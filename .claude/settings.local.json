@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd \"C:\\\\Users\\\\Calvin\\\\Documents\\\\My Project\\\\Hackathon 2\"; $job = Start-Job -ScriptBlock { cd \"C:\\\\Users\\\\Calvin\\\\Documents\\\\My Project\\\\Hackathon 2\"; npm run dev 2>&1 }; Start-Sleep -Seconds 8; Receive-Job $job; Stop-Job $job; Remove-Job $job)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npx next *)",
+      "Bash(Remove-Item -Recurse -Force \"C:\\\\Users\\\\Calvin\\\\Documents\\\\My Project\\\\Hackathon 2\\\\.next\\\\cache\\\\webpack\" -ErrorAction SilentlyContinue)",
+      "PowerShell(\"Cache cleared\")"
+    ]
+  }
+}

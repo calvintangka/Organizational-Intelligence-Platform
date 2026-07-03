@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pandoc *)",
+      "PowerShell(winget install *)",
+      "PowerShell(pandoc *)"
+    ]
+  }
+}
