@@ -2,13 +2,37 @@
 
 # Developer Changelog
 
-This document records the evolution of the Organizational Intelligence Platform (OIP).
-Unlike Git history, this changelog focuses on architectural evolution, implementation milestones, important fixes, and developer context.
+This document records the evolution of the Organizational Intelligence Platform (OIP). It captures architectural evolution, implementation milestones, significant fixes, engineering decisions, migration information, and verification results.
+
+This changelog complements Git history rather than replacing it. Git history captures individual commits and diffs. This document captures the reasoning, context, and architectural trajectory behind those changes. Together they provide a complete engineering record of the platform.
+
 Every significant implementation should append a new dated entry.
 
 ---
 
-## 2026-07-03
+## Current Platform Status
+
+| Item | Status |
+|------|--------|
+| Current Version | **0.8.0** |
+| Architecture | Organizational Intelligence Platform |
+| Current AI | Gemma 4 E4B (LM Studio) |
+| AI Mode | AI Advisory (Deterministic Governance) |
+| Persistence | localStorage |
+| Knowledge Intake | Three Intake Doors |
+| Organizational Memory | Enabled |
+| Pattern Discovery | Enabled |
+| Trust Engine | Enabled |
+| Production Ready | No |
+| Hackathon Status | Active Development |
+
+This section provides a quick snapshot of the current implementation state. Update it whenever major architectural milestones are completed.
+
+---
+
+## Version 0.8.0
+
+Date: 2026-07-03
 
 ### Added
 
@@ -62,6 +86,28 @@ Every significant implementation should append a new dated entry.
 - Maesa Tech organization profile expanded to 15 supported domains, 26 business vocabulary terms, and 17 supported issue types.
 - Out-of-scope ticket rejection now displays a visible error message explaining the rejection reason.
 
+### Breaking Changes
+
+- Business Relevance Guardrail now determines only whether a ticket belongs to the organization. It no longer considers whether the issue exists in Organizational Memory.
+- Business Domain Classification now performs domain identification before Canonical Problem Detection. Domain context is available to downstream stages.
+- Unknown business issues no longer terminate the pipeline. Any ticket that passes the Business Relevance Guardrail will complete the full pipeline regardless of whether organizational memory contains a match.
+- Cold Start AI replaces previous rejection behavior for unknown but relevant issues. Stages that previously returned early with "No reusable knowledge found" now route to AI advisory and human review.
+- Auto-resolution is blocked for unknown and uncategorized issues regardless of trust score. Only validated, categorized canonical problems may auto-resolve.
+
+These changes affect future development assumptions. Any new pipeline stage or feature should assume that unknown issues will always flow through the full pipeline rather than being stopped at intermediate stages.
+
+### Developer Notes
+
+This section captures engineering lessons learned during implementation rather than user-facing features.
+
+- Gemma performs better with compact JSON response formats. Requesting structured JSON with explicit field names produces more reliable output than open-ended text generation.
+- Long reasoning outputs frequently exceed token limits. AI prompts should request concise analysis rather than detailed explanations.
+- AI advisory should remain deterministic-safe. Every AI-generated draft must have a deterministic fallback that produces a usable response when AI is unavailable or returns unusable output.
+- Customer-facing drafts should always be category-validated. A template from one category must never be served for a ticket in an incompatible category, even if similarity or trust scores are high.
+- AI responses should never bypass governance. All AI output passes through the same human review and reflection pipeline as deterministic drafts. There is no fast path that skips review.
+- Signal-based matching is sensitive to vocabulary coverage. Missing a single common term (e.g., "crash", "update") can cause valid business tickets to receive uncertain relevance status. Vocabulary expansion should be tested against realistic ticket samples.
+- Mojibake and encoding issues in source files can cause build failures that are difficult to diagnose. Edits to files with BOM markers or mixed encodings should be verified with a production build before committing.
+
 ### Fixed
 
 - Duplicate canonical problems caused by ID collisions resolved with 3-layer deduplication (engine merge, load migration, retrieval).
@@ -80,47 +126,75 @@ Every significant implementation should append a new dated entry.
 ### Architecture Impact
 
 ```
+Knowledge Intake
+       |
+       v
 Business Relevance Guardrail
-         |
-         v
+       |
+       v
 Business Domain Classification
-         |
-         v
+       |
+       v
 Canonical Problem Detection
-         |
-    +---------+
-    |         |
-  Known    Unknown
-    |         |
-    v         v
- Memory   Cold Start AI
-Retrieval     |
-    |         v
-    v     Human Review
-  Trust       |
-Evaluation    v
-    |     Knowledge
-    v     Candidate
- Draft        |
-Generation    v
-    |     Validation
-    v         |
-  Human       v
-  Review  Organizational
-    |       Memory
-    v
-Reflection
-    |
-    v
-Organizational
-  Memory
+       |
+       v
+Memory Retrieval
+       |
+       v
+AI Advisory (Cold Start if needed)
+       |
+       v
+Human Review
+       |
+       v
+Knowledge Candidate
+       |
+       v
+Validation
+       |
+       v
+Organizational Memory
+       |
+       v
+Trust Evolution
+       |
+       v
+Pattern Discovery
 ```
 
-Previously, unknown business issues were often rejected because they did not match existing organizational knowledge. The Business Relevance Guardrail conflated "not in our memory" with "not our business."
+Knowledge always begins at Knowledge Intake. The Business Relevance Guardrail answers a single question: "Does this ticket relate to the organization's responsibilities?" Tickets that pass proceed to Business Domain Classification, which identifies the business domain before any memory lookup occurs.
 
-The introduction of Business Domain Classification separates business relevance from organizational memory. The guardrail now answers only one question: "Is this related to the organization's responsibilities?" Domain classification then categorizes the ticket into business domains before memory retrieval occurs.
+Canonical Problem Detection determines whether the issue matches a known organizational problem. If a match exists, Memory Retrieval provides the relevant knowledge and trust context. If no match exists, the ticket routes to Cold Start AI for an initial draft suggestion rather than being rejected.
 
-Unknown but relevant business issues now continue through the Cold Start AI path, undergo human review, become Knowledge Candidates, and can ultimately evolve into validated Organizational Memory. This architectural change allows the OIP to continuously learn new organizational knowledge rather than only recognizing existing problems.
+All tickets — whether matched or unmatched — proceed through Human Review. Validation is required before Organizational Memory is updated. After a resolution is validated and stored, Trust Evolution updates the knowledge item's trust score based on successful reuse. Pattern Discovery operates over validated Organizational Memory, detecting emerging patterns across resolved tickets.
+
+Previously, unknown business issues were often rejected because they did not match existing organizational knowledge. The Business Relevance Guardrail conflated "not in our memory" with "not our business." The introduction of Business Domain Classification separates business relevance from organizational memory. This architectural change allows the OIP to continuously learn new organizational knowledge rather than only recognizing existing problems.
+
+### Major Files Affected
+
+The following files represent the architectural hotspots for Version 0.8.0. Future developers working on pipeline behavior, knowledge lifecycle, or AI integration should start here.
+
+- `app/page.tsx` — Pipeline orchestration, ticket lifecycle, approval gates, cold start routing
+- `lib/analyzer.ts` — Business Relevance Guardrail, signal matching, category rules
+- `lib/domainClassifier.ts` — Business Domain Classification engine
+- `lib/canonicalProblemEngine.ts` — Canonical problem detection, response templates, resolution workflows
+- `lib/trustEngine.ts` — Trust scoring, auto-resolution eligibility
+- `lib/memory.ts` — Knowledge storage, retrieval, deduplication, localStorage persistence
+- `lib/patternDiscovery.ts` — Emerging pattern detection and grouping
+- `lib/drafting.ts` — Draft generation, category compatibility, lesson matching
+- `lib/ai/lmStudio.ts` — LM Studio provider, timeout handling, response parsing
+- `lib/ai/prompts.ts` — AI prompt construction for analysis and drafting
+- `lib/ai/adapter.ts` — AI provider routing and fallback logic
+- `data/seedOrganizationProfiles.ts` — Organization profile definitions
+- `components/views/TicketWorkspace.tsx` — Ticket UI, OIP reasoning timeline, review workflow
+
+### Migration Notes
+
+- Existing localStorage data automatically migrates to the newest data structures on load. No manual intervention is required.
+- Organization Profiles remain backward-compatible. Existing profiles continue functioning. New profiles can be added without affecting existing ones.
+- Existing Canonical Problems continue functioning. New canonical rules extend coverage without modifying existing problem identities.
+- Existing Trust Scores are preserved across updates. The trust accumulation model is additive.
+- No manual migration is currently required. Future versions that introduce breaking storage changes should document migration steps here.
 
 ### Verification
 
@@ -162,6 +236,24 @@ Unknown but relevant business issues now continue through the Cold Start AI path
 
 ---
 
-> **Future Maintenance Rule**
->
-> Every significant architectural change, major feature, important bug fix, or implementation milestone should append a new dated entry to this changelog rather than modifying historical entries. This preserves an accurate history of the platform's evolution.
+## Future Maintenance Guidelines
+
+Every significant architectural change, major feature, important bug fix, or implementation milestone should append a new dated entry to this changelog rather than modifying historical entries. This preserves an accurate history of the platform's evolution.
+
+Future entries should follow this structure:
+
+- **Version Number**
+- **Date**
+- **Added**
+- **Changed**
+- **Breaking Changes**
+- **Fixed**
+- **Architecture Impact**
+- **Developer Notes**
+- **Major Files Affected**
+- **Migration Notes**
+- **Verification**
+- **Known Limitations**
+- **Next Steps**
+
+Not every section is required for every entry. Include only sections that are relevant to the changes being documented. At minimum, every entry should include Version Number, Date, and at least one of Added, Changed, or Fixed.
