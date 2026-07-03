@@ -33,6 +33,11 @@ const COMPATIBLE_CATEGORIES: Record<string, string[]> = {
   "Consultation Booking": ["Consultation Booking", "Appointment Rescheduling"],
   "Appointment Rescheduling": ["Consultation Booking", "Appointment Rescheduling"],
   "Document Status": ["Document Status"],
+  "Product Version": ["Product Version", "Compatibility", "Application Stability"],
+  Installation: ["Installation"],
+  Compatibility: ["Compatibility", "Product Version"],
+  Performance: ["Performance"],
+  "Application Stability": ["Application Stability", "Product Version", "Compatibility"],
   General: []
 };
 
@@ -67,6 +72,16 @@ const CATEGORY_TEMPLATES: Record<string, (ticket: Ticket) => string> = {
     `Hi ${t.customerName}, I understand your account is currently locked. Account locks are a security measure that protects you. Please wait 15 minutes, then use the "Forgot Password" option to reset your credentials. If access remains blocked after a password reset, reply with your account email so we can verify your identity and unlock it manually.`,
   Delivery: (t) =>
     `Hi ${t.customerName}, I am sorry your delivery has been delayed. Please allow an additional 1-2 business days, as tracking updates can lag behind actual delivery progress. If tracking has not updated by then, please reply with your order number so we can contact the courier on your behalf.`,
+  "Product Version": (t) =>
+    `Hi ${t.customerName}, thank you for reaching out about the product update issue. Please confirm the version you were running before the update and the version you updated to. If you see any error messages, please share a screenshot so we can investigate further.`,
+  Installation: (t) =>
+    `Hi ${t.customerName}, I understand you are having difficulty with installation. Please let us know the operating system you are using, the product version, and the exact error or behavior you encountered so we can help resolve this.`,
+  Compatibility: (t) =>
+    `Hi ${t.customerName}, thank you for reporting this compatibility issue. Please share the details of your environment including operating system, browser, and any other relevant software versions, and we will check if there are known compatibility requirements.`,
+  Performance: (t) =>
+    `Hi ${t.customerName}, I am sorry to hear the product is running slowly. Please let us know which specific feature or area is affected and how long this has been occurring. If possible, include a screenshot of any error or resource usage so we can investigate.`,
+  "Application Stability": (t) =>
+    `Hi ${t.customerName}, I understand the application is crashing or not opening correctly. Please confirm the product version you are running, your operating system, and what you were doing when the issue occurred. Any crash reports or error messages will help us investigate.`,
   General: (t) =>
     `Hi ${t.customerName}, thank you for reaching out. I have reviewed your request and will look into this for you. Could you provide more details about your issue? Our support team will respond within 1 business day.`
 };

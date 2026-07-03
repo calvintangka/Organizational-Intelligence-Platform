@@ -11,7 +11,11 @@ export const seedOrganizationProfiles: OrganizationProfile[] = [
       "A software company offering an AI productivity platform, customer support dashboard, and account portal.",
     products: ["AI productivity platform", "customer support dashboard", "account portal"],
     services: ["software support", "account support", "billing support", "technical support"],
-    supportedDomains: ["activation", "login", "billing", "subscription", "technical support", "product access"],
+    supportedDomains: [
+      "activation", "login", "billing", "subscription", "technical support", "product access",
+      "product version", "installation", "compatibility", "performance", "application stability",
+      "dashboard", "account management", "data sync", "api"
+    ],
     businessVocabulary: [
       "activation code",
       "license key",
@@ -21,7 +25,23 @@ export const seedOrganizationProfiles: OrganizationProfile[] = [
       "invoice",
       "subscription",
       "purchase email",
-      "product version"
+      "product version",
+      "update",
+      "crash",
+      "install",
+      "compatibility",
+      "performance",
+      "sync",
+      "import",
+      "export",
+      "software",
+      "application",
+      "launch",
+      "startup",
+      "loading",
+      "freezing",
+      "feature",
+      "bug"
     ],
     supportedIssueTypes: [
       "activation failure",
@@ -32,7 +52,15 @@ export const seedOrganizationProfiles: OrganizationProfile[] = [
       "billing question",
       "refund request",
       "subscription change",
-      "account access"
+      "account access",
+      "product version issue",
+      "installation issue",
+      "compatibility issue",
+      "performance issue",
+      "application stability",
+      "crash",
+      "application wont open",
+      "software update problem"
     ],
     outOfScopeTopics: ["relationship advice", "medical advice", "legal advice", "politics", "religion", "homework"],
     customerTone: "professional",

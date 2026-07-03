@@ -8,6 +8,7 @@
  */
 
 export { assessBusinessRelevance, observe, understand, buildReasoning, buildConfidence } from "@/lib/analyzer";
+export { classifyBusinessDomain } from "@/lib/domainClassifier";
 export { retrieveMemory } from "@/lib/memory";
 export { draftResponse } from "@/lib/drafting";
 export { createLogEntry, formatLogTime } from "@/lib/intelligenceLog";

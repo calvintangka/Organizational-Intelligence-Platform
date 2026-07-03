@@ -17,6 +17,7 @@ import { createAIAdapter } from "@/lib/ai/adapter";
 import { buildAIAdvisory, shouldAcceptPatternSuggestion } from "@/lib/ai/deterministic";
 import type { AIProviderResult } from "@/lib/ai/types";
 import { assessBusinessRelevanceForProfile, observe, understandForProfile, buildReasoning, buildConfidence } from "@/lib/analyzer";
+import { classifyBusinessDomain } from "@/lib/domainClassifier";
 import { analyzeBulkEntries, prepareBulkClusterCommit } from "@/lib/bulkUpload";
 import { retrieveMemory } from "@/lib/memory";
 import { draftResponse, findMatchingLesson, isCompatibleForDrafting } from "@/lib/drafting";
@@ -106,6 +107,7 @@ import type {
   Lesson,
   ReflectionCommitInput,
   DraftGroundingMode,
+  BusinessDomainClassification,
 } from "@/types";
 
 const aiAdapter = createAIAdapter();
@@ -197,6 +199,7 @@ export default function Home() {
   const [reasoning, setReasoning] = useState<ReasoningSummary | null>(null);
   const [confidence, setConfidence] = useState<Confidence | null>(null);
   const [businessRelevance, setBusinessRelevance] = useState<BusinessRelevance | null>(null);
+  const [domainClassification, setDomainClassification] = useState<BusinessDomainClassification | null>(null);
   const [aiAdvisory, setAiAdvisory] = useState<AIAdvisory | null>(null);
   const [intelligenceLog, setIntelligenceLog] = useState<IntelligenceLogEntry[]>([]);
   const [sessionCreatedIds, setSessionCreatedIds] = useState<Set<string>>(new Set());
@@ -686,6 +689,7 @@ export default function Home() {
     setReasoning(null);
     setConfidence(null);
     setBusinessRelevance(null);
+    setDomainClassification(null);
     setAiAdvisory(null);
     setSessionCreatedIds(new Set());
     setCustomSecondText("");
@@ -1092,13 +1096,26 @@ export default function Home() {
       setReasoning(null);
       setConfidence(null);
       setAiAdvisory(null);
+      setDomainClassification(null);
       setLastDraftUsedAI(false);
       setSelectedTicket({ ...ticket, status: "new" });
       addLogEntries(createRelevanceLogEntries(relevance));
       updateMetrics({ outOfScopeDismissals: 1 });
+      setErrorMessage(`Rejected by Business Relevance Guardrail: ${relevance.reason}`);
       setCurrentStep(1);
       return;
     }
+
+    // Business Domain Classification
+    const domain = classifyBusinessDomain(
+      `${ticket.subject} ${ticket.description}`,
+      ticket.id,
+      organizationProfile
+    );
+    setDomainClassification(domain);
+    addLogEntries([
+      createLogEntry("Business domain classified", `Primary: ${domain.primaryDomain} · All: ${domain.domains.join(", ")} (${domain.confidence} confidence)`)
+    ]);
 
     const obs = observe(ticket, source);
     const und = understandForProfile(ticket, organizationProfile);
@@ -1221,8 +1238,8 @@ export default function Home() {
       setErrorMessage("Review the response before approving it as knowledge.");
       return;
     }
-    if (!businessRelevance?.isRelevant) {
-      setErrorMessage("Only business-relevant support tickets can be approved into Organizational Memory.");
+    if (businessRelevance?.status === "out_of_scope") {
+      setErrorMessage("Out-of-scope tickets cannot be approved into Organizational Memory.");
       return;
     }
 
@@ -1506,7 +1523,7 @@ export default function Home() {
     const relevance = assessBusinessRelevanceForProfile(`${second.subject} ${second.description}`, organizationProfile);
     setBusinessRelevance(relevance);
 
-    if (!relevance.isRelevant) {
+    if (!relevance.isRelevant && relevance.status === "out_of_scope") {
       setSecondTicket({ ...second, status: "new" });
       setAiAnalysis(null);
       setSimilarKnowledge([]);
@@ -1515,11 +1532,19 @@ export default function Home() {
       setReuseDecision(null);
       setReuseResolvedMode(null);
       addLogEntries(createRelevanceLogEntries(relevance));
-      updateMetrics(relevance.status === "out_of_scope" ? { outOfScopeDismissals: 1 } : { clarificationRequests: 1 });
+      updateMetrics({ outOfScopeDismissals: 1 });
       setErrorMessage("");
       setCurrentStep(8);
       return;
     }
+
+    // Business Domain Classification for reuse ticket
+    const reuseDomain = classifyBusinessDomain(
+      `${second.subject} ${second.description}`,
+      second.id,
+      organizationProfile
+    );
+    setDomainClassification(reuseDomain);
 
     const und = understandForProfile(second, organizationProfile);
     const canonicalProblem = identifyCanonicalProblem(und, organizationProfile);
@@ -1530,22 +1555,35 @@ export default function Home() {
     });
     const matches = retrieveMemory(und, knowledgeItems, sessionCreatedIds);
 
-    if (matches.length === 0) {
-      setAiAdvisory(advisory);
-      setLastDraftUsedAI(false);
-      setErrorMessage("No reusable knowledge found for this ticket. Try a more similar issue.");
-      return;
-    }
-
     // Among the strongly-relevant matches, the organization reaches for its
     // MOST TRUSTED knowledge — that is what enables auto-resolution over time.
     // Category-incompatible items are excluded before the trust-based selection so
     // a high-trust Activation item cannot drive a Login ticket's reuse response.
     const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(und, m.item) || !!findMatchingLesson(second, m.item));
-    if (compatibleMatches.length === 0) {
+
+    // Cold Start path: no matches or no compatible matches → route to human review
+    if (matches.length === 0 || compatibleMatches.length === 0) {
+      const coldStartDraft = draftResponse(second, und, null, organizationProfile, knowledgeItems.length === 0);
+      const secondAnalysis = understandingToAnalysis(und);
+      setSecondTicket({ ...second, status: "analyzed" });
+      setAiAnalysis(secondAnalysis);
       setAiAdvisory(advisory);
+      setSimilarKnowledge([]);
+      setReuseMatchId(null);
+      setReuseDecision("human_required");
+      setReuseResponseText(coldStartDraft.draftResponse);
+      setReuseResponseSource("deterministic");
       setLastDraftUsedAI(false);
-      setErrorMessage("No compatible knowledge found for this ticket category. Try a more similar issue.");
+      setReuseResolvedMode(null);
+      setRunCount((c) => c + 1);
+      addLogEntries([
+        ...createRelevanceLogEntries(relevance),
+        createLogEntry("Observed reuse ticket", `Ticket: ${second.id}`),
+        createLogEntry("Cold Start AI", "No compatible organizational memory — unknown business problem entering learning path"),
+        createLogEntry("Human review required", "Unknown issues route to human review for knowledge creation")
+      ]);
+      setErrorMessage("");
+      setCurrentStep(8);
       return;
     }
     const topScore = compatibleMatches[0].matchScore;
@@ -1590,8 +1628,11 @@ export default function Home() {
     const draft = draftResponse(second, und, effectiveReuseMatch, organizationProfile);
     const aiDraft = await requestDraftAdvisory(second, und, canonicalProblem.title, effectiveReuseMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", advisory);
     const draftSource = aiDraft.response.source ?? "deterministic";
+    const isUnknownIssue = und.category === "Uncategorized" || und.category === "General";
     const effectiveReuseDecision: TrustDecision =
-      draftSource === "ai_advisory" && trust.decision === "auto_resolution" ? "human_required" : trust.decision;
+      isUnknownIssue ? "human_required"
+      : draftSource === "ai_advisory" && trust.decision === "auto_resolution" ? "human_required"
+      : trust.decision;
     const secondAnalysis = understandingToAnalysis(und);
 
     setSecondTicket({ ...second, status: "analyzed" });
@@ -1616,7 +1657,9 @@ export default function Home() {
         `Top: "${effectiveReuseMatch.item.title}" — ${effectiveReuseMatch.matchScore}% similarity`
       ),
       createLogEntry(`Trust evaluated: ${trust.score}/100 → ${trust.decisionLabel}`, `Maturity: ${trust.maturity}`),
-      draftSource === "ai_advisory" && trust.decision === "auto_resolution"
+      isUnknownIssue
+        ? createLogEntry("Auto-resolution blocked", "Unknown issues must always go through human review before learning")
+        : draftSource === "ai_advisory" && trust.decision === "auto_resolution"
         ? createLogEntry("AI draft requires human review", "Fresh AI advisory text cannot use the automatic-resolution path")
         : createLogEntry("Draft source checked", draftSource === "ai_advisory" ? "AI advisory draft held for review" : "Deterministic validated template")
     ]);
@@ -1681,9 +1724,21 @@ export default function Home() {
     addLogEntries(createRelevanceLogEntries(relevance));
 
     if (!relevance.isRelevant && relevance.status === "out_of_scope") {
+      setErrorMessage(`Rejected by Business Relevance Guardrail: ${relevance.reason}`);
       setIsProcessing(false);
       return;
     }
+
+    // Phase 1b: Business Domain Classification
+    const domain = classifyBusinessDomain(
+      `${ticket.subject} ${ticket.description}`,
+      ticket.id,
+      organizationProfile
+    );
+    setDomainClassification(domain);
+    addLogEntries([
+      createLogEntry("Business domain classified", `Primary: ${domain.primaryDomain} · All: ${domain.domains.join(", ")} (${domain.confidence} confidence)`)
+    ]);
 
     const obs = observe(ticket, "manual-demo-input");
     const und = understandForProfile(ticket, organizationProfile);
@@ -1842,6 +1897,7 @@ export default function Home() {
                   reflectionDecision={reflectionDecision}
                   knowledgeItems={knowledgeItems}
                   businessRelevance={businessRelevance}
+                  domainClassification={domainClassification}
                   aiAdvisory={aiAdvisory}
                   errorMessage={errorMessage}
                   organizationProfile={organizationProfile}

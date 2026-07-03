@@ -26,7 +26,24 @@ const BUSINESS_RELEVANCE_SIGNALS = [
   // Delivery
   "delivery", "shipment", "order",
   // Product / tech
-  "product", "app", "dashboard", "technical", "error", "bug", "access"
+  "product", "app", "dashboard", "technical", "error", "bug", "access",
+  // Software updates & versions
+  "update", "updated", "updating", "latest version", "product version",
+  "version", "new version", "software", "application",
+  // Installation & compatibility
+  "install", "installation", "installer",
+  "compatibility", "compatible", "incompatible",
+  // Crashes & startup
+  "crash", "crashes", "crashing",
+  "wont open", "cannot open", "cant open", "won t open",
+  "launch", "launching", "startup", "start up",
+  "closes immediately", "stops working", "not working",
+  // Performance
+  "loading", "loading screen", "freezing", "freeze",
+  "performance", "slow", "lag", "unresponsive",
+  // Features & data
+  "feature", "sync", "syncing",
+  "importing", "import", "exporting", "export"
 ];
 
 const OUT_OF_SCOPE_SIGNALS = [
@@ -266,6 +283,52 @@ const CATEGORY_RULES: Array<{ category: string; keywords: string[]; tags: string
     category: "Appointment Rescheduling",
     keywords: ["reschedule", "appointment", "change appointment", "move my appointment"],
     tags: ["appointment", "reschedule"]
+  },
+  {
+    category: "Product Version",
+    keywords: [
+      "update", "updated", "updating", "latest version", "product version",
+      "version", "new version", "upgrade", "upgraded", "patch",
+      "software update", "app update"
+    ],
+    tags: ["product-version", "update", "version"]
+  },
+  {
+    category: "Installation",
+    keywords: [
+      "install", "installation", "installer", "setup", "set up",
+      "uninstall", "reinstall", "download", "downloading"
+    ],
+    tags: ["installation", "setup"]
+  },
+  {
+    category: "Compatibility",
+    keywords: [
+      "compatibility", "compatible", "incompatible", "not compatible",
+      "doesnt work with", "does not work with", "unsupported",
+      "system requirements", "requirements"
+    ],
+    tags: ["compatibility"]
+  },
+  {
+    category: "Performance",
+    keywords: [
+      "slow", "performance", "lag", "lagging", "freezing", "freeze",
+      "frozen", "hanging", "loading", "loading screen", "unresponsive",
+      "not responding", "takes long", "takes forever"
+    ],
+    tags: ["performance"]
+  },
+  {
+    category: "Application Stability",
+    keywords: [
+      "crash", "crashes", "crashing", "wont open", "won t open",
+      "cannot open", "cant open", "closes immediately",
+      "shuts down", "not launching", "launch", "launching",
+      "startup", "start up", "stops working", "stopped working",
+      "not working", "force close", "force quit"
+    ],
+    tags: ["stability", "crash"]
   }
 ];
 
@@ -345,6 +408,11 @@ const CORE_PROBLEM_MAP: Record<string, string> = {
   "Consultation Booking": "Client needs help booking a consultation",
   "Document Status": "Client requests a document status update",
   "Appointment Rescheduling": "Client needs to reschedule an appointment",
+  "Product Version": "Customer has a product update or version issue",
+  Installation: "Customer has a software installation issue",
+  Compatibility: "Customer has a compatibility issue",
+  Performance: "Customer reports performance or slowness issues",
+  "Application Stability": "Customer reports crashes or application instability",
   General: "Customer needs support assistance"
 };
 

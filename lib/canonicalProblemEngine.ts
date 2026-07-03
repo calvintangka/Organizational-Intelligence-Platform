@@ -165,6 +165,46 @@ const CANONICAL_RULES: Array<{
     signals: ["reschedule", "appointment", "change appointment", "move my appointment"],
     tags: ["appointment", "reschedule"],
     summary: "Clients need help rescheduling an appointment."
+  },
+  {
+    id: "canonical-product-version",
+    title: "Product Version Issue",
+    category: "Product Version",
+    signals: ["update", "updated", "updating", "latest version", "product version", "version", "new version", "upgrade", "patch"],
+    tags: ["product-version", "update", "version"],
+    summary: "Customer has an issue related to product updates or version changes."
+  },
+  {
+    id: "canonical-installation",
+    title: "Installation Issue",
+    category: "Installation",
+    signals: ["install", "installation", "installer", "setup", "set up", "uninstall", "reinstall", "download"],
+    tags: ["installation", "setup"],
+    summary: "Customer has difficulty installing, setting up, or reinstalling software."
+  },
+  {
+    id: "canonical-compatibility",
+    title: "Compatibility Issue",
+    category: "Compatibility",
+    signals: ["compatibility", "compatible", "incompatible", "not compatible", "unsupported", "system requirements"],
+    tags: ["compatibility"],
+    summary: "Customer reports a compatibility issue between the product and their environment."
+  },
+  {
+    id: "canonical-performance",
+    title: "Performance Issue",
+    category: "Performance",
+    signals: ["slow", "performance", "lag", "freezing", "freeze", "loading", "unresponsive", "not responding"],
+    tags: ["performance"],
+    summary: "Customer reports performance degradation, slowness, or unresponsiveness."
+  },
+  {
+    id: "canonical-application-stability",
+    title: "Application Stability Issue",
+    category: "Application Stability",
+    signals: ["crash", "crashes", "crashing", "wont open", "cannot open", "closes immediately", "not launching", "startup", "stops working", "not working"],
+    tags: ["stability", "crash"],
+    summary: "Customer reports application crashes, failure to launch, or instability."
   }
 ];
 
@@ -435,6 +475,37 @@ function getIntentAwareCustomerResponseTemplate(
         "Sincerely,",
         closing
       ].join("\n");
+    case "Product Version":
+      return buildTemplate(intro, closing, [
+        "",
+        "It sounds like this issue may be related to a recent product update or version change.",
+        "Please confirm the version you are currently running and the version you updated from.",
+        "If possible, include any error messages or screenshots so we can investigate further."
+      ]);
+    case "Installation":
+      return buildTemplate(intro, closing, [
+        "",
+        "It sounds like you are having difficulty with installation or setup.",
+        "Please let us know the operating system, the product version, and the exact error or behavior you encountered during the install process."
+      ]);
+    case "Compatibility":
+      return buildTemplate(intro, closing, [
+        "",
+        "It sounds like you may have encountered a compatibility issue.",
+        "Please share the environment details, including the operating system, browser, or other relevant software versions, and a description of the problem."
+      ]);
+    case "Performance":
+      return buildTemplate(intro, closing, [
+        "",
+        "We understand the product is not performing as expected.",
+        "Please let us know which specific feature or area is affected, how long it has been occurring, and any error messages you have seen."
+      ]);
+    case "Application Stability":
+      return buildTemplate(intro, closing, [
+        "",
+        "We are sorry to hear the application is not behaving as expected.",
+        "Please confirm what you were doing when the issue occurred, the product version, and any error messages or crash reports, so we can investigate."
+      ]);
     default:
       return buildTemplate(intro, closing, [
         "",
@@ -506,6 +577,16 @@ export function getInternalGuidance(category: string): string {
       return "Confirm availability before promising appointment times.";
     case "Document Status":
       return "Share administrative document status only. Route legal substance to the responsible lawyer.";
+    case "Product Version":
+      return "Check current version, update history, and whether the issue correlates with a specific release.";
+    case "Installation":
+      return "Confirm OS, product edition, and installer version. Check for known install blockers.";
+    case "Compatibility":
+      return "Verify environment requirements and known compatibility gaps for the customer's setup.";
+    case "Performance":
+      return "Gather affected feature, duration, resource usage, and reproduction steps before escalating.";
+    case "Application Stability":
+      return "Collect crash logs, product version, OS, and reproduction steps. Check for known stability issues.";
     default:
       return "Ask for enough product, account, billing, subscription, delivery, or technical context before resolving.";
   }
@@ -549,6 +630,16 @@ export function getResolutionWorkflow(category: string): string[] {
       return ["Collect preferred schedule", "Check availability", "Confirm appointment", "Escalate complex scheduling"];
     case "Document Status":
       return ["Collect matter reference", "Check document status", "Share administrative update", "Route legal substance to lawyer"];
+    case "Product Version":
+      return ["Confirm current and previous version", "Check release notes for known issues", "Guide rollback or update", "Escalate persistent version issues"];
+    case "Installation":
+      return ["Confirm OS and product edition", "Check for known install blockers", "Guide installation steps", "Escalate failed installs"];
+    case "Compatibility":
+      return ["Verify system requirements", "Check known compatibility gaps", "Suggest workarounds", "Escalate confirmed incompatibility"];
+    case "Performance":
+      return ["Identify affected feature", "Gather resource usage data", "Check for known performance issues", "Escalate persistent degradation"];
+    case "Application Stability":
+      return ["Collect crash logs and version info", "Check for known stability issues", "Guide troubleshooting", "Escalate persistent crashes"];
     default:
       return ["Clarify support domain", "Collect evidence", "Resolve or escalate", "Record validated learning"];
   }

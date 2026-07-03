@@ -44,6 +44,15 @@ export interface BusinessRelevance {
   recommendedAction: "continue" | "dismiss" | "ask_clarifying_question";
 }
 
+export interface BusinessDomainClassification {
+  ticketId: string;
+  domains: string[];
+  primaryDomain: string;
+  confidence: "high" | "medium" | "low";
+  organizationName: string;
+  reason: string;
+}
+
 export interface IntelligenceLogEntry {
   id: string;
   timestamp: string;

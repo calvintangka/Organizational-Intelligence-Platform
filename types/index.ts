@@ -37,7 +37,7 @@ export type {
   LessonMode
 } from "./knowledge";
 export type { Metrics, OrgMetrics } from "./metrics";
-export type { Observation, Understanding, ReasoningSummary, Confidence, BusinessRelevance, IntelligenceLogEntry } from "./oip";
+export type { Observation, Understanding, ReasoningSummary, Confidence, BusinessRelevance, BusinessDomainClassification, IntelligenceLogEntry } from "./oip";
 export type { EmergingPattern, EmergingPatternExample } from "./patterns";
 export type { OrganizationProfile, CustomerTone } from "./organization";
 export type {

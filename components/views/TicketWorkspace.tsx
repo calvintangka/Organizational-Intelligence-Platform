@@ -4,6 +4,7 @@ import { useState } from "react";
 import type {
   AIAnalysis,
   AIAdvisory,
+  BusinessDomainClassification,
   BusinessRelevance,
   KnowledgeItem,
   KnowledgeMatch,
@@ -42,6 +43,7 @@ interface TicketWorkspaceProps {
   reflectionDecision: ReflectionDecision | null;
   knowledgeItems: KnowledgeItem[];
   businessRelevance: BusinessRelevance | null;
+  domainClassification: BusinessDomainClassification | null;
   aiAdvisory: AIAdvisory | null;
   errorMessage: string;
   organizationProfile: OrganizationProfile;
@@ -189,8 +191,17 @@ function getTimelineItems(
   suggestedResponse: SuggestedResponse | null,
   reflectionDecision: ReflectionDecision | null,
   lastSavedKnowledgeId: string | null,
+  domainClassification: BusinessDomainClassification | null,
 ): TimelineItem[] {
   return [
+    {
+      id: "domain",
+      label: domainClassification
+        ? `Domain: ${domainClassification.domains.join(", ")}`
+        : "Classifying business domain",
+      detail: domainClassification ? `${domainClassification.confidence} confidence` : undefined,
+      status: step >= 2 ? "done" : step === 1 && isProcessing ? "running" : "pending",
+    },
     {
       id: "analyze",
       label: analysis ? `Intent: ${analysis.category}` : "Analyzing issue",
@@ -202,7 +213,7 @@ function getTimelineItems(
       label: topMatch
         ? `Memory found: ${topMatch.item.canonicalProblemTitle ?? topMatch.item.title}`
         : step >= 3
-        ? "No knowledge match â€” cold start"
+        ? "No knowledge match — cold start"
         : "Searching organizational memory",
       detail: topMatch ? `${topMatch.matchScore}% match` : undefined,
       status: step >= 3 ? "done" : step === 2 && isProcessing ? "running" : "pending",
@@ -278,6 +289,7 @@ export function TicketWorkspace({
   reflectionDecision,
   knowledgeItems,
   businessRelevance,
+  domainClassification,
   aiAdvisory,
   errorMessage,
   organizationProfile,
@@ -306,7 +318,7 @@ export function TicketWorkspace({
   onSwitchToBulk,
 }: TicketWorkspaceProps) {
   const topMatch = similarKnowledge.length > 0 ? similarKnowledge[0] : null;
-  const timelineItems = getTimelineItems(currentStep, isProcessing, aiAnalysis, topMatch, suggestedResponse, reflectionDecision, lastSavedKnowledgeId);
+  const timelineItems = getTimelineItems(currentStep, isProcessing, aiAnalysis, topMatch, suggestedResponse, reflectionDecision, lastSavedKnowledgeId, domainClassification);
   const isColdStart = knowledgeItems.length === 0 || (!!suggestedResponse && suggestedResponse.basedOnKnowledgeIds.length === 0);
   const reuseLessonMatch = reuseItem && customSecondText.trim()
     ? findMatchingLesson(
@@ -401,13 +413,13 @@ export function TicketWorkspace({
                       AI discrimination
                     </p>
                     <p className={`mt-1 text-xs font-semibold ${darkMode ? "text-amber-200" : "text-amber-800"}`}>
-                      Candidate match &ldquo;{discriminatedMatchTitle}&rdquo; rejected â€” identified as a distinct problem
+                      Candidate match &ldquo;{discriminatedMatchTitle}&rdquo; rejected -- identified as a distinct problem
                     </p>
                     <p className={`mt-1 text-xs leading-snug ${darkMode ? "text-amber-300/80" : "text-amber-700"}`}>
                       {discriminationReasoning}
                     </p>
                     <p className={`mt-1.5 text-[10px] ${darkMode ? "text-amber-400/60" : "text-amber-600/70"}`}>
-                      Treated as no-match â†’ honest cold-start path â†’ human review required
+                      Treated as no-match, routed to honest cold-start path, human review required
                     </p>
                   </div>
                 )}
@@ -468,7 +480,7 @@ export function TicketWorkspace({
                   {reflectionDecision.action === "trust_update_only" && `Will update trust for "${reflectionDecision.existingItemTitle}"`}
                 </p>
                 <p className={`mt-1 text-sm leading-6 ${darkMode ? "text-slate-400" : "text-slate-600"}`}>
-                  {reflectionDecision.rationale.slice(0, 200)}{reflectionDecision.rationale.length > 200 ? "â€¦" : ""}
+                  {reflectionDecision.rationale.slice(0, 200)}{reflectionDecision.rationale.length > 200 ? "..." : ""}
                 </p>
                 <button
                   type="button"
@@ -549,7 +561,7 @@ export function TicketWorkspace({
                     {reuseResolvedMode === "automatic" ? (
                       <div className={`rounded-xl p-4 ${darkMode ? "bg-emerald-900/20 border border-emerald-700/30" : "bg-emerald-50 border border-emerald-200"}`}>
                         <p className={`text-sm font-bold ${darkMode ? "text-emerald-300" : "text-emerald-700"}`}>
-                          Auto Resolved â€” trust at {reuseItem.trustScore ?? 20}/100
+                          Auto Resolved -- trust at {reuseItem.trustScore ?? 20}/100
                         </p>
                         <p className={`mt-1 text-xs ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}>
                           Resolved automatically from validated organizational memory using the stored response template.
@@ -559,14 +571,14 @@ export function TicketWorkspace({
                     ) : reuseResolvedMode === "human" ? (
                       <div className={`rounded-xl p-4 ${darkMode ? "bg-blue-900/20 border border-blue-700/30" : "bg-blue-50 border border-blue-200"}`}>
                         <p className={`text-sm font-bold ${darkMode ? "text-blue-300" : "text-blue-700"}`}>
-                          Human approved â€” trust increased (+{lastTrustDelta})
+                          Human approved -- trust increased (+{lastTrustDelta})
                         </p>
                         <p className={`mt-2 text-sm rounded-xl p-2 leading-6 ${darkMode ? "bg-[#111827] text-slate-300" : "bg-white text-slate-700"}`}>{reuseResponseText}</p>
                       </div>
                     ) : (
                       <div className={`rounded-xl p-4 ${darkMode ? "bg-amber-900/20 border border-amber-700/30" : "bg-amber-50 border border-amber-200"}`}>
                         <p className={`text-sm font-bold ${darkMode ? "text-amber-300" : "text-amber-700"}`}>
-                          Human review required â€” trust {reuseItem.trustScore ?? 20}/{organizationProfile.autoResolutionThreshold}
+                          Human review required -- trust {reuseItem.trustScore ?? 20}/{organizationProfile.autoResolutionThreshold}
                         </p>
                         {reuseResponseSource === "ai_advisory" ? (
                           <p className={`mt-1 text-xs font-semibold ${darkMode ? "text-amber-300" : "text-amber-700"}`}>
@@ -631,7 +643,7 @@ export function TicketWorkspace({
               <div className="mt-3">
                 <p className={`text-xs font-bold ${darkMode ? "text-slate-400" : "text-slate-500"}`}>Why this answer?</p>
                 <p className={`mt-1 text-xs ${darkMode ? "text-slate-400" : "text-[#667085]"}`}>
-                  Knowledge ID {topMatch.item.id.slice(0, 10)}â€¦ â€¢ Version {(topMatch.item.knowledgeVersions?.length ?? 0) || 1} â€¢ Last reviewed today
+                  Knowledge ID {topMatch.item.id.slice(0, 10)}... * Version {(topMatch.item.knowledgeVersions?.length ?? 0) || 1} * Last reviewed today
                 </p>
               </div>
             </div>
@@ -640,7 +652,7 @@ export function TicketWorkspace({
               <p className={`text-sm font-semibold ${darkMode ? "text-slate-300" : "text-[#111827]"}`}>No knowledge match</p>
               <p className={`mt-1 text-xs ${darkMode ? "text-slate-500" : "text-slate-400"}`}>
                 {knowledgeItems.length === 0
-                  ? "Cold start â€” no organizational memory exists yet."
+                  ? "Cold start -- no organizational memory exists yet."
                   : "This ticket doesn't match existing knowledge. Approval will create a new entry."}
               </p>
             </div>
@@ -665,7 +677,7 @@ export function TicketWorkspace({
   );
 }
 
-/* Ticket input form â€” left column idle state */
+/* Ticket input form -- left column idle state */
 function TicketInputForm({ darkMode, onSubmit }: { darkMode: boolean; onSubmit: (text: string) => void }) {
   const [text, setText] = useState("");
 
