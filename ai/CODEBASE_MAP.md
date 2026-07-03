@@ -1,222 +1,236 @@
 # OIP Codebase Map
 
-This document maps the major folders and files in the repository. Use it to locate code before reading source files. For detailed symbol-level navigation, query Graphify first.
+Use this file to find the minimum source needed for a task. It is written for coding agents, so the emphasis is on load-bearing paths and the functions that actually move state.
 
-## Directory Structure
+## Top-Level Directories
 
-```
-app/                    Next.js app router
-components/             React UI components
-  views/                Full-page view components
-  maesa/                Organization-specific UI (sidebar)
-lib/                    Core business logic
-  ai/                   AI provider layer
-data/                   Seed data and organization profiles
-types/                  TypeScript type definitions
-hooks/                  React hooks
-docs/                   Project documentation
-ai/                     AI agent documentation (this directory)
-graphify-out/           Graphify knowledge graph output
-```
+- `ai/` — AI governance and working-context documents for brain-layer and coding-layer agents.
+- `app/` — Next.js app router entrypoints; the client orchestrator lives here.
+- `components/` — React UI components and full-page workspaces.
+- `data/` — Seed tickets, seed knowledge, and seed organization profiles.
+- `docs/` — product, architecture, roadmap, canon, and implementation references for broader OIP context.
+- `graphify-out/` — generated code graph artifacts and graph report.
+- `lib/` — core business logic, memory lifecycle, AI provider adapters, and pipeline engines.
+- `outputs/` — generated output artifacts, currently including the brochure PDF.
+- `tmp/` — temporary generation helpers and rendered assets.
+- `types/` — shared TypeScript contracts used across UI and business logic.
 
 ## App Layer
 
+- `app/layout.tsx` — root HTML shell and metadata.
+- `app/globals.css` — global styling and design tokens used by the prototype UI.
+- `app/page.tsx` — main client orchestrator; owns pipeline state, persistence wiring, view selection, and all write-path coordination.
+- `app/api/ai/chat/route.ts` — LM Studio proxy route with request validation, timeout, and diagnostic headers.
+
+## View Components
+
+- `components/views/HomeView.tsx` — landing workspace with summary cards and entry actions.
+- `components/views/TicketWorkspace.tsx` — single-ticket intake, analysis, review, reflection, reuse testing, and AI advisory surface.
+- `components/views/BulkUploadWorkspace.tsx` — bulk upload parsing, batch analysis, cluster review, and commit UI.
+- `components/views/KnowledgeView.tsx` — knowledge browser, provenance, validation history, and memory-network entrypoint.
+- `components/views/DashboardView.tsx` — metrics and health dashboards.
+- `components/views/OrganizationView.tsx` — profile selection and organization settings.
+- `components/maesa/Sidebar.tsx` — primary navigation between views.
+
+## Supporting Components
+
+- `components/AIAdvisoryPanel.tsx` — AI diagnostics, agreement, and fallback display.
+- `components/AIAnalysisPanel.tsx` — structured AI analysis and canonical suggestions.
+- `components/HumanReviewEditor.tsx` — editable customer-response review gate.
+- `components/ReflectionPanel.tsx` — create/merge/version/trust-update explanation and commit inputs.
+- `components/ProvenancePanel.tsx` — provenance, validation, and version history display.
+- `components/ReasoningPanel.tsx` — deterministic reasoning and uncertainty display.
+- `components/RelevanceGuardrailPanel.tsx` — business-relevance decision display.
+- `components/SimilarKnowledgeList.tsx` — retrieved memory candidates.
+- `components/TrustBadges.tsx` — trust score and maturity display.
+- `components/EmergingPatternsPanel.tsx` — pattern-detection and promotion UI.
+- `components/KnowledgeBaseList.tsx` and `components/KnowledgeItemCard.tsx` — knowledge list and card rendering.
+- `components/MemoryNetworkOverlay.tsx` — full-screen knowledge network visualization.
+- `components/MetricsDashboard.tsx` and `components/OrgMetricsDashboard.tsx` — metric summaries.
+- `components/IntelligenceLogPanel.tsx` — pipeline event log.
+- `components/TicketCard.tsx` — ticket display card.
+- `components/StepNavigation.tsx` — step-based workflow navigation.
+- `components/AccentPicker.tsx` — organization accent-color picker.
+- `components/DemoScenarioSelector.tsx` and `components/ResetDemoButton.tsx` — demo-specific controls.
+
+## Seed Data
+
+- `data/seedKnowledge.ts` — starter organizational memory used before localStorage hydration.
+- `data/seedOrganizationProfiles.ts` — Maesa Tech, FastDrop Logistics, and Pramana Legal profiles plus defaults.
+- `data/seedTickets.ts` — demo tickets for first and second-ticket flows.
+- `data/seedResponses.ts` — older response seeds still referenced by the prototype data layer.
+
+## Core Libraries
+
+### Pipeline and analysis
+
+- `lib/analyzer.ts` — business relevance, category/intent understanding, reasoning summaries, and confidence summaries.
+- `lib/domainClassifier.ts` — business-domain classification before knowledge lookup.
+- `lib/canonicalProblemEngine.ts` — canonical-problem identity, templates, internal guidance, workflows, merges, versions, and canonical defaults.
+- `lib/memory.ts` — retrieval ranking over existing knowledge items.
+- `lib/drafting.ts` — deterministic response drafting, category safety, lesson matching, and tone shaping.
+- `lib/reflection.ts` — post-approval reflection decision engine.
+- `lib/trustEngine.ts` — trust scoring, auto-resolution gating, validation-aware automation checks, and reuse outcome recording.
+- `lib/patternDiscovery.ts` — recurring-issue detection and promotion to canonical problems.
+- `lib/bulkUpload.ts` — batch parsing, analysis, clustering, and cluster-to-memory draft preparation.
+
+### Persistence and profile state
+
+- `lib/orgMemory.ts` — localStorage load/save helpers for knowledge, candidates, validations, memory changes, metrics, log, and patterns.
+- `lib/organizationProfile.ts` — profile load/save helpers, normalization, and keyword-bank generation.
+- `lib/metrics.ts` — metric defaults.
+- `lib/intelligenceLog.ts` — event-log helpers.
+- `lib/demoState.ts` — demo data helpers.
+- `lib/oipEngine.ts` — thin export surface for pipeline modules.
+- `lib/matching.ts` — low-level token overlap helpers used by retrieval/matching.
+
+### AI layer
+
+- `lib/ai/adapter.ts` — selects LM Studio, AMD placeholder, or disabled mode from env config.
+- `lib/ai/deterministic.ts` — advisory agreement scoring, AI draft eligibility checks, and fallback status logic.
+- `lib/ai/lmStudio.ts` — LM Studio provider implementation, timeout handling, JSON extraction, and typed response mapping.
+- `lib/ai/prompts.ts` — prompt builders for analysis, canonical suggestion, pattern naming, knowledge enrichment, draft generation, and match discrimination.
+- `lib/ai/provider.ts` — provider re-export surface.
+- `lib/ai/types.ts` — provider contracts and request/response types.
+
+## Shared Types
+
+- `types/ticket.ts` — `Ticket`, `TicketStatus`.
+- `types/oip.ts` — `Observation`, `Understanding`, `ReasoningSummary`, `Confidence`, `BusinessRelevance`, `BusinessDomainClassification`, `IntelligenceLogEntry`.
+- `types/knowledge.ts` — `KnowledgeItem`, `Lesson`, `KnowledgeCandidate`, `ValidationRecord`, `MemoryChangeRecord`, `ReflectionDecision`, `TrustEvaluation`, `KnowledgeMatch`.
+- `types/ai.ts` — `AIAnalysis`, `AIAdvisory`, `SuggestedResponse`, `DraftGroundingMode`, diagnostics and advisory suggestion types.
+- `types/bulkUpload.ts` — `BulkUploadEntry`, `BulkAnalyzedQuery`, `BulkCluster`, `BulkAnalysisResult`, parse/mapping contracts.
+- `types/metrics.ts` — `Metrics`, `OrgMetrics`.
+- `types/patterns.ts` — pattern types.
+- `types/organization.ts` — `OrganizationProfile`, `CustomerTone`.
+- `types/index.ts` — re-export barrel.
+
+## Load-Bearing Functions
+
 ### `app/page.tsx`
-- **Purpose**: Main application orchestrator
-- **Responsibilities**: All pipeline coordination, state management, ticket lifecycle, approval gates, cold start routing, view rendering
-- **Dependencies**: Nearly every lib and component module
-- **Important exports**: None (root component)
-- **Note**: This is the largest file in the project (~2000 lines). Most pipeline logic lives here.
 
-### `app/layout.tsx`
-- **Purpose**: Root layout with metadata
-- **Responsibilities**: HTML wrapper, font loading
-- **Dependencies**: None
-
-### `app/api/ai/chat/route.ts`
-- **Purpose**: Next.js API proxy for LM Studio
-- **Responsibilities**: Forwards AI requests to local LM Studio, handles timeouts, returns structured responses
-- **Dependencies**: None (standalone API route)
-
-## Core Library (`lib/`)
+- `processTicketPipeline()` — end-to-end single-ticket orchestration.
+- `processSecondTicket()` — reuse / auto-resolution pipeline.
+- `requestAnalysisAdvisory()` — AI analysis and canonical suggestion wrapper.
+- `requestMatchDiscrimination()` — AI same-problem vs distinct-problem check.
+- `requestDraftAdvisory()` — grounded AI draft wrapper plus deterministic fallback.
+- `generateSuggestedResponse()` — single-ticket draft generation stage.
+- `approveResponse()` — human approval gate before reflection.
+- `confirmReflection()` — create/merge/version/trust-update commit coordinator.
+- `applyResolution()` — reuse outcome recorder and trust-update committer.
+- `analyzeUploadedQueries()` — bulk analysis entrypoint.
+- `commitBulkCluster()` — bulk cluster validation and commit path.
+- `applyValidatedMemoryChange()` — canonical write path for candidates, validations, memory changes, and knowledge upserts.
+- `commitValidatedMemoryChange()` — wrapper returning the final validated knowledge item.
+- `confirmAndResetOrganization()` and `resetOrganization()` — protected danger-zone reset path.
 
 ### `lib/analyzer.ts`
-- **Purpose**: Business Relevance Guardrail and Understanding Engine
-- **Responsibilities**: Signal-based relevance assessment, ticket understanding, category classification, core problem mapping
-- **Dependencies**: `types/oip.ts`, `types/organization.ts`, `lib/organizationProfile.ts`
-- **Important exports**: `assessBusinessRelevanceForProfile()`, `understandForProfile()`, `observe()`
 
-### `lib/domainClassifier.ts`
-- **Purpose**: Business Domain Classification engine
-- **Responsibilities**: Classifies tickets into business domains using signal matching against 20 domain rules
-- **Dependencies**: `types/oip.ts`, `types/organization.ts`
-- **Important exports**: `classifyBusinessDomain()`
+- `assessBusinessRelevanceForProfile()` — business-scope guardrail.
+- `understandForProfile()` — category, intent, urgency, tags, and detected signals.
+- `observe()` — raw ticket observation.
+- `buildReasoning()` — human-readable explanation of classification and memory reuse.
+- `buildConfidence()` — confidence score and basis/uncertainty summary.
 
 ### `lib/canonicalProblemEngine.ts`
-- **Purpose**: Canonical Problem Detection, templates, merging
-- **Responsibilities**: Problem identity matching, customer response templates, internal guidance, resolution workflows, canonical problem CRUD, deduplication
-- **Dependencies**: `types/knowledge.ts`, `types/oip.ts`, `types/organization.ts`
-- **Important exports**: `identifyCanonicalProblem()`, `getCustomerResponseTemplate()`, `renderCustomerResponse()`, `getInternalGuidance()`, `getResolutionWorkflow()`, `createCanonicalProblem()`, `mergeCanonicalProblemItems()`, `dedupeCanonicalProblems()`
+
+- `identifyCanonicalProblem()` — deterministic canonical identity selection.
+- `findCanonicalProblem()` — similarity-thresholded canonical match against stored knowledge.
+- `createCanonicalProblem()` — first validated canonical-problem creation.
+- `mergeIntoCanonicalProblem()` — evidence merge path.
+- `upsertCanonicalProblem()` — canonical upsert used during validated commit.
+- `withCanonicalProblemDefaults()` — normalization and default fields.
+- `getCustomerResponseTemplate()` and `renderCustomerResponse()` — deterministic customer template rendering.
 
 ### `lib/drafting.ts`
-- **Purpose**: Draft response generation
-- **Responsibilities**: Template selection, category compatibility validation, lesson matching, tone application
-- **Dependencies**: `types/knowledge.ts`, `types/oip.ts`, `lib/canonicalProblemEngine.ts`
-- **Important exports**: `draftResponse()`, `isCompatibleForDrafting()`, `findMatchingLesson()`
+
+- `draftResponse()` — deterministic draft generator.
+- `findMatchingLesson()` — lesson-grounded override lookup.
+- `isCompatibleForDrafting()` — category-safety gate for draft reuse.
 
 ### `lib/trustEngine.ts`
-- **Purpose**: Trust scoring and auto-resolution decisions
-- **Responsibilities**: Trust evaluation, auto-resolution eligibility, trust increment calculation
-- **Dependencies**: `types/knowledge.ts`, `types/organization.ts`
-- **Important exports**: `evaluateTrust()`
 
-### `lib/memory.ts`
-- **Purpose**: Knowledge retrieval and matching
-- **Responsibilities**: Similarity search, knowledge matching, deduplication at retrieval time
-- **Dependencies**: `types/knowledge.ts`, `lib/matching.ts`
-- **Important exports**: `findSimilarKnowledge()`
-
-### `lib/orgMemory.ts`
-- **Purpose**: localStorage persistence layer
-- **Responsibilities**: Load, save, migrate, deduplicate organizational memory
-- **Dependencies**: `types/knowledge.ts`
-- **Important exports**: `loadOrganizationMemory()`, `saveOrganizationMemory()`
+- `hasApprovedValidationForActiveVersion()` — active-version validation gate.
+- `evaluateTrust()` — auto-resolution decision with validation awareness.
+- `recordResolution()` — trust evolution and outcome counters.
+- `updateTrust()` — direct trust delta helper.
 
 ### `lib/reflection.ts`
-- **Purpose**: Reflection engine
-- **Responsibilities**: Post-approval analysis determining create/merge/version/trust-update actions
-- **Dependencies**: `types/knowledge.ts`, `lib/canonicalProblemEngine.ts`
-- **Important exports**: `generateReflection()`
 
-### `lib/patternDiscovery.ts`
-- **Purpose**: Emerging pattern detection
-- **Responsibilities**: Groups recurring tickets, calculates confidence, supports promotion to canonical problems
-- **Dependencies**: `types/patterns.ts`, `types/knowledge.ts`
-- **Important exports**: `detectEmergingPattern()`, `upsertEmergingPattern()`
+- `generateReflection()` — create-new vs merge vs version vs trust-only decision logic.
 
-### `lib/organizationProfile.ts`
-- **Purpose**: Organization profile utilities
-- **Responsibilities**: Profile keyword bank generation, profile matching
-- **Dependencies**: `types/organization.ts`
-- **Important exports**: `profileKeywordBank()`
+### `lib/orgMemory.ts`
 
-### `lib/matching.ts`
-- **Purpose**: Text similarity scoring
-- **Responsibilities**: Word overlap, similarity percentage calculation
-- **Dependencies**: None
-- **Important exports**: Similarity functions used by memory retrieval
-
-### `lib/metrics.ts`
-- **Purpose**: Organizational metrics state
-- **Responsibilities**: Default metrics, metric update helpers
-- **Dependencies**: `types/metrics.ts`
-- **Important exports**: `defaultMetrics`
+- `loadKnowledge()` / `saveKnowledge()` — knowledge persistence.
+- `loadKnowledgeCandidates()` / `saveKnowledgeCandidates()` — candidate persistence.
+- `loadValidationRecords()` / `saveValidationRecords()` — validation-history persistence.
+- `loadMemoryChangeRecords()` / `saveMemoryChangeRecords()` — memory-change audit persistence.
+- `loadOrgMetrics()` / `saveOrgMetrics()` — organization metrics.
+- `loadOrgLog()` / `saveOrgLog()` — intelligence log.
+- `loadEmergingPatterns()` / `saveEmergingPatterns()` — pattern persistence.
+- `clearOrganization()` — destructive reset.
 
 ### `lib/bulkUpload.ts`
-- **Purpose**: CSV bulk knowledge import
-- **Responsibilities**: Parse CSV, validate entries, create knowledge items from bulk data
-- **Dependencies**: `types/bulkUpload.ts`, `types/knowledge.ts`
 
-### `lib/oipEngine.ts`
-- **Purpose**: Pipeline re-exports
-- **Responsibilities**: Central export point for pipeline functions
-- **Dependencies**: Re-exports from analyzer, domainClassifier, canonicalProblemEngine, etc.
+- `parseBulkUploadFile()` — multi-format bulk file parser.
+- `analyzeBulkEntries()` — bulk deterministic/AI-assisted analysis loop.
+- `prepareBulkClusterCommit()` — validated bulk cluster to memory-mutation draft.
+- `getBulkUploadLimit()` — batch cap.
 
-### `lib/intelligenceLog.ts`
-- **Purpose**: Intelligence log entry creation
-- **Dependencies**: `types/oip.ts`
+### `lib/ai/*`
 
-### `lib/demoState.ts`
-- **Purpose**: Demo mode state management
-- **Dependencies**: `types/`
+- `createAIAdapter()` — provider selection from env.
+- `buildAIAdvisory()` — advisory status and diagnostics wrapper.
+- `shouldUseAIDraft()` — minimum AI draft safety screen.
+- `createLMStudioProvider()` — provider factory.
+- `callChatCompletion()` — LM Studio request primitive.
 
-## AI Provider Layer (`lib/ai/`)
+## Where To Look For X
 
-### `lib/ai/adapter.ts`
-- **Purpose**: AI provider routing and fallback
-- **Responsibilities**: Selects provider (LM Studio, AMD Cloud, disabled), handles fallback to deterministic
-- **Important exports**: `createAIAdapter()`
+- Classification and intents — `lib/analyzer.ts`
+  Start with `understandForProfile()` and `inferIntent()`.
 
-### `lib/ai/lmStudio.ts`
-- **Purpose**: LM Studio provider implementation
-- **Responsibilities**: HTTP requests to local LM Studio API, response parsing, timeout handling
-- **Important exports**: `createLMStudioProvider()`
+- Business-scope rejection vs uncertain pass-through — `lib/analyzer.ts`
+  See `assessBusinessRelevanceForProfile()`.
 
-### `lib/ai/prompts.ts`
-- **Purpose**: AI prompt construction
-- **Responsibilities**: Builds prompts for ticket analysis, customer response drafting, canonical problem suggestion
-- **Important exports**: Prompt builder functions
+- Domain classification — `lib/domainClassifier.ts`
+  See `classifyBusinessDomain()`.
 
-### `lib/ai/types.ts`
-- **Purpose**: AI provider interfaces
-- **Important exports**: `AIProvider`, `AIAdapter`, `AIConfig`, `AIProviderResult`
+- Canonical-problem identity and similarity thresholds — `lib/canonicalProblemEngine.ts`
+  See `identifyCanonicalProblem()` and `findCanonicalProblem()`.
 
-### `lib/ai/deterministic.ts`
-- **Purpose**: Deterministic fallback provider
-- **Responsibilities**: Returns structured responses without AI when provider is unavailable
+- Memory retrieval and ranking — `lib/memory.ts`
+  See `retrieveMemory()`.
 
-### `lib/ai/provider.ts`
-- **Purpose**: Provider factory
-- **Responsibilities**: Creates provider instances based on configuration
+- Draft generation and lesson matching — `lib/drafting.ts`
+  See `draftResponse()`, `findMatchingLesson()`, and `isCompatibleForDrafting()`.
 
-## Components (`components/`)
+- AI analysis, discrimination, and grounded draft selection — `app/page.tsx`
+  See `requestAnalysisAdvisory()`, `requestMatchDiscrimination()`, and `requestDraftAdvisory()`.
 
-### Views (`components/views/`)
+- LM Studio proxy and timeout handling — `app/api/ai/chat/route.ts` and `lib/ai/lmStudio.ts`
+  See `POST()` and `callChatCompletion()`.
 
-| File | Purpose |
-|------|---------|
-| `TicketWorkspace.tsx` | Ticket intake form, OIP reasoning timeline, review workflow, reuse flow |
-| `KnowledgeView.tsx` | Knowledge base browser with search and filtering |
-| `DashboardView.tsx` | Organizational metrics, trust growth charts, stat cards |
-| `OrganizationView.tsx` | Organization profile display and switching |
-| `HomeView.tsx` | Landing page with quick actions and learning timeline |
-| `BulkUploadWorkspace.tsx` | CSV upload interface for bulk knowledge import |
+- Human approval gate — `app/page.tsx`
+  See `approveResponse()` and `approveReuse()`.
 
-### Feature Components
+- Reflection decisioning — `lib/reflection.ts`
+  See `generateReflection()`.
 
-| File | Purpose |
-|------|---------|
-| `HumanReviewEditor.tsx` | Editable review interface for draft responses |
-| `ReflectionPanel.tsx` | Reflection decision display and confirmation |
-| `ProvenancePanel.tsx` | Knowledge item provenance and history |
-| `SuggestedResponsePanel.tsx` | Draft response display with confidence notes |
-| `AIAdvisoryPanel.tsx` | AI diagnostics and provider status |
-| `ReasoningPanel.tsx` | OIP reasoning display |
-| `RelevanceGuardrailPanel.tsx` | Business relevance assessment display |
-| `AIAnalysisPanel.tsx` | AI analysis results display |
-| `KnowledgeBaseList.tsx` | Knowledge item list rendering |
-| `KnowledgeItemCard.tsx` | Individual knowledge item card |
-| `EmergingPatternsPanel.tsx` | Pattern discovery display |
-| `OrganizationProfilePanel.tsx` | Organization profile details |
-| `TrustBadges.tsx` | Trust score visual indicators |
-| `SimilarKnowledgeList.tsx` | Similar knowledge matches display |
-| `MetricsDashboard.tsx` | Metrics chart component |
-| `OrgMetricsDashboard.tsx` | Organization-level metrics |
-| `TicketCard.tsx` | Individual ticket display |
-| `StepNavigation.tsx` | Pipeline step navigation |
-| `MemoryNetworkOverlay.tsx` | Memory network visualization |
-| `IntelligenceLogPanel.tsx` | Intelligence log display |
-| `AccentPicker.tsx` | Theme color picker |
-| `ResetDemoButton.tsx` | Demo state reset |
-| `DemoScenarioSelector.tsx` | Demo scenario selection |
+- Validation / memory commit path — `app/page.tsx` and `lib/orgMemory.ts`
+  See `createCandidate()`, `applyValidatedMemoryChange()`, `commitValidatedMemoryChange()`, and the `load*` / `save*` persistence helpers.
 
-## Types (`types/`)
+- Trust + validation dual requirement — `lib/trustEngine.ts`
+  See `hasApprovedValidationForActiveVersion()` and `evaluateTrust()`.
 
-| File | Key Types |
-|------|-----------|
-| `types/ticket.ts` | `Ticket` |
-| `types/knowledge.ts` | `KnowledgeItem`, `KnowledgeMatch`, `KnowledgeVersion`, `ReflectionDecision`, `TrustDecision`, `Lesson` |
-| `types/oip.ts` | `Observation`, `Understanding`, `BusinessRelevance`, `BusinessDomainClassification`, `IntelligenceLogEntry` |
-| `types/organization.ts` | `OrganizationProfile` |
-| `types/ai.ts` | `AIAnalysis`, `AIAdvisory`, `SuggestedResponse`, `AIDiagnostics`, `MatchDiscriminationResult` |
-| `types/metrics.ts` | `OrgMetrics` |
-| `types/patterns.ts` | `EmergingPattern` |
-| `types/bulkUpload.ts` | `BulkUploadEntry`, `BulkAnalyzedQuery`, `BulkCluster` |
-| `types/index.ts` | Central re-export for all types |
+- Reuse auto-resolution path — `app/page.tsx`
+  See `processSecondTicket()` and `applyResolution()`.
 
-## Data (`data/`)
+- Bulk upload with cluster validation — `lib/bulkUpload.ts` and `app/page.tsx`
+  See `analyzeBulkEntries()`, `prepareBulkClusterCommit()`, and `commitBulkCluster()`.
 
-| File | Purpose |
-|------|---------|
-| `seedOrganizationProfiles.ts` | Three organization profiles (Maesa Tech, FastDrop Logistics, Pramana Legal) |
-| `seedTickets.ts` | Sample tickets for demo mode |
+- Organizational reset / danger actions — `app/page.tsx` and `lib/orgMemory.ts`
+  See `confirmAndResetOrganization()`, `resetOrganization()`, and `clearOrganization()`.
+
+- Knowledge provenance, versions, and lessons — `types/knowledge.ts`, `lib/canonicalProblemEngine.ts`, and `app/page.tsx`
+  See `KnowledgeItem`, `Lesson`, `confirmReflection()`, and `mergeIntoCanonicalProblem()`.
