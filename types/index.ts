@@ -5,6 +5,7 @@ export type {
   SuggestedResponse,
   AIProviderMode,
   AIAdvisoryStatus,
+  AIDiagnostics,
   AIAnalysisSuggestion,
   AICanonicalProblemSuggestion,
   AIPatternSuggestion,

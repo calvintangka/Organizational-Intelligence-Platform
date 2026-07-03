@@ -6,6 +6,21 @@ import { profileKeywordBank } from "@/lib/organizationProfile";
 
 const FALLBACK_PROFILE = defaultOrganizationProfile;
 
+const EMAIL_RECOVERY_SIGNALS = [
+  "forgot my email",
+  "forgot email",
+  "forgotten my email",
+  "retrieve my email",
+  "retrieving my email",
+  "recover my email",
+  "cannot remember my email",
+  "cant remember my email",
+  "forgot account email",
+  "dont remember my login email",
+  "don't remember my login email",
+  "unable to log in because i forgot my email"
+];
+
 const BUSINESS_RELEVANCE_SIGNALS = [
   // Activation
   "activation", "activate", "activation code",
@@ -19,7 +34,7 @@ const BUSINESS_RELEVANCE_SIGNALS = [
   "password", "account", "blocked", "locked",
   // Account recovery (email/username lookup, forgot credentials)
   "email", "email address", "forgot email", "retrieve email",
-  "forgot", "recover", "recovery",
+  "forgot", "recover", "recovery", ...EMAIL_RECOVERY_SIGNALS,
   // Billing / commerce
   "payment", "billing", "invoice", "refund", "subscription",
   "cancel", "purchase", "bought", "license",
@@ -210,6 +225,7 @@ const CATEGORY_RULES: Array<{ category: string; keywords: string[]; tags: string
       "login failed", "authentication failed",
       "cannot login", "cant login", "cant log in",
       "forgot password", "reset password",
+      ...EMAIL_RECOVERY_SIGNALS,
       "password"
     ],
     tags: ["login", "password", "access"]
@@ -383,6 +399,16 @@ const CATEGORY_WEIGHTS: Record<string, Array<[string, number]>> = {
     ["cant access account", 2],
     ["forgot password", 2],
     ["reset password", 2],
+    ["forgot my email", 5],
+    ["forgot email", 5],
+    ["forgotten my email", 5],
+    ["retrieve my email", 5],
+    ["recover my email", 5],
+    ["cannot remember my email", 5],
+    ["cant remember my email", 5],
+    ["forgot account email", 5],
+    ["dont remember my login email", 5],
+    ["don't remember my login email", 5],
     ["access", 1]
   ]
 };
@@ -597,9 +623,24 @@ function inferIntent(category: string, detectedSignals: string[], fullText: stri
     typeof matcher === "string"
       ? detectedSignals.includes(matcher) || fullText.includes(matcher)
       : matcher.test(fullText);
+  const hasEmailRecoverySignal =
+    EMAIL_RECOVERY_SIGNALS.some((signal) => fullText.includes(signal)) ||
+    (
+      fullText.includes("email") &&
+      ["forgot", "forgotten", "retrieve", "retrieving", "recover", "remember"].some((term) => fullText.includes(term))
+    );
+  const hasPasswordRecoverySignal =
+    fullText.includes("password") &&
+    ["forgot", "forgotten", "reset", "changed"].some((term) => fullText.includes(term));
 
   switch (category) {
     case "Login":
+      if (hasEmailRecoverySignal) {
+        return "email_recovery";
+      }
+      if (hasPasswordRecoverySignal || hasSignal("forgot password") || hasSignal("reset password")) {
+        return "credentials_rejected";
+      }
       if (
         hasSignal("invalid credentials") ||
         hasSignal("invalid password") ||
@@ -619,6 +660,9 @@ function inferIntent(category: string, detectedSignals: string[], fullText: stri
       }
       return "general_login_failure";
     case "Account Access":
+      if (hasEmailRecoverySignal) {
+        return "email_recovery";
+      }
       if (hasSignal("account locked") || hasSignal("locked out") || hasSignal("blocked") || hasSignal("suspended")) {
         return "account_locked";
       }
@@ -745,6 +789,3 @@ export function buildConfidence(understanding: Understanding, topMatch: Knowledg
 
   return { level, score, basis, uncertainty: uncertaintyFactors };
 }
-
-
-

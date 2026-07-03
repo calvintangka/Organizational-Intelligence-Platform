@@ -79,6 +79,7 @@ import type {
   AIAnalysis,
   AIAdvisory,
   AIAdvisoryStatus,
+  AIDiagnostics,
   AIKnowledgeEnrichment,
   KnowledgeItem,
   KnowledgeMatch,
@@ -111,6 +112,46 @@ import type {
 } from "@/types";
 
 const aiAdapter = createAIAdapter();
+const EMAIL_RECOVERY_FORBIDDEN_DRAFT_TERMS = [
+  "caps lock",
+  "saved password",
+  "autofill",
+  "credential mismatch",
+  "old password"
+];
+const EMAIL_RECOVERY_VALIDATION_TERMS = [
+  "verify",
+  "verification",
+  "invoice",
+  "order id",
+  "subscription",
+  "purchase date",
+  "payment method",
+  "login email",
+  "account email"
+];
+const ACTIVATION_REQUIRED_DRAFT_TERMS = [
+  "activation code",
+  "purchase email",
+  "product version",
+  "screenshot"
+];
+const ACTIVATION_ALLOWED_TOPIC_TERMS = [
+  "activation",
+  "activation code",
+  "license",
+  "product version",
+  "purchase email",
+  "activation error"
+];
+const ACTIVATION_FORBIDDEN_DRAFT_TERMS = [
+  "password",
+  "login email",
+  "recover the email",
+  "credentials",
+  "caps lock",
+  "saved password"
+];
 
 const steps = [
   "Start",
@@ -817,7 +858,7 @@ export default function Home() {
     if (aiAdapter.config.mode === "amd") {
       return "AMD Cloud placeholder is not implemented yet. Using deterministic Organizational Intelligence.";
     }
-    return "AI unavailable. Using deterministic Organizational Intelligence.";
+    return `AI unavailable. Using deterministic Organizational Intelligence. Proxy: ${aiAdapter.config.proxyPath}.`;
   }
 
   function draftModeLabel(mode: DraftGroundingMode, groundingLabel?: string): string {
@@ -830,11 +871,116 @@ export default function Home() {
     return "AI suggestion - no organizational knowledge exists yet; this draft is not based on validated memory. Review carefully before sending.";
   }
 
-  function isUsableAIDraft(result: AIProviderResult<{ draftResponse: string; confidence: number }>): boolean {
-    const draft = result.data?.draftResponse?.trim();
-    if (!result.ok || !draft) return false;
+  function buildDefaultDiagnostics(fallbackReason?: string): AIDiagnostics {
+    return {
+      mode: aiAdapter.config.mode,
+      provider: aiAdapter.provider.label,
+      model: aiAdapter.config.model,
+      proxyPath: aiAdapter.config.proxyPath,
+      endpointUsed: aiAdapter.config.proxyPath,
+      proxySucceeded: aiAdapter.config.mode === "disabled" ? false : undefined,
+      fallbackReason
+    };
+  }
+
+  function coalesceDiagnostics(results: Array<AIProviderResult<unknown>>, fallbackReason?: string): AIDiagnostics {
+    const firstDiagnostics = results.find((result) => result.diagnostics)?.diagnostics;
+    const firstError = results.find((result) => !result.ok)?.error;
+    const anySucceeded = results.some((result) => result.diagnostics?.proxySucceeded === true);
+    const anyFailed = results.some((result) => result.diagnostics?.proxySucceeded === false);
+
+    return {
+      ...buildDefaultDiagnostics(fallbackReason ?? firstError),
+      ...firstDiagnostics,
+      proxySucceeded: anySucceeded ? true : anyFailed ? false : firstDiagnostics?.proxySucceeded,
+      fallbackReason: fallbackReason ?? firstDiagnostics?.fallbackReason ?? firstError
+    };
+  }
+
+  function formatFallbackNotice(fallbackReason?: string, diagnostics?: AIDiagnostics): string {
+    const proxyPath = diagnostics?.proxyPath ?? aiAdapter.config.proxyPath;
+    const baseUrl = diagnostics?.serverBaseUrl ?? "server-configured";
+    const reason = fallbackReason ?? diagnostics?.fallbackReason ?? "AI advisory unavailable.";
+    return `AI fallback: ${reason} Proxy: ${proxyPath}. Server base URL: ${baseUrl}. Deterministic draft shown.`;
+  }
+
+  function validateEmailRecoveryDraft(draft: string): string | null {
     const lower = draft.toLowerCase();
-    return !lower.includes("internal guidance") && !lower.includes("root cause hypothesis");
+    const forbiddenTerm = EMAIL_RECOVERY_FORBIDDEN_DRAFT_TERMS.find((term) => lower.includes(term));
+    if (forbiddenTerm) {
+      return `AI draft rejected because it did not match email recovery intent. Found password-focused wording: "${forbiddenTerm}".`;
+    }
+
+    const mentionsPasswordReset = lower.includes("password reset") || lower.includes("reset your password");
+    const mentionsRecoveryGoal = lower.includes("email") && EMAIL_RECOVERY_VALIDATION_TERMS.some((term) => lower.includes(term));
+    if (mentionsPasswordReset && !mentionsRecoveryGoal) {
+      return "AI draft rejected because it did not match email recovery intent.";
+    }
+
+    if (!mentionsRecoveryGoal) {
+      return "AI draft rejected because it did not match email recovery intent.";
+    }
+
+    return null;
+  }
+
+  function validateActivationDraft(draft: string): string | null {
+    const lower = draft.toLowerCase();
+    const forbiddenTerm = ACTIVATION_FORBIDDEN_DRAFT_TERMS.find((term) => lower.includes(term));
+    if (forbiddenTerm) {
+      return `AI draft rejected because it did not match Activation category. Found non-activation wording: "${forbiddenTerm}".`;
+    }
+
+    const mentionsActivationTopic = ACTIVATION_ALLOWED_TOPIC_TERMS.some((term) => lower.includes(term));
+    if (!mentionsActivationTopic) {
+      return "AI draft rejected because it did not match Activation category.";
+    }
+
+    const missingRequiredTerms = ACTIVATION_REQUIRED_DRAFT_TERMS.filter((term) => !lower.includes(term));
+    if (missingRequiredTerms.length > 0) {
+      return `AI draft rejected because it did not match Activation category. Missing activation details: ${missingRequiredTerms.join(", ")}.`;
+    }
+
+    return null;
+  }
+
+  function getAIDraftRejectionReason(
+    understanding: Understanding,
+    result: AIProviderResult<{ draftResponse: string; confidence: number }>
+  ): string | null {
+    const draft = result.data?.draftResponse?.trim();
+    if (!result.ok || !draft) return result.error ?? "AI draft was empty.";
+    const lower = draft.toLowerCase();
+    if (lower.includes("internal guidance") || lower.includes("root cause hypothesis")) {
+      return "AI draft included internal-only guidance.";
+    }
+    if (understanding.category === "Activation") {
+      return validateActivationDraft(draft);
+    }
+    if (understanding.intent === "email_recovery") {
+      return validateEmailRecoveryDraft(draft);
+    }
+    return null;
+  }
+
+  function isUsableAIDraft(
+    understanding: Understanding,
+    result: AIProviderResult<{ draftResponse: string; confidence: number }>
+  ): boolean {
+    return getAIDraftRejectionReason(understanding, result) === null;
+  }
+
+  function createAIStatusLogEntry(advisory: AIAdvisory): IntelligenceLogEntry {
+    const detail = [
+      `${advisory.providerLabel}: ${advisory.status} · Agreement ${advisory.agreementPct}%`,
+      `Mode ${advisory.diagnostics.mode}`,
+      `Proxy ${advisory.diagnostics.proxyPath}`,
+      `Base ${advisory.diagnostics.serverBaseUrl ?? "server-configured"}`,
+      advisory.diagnostics.proxySucceeded === true ? "Proxy succeeded" : advisory.diagnostics.proxySucceeded === false ? "Proxy failed" : "",
+      advisory.diagnostics.fallbackReason ? `Fallback: ${advisory.diagnostics.fallbackReason}` : ""
+    ].filter(Boolean).join(" · ");
+
+    return createLogEntry("AI advisory status", detail);
   }
 
   /**
@@ -900,7 +1046,8 @@ export default function Home() {
         providerLabel: aiAdapter.provider.label,
         model: aiAdapter.config.model,
         deterministicLabel: canonicalProblem.title,
-        availabilityMessage: defaultAvailabilityMessage()
+        availabilityMessage: defaultAvailabilityMessage(),
+        diagnostics: buildDefaultDiagnostics(defaultAvailabilityMessage())
       });
     }
 
@@ -935,7 +1082,8 @@ export default function Home() {
       deterministicLabel: canonicalProblem.title,
       analysisSuggestion: analysisResult.ok ? analysisResult.data : undefined,
       canonicalSuggestion: canonicalResult.ok ? canonicalResult.data : undefined,
-      availabilityMessage
+      availabilityMessage,
+      diagnostics: coalesceDiagnostics([analysisResult, canonicalResult], availabilityMessage)
     });
 
     recordAIResults([analysisResult, canonicalResult], advisory.status, advisory.agreementPct);
@@ -990,7 +1138,7 @@ export default function Home() {
         advisory: baseAdvisory,
         response: {
           ...fallbackResponse,
-          fallbackNotice: "AI unavailable - deterministic draft shown."
+          fallbackNotice: formatFallbackNotice(defaultAvailabilityMessage(), baseAdvisory?.diagnostics)
         },
         usedAIDraft: false
       };
@@ -1048,12 +1196,18 @@ export default function Home() {
       availabilityMessage:
         draftResult.ok || enrichmentResult.ok
           ? baseAdvisory?.availabilityMessage
-          : draftResult.error || enrichmentResult.error || defaultAvailabilityMessage()
+          : draftResult.error || enrichmentResult.error || defaultAvailabilityMessage(),
+      diagnostics: coalesceDiagnostics(
+        [draftResult, enrichmentResult],
+        draftResult.ok || enrichmentResult.ok ? undefined : draftResult.error || enrichmentResult.error
+      )
     });
 
     recordAIResults([draftResult, enrichmentResult], nextAdvisory.status, nextAdvisory.agreementPct);
 
-    if (isUsableAIDraft(draftResult)) {
+    const draftRejectionReason = getAIDraftRejectionReason(understanding, draftResult);
+
+    if (draftRejectionReason === null && isUsableAIDraft(understanding, draftResult)) {
       return {
         advisory: nextAdvisory,
         usedAIDraft: true,
@@ -1071,11 +1225,31 @@ export default function Home() {
       };
     }
 
+    if (draftRejectionReason && draftResult.ok) {
+      addLogEntries([
+        createLogEntry(
+          draftRejectionReason.includes("Activation category")
+            ? "AI draft rejected because it did not match Activation category."
+            : "AI draft rejected because it did not match email recovery intent.",
+          draftRejectionReason
+        )
+      ]);
+    }
+
     return {
-      advisory: nextAdvisory,
+      advisory: {
+        ...nextAdvisory,
+        diagnostics: {
+          ...nextAdvisory.diagnostics,
+          fallbackReason: draftRejectionReason ?? nextAdvisory.diagnostics.fallbackReason
+        }
+      },
       response: {
         ...fallbackResponse,
-        fallbackNotice: "AI unavailable - deterministic draft shown."
+        fallbackNotice: formatFallbackNotice(
+          draftRejectionReason ?? draftResult.error ?? enrichmentResult.error ?? defaultAvailabilityMessage(),
+          nextAdvisory.diagnostics
+        )
       },
       usedAIDraft: false
     };
@@ -1142,12 +1316,7 @@ export default function Home() {
     setAiAdvisory(advisory);
     setSelectedTicket({ ...ticket, status: "analyzed" });
     addLogEntries(logEntries);
-    addLogEntries([
-      createLogEntry(
-        "AI advisory status",
-        `${advisory.providerLabel}: ${advisory.status} · Agreement ${advisory.agreementPct}%`
-      )
-    ]);
+    addLogEntries([createAIStatusLogEntry(advisory)]);
     updateMetrics({ ticketsProcessed: 1 });
     setCurrentStep(2);
   }

@@ -34,6 +34,17 @@ export interface MatchDiscriminationResult {
 export type AIProviderMode = "disabled" | "lmstudio" | "amd";
 export type AIAdvisoryStatus = "verified" | "advisory_only" | "needs_human_review" | "unavailable" | "disabled";
 
+export interface AIDiagnostics {
+  mode: AIProviderMode;
+  provider: string;
+  model?: string;
+  proxyPath: string;
+  serverBaseUrl?: string;
+  endpointUsed?: string;
+  proxySucceeded?: boolean;
+  fallbackReason?: string;
+}
+
 export interface AIAnalysisSuggestion {
   summary: string;
   category: string;
@@ -78,6 +89,7 @@ export interface AIAdvisory {
   providerMode: AIProviderMode;
   providerLabel: string;
   model?: string;
+  diagnostics: AIDiagnostics;
   deterministicLabel: string;
   aiLabel: string;
   agreementPct: number;

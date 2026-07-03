@@ -18,6 +18,7 @@ import type {
   PatternNameInput
 } from "@/lib/ai/types";
 import type {
+  AIDiagnostics,
   AIAnalysisSuggestion,
   AICanonicalProblemSuggestion,
   AICustomerResponseSuggestion,
@@ -31,6 +32,32 @@ interface ChatCompletionPayload {
   messages: Array<{ role: "system" | "user"; content: string }>;
   temperature: number;
   max_tokens: number;
+}
+
+interface ChatCompletionOptions {
+  maxTokens?: number;
+}
+
+function readDiagnostics(
+  config: AIConfig,
+  endpoint: string,
+  proxySucceeded?: boolean,
+  fallbackReason?: string,
+  headers?: Headers
+): AIDiagnostics {
+  return {
+    mode: (headers?.get("x-ai-mode") as AIDiagnostics["mode"] | null) ?? config.mode,
+    provider: headers?.get("x-ai-provider") ?? "LM Studio",
+    model: headers?.get("x-ai-model") ?? config.model,
+    proxyPath: headers?.get("x-ai-proxy-path") ?? config.proxyPath,
+    serverBaseUrl: headers?.get("x-ai-server-base-url") ?? config.baseUrl,
+    endpointUsed: headers?.get("x-ai-endpoint-used") ?? endpoint,
+    proxySucceeded:
+      headers?.get("x-ai-proxy-succeeded") != null
+        ? headers.get("x-ai-proxy-succeeded") === "true"
+        : proxySucceeded,
+    fallbackReason: headers?.get("x-ai-fallback-reason") ?? fallbackReason
+  };
 }
 
 function extractJsonObject(text: string): string | null {
@@ -67,16 +94,17 @@ function parseJsonObject(text: string): unknown | null {
 
 async function callChatCompletion<T>(
   config: AIConfig,
-  prompt: { system: string; user: string }
+  prompt: { system: string; user: string },
+  options: ChatCompletionOptions = {}
 ): Promise<AIProviderResult<T>> {
   const startedAt = Date.now();
   const controller = new AbortController();
-  const timeoutMs = Math.max(5000, Math.min(config.timeoutMs, 8000));
+  const timeoutMs = Math.max(5000, Math.min(config.timeoutMs, 30000));
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const endpoint =
     typeof window === "undefined"
       ? `${config.baseUrl.replace(/\/$/, "")}/chat/completions`
-      : "/api/ai/chat";
+      : config.proxyPath;
 
   try {
     const response = await fetch(endpoint, {
@@ -87,7 +115,7 @@ async function callChatCompletion<T>(
       body: JSON.stringify({
         model: config.model,
         temperature: 0.2,
-        max_tokens: 180,
+        max_tokens: options.maxTokens ?? 180,
         messages: [
           { role: "system", content: prompt.system },
           { role: "user", content: prompt.user }
@@ -98,20 +126,56 @@ async function callChatCompletion<T>(
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => "");
+      const error = errorText ? `HTTP ${response.status}: ${errorText}` : `HTTP ${response.status}`;
       return {
         ok: false,
         providerMode: "lmstudio",
         providerLabel: "LM Studio",
         model: config.model,
         latencyMs: Date.now() - startedAt,
-        error: errorText ? `HTTP ${response.status}: ${errorText}` : `HTTP ${response.status}`
+        error,
+        diagnostics: readDiagnostics(config, endpoint, false, error, response.headers)
       };
     }
 
     const payload = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
+      choices?: Array<{
+        finish_reason?: string;
+        message?: { content?: string; reasoning_content?: string };
+      }>;
     };
-    const content = payload.choices?.[0]?.message?.content;
+    const firstChoice = payload.choices?.[0];
+    const finishReason = firstChoice?.finish_reason;
+    const content = firstChoice?.message?.content?.trim();
+    const reasoningContent = firstChoice?.message?.reasoning_content?.trim();
+    if (finishReason === "length") {
+      return {
+        ok: false,
+        providerMode: "lmstudio",
+        providerLabel: "LM Studio",
+        model: config.model,
+        latencyMs: Date.now() - startedAt,
+        error: "AI output truncated before valid JSON",
+        diagnostics: readDiagnostics(config, endpoint, false, "AI output truncated before valid JSON", response.headers)
+      };
+    }
+    if (!content && reasoningContent) {
+      return {
+        ok: false,
+        providerMode: "lmstudio",
+        providerLabel: "LM Studio",
+        model: config.model,
+        latencyMs: Date.now() - startedAt,
+        error: "Model returned reasoning_content instead of JSON content",
+        diagnostics: readDiagnostics(
+          config,
+          endpoint,
+          false,
+          "Model returned reasoning_content instead of JSON content",
+          response.headers
+        )
+      };
+    }
     if (!content) {
       return {
         ok: false,
@@ -119,7 +183,8 @@ async function callChatCompletion<T>(
         providerLabel: "LM Studio",
         model: config.model,
         latencyMs: Date.now() - startedAt,
-        error: "Malformed AI response"
+        error: "Malformed AI response",
+        diagnostics: readDiagnostics(config, endpoint, false, "Malformed AI response", response.headers)
       };
     }
 
@@ -131,7 +196,8 @@ async function callChatCompletion<T>(
         providerLabel: "LM Studio",
         model: config.model,
         latencyMs: Date.now() - startedAt,
-        error: "AI response did not contain valid JSON"
+        error: "AI response did not contain valid JSON",
+        diagnostics: readDiagnostics(config, endpoint, false, "AI response did not contain valid JSON", response.headers)
       };
     }
 
@@ -141,21 +207,24 @@ async function callChatCompletion<T>(
       providerLabel: "LM Studio",
       model: config.model,
       latencyMs: Date.now() - startedAt,
-      data: parsed as T
+      data: parsed as T,
+      diagnostics: readDiagnostics(config, endpoint, true, undefined, response.headers)
     };
   } catch (error) {
+    const message =
+      error instanceof DOMException && error.name === "AbortError"
+        ? `AI request timed out after ${timeoutMs}ms`
+        : error instanceof Error
+        ? error.message
+        : "Unknown network error";
     return {
       ok: false,
       providerMode: "lmstudio",
       providerLabel: "LM Studio",
       model: config.model,
       latencyMs: Date.now() - startedAt,
-      error:
-        error instanceof DOMException && error.name === "AbortError"
-          ? `AI request timed out after ${timeoutMs}ms`
-          : error instanceof Error
-          ? error.message
-          : "Unknown network error"
+      error: message,
+      diagnostics: readDiagnostics(config, endpoint, false, message)
     };
   } finally {
     clearTimeout(timeout);
@@ -180,7 +249,8 @@ function mapFailure<T>(result: AIProviderResult<Record<string, unknown>>): AIPro
     providerLabel: result.providerLabel,
     model: result.model,
     latencyMs: result.latencyMs,
-    error: result.error
+    error: result.error,
+    diagnostics: result.diagnostics
   };
 }
 
@@ -246,12 +316,16 @@ export function createLMStudioProvider(config: AIConfig): AIProvider {
       };
     },
     async draftCustomerResponse(input: DraftCustomerResponseInput) {
-      const result = await callChatCompletion<Record<string, unknown>>(config, buildDraftCustomerResponsePrompt(input));
+      const result = await callChatCompletion<Record<string, unknown>>(
+        config,
+        buildDraftCustomerResponsePrompt(input),
+        { maxTokens: 650 }
+      );
       if (!result.ok || !result.data) return mapFailure<AICustomerResponseSuggestion>(result);
       return {
         ...result,
         data: {
-          draftResponse: String(result.data.draftResponse ?? input.deterministicDraft),
+          draftResponse: String(result.data.customerResponse ?? result.data.draftResponse ?? input.deterministicDraft),
           confidence: clampConfidence(result.data.confidence),
           rationale: typeof result.data.rationale === "string" ? result.data.rationale : undefined,
           groundingMode: input.groundingMode,

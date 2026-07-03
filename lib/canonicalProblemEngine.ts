@@ -20,6 +20,16 @@ interface CanonicalProblemIdentity {
   tags: string[];
 }
 
+const INTENT_CANONICAL_RULES: Record<string, CanonicalProblemIdentity> = {
+  email_recovery: {
+    id: "canonical-account-email-recovery",
+    title: "Account Email Recovery",
+    problemSummary: "Customers cannot log in because they do not remember the email address or account identifier associated with their account.",
+    category: "Login",
+    tags: ["login", "account", "email", "email-recovery"]
+  }
+};
+
 export interface CanonicalProblemMatch {
   item: KnowledgeItem;
   similarity: number;
@@ -289,9 +299,9 @@ function getIntentAwareCustomerResponseTemplate(
         return buildTemplate(intro, closing, [
           "",
           "It sounds like the activation code or license key is being rejected.",
-          "Please copy and paste the code directly from the purchase email, confirm there are no extra spaces, and verify that you are activating the correct product version.",
+          "Please copy and paste the activation code directly from the purchase email, confirm there are no extra spaces, and verify that you are activating the correct product version.",
           "",
-          "If it still fails, send us the exact error message, a screenshot of the activation screen, and the purchase email address so we can validate the code safely."
+          "If it still fails, send us the exact error message, a screenshot of the activation error, the purchase email, and the product version so we can validate the code safely."
         ]);
       }
       return buildTemplate(intro, closing, [
@@ -349,6 +359,22 @@ function getIntentAwareCustomerResponseTemplate(
         "If there is an error on screen, include the wording or a screenshot so we can confirm whether this is an account access issue, a settings issue, or something else."
       ]);
     case "Login":
+      if (intent === "email_recovery") {
+        return buildTemplate(intro, closing, [
+          "",
+          "We can help you recover the email associated with your account.",
+          "For security reasons, please send us any details that may help us verify your account, such as:",
+          "- your full name",
+          "- purchase email if you remember it",
+          "- invoice number or order ID",
+          "- subscription details",
+          "- approximate purchase date",
+          "- last four digits of the payment method, if applicable",
+          "",
+          "Please do not send your full card number or password.",
+          "Once we verify the account, we can help you identify the correct login email or guide you through the next recovery step."
+        ]);
+      }
       if (intent === "credentials_rejected") {
         return buildTemplate(intro, closing, [
           "",
@@ -663,6 +689,15 @@ export function identifyCanonicalProblem(
   understanding: Understanding,
   profile: OrganizationProfile = defaultOrganizationProfile
 ): CanonicalProblemIdentity {
+  const intent = normalizeIntent(understanding.intent);
+  const intentRule = INTENT_CANONICAL_RULES[intent];
+  if (intentRule) {
+    return {
+      ...intentRule,
+      tags: unique([...intentRule.tags, ...understanding.tags])
+    };
+  }
+
   const text = `${understanding.summary} ${understanding.coreProblem} ${understanding.category} ${understanding.tags.join(" ")} ${understanding.detectedSignals.join(" ")}`.toLowerCase();
   const allowedRules = CANONICAL_RULES.filter((rule) => ruleAllowedByProfile(rule, profile));
   const rule =
@@ -1082,4 +1117,3 @@ export function upsertCanonicalProblem(items: KnowledgeItem[], incoming: Knowled
   next[index] = mergeCanonicalProblemItems(items[index], normalized);
   return next;
 }
-

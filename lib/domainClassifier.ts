@@ -129,10 +129,11 @@ const DOMAIN_RULES: DomainRule[] = [
     domain: "Account Management",
     signals: [
       "account", "profile", "settings", "preferences", "email",
-      "email address", "forgot email", "retrieve email", "change email",
+      "email address", "forgot email", "forgot my email", "retrieve email", "retrieve my email",
+      "retrieving my email", "recover my email", "remember my email", "login email", "account email", "change email",
       "update email", "delete account", "close account", "deactivate"
     ],
-    weight: 1
+    weight: 2
   },
   {
     domain: "Data Sync",

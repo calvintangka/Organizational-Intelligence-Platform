@@ -1,4 +1,5 @@
 import type {
+  AIDiagnostics,
   AIAdvisory,
   AIAdvisoryStatus,
   AIAnalysisSuggestion,
@@ -78,6 +79,7 @@ export function buildAIAdvisory(input: {
   providerMode: AIProviderMode;
   providerLabel: string;
   model?: string;
+  diagnostics?: Partial<AIDiagnostics>;
   deterministicLabel: string;
   analysisSuggestion?: AIAnalysisSuggestion;
   canonicalSuggestion?: AICanonicalProblemSuggestion;
@@ -107,6 +109,16 @@ export function buildAIAdvisory(input: {
     providerMode: input.providerMode,
     providerLabel: input.providerLabel,
     model: input.model,
+    diagnostics: {
+      mode: input.providerMode,
+      provider: input.providerLabel,
+      model: input.model,
+      proxyPath: input.diagnostics?.proxyPath ?? "/api/ai/chat",
+      serverBaseUrl: input.diagnostics?.serverBaseUrl,
+      endpointUsed: input.diagnostics?.endpointUsed,
+      proxySucceeded: input.diagnostics?.proxySucceeded,
+      fallbackReason: input.diagnostics?.fallbackReason ?? input.availabilityMessage
+    },
     deterministicLabel: input.deterministicLabel,
     aiLabel,
     agreementPct,

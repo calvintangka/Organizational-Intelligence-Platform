@@ -64,6 +64,32 @@ export function AIAdvisoryPanel({ advisory }: AIAdvisoryPanelProps) {
         <InfoCard label="Status" value={status.label} accent={advisory.status === "verified"} />
       </div>
 
+      <div className="mt-5 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <InfoCard label="AI mode" value={advisory.diagnostics.mode} accent={advisory.diagnostics.mode === "lmstudio"} />
+        <InfoCard label="Provider" value={advisory.diagnostics.provider} />
+        <InfoCard label="Proxy path" value={advisory.diagnostics.proxyPath} accent={advisory.diagnostics.proxySucceeded === true} />
+        <InfoCard label="Server base URL" value={advisory.diagnostics.serverBaseUrl ?? "Not returned"} />
+      </div>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <InfoCard
+          label="Proxy result"
+          value={
+            advisory.diagnostics.proxySucceeded === true
+              ? "Succeeded"
+              : advisory.diagnostics.proxySucceeded === false
+              ? "Failed"
+              : "Pending"
+          }
+          accent={advisory.diagnostics.proxySucceeded === true}
+        />
+        <InfoCard
+          label="Fallback reason"
+          value={advisory.diagnostics.fallbackReason ?? "No fallback used"}
+          accent={!advisory.diagnostics.fallbackReason}
+        />
+      </div>
+
       {advisory.analysisSuggestion ? (
         <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">AI understanding</p>

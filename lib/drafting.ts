@@ -57,7 +57,7 @@ export function isCompatibleForDrafting(understanding: Understanding, item: Know
 
 const CATEGORY_TEMPLATES: Record<string, (ticket: Ticket) => string> = {
   Activation: (t) =>
-    `Hi ${t.customerName}, thank you for reaching out. Based on your issue with the activation code, please try these steps: (1) Open your original purchase confirmation email and copy the activation code carefully - avoid extra spaces. (2) Confirm you are entering the code for the correct product and version. (3) If the code still shows as invalid, please reply with a screenshot of the error and the email address used for your purchase so we can verify the license on our end.`,
+    `Hi ${t.customerName}, thank you for contacting us. We can help with the activation code issue. Please reply with the activation code you are using, the purchase email, the product version, and a screenshot of the activation error so we can verify the license details safely and guide the next step.`,
   "Two-Factor Auth": (t) =>
     `Hi ${t.customerName}, I understand your two-factor authentication code is not working. Please try these steps: (1) Check that your device clock is set to sync automatically - even a small drift can invalidate codes. (2) Wait for a fresh code to appear in your authenticator app and enter it immediately. (3) If you have backup codes, you can use one of those to regain access. If none of these work, please reply with your account email and we will help you safely re-enroll two-factor authentication.`,
   Login: (t) =>

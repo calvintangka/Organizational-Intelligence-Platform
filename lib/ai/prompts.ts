@@ -43,7 +43,6 @@ export function buildAnalyzeTicketPrompt(input: AnalyzeTicketInput): PromptBundl
     system: advisorSystemPrompt,
     user: [
       profileContext(input.organizationProfile),
-      "",
       `Original Ticket Subject: ${input.ticket.subject}`,
       `Original Ticket Description: ${input.ticket.description}`,
       "",
@@ -120,22 +119,41 @@ export function buildKnowledgeEnrichmentPrompt(input: KnowledgeEnrichmentInput):
 }
 
 export function buildDraftCustomerResponsePrompt(input: DraftCustomerResponseInput): PromptBundle {
+  const emailRecoveryGuardrails =
+    input.deterministicUnderstanding.intent === "email_recovery"
+      ? [
+          "IMPORTANT: The customer forgot the account email or login identifier.",
+          "Do not turn this into a password-reset issue.",
+          "Focus on account verification and identifying the correct login email.",
+          "If password reset is mentioned at all, present it only as a later step after the correct account email is identified."
+        ]
+      : [];
+  const activationGuardrails =
+    input.deterministicUnderstanding.category === "Activation"
+      ? [
+          "IMPORTANT: This is an activation issue.",
+          "Keep the response focused on activation code troubleshooting and verification only.",
+          "Do not mention login, password reset, credentials, or account email recovery."
+        ]
+      : [];
+
   if (input.groundingMode === "cold_start") {
     return {
       system: [
         advisorSystemPrompt,
-        "You do not know this company's specific policies or systems. Do not invent specifics. Ask for information a support agent would genuinely need.",
-        "Do not include reasoning, thinking, analysis, or explanations.",
-        "Draft 2 short customer-facing sentences. Acknowledge the issue and ask for needed account details. Return JSON only."
+        "Return compact JSON only.",
+        "Do not include markdown, chain-of-thought, or explanations outside the JSON object.",
+        "Keep the customer response concise and customer-facing.",
+        ...emailRecoveryGuardrails,
+        ...activationGuardrails
       ].join(" "),
       user: [
         `Organization Name: ${input.organizationProfile.name}`,
-        "",
         `Ticket: ${input.ticket.subject} - ${input.ticket.description}`,
-        "",
+        `Deterministic Category: ${input.deterministicUnderstanding.category}`,
+        `Deterministic Intent: ${input.deterministicUnderstanding.intent ?? "unspecified"}`,
         "No validated organizational knowledge exists for this issue.",
-        "",
-        'Respond with JSON: {"draftResponse":"", "confidence":0-100, "rationale":""}'
+        'Respond with compact JSON only: {"customerResponse":"", "confidence":90, "rationale":""}'
       ].join("\n")
     };
   }
@@ -144,30 +162,22 @@ export function buildDraftCustomerResponsePrompt(input: DraftCustomerResponseInp
     return {
       system: [
         advisorSystemPrompt,
-        "Your task is to adapt a validated lesson response to the customer's exact wording.",
-        "STRICT RULES: Do not add resolution steps absent from the lesson.",
-        "Do not remove caveats, verification steps, or uncertainty from the lesson.",
-        "Do not introduce company-specific facts beyond the lesson and profile context.",
-        "Do not use internal guidance labels or troubleshooting rationale in the customer-facing output."
+        "Return compact JSON only.",
+        "Adapt the validated lesson response to the customer's wording without adding new steps.",
+        "Do not include internal guidance or troubleshooting rationale in the customer response.",
+        ...emailRecoveryGuardrails,
+        ...activationGuardrails
       ].join(" "),
       user: [
         profileContext(input.organizationProfile, input.canonicalProblemTitle),
-        "",
         `Customer Ticket Subject: ${input.ticket.subject}`,
         `Customer Ticket Description: ${input.ticket.description}`,
+        `Deterministic Category: ${input.deterministicUnderstanding.category}`,
         `Deterministic Intent: ${input.deterministicUnderstanding.intent ?? "unspecified"}`,
-        "",
         `Validated Lesson: ${input.groundingLabel}`,
-        `Root Cause: ${input.lessonGrounding.rootCause}`,
-        `Solution: ${input.lessonGrounding.solution}`,
-        `Matched Signals: ${input.lessonGrounding.matchedSignals.join(", ") || "none"}`,
-        "",
-        "Validated Lesson Customer Response (your ONLY source of resolution content):",
+        "Customer response source:",
         input.lessonGrounding.customerResponse,
-        "",
-        "Adapt the lesson response to acknowledge the customer's specific situation. Preserve all caveats and limits.",
-        "",
-        'Respond with JSON: {"draftResponse":"", "confidence":0-100, "rationale":""}'
+        'Respond with compact JSON only: {"customerResponse":"", "confidence":90, "rationale":""}'
       ].join("\n")
     };
   }
@@ -175,11 +185,12 @@ export function buildDraftCustomerResponsePrompt(input: DraftCustomerResponseInp
   return {
     system: [
       advisorSystemPrompt,
-      "Your task is to personalize the provided customer response template to acknowledge the customer's specific situation.",
-      "STRICT RULES: Do not add resolution steps that are not already in the template.",
-      "Do not remove safety caveats or identity-verification steps from the template.",
-      "Do not introduce any facts or instructions that are absent from the template.",
-      "Do not use internal guidance labels or troubleshooting rationale in the customer-facing output.",
+      "Return compact JSON only.",
+      "Personalize the provided customer response template to the customer's wording without adding new steps.",
+      "Preserve all safety caveats and verification steps already present in the template.",
+      "Do not include internal guidance or troubleshooting rationale in the customer response.",
+      ...emailRecoveryGuardrails,
+      ...activationGuardrails,
       "If the customer's issue is not addressed by the template, say the response needs human attention — do not improvise."
     ].join(" "),
     user: [
@@ -187,15 +198,14 @@ export function buildDraftCustomerResponsePrompt(input: DraftCustomerResponseInp
       "",
       `Customer Ticket Subject: ${input.ticket.subject}`,
       `Customer Ticket Description: ${input.ticket.description}`,
+      `Deterministic Category: ${input.deterministicUnderstanding.category}`,
       `Deterministic Intent: ${input.deterministicUnderstanding.intent ?? "unspecified"}`,
       "",
       "Validated Customer Response Template (your ONLY source of content — do not add steps not present here):",
       input.groundingContent || input.deterministicDraft,
       "",
-      "Personalize the template to acknowledge the customer's specific situation described above.",
-      "Keep all steps, caveats, and safety instructions intact. Only adapt wording and ordering.",
       "",
-      'Respond with JSON: {"draftResponse":"", "confidence":0-100, "rationale":""}'
+      'Respond with compact JSON only: {"customerResponse":"", "confidence":90, "rationale":""}'
     ].join("\n")
   };
 }

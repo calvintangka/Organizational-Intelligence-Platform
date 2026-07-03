@@ -1,4 +1,5 @@
 import type {
+  AIDiagnostics,
   AIAnalysisSuggestion,
   AICanonicalProblemSuggestion,
   AICustomerResponseSuggestion,
@@ -19,6 +20,7 @@ export interface AIConfig {
   baseUrl: string;
   model: string;
   timeoutMs: number;
+  proxyPath: string;
 }
 
 export interface AIProviderResult<T> {
@@ -29,6 +31,7 @@ export interface AIProviderResult<T> {
   latencyMs: number;
   data?: T;
   error?: string;
+  diagnostics?: AIDiagnostics;
 }
 
 export interface AnalyzeTicketInput {
