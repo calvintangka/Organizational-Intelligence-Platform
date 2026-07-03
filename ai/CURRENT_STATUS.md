@@ -1,87 +1,65 @@
-# OIP Current Status
+# Current Status
 
-This document describes the current state of the project. Read this first before making any changes.
+This file is the fastest accurate snapshot of the prototype as of 2026-07-03.
 
-## Current Milestone
+## What Changed Most Recently
 
-Production polish and demo readiness.
+The `/ai` governance layer now includes code-grounded architecture, boundaries, workflow, decision, map, changelog, and prompt-library documents. Future AI work should start here before touching source.
 
-## Version
+## What Works Right Now
 
-0.8.0
+- Full learning loop
+  Single-ticket intake, analysis, memory retrieval, draft generation, human review, reflection, validated memory commit, and trust evolution all exist in code.
 
-## Tech Stack
+- Lessons as first-class learning objects
+  `KnowledgeItem.lessons` is live, lessons can be authored during reflection, and `findMatchingLesson()` can drive lesson-grounded drafts.
 
-- Next.js 15.5.19
-- TypeScript
-- React 19
-- Tailwind CSS
-- LM Studio (Gemma 4 E4B) for local AI advisory
-- localStorage for persistence
-- Graphify for code graph navigation
+- Bulk upload with validation
+  Historical queries can be parsed, clustered, reviewed, and committed through the same candidate/validation/memory-change path as single tickets.
 
-## Completed Features
+- Memory network and knowledge views
+  The knowledge workspace and full-screen memory network overlay are implemented.
 
-### Views
-- **Home** — Landing page with learning timeline, quick actions, and organizational summary
-- **Tickets** — Full ticket workspace with intake, OIP reasoning timeline, human review, and reuse flow
-- **Knowledge** — Knowledge base browser with search, filtering, and item detail cards
-- **Dashboard** — Organizational metrics, trust growth chart, category distribution, pattern summary
-- **Organization** — Organization profile display, profile switching (3 profiles), accent color picker
-- **Settings** — AI provider configuration, demo controls
+- Three Gemma draft grounding modes
+  `lesson_grounded`, `memory_grounded`, and `cold_start` are all represented in `SuggestedResponse` and set in `requestDraftAdvisory()`.
 
-### Pipeline Stages
-- **Business Relevance Guardrail** — Profile-aware signal matching with visible rejection messages
-- **Business Domain Classification** — 20 domain rules, multi-domain detection, confidence scoring
-- **Canonical Problem Detection** — Signal-based matching, similarity scoring, category rules
-- **Memory Retrieval** — Knowledge matching with 3-layer deduplication
-- **Draft Response Generation** — Deterministic templates, lesson matching, category validation
-- **AI Advisory** — LM Studio integration, cold start drafting, diagnostics panel
-- **Human Review** — Editable review with approval workflow
-- **Reflection** — Create/merge/version/trust-update decisions
+- LM Studio proxy and advisory flow
+  Browser AI calls route through `app/api/ai/chat/route.ts`, with diagnostics, timeout handling, and deterministic fallback behavior.
 
-### Engines
-- **Trust Engine** — Per-item trust scoring, auto-resolution gating, organization thresholds
-- **Pattern Discovery** — Emerging pattern detection, grouping, confidence scoring
-- **Reflection Engine** — Post-approval knowledge lifecycle decisions
-- **Organizational Memory** — localStorage persistence, versioning, provenance, deduplication
+- Trust + validation reuse path
+  Reuse can route to human review or deterministic auto-resolution depending on validation state, trust score, category safety, and draft source.
 
-### Infrastructure
-- **Three Knowledge Intake Doors** — Manual entry, bulk CSV upload, reuse flow
-- **Organization Profiles** — Maesa Tech, FastDrop Logistics, Pramana Legal
-- **AI Provider Interface** — LM Studio, AMD Cloud (placeholder), disabled mode
-- **API Proxy** — Next.js route for LM Studio CORS avoidance
-- **Bulk Upload** — CSV parsing, clustering, knowledge creation
-- **Provenance Tracking** — Full audit trail on all knowledge items
+- Organization-scoped prototype state
+  Knowledge, candidates, validation records, memory changes, metrics, patterns, and org profile state persist in localStorage.
 
-## Remaining Work
+## Environment Notes
 
-### Polish
-- Ticket workspace spacing and layout refinement
-- Dashboard chart polish and responsive sizing
-- Settings view completion (additional configuration options)
-- Dark mode consistency across all views
-- Mobile responsiveness improvements
-- Demo flow polish for presentation
+- AI mode is configured in `.env.local` as `NEXT_PUBLIC_AI_MODE=lmstudio`.
+- LM Studio base URL is `http://127.0.0.1:1234/v1`.
+- Current model is `google/gemma-4-e4b`.
+- Current timeout is `AI_TIMEOUT_MS=30000`.
+- If Next.js starts behaving strangely after edits, clear the build cache by deleting `.next` and restart the dev server.
+- `graphify-out/graph.json` exists, but `graphify query` currently fails locally with `uv trampoline failed to canonicalize script path`, so direct graph CLI use may need repair before relying on it.
 
-### Known Issues
-- Duplicate action buttons may appear in certain edge-case workflows
-- Minor spacing inconsistencies between views
-- Developer controls (reset buttons, demo selectors) should be consolidated inside Settings rather than appearing in multiple views
-- Graph visualization (`graph.html`) skipped for large graphs (>5000 nodes)
+## Known Open Items
 
-### Not Yet Implemented
-- Enterprise storage backend (server-side database)
-- Enterprise authentication and access control
-- AMD Cloud AI provider
-- Semantic retrieval (embeddings, vector similarity)
-- Knowledge graph visualization
-- Multi-tenant data isolation
-- Automated end-to-end testing
-- Manual Knowledge Entry workflow (authoring without a ticket)
+- Verify the pipeline stall fix for unclassified yet relevant queries end-to-end.
+- Run the F-04 live regression test with Gemma enabled.
+- Calibrate AI timeout behavior under real Gemma latency rather than the current fixed 30000 ms assumption.
+- Add automated regression coverage; the repo still relies on manual verification and build checks.
+- Move beyond client-side persistence when the prototype leaves the demo environment.
 
-## Build Status
+## What Is Intentionally Simplified
 
-- Production build: **Passing**
-- Dev server: **Running** (Next.js 15.5.19)
-- Graphify graph: **Generated** (5607 nodes, 7727 edges, 357 communities)
+- Single effective reviewer role in code, not enterprise RBAC.
+- Client-side persistence only; no backend database or shared audit store.
+- Simplified trust model with bounded numeric scoring.
+- Single-file orchestration in `app/page.tsx` rather than distributed services.
+
+## Build / Runtime Snapshot
+
+- Repository: git-backed and active.
+- Frontend stack: Next.js 15, React 19, TypeScript, Tailwind CSS.
+- Persistence: browser localStorage via `lib/orgMemory.ts`.
+- AI provider: LM Studio through same-origin proxy.
+- Governance docs: present under `/ai`.
