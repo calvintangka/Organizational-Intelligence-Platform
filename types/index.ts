@@ -68,3 +68,9 @@ export type {
   BulkAnalysisProgress,
   BulkAnalysisResult
 } from "./bulkUpload";
+export type {
+  KnowledgePack,
+  PackLesson,
+  KnowledgePackPreview,
+  KnowledgePackCandidateDraft
+} from "./knowledgePack";

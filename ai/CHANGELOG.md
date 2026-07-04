@@ -13,6 +13,20 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-04] Starter knowledge pack import and governed validation
+**Layer:** coding
+**Task/Prompt:** "Add a Starter Knowledge Pack feature so JSON packs import as candidates first, then become memory only after human validation."
+**Files changed:** `app/page.tsx`, `components/views/KnowledgeView.tsx`, `components/ProvenancePanel.tsx`, `lib/analyzer.ts`, `lib/drafting.ts`, `lib/knowledgePacks.ts`, `lib/ai/prompts.ts`, `lib/ai/types.ts`, `types/knowledge.ts`, `types/knowledgePack.ts`, `types/index.ts`, `data/packs/login-issues-v1.json`, `ai/ARCHITECTURE.md`, `ai/CODEBASE_MAP.md`, `ai/CURRENT_STATUS.md`, `ai/CHANGELOG.md`
+**What changed:**
+- Added a JSON knowledge-pack model plus parsing helpers, category-warning logic, and a shipped `login-issues-v1` starter pack with 9 production-quality Login lessons.
+- Extended the Knowledge workspace with pack preview, pending-validation cards, editable lesson review, lesson removal, bundled-sample preview, and approve/reject actions.
+- Reused the shared candidate-to-validation-to-memory path by importing packs as proposed `KnowledgeCandidate`s first, then validating them through `applyValidatedMemoryChange()` to create the real `ValidationRecord`, `MemoryChangeRecord`, and `KnowledgeItem`.
+- Extended `Lesson` with optional `title`, `whenToEscalate`, and `doNotPromise`, and passed lesson-specific `doNotPromise` guidance into lesson-grounded AI draft prompts.
+- Updated lesson/provenance copy so the matched lesson name is surfaced more clearly in the review explanation.
+**Boundaries touched:** Boundary rule 2 was exercised directly: pack intake stops at the candidate boundary, and final memory writes still flow through the shared validated commit path. The no-unvalidated-commitments rule was extended with per-lesson `doNotPromise` warnings for lesson-grounded AI drafting.
+**Verification:** `npm.cmd run build` (twice after the final UI update); `npm.cmd run dev`; live browser spot-check confirmed the Knowledge view shows `Import knowledge pack` and `Preview bundled sample`, and the bundled sample preview path was added specifically to make the governed import flow observable in the app without relying on a native file-picker automation path.
+**Open items:** End-to-end browser automation for the full preview -> import -> validate -> reload sequence was partially blocked by flaky in-app browser control around reloads and JS confirm dialogs. `graphify query` still fails locally with the known `uv trampoline failed to canonicalize script path` issue.
+
 ## [2026-07-03] Audit remediation F-01-F-07 (retroactive entry)
 **Layer:** coding
 **Task/Prompt:** Audit remediation hardening before AI governance setup

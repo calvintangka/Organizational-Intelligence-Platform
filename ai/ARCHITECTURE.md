@@ -79,6 +79,18 @@ Bulk intake is implemented in `lib/bulkUpload.ts` and orchestrated from `app/pag
 
 This means bulk upload does not bypass governance. It uses cluster-level human validation, then the same validated commit machinery as single-ticket learning.
 
+## Starter Knowledge Pack Intake
+
+Starter packs are the prototype's manual/imported knowledge path for pre-authored lessons. The flow is intentionally parallel to bulk upload in governance terms, but different in source:
+
+- `types/knowledgePack.ts` defines the JSON pack contract
+- `data/packs/login-issues-v1.json` is the shipped sample Login pack
+- `lib/knowledgePacks.ts` parses packs, warns on unknown classifier categories, shapes `Lesson[]`, and converts a reviewed pack candidate into a final `KnowledgeItem`
+- `components/views/KnowledgeView.tsx` provides the preview, pending-validation, and review/edit surface
+- `app/page.tsx` imports the pack as a proposed `KnowledgeCandidate`, then validates it through the shared commit path
+
+The crucial architectural rule is unchanged: importing a pack never writes validated memory directly. A pack becomes a proposed `KnowledgeCandidate` first. Only after human review does `validateKnowledgePackCandidate()` call `applyValidatedMemoryChange()` to create the real `ValidationRecord`, `MemoryChangeRecord`, and final `KnowledgeItem`.
+
 ## Knowledge and Learning Lifecycle
 
 The write path is centralized in `app/page.tsx`:
@@ -102,6 +114,8 @@ Canonical-problem mutation logic lives in `lib/canonicalProblemEngine.ts`:
 - `withCanonicalProblemDefaults()`
 
 Lessons are first-class learning objects stored on `KnowledgeItem.lessons`. `findMatchingLesson()` in `lib/drafting.ts` can override the generic template path with a lesson-grounded response. `confirmReflection()` can also attach or improve lessons during memory commit.
+
+Starter packs extend, rather than replace, that lesson model. Imported lessons use the same `Lesson` shape with extra optional fields such as `title`, `whenToEscalate`, and `doNotPromise`, so lesson-grounded drafting and later human edits still operate on one shared knowledge structure.
 
 ## Data Model
 
@@ -140,7 +154,7 @@ The core types live in `types/knowledge.ts`, `types/ai.ts`, `types/bulkUpload.ts
 The prototype has three explicit AI grounding modes, all set in `requestDraftAdvisory()` in `app/page.tsx` and represented by `DraftGroundingMode` in `types/ai.ts`:
 
 1. `lesson_grounded`
-   Used when `findMatchingLesson()` finds a lesson on the matched knowledge item. The AI receives lesson root cause, solution, customer response, and matched signals.
+   Used when `findMatchingLesson()` finds a lesson on the matched knowledge item. The AI receives lesson root cause, solution, customer response, matched signals, and any lesson-level `doNotPromise` warnings.
 
 2. `memory_grounded`
    Used when the ticket matches validated organizational memory and the deterministic draft is grounded in the matched canonical problem.

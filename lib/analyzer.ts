@@ -385,6 +385,15 @@ const CATEGORY_RULES: Array<{ category: string; keywords: string[]; tags: string
   }
 ];
 
+export function getRecognizedClassifierCategories(): string[] {
+  return [...new Set(CATEGORY_RULES.map((rule) => rule.category))];
+}
+
+export function isRecognizedClassifierCategory(category: string): boolean {
+  const normalized = category.trim().toLowerCase();
+  return CATEGORY_RULES.some((rule) => rule.category.toLowerCase() === normalized);
+}
+
 // Weighted signals for categories where multiple related terms should accumulate
 // confidence instead of requiring one exact phrase. Categories not listed here
 // fall back to the default 1-point-per-keyword system.

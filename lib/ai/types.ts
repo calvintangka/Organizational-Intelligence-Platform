@@ -89,6 +89,7 @@ export interface DraftCustomerResponseInput {
     solution: string;
     customerResponse: string;
     matchedSignals: string[];
+    doNotPromise?: string[];
   };
   /** The raw validated customer response template used as grounding source */
   deterministicDraft: string;

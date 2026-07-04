@@ -172,7 +172,8 @@ export function draftResponse(
   if (lessonMatch && compatibleMatch) {
     draft = renderLessonResponse(lessonMatch.lesson, ticket, profile, understanding);
     if (ticket.ticketId) draft += `\n\nYour ticket reference is ${ticket.ticketId}.`;
-    confidenceNote = `Lesson-informed draft: "${lessonMatch.lesson.rootCause}" (matched signals: ${lessonMatch.matchedSignals.join(", ")}). Root cause: ${lessonMatch.lesson.rootCause}. Solution: ${lessonMatch.lesson.solution}. Human review is still required unless trust allows auto-resolution.`;
+    const lessonLabel = lessonMatch.lesson.title ?? lessonMatch.lesson.rootCause;
+    confidenceNote = `Lesson-informed draft: "${lessonLabel}" (matched signals: ${lessonMatch.matchedSignals.join(", ")}). Root cause: ${lessonMatch.lesson.rootCause}. Solution: ${lessonMatch.lesson.solution}. Human review is still required unless trust allows auto-resolution.`;
     basedOnKnowledgeIds.push(compatibleMatch.item.id);
     return { draftResponse: draft, basedOnKnowledgeIds, confidenceNote, source: "deterministic" };
   }

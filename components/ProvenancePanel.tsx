@@ -94,7 +94,7 @@ export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized
       </p>
       <p className="mt-1 text-sm text-slate-600">
         {lessonMatch
-          ? `OIP matched this ticket to a learned lesson: "${lessonMatch.lesson.rootCause}" (matched signals: ${lessonMatch.matchedSignals.join(", ")}). The response below uses this lesson's specific guidance.`
+          ? `OIP matched this ticket to a learned lesson: "${lessonMatch.lesson.title ?? lessonMatch.lesson.rootCause}" (matched signals: ${lessonMatch.matchedSignals.join(", ")}). The response below uses this lesson's specific guidance.`
           : "OIP matched this ticket to an approved knowledge entry and used it to draft the response below."}
       </p>
 
@@ -106,7 +106,7 @@ export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized
             </svg>
             <p className="text-xs font-bold uppercase tracking-wide text-amber-700">Matched Lesson</p>
           </div>
-          <p className="mt-1.5 text-sm font-semibold text-amber-900">{lessonMatch.lesson.rootCause}</p>
+          <p className="mt-1.5 text-sm font-semibold text-amber-900">{lessonMatch.lesson.title ?? lessonMatch.lesson.rootCause}</p>
           <p className="mt-0.5 text-xs text-amber-800">{lessonMatch.lesson.solution}</p>
           <div className="mt-2 flex flex-wrap gap-1">
             {lessonMatch.lesson.signals.map((signal) => (

@@ -1,0 +1,170 @@
+{
+  "packId": "login-issues-v1",
+  "packName": "Login Issues Starter Pack",
+  "description": "Starter knowledge pack covering the most common login blockers, from password reset problems to SSO and activation prerequisites. Import as candidates first, then validate before this knowledge becomes reusable organizational memory.",
+  "language": "en",
+  "canonicalProblem": {
+    "title": "Login Issue",
+    "category": "Login",
+    "description": "Customers cannot sign in because credentials, identity details, reset flows, browser sessions, account activation, or login-provider dependencies are preventing access."
+  },
+  "lessons": [
+    {
+      "title": "Forgot password",
+      "rootCause": "The customer no longer knows the current password and needs a safe reset path before they can sign in again.",
+      "solution": "Direct the customer to the official password reset flow, remind them to use the email address on the account, and ask them to report back if the reset message does not arrive or the reset fails.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for reaching out. I understand you need to reset the password before you can sign in again.\n\nPlease use the Forgot Password option on the login page and submit the email address linked to your account. Once you receive the reset email, open the newest link only and create a fresh password that you have not used recently. After that, return to the login page and sign in again.\n\nIf the reset email does not arrive or the reset still fails, reply with the email address you used on the form and let us know what happened so we can guide the next step.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "forgot my password",
+        "can't remember password",
+        "need to reset password"
+      ],
+      "whenToEscalate": "Escalate if the customer says they no longer have access to the email address on the account or the password reset flow repeatedly fails after the standard steps.",
+      "doNotPromise": [
+        "account access without identity verification",
+        "specific delivery times for password reset emails"
+      ]
+    },
+    {
+      "title": "Invalid credentials despite correct password",
+      "rootCause": "The customer believes the password is correct, but the sign-in attempt is still rejected because the stored password is different, the account is using another sign-in method, or the session is reading stale credentials.",
+      "solution": "Have the customer confirm the correct email address, enter the password manually instead of relying on autofill, and reset the password if the rejection continues. If the account uses SSO or another provider, route them back to that login method.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for the details. I understand the system is rejecting the password even though it appears to be correct.\n\nPlease try signing in again by typing both the email address and password manually instead of using saved autofill values. If the message still says the credentials are invalid, use the Forgot Password option to create a new password and then sign in with the new one. If your account normally uses Google, Microsoft, or another company login option, please return to that provider button instead of the email-password form.\n\nIf the same rejection appears after these checks, reply with the exact error message and confirm which sign-in method you are using so we can review it with you.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "invalid credentials",
+        "password is correct but",
+        "keeps rejecting my password",
+        "credentials are invalid"
+      ],
+      "whenToEscalate": "Escalate if the customer already reset the password, entered it manually, confirmed the correct sign-in method, and the platform still rejects the login.",
+      "doNotPromise": [
+        "manual password changes without verification",
+        "that saved browser credentials are the system of record"
+      ]
+    },
+    {
+      "title": "Wrong email address",
+      "rootCause": "The customer is trying to sign in with the wrong email address or is unsure which email address is actually attached to the account.",
+      "solution": "Guide the customer to identify the purchase or registration email from prior receipts, subscription notices, or welcome emails before attempting another reset or login step.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for explaining the issue. It sounds like the email address being used may not match the one registered on the account.\n\nBefore trying another password reset, please check any original purchase receipt, welcome email, invoice, or subscription notice from us and compare the email address shown there with the one you are entering on the sign-in page. If you find a different address, use that address for the login or reset flow instead.\n\nIf you are still unsure which email is on file, reply with the name on the purchase and any order or subscription reference you have available so we can explain the safest verification step.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "wrong email",
+        "email not found",
+        "no account with that email",
+        "different email",
+        "which email"
+      ],
+      "whenToEscalate": "Escalate if the customer cannot identify the account email from their records or believes the account email was changed unexpectedly.",
+      "doNotPromise": [
+        "disclosing the full account email without verification",
+        "account recovery without confirming account ownership"
+      ]
+    },
+    {
+      "title": "Account locked after too many attempts",
+      "rootCause": "The account has triggered a temporary security lock because of repeated unsuccessful sign-in attempts.",
+      "solution": "Ask the customer to stop retrying, wait for the lock window to clear, and then reset the password before attempting another login.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for reaching out. I understand you are currently locked out after multiple sign-in attempts.\n\nPlease stop trying to sign in for now and wait for the temporary security lock to clear. After that waiting period, use the Forgot Password option to create a fresh password before attempting another login. This helps prevent the account from being locked again immediately.\n\nIf the account is still blocked after the waiting period and a fresh password reset, reply with the exact lock message you see so we can guide the next verified step.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "locked out",
+        "too many attempts",
+        "account locked",
+        "temporarily blocked"
+      ],
+      "whenToEscalate": "Escalate if the lock remains in place after the normal cooldown period and a password reset attempt, or if the customer reports suspicious access activity.",
+      "doNotPromise": [
+        "immediate manual unlock without verification",
+        "that the security lock can be bypassed on request"
+      ]
+    },
+    {
+      "title": "Password reset link expired or not received",
+      "rootCause": "The reset email is delayed, filtered, or the customer opened an older reset link that is no longer valid.",
+      "solution": "Have the customer request a fresh reset email, check spam and filtered folders, and use only the most recent reset link. Confirm whether their mail system blocks automated messages.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for the update. I understand the reset link has either expired or the reset email has not reached you.\n\nPlease return to the login page and request a new password reset email, then use only the newest reset link that arrives. If you do not see it in your inbox, also check spam, junk, promotions, and any company mail filters that might delay automated messages. Older reset links often stop working once a newer request is created.\n\nIf a fresh reset email still does not arrive, reply with the email address you entered and tell us whether you are using a company or personal mailbox so we can guide the next step.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "reset link expired",
+        "didn't receive reset email",
+        "reset email never arrived",
+        "link doesn't work"
+      ],
+      "whenToEscalate": "Escalate if multiple fresh reset requests do not generate a working email or if the customer confirms their mailbox is blocking automated mail from the service.",
+      "doNotPromise": [
+        "specific delivery times for reset messages",
+        "that any previously issued reset link will remain active"
+      ]
+    },
+    {
+      "title": "Browser cache or session issue",
+      "rootCause": "The login process is being disrupted by stale browser session data, cached pages, or an extension that interferes with the authentication flow.",
+      "solution": "Ask the customer to retry in a private window, clear browser cache and cookies for the site, and disable interfering extensions or VPN tools for the test.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for describing the behavior. This looks like the sign-in session may be stuck because of cached browser data or an expired session token.\n\nPlease try signing in from a private or incognito window first. If that works, clear the browser cache and cookies for our site in your regular browser, then sign in again there. If the issue continues, temporarily disable any browser extensions, password managers, or VPN tools that may be changing the login session and test once more.\n\nIf you are still being logged out, stuck loading, or returned to the login page, reply with the browser name and the exact behavior you see so we can guide the next step.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "keeps loading",
+        "stuck after login",
+        "works in incognito",
+        "logged out immediately",
+        "session expired"
+      ],
+      "whenToEscalate": "Escalate if the issue reproduces in a clean private window with extensions disabled, or if multiple browsers show the same looping login behavior.",
+      "doNotPromise": [
+        "that clearing cache will preserve every saved session preference",
+        "an immediate platform fix before reproducing the issue cleanly"
+      ]
+    },
+    {
+      "title": "2FA code not received during login",
+      "rootCause": "The customer is blocked during login because the second-factor delivery step is not arriving, even though the account is already configured and the issue is not a new authenticator setup problem.",
+      "solution": "Confirm whether the customer expects an emailed, SMS, or app-based code, then check device time, delivery delays, and alternate backup codes. If the problem is actually authenticator setup or persistent invalid authenticator codes, route it to the separate Two-Factor Auth workflow instead of treating it as a generic login issue.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for the details. I understand the login is blocked because the verification code is not reaching you or is not available when you need it.\n\nPlease first confirm which second-factor method your account normally uses, such as email, SMS, or an authenticator app. If you use an authenticator app, make sure the device time is set to update automatically and try the newest code immediately. If you normally receive the code by email or SMS, check for message delays and look for any backup code options you may already have saved.\n\nIf you are unable to receive any login code through the expected method, reply with the method you use and what happened at the last step. If the issue is actually with setting up or re-enrolling the authenticator itself, we will route you through the dedicated two-factor recovery path.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "2fa code not received",
+        "no verification code",
+        "authenticator code",
+        "code never arrives"
+      ],
+      "whenToEscalate": "Escalate if the customer has no working backup method, cannot receive any second-factor delivery, or the issue is really authenticator setup/re-enrollment rather than delivery during login.",
+      "doNotPromise": [
+        "disabling two-factor authentication without identity verification",
+        "specific delivery times for one-time verification codes"
+      ]
+    },
+    {
+      "title": "Account not activated yet",
+      "rootCause": "The customer is trying to sign in before completing the original account activation or email-confirmation step.",
+      "solution": "Ask the customer to find the activation or confirmation email, complete the activation step first, and request a fresh activation message if the original one is no longer valid.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for reaching out. It appears the account may not have been activated yet, which can prevent sign-in even when the email and password are correct.\n\nPlease check for the original activation or email confirmation message and complete that step first. If the activation link has expired or you can no longer find the message, request a new activation email from the sign-in or registration flow if that option is available, then use the newest link only.\n\nIf you still cannot activate the account, reply with the email address used during registration and the message you see on screen so we can guide the next verified step.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "never activated",
+        "activation email",
+        "account not active",
+        "haven't confirmed email"
+      ],
+      "whenToEscalate": "Escalate if repeated activation attempts fail, the activation email never arrives, or the account appears activated on the customer side but login is still blocked.",
+      "doNotPromise": [
+        "manual activation without confirming account ownership",
+        "that any expired activation link can be reused"
+      ]
+    },
+    {
+      "title": "SSO or external login provider issue",
+      "rootCause": "The customer signs in through a third-party identity provider, and access is failing because the provider session, company identity policy, or mapped SSO account is not completing successfully.",
+      "solution": "Confirm the provider being used, have the customer retry from the correct SSO button, refresh the provider session, and involve the customer’s internal identity administrator when the failure is specific to their company login policy.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for the information. It sounds like the issue is happening in the single sign-on or external login provider step rather than the standard email-password login.\n\nPlease return to the login page and choose the correct provider button again, such as Google, Microsoft, or your company sign-in option, instead of the standard password form. If you are already doing that, sign out of the provider in a separate browser tab, close the browser window, and start a fresh login session. For company-managed sign-ins, it is also helpful to confirm with your internal IT or identity administrator that your provider access is active.\n\nIf the provider still blocks access, reply with the provider name and the exact error or redirect behavior you see so we can guide the next step.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "sso",
+        "single sign-on",
+        "login with google",
+        "company login",
+        "identity provider"
+      ],
+      "whenToEscalate": "Escalate if the mapped SSO account appears inactive, the provider returns a tenant or permission error, or the customer’s IT administrator needs to confirm identity-provider settings.",
+      "doNotPromise": [
+        "changing identity-provider mappings without authorization",
+        "access restoration without the customer using the correct provider path"
+      ]
+    }
+  ],
+  "version": "1.0.0",
+  "author": "Maesa Tech"
+}

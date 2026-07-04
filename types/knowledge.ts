@@ -25,6 +25,17 @@ export interface KnowledgeCandidateContent {
   internalGuidance: string;
   canonicalProblemTitle?: string;
   category?: string;
+  lessons?: Lesson[];
+  importMetadata?: {
+    sourceType: "knowledge_pack";
+    sourceLabel: string;
+    packId: string;
+    packName: string;
+    packVersion: string;
+    packAuthor: string;
+    packLanguage: string;
+    packDescription: string;
+  };
 }
 
 export interface KnowledgeCandidate {
@@ -103,10 +114,13 @@ export interface LearningHistoryEntry {
 
 export interface Lesson {
   id: string;
+  title?: string;
   rootCause: string;
   solution: string;
   customerResponse: string;
   signals: string[];
+  whenToEscalate?: string;
+  doNotPromise?: string[];
   createdAt: string;
   sourceTicketId: string;
 }

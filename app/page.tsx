@@ -21,10 +21,16 @@ import { classifyBusinessDomain } from "@/lib/domainClassifier";
 import { analyzeBulkEntries, prepareBulkClusterCommit } from "@/lib/bulkUpload";
 import { retrieveMemory } from "@/lib/memory";
 import { draftResponse, findMatchingLesson, isCompatibleForDrafting } from "@/lib/drafting";
+import {
+  buildKnowledgeItemFromPackCandidate,
+  buildPackCandidateContent,
+  candidateToPackDraft
+} from "@/lib/knowledgePacks";
 import { generateReflection } from "@/lib/reflection";
 import {
   createCanonicalProblem,
   findCanonicalProblem,
+  getCustomerResponseTemplate,
   identifyCanonicalProblem,
   mergeIntoCanonicalProblem,
   upsertCanonicalProblem,
@@ -121,6 +127,8 @@ import type {
   DraftGroundingMode,
   BusinessDomainClassification,
   TicketRecord,
+  KnowledgePack,
+  KnowledgePackCandidateDraft,
 } from "@/types";
 
 const aiAdapter = createAIAdapter();
@@ -615,6 +623,8 @@ export default function Home() {
     internalGuidance: string;
     canonicalProblemTitle?: string;
     category?: string;
+    lessons?: Lesson[];
+    importMetadata?: KnowledgeCandidate["proposedContent"]["importMetadata"];
     relatedKnowledgeId?: string;
     rationale: string;
     createdAt?: string;
@@ -628,13 +638,118 @@ export default function Home() {
         customerResponseTemplate: input.customerResponseTemplate,
         internalGuidance: input.internalGuidance,
         canonicalProblemTitle: input.canonicalProblemTitle,
-        category: input.category
+        category: input.category,
+        lessons: input.lessons,
+        importMetadata: input.importMetadata
       },
       relatedKnowledgeId: input.relatedKnowledgeId,
       rationale: input.rationale,
       status: "proposed",
       createdAt: input.createdAt ?? new Date().toISOString()
     };
+  }
+
+  function importKnowledgePack(pack: KnowledgePack): KnowledgeCandidate {
+    const now = new Date().toISOString();
+    const customerResponseTemplate = getCustomerResponseTemplate(pack.canonicalProblem.category, organizationProfile);
+    const internalGuidance = [
+      `Starter knowledge pack import for ${pack.canonicalProblem.title}.`,
+      pack.description,
+      "Review every lesson before validation. Imported packs remain pending until a human approves them."
+    ].join(" ");
+    const content = buildPackCandidateContent(pack, now, customerResponseTemplate, internalGuidance);
+    const candidate = createCandidate({
+      action: "create_new",
+      sourceTicketIds: [content.importMetadata?.sourceLabel ?? `knowledge_pack: ${pack.packId}`],
+      solution: content.solution,
+      customerResponseTemplate: content.customerResponseTemplate,
+      internalGuidance: content.internalGuidance,
+      canonicalProblemTitle: content.canonicalProblemTitle,
+      category: content.category,
+      lessons: content.lessons,
+      importMetadata: content.importMetadata,
+      rationale: `Imported starter knowledge pack "${pack.packName}" as a pending validation candidate.`,
+      createdAt: now
+    });
+
+    setKnowledgeCandidates((prev) => [...prev, candidate]);
+    addLogEntries([
+      createLogEntry(
+        "Knowledge pack imported as candidate",
+        `${pack.packName} (${pack.lessons.length} lessons) is awaiting validation before it becomes organizational memory.`
+      )
+    ]);
+    return candidate;
+  }
+
+  function validateKnowledgePackCandidate(
+    candidateId: string,
+    draft: KnowledgePackCandidateDraft
+  ): KnowledgeItem | null {
+    const candidate = knowledgeCandidates.find((item) => item.id === candidateId && item.status === "proposed");
+    if (!candidate) {
+      setErrorMessage("This imported knowledge pack candidate is no longer available for validation.");
+      return null;
+    }
+    if (!draft.lessons.length) {
+      setErrorMessage("At least one lesson must remain before validating this knowledge pack.");
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    const updatedCandidate: KnowledgeCandidate = {
+      ...candidate,
+      rationale: `Validated starter knowledge pack "${candidate.proposedContent.importMetadata?.packName ?? draft.canonicalProblemTitle}".`,
+      proposedContent: {
+        ...candidate.proposedContent,
+        solution: draft.problemSummary.trim(),
+        internalGuidance: draft.internalGuidance.trim(),
+        customerResponseTemplate: draft.customerResponseTemplate.trim(),
+        canonicalProblemTitle: draft.canonicalProblemTitle.trim(),
+        category: draft.category.trim(),
+        lessons: draft.lessons.map((lesson) => ({
+          ...lesson,
+          signals: lesson.signals.map((signal) => signal.trim()).filter(Boolean),
+          whenToEscalate: lesson.whenToEscalate?.trim(),
+          doNotPromise: lesson.doNotPromise?.map((entry) => entry.trim()).filter(Boolean)
+        }))
+      }
+    };
+    const afterState = buildKnowledgeItemFromPackCandidate(updatedCandidate, draft, organizationProfile, now);
+    const result = applyValidatedMemoryChange(
+      updatedCandidate,
+      null,
+      afterState,
+      `Starter knowledge pack validated: ${updatedCandidate.proposedContent.importMetadata?.packName ?? draft.canonicalProblemTitle}`
+    );
+
+    setSessionCreatedIds((prev) => new Set([...prev, result.validatedItem.id]));
+    setLastSavedKnowledgeId(result.validatedItem.id);
+    recordOrgResolution("human", { createdKnowledge: true });
+    updateMetrics({ knowledgeItemsCreated: 1, humanApprovedResponses: 1, canonicalProblemsTouched: 1, knowledgeVersionsCreated: 1 });
+    addLogEntries([
+      createLogEntry(
+        "Knowledge pack validated",
+        `${updatedCandidate.proposedContent.importMetadata?.packName ?? draft.canonicalProblemTitle} committed with ${draft.lessons.length} approved lessons.`
+      ),
+      createLogEntry("Validation record created", result.validation.id),
+      createLogEntry("Memory change recorded", result.memoryChange.id)
+    ]);
+    return result.validatedItem;
+  }
+
+  function rejectKnowledgePackCandidate(candidateId: string) {
+    const candidate = knowledgeCandidates.find((item) => item.id === candidateId);
+    if (!candidate) return;
+    setKnowledgeCandidates((prev) =>
+      prev.map((item) => (item.id === candidateId ? { ...item, status: "rejected" } : item))
+    );
+    addLogEntries([
+      createLogEntry(
+        "Knowledge pack rejected",
+        `${candidate.proposedContent.importMetadata?.packName ?? candidate.proposedContent.canonicalProblemTitle ?? candidate.id} was rejected before validation.`
+      )
+    ]);
   }
 
   async function analyzeUploadedQueries(
@@ -1299,7 +1414,7 @@ export default function Home() {
       : "cold_start";
     const groundingLabel =
       draftMode === "lesson_grounded"
-        ? lessonMatch?.lesson.rootCause ?? "matched lesson"
+        ? lessonMatch?.lesson.title ?? lessonMatch?.lesson.rootCause ?? "matched lesson"
         : draftMode === "memory_grounded"
         ? matchedKnowledge?.item.canonicalProblemTitle ?? matchedKnowledge?.item.title ?? "organizational memory"
         : "no organizational knowledge";
@@ -1344,7 +1459,8 @@ export default function Home() {
             rootCause: lessonMatch.lesson.rootCause,
             solution: lessonMatch.lesson.solution,
             customerResponse: lessonMatch.lesson.customerResponse,
-            matchedSignals: lessonMatch.matchedSignals
+            matchedSignals: lessonMatch.matchedSignals,
+            doNotPromise: lessonMatch.lesson.doNotPromise
           }
         : undefined,
       deterministicDraft,
@@ -2409,12 +2525,16 @@ export default function Home() {
           {activeView === "knowledge" && (
             <KnowledgeView
               knowledgeItems={knowledgeItems}
+              knowledgeCandidates={knowledgeCandidates}
               emergingPatterns={emergingPatterns}
               validationRecords={validationRecords}
               memoryChangeRecords={memoryChangeRecords}
               darkMode={darkMode}
               orgId={organizationProfile.id}
               onPromote={promotePattern}
+              onImportPack={importKnowledgePack}
+              onValidatePackCandidate={validateKnowledgePackCandidate}
+              onRejectPackCandidate={rejectKnowledgePackCandidate}
             />
           )}
 

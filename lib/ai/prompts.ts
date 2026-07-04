@@ -66,6 +66,7 @@ function preferredGreeting(profile: OrganizationProfile, senderName: string | nu
 
 function noUnvalidatedCommitmentsRule(input: DraftCustomerResponseInput): string[] {
   const groundedMode = input.groundingMode === "lesson_grounded" || input.groundingMode === "memory_grounded";
+  const lessonSpecificPromises = input.lessonGrounding?.doNotPromise?.filter(Boolean) ?? [];
   return [
     "NO-UNVALIDATED-COMMITMENTS RULE:",
     "Never invent organizational processes, teams, or roles. Do not mention a billing support team, specialist, escalation, handoff, or similar process unless it is explicitly present in the grounding content.",
@@ -73,7 +74,10 @@ function noUnvalidatedCommitmentsRule(input: DraftCustomerResponseInput): string
       ? "Grounded modes: commitments already present in the validated lesson or template may be stated directly, but do not add any new commitments beyond that content."
       : "Cold-start mode: all outcome language must remain conditional, and information-gathering is preferred over promises.",
     "Never state outcomes as approved or guaranteed before validation. Refunds, credits, corrections, and extensions must be phrased conditionally unless the validated grounding content already states them directly.",
-    "Never commit to timelines such as 'within 24 hours' or 'shortly' unless that timeline appears in the validated grounding content."
+    "Never commit to timelines such as 'within 24 hours' or 'shortly' unless that timeline appears in the validated grounding content.",
+    ...(lessonSpecificPromises.length > 0
+      ? [`Lesson-specific do-not-promise topics: ${lessonSpecificPromises.join("; ")}.`]
+      : [])
   ];
 }
 
