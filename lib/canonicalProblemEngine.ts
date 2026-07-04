@@ -237,9 +237,45 @@ function makeSlug(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-function renderCustomerTemplate(template: string, ticket: Ticket, profile: OrganizationProfile = defaultOrganizationProfile): string {
+export function resolveCustomerAddressingName(ticket: Ticket, understanding?: Understanding): string | null {
+  const extractedName = understanding?.extractedFields.senderName?.trim();
+  if (extractedName) return extractedName;
+
+  const fallbackName = ticket.customerName?.trim();
+  if (!fallbackName || fallbackName.toLowerCase() === "demo user") return null;
+  return fallbackName;
+}
+
+function buildGreetingLine(
+  ticket: Ticket,
+  profile: OrganizationProfile = defaultOrganizationProfile,
+  understanding?: Understanding
+): string {
+  const name = resolveCustomerAddressingName(ticket, understanding);
+  if (!name) return "Hello,";
+
+  switch (profile.customerTone) {
+    case "friendly":
+    case "empathetic":
+      return `Hi ${name.split(/\s+/)[0]},`;
+    case "formal":
+      return `Dear ${name},`;
+    case "professional":
+    default:
+      return `Hello ${name},`;
+  }
+}
+
+export function renderCustomerTemplateForTicket(
+  template: string,
+  ticket: Ticket,
+  profile: OrganizationProfile = defaultOrganizationProfile,
+  understanding?: Understanding
+): string {
+  const resolvedName = resolveCustomerAddressingName(ticket, understanding);
   return template
-    .replaceAll("{{customerName}}", ticket.customerName)
+    .replaceAll("{{greetingLine}}", buildGreetingLine(ticket, profile, understanding))
+    .replaceAll("{{customerName}}", resolvedName ?? "there")
     .replaceAll("{{organizationName}}", profile.name);
 }
 
@@ -258,7 +294,6 @@ function toneIntro(profile: OrganizationProfile): string {
 }
 
 function toneClosing(profile: OrganizationProfile): string {
-  if (profile.customerTone === "formal") return `${profile.name} Support`;
   return `${profile.name} Support Team`;
 }
 
@@ -268,7 +303,7 @@ function normalizeIntent(intent?: string): string {
 
 function buildTemplate(intro: string, closing: string, body: string[]): string {
   return [
-    "Hi {{customerName}},",
+    "{{greetingLine}}",
     "",
     intro,
     ...body,
@@ -551,11 +586,17 @@ export function getCustomerResponseTemplate(
   return getIntentAwareCustomerResponseTemplate(category, intro, closing, intent);
 }
 
-export function renderCustomerResponse(item: KnowledgeItem, ticket: Ticket, profile: OrganizationProfile = defaultOrganizationProfile): string {
-  return renderCustomerTemplate(
+export function renderCustomerResponse(
+  item: KnowledgeItem,
+  ticket: Ticket,
+  profile: OrganizationProfile = defaultOrganizationProfile,
+  understanding?: Understanding
+): string {
+  return renderCustomerTemplateForTicket(
     item.customerResponseTemplate ?? getCustomerResponseTemplate(item.category, profile),
     ticket,
-    profile
+    profile,
+    understanding
   );
 }
 

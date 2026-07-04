@@ -1,5 +1,5 @@
 ﻿import type { Ticket } from "@/types";
-import type { Observation, Understanding, ReasoningSummary, Confidence, BusinessRelevance } from "@/types/oip";
+import type { ExtractedTicketFields, Observation, Understanding, ReasoningSummary, Confidence, BusinessRelevance } from "@/types/oip";
 import type { KnowledgeMatch, OrganizationProfile } from "@/types";
 import { defaultOrganizationProfile } from "@/data/seedOrganizationProfiles";
 import { profileKeywordBank } from "@/lib/organizationProfile";
@@ -102,6 +102,43 @@ function normalizeForSignalMatching(value: string): string {
 
 function findMatchedSignals(text: string, signals: string[]): string[] {
   return signals.filter((signal) => text.includes(signal));
+}
+
+function emptyExtractedTicketFields(): ExtractedTicketFields {
+  return {
+    senderName: null,
+    senderRole: null,
+    companyName: null,
+    deadline: null,
+    subIssues: [],
+    urgencyIndicators: []
+  };
+}
+
+function extractSenderNameFromSignature(text: string): string | null {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index].toLowerCase();
+    if (/^(best regards|regards|kind regards|sincerely|thanks|thank you|warm regards|many thanks)[,!]?$/.test(line)) {
+      const nextLine = lines[index + 1]?.trim();
+      if (nextLine && /^[A-Za-z][A-Za-z .'-]{1,80}$/.test(nextLine) && !/@/.test(nextLine)) {
+        return nextLine;
+      }
+    }
+  }
+
+  return null;
+}
+
+function extractFallbackTicketFields(ticket: Ticket): ExtractedTicketFields {
+  return {
+    ...emptyExtractedTicketFields(),
+    senderName: extractSenderNameFromSignature(ticket.description)
+  };
 }
 
 export function assessBusinessRelevance(ticketText: string): BusinessRelevance {
@@ -599,6 +636,8 @@ export function understandForProfile(ticket: Ticket, profile: OrganizationProfil
 
 
 
+  const extractedFields = extractFallbackTicketFields(ticket);
+
  return {
     ticketId: ticket.id,
     summary,
@@ -611,11 +650,8 @@ export function understandForProfile(ticket: Ticket, profile: OrganizationProfil
     intent,
     urgency,
     tags: [...new Set(tags)],
-   
-
-
-
- detectedSignals: detectedSignals.slice(0, 6)
+    detectedSignals: detectedSignals.slice(0, 6),
+    extractedFields
   };
 }
 function inferIntent(category: string, detectedSignals: string[], fullText: string): string | undefined {

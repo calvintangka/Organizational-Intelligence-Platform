@@ -5,6 +5,7 @@ export const runtime = "nodejs";
 const DEFAULT_AI_BASE_URL = "http://127.0.0.1:1234/v1";
 const DEFAULT_AI_MODEL = "google/gemma-4-e4b";
 const DEFAULT_TIMEOUT_MS = 30000;
+const MAX_TIMEOUT_MS = 120000;
 const PROXY_PATH = "/api/ai/chat";
 
 interface ChatMessage {
@@ -30,7 +31,7 @@ function readModel(requestedModel?: string): string {
 
 function readTimeoutMs(): number {
   const configured = Number(process.env.AI_TIMEOUT_MS ?? process.env.NEXT_PUBLIC_AI_TIMEOUT_MS ?? `${DEFAULT_TIMEOUT_MS}`);
-  return Math.max(5000, Math.min(Number.isFinite(configured) ? configured : DEFAULT_TIMEOUT_MS, 30000));
+  return Math.max(5000, Math.min(Number.isFinite(configured) ? configured : DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS));
 }
 
 function readMode(): "disabled" | "lmstudio" | "amd" {

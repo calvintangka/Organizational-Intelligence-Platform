@@ -28,13 +28,13 @@ The primary ticket flow starts in `processTicketPipeline()` in `app/page.tsx`. T
    `classifyBusinessDomain()` in `lib/domainClassifier.ts` tags the ticket with one or more supported domains before knowledge matching.
 
 4. Deterministic understanding
-   `observe()` and `understandForProfile()` in `lib/analyzer.ts` build the initial `Observation` and `Understanding`. This is where category selection, intent detection, urgency, tags, and detected signals are produced.
+   `observe()` and `understandForProfile()` in `lib/analyzer.ts` build the initial `Observation` and `Understanding`. This is where category selection, intent detection, urgency, tags, detected signals, and fallback-extracted customer context are produced.
 
 5. Canonical problem identity
    `identifyCanonicalProblem()` in `lib/canonicalProblemEngine.ts` maps the understanding to a canonical problem title, summary, category, and tags.
 
 6. AI analysis advisory
-   `requestAnalysisAdvisory()` in `app/page.tsx` calls the provider methods exposed by `lib/ai/*` for optional ticket analysis and canonical-problem suggestions. Deterministic labels remain the baseline.
+   `requestAnalysisAdvisory()` in `app/page.tsx` calls the provider methods exposed by `lib/ai/*` for optional ticket analysis and canonical-problem suggestions. The same analysis call can enrich `Understanding.extractedFields` with structured sender/deadline/sub-issue data; no second AI round trip is used. Deterministic labels remain the baseline.
 
 7. Memory retrieval
    `retrieveMemory()` in `lib/memory.ts` ranks existing `KnowledgeItem` records by category overlap, tag overlap, keyword overlap, prior reuse, and trust. This produces `KnowledgeMatch[]`.
@@ -111,7 +111,7 @@ The core types live in `types/knowledge.ts`, `types/ai.ts`, `types/bulkUpload.ts
 
 - `Ticket`: the runtime support request object
 - `Observation`: raw observed ticket facts
-- `Understanding`: deterministic interpretation of category, intent, urgency, tags, and detected signals
+- `Understanding`: deterministic interpretation of category, intent, urgency, tags, detected signals, and extracted customer-context fields
 
 ### Knowledge and validation types
 
@@ -161,7 +161,7 @@ The AI stack is split across `lib/ai/*` plus the Next.js proxy route:
   Implements `analyzeTicket`, `suggestCanonicalProblem`, `suggestPatternName`, `enrichKnowledge`, `draftCustomerResponse`, and `discriminateMatch`. Every call uses timeout handling, JSON parsing, and structured failure mapping.
 
 - `lib/ai/prompts.ts`
-  Builds prompt bundles for analysis, canonical problem suggestion, knowledge enrichment, response drafting, and match discrimination.
+  Builds prompt bundles for analysis, canonical problem suggestion, knowledge enrichment, response drafting, and match discrimination. Draft prompts now explicitly enforce organization tone, greeting/acknowledgment/body/closing structure, and the named no-unvalidated-commitments rule across all grounding modes.
 
 - `lib/ai/deterministic.ts`
   Computes agreement, advisory status, and whether an AI draft is even eligible to be used in the review surface.

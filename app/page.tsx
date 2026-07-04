@@ -75,6 +75,16 @@ import {
   initialsFor,
   normalizeAccentColor,
 } from "@/lib/organizationProfile";
+import {
+  generateTicketId,
+  createTicketRecord,
+  upsertTicketRecord,
+  loadTicketRecords,
+  saveTicketRecords,
+  clearTicketRecords,
+  computeEditDistance,
+} from "@/lib/ticketRecords";
+import { CaseLookupView } from "@/components/views/CaseLookupView";
 import type {
   AIAnalysis,
   AIAdvisory,
@@ -97,6 +107,7 @@ import type {
   ResolutionMode,
   EmergingPattern,
   OrganizationProfile,
+  ExtractedTicketFields,
   KnowledgeCandidate,
   ValidationRecord,
   MemoryChangeRecord,
@@ -109,6 +120,7 @@ import type {
   ReflectionCommitInput,
   DraftGroundingMode,
   BusinessDomainClassification,
+  TicketRecord,
 } from "@/types";
 
 const aiAdapter = createAIAdapter();
@@ -152,6 +164,43 @@ const ACTIVATION_FORBIDDEN_DRAFT_TERMS = [
   "caps lock",
   "saved password"
 ];
+const UNVALIDATED_PROCESS_REFERENCES: Array<{ label: string; pattern: RegExp }> = [
+  { label: "billing support team", pattern: /\bbilling support team\b/i },
+  { label: "finance team", pattern: /\bfinance team\b/i },
+  { label: "specialist", pattern: /\bspecialist\b/i },
+  { label: "escalation", pattern: /\bescalat(?:e|ed|ion)\b/i },
+  { label: "handoff", pattern: /\bhandoff\b/i },
+  { label: "back-office team", pattern: /\bback[- ]office team\b/i }
+];
+const UNGROUNDED_TIMELINE_REFERENCES: Array<{ label: string; pattern: RegExp }> = [
+  { label: "within-N-hours-days", pattern: /\bwithin \d+\s+(?:business\s+)?(?:hour|hours|day|days|week|weeks)\b/i },
+  { label: "by end of day", pattern: /\b(?:by|before) end of (?:day|week)\b/i },
+  { label: "shortly", pattern: /\bshortly\b/i },
+  { label: "soon", pattern: /\bsoon\b/i },
+  { label: "as soon as possible", pattern: /\bas soon as possible\b/i }
+];
+const OUTCOME_COMMITMENT_RULES: Array<{ label: string; pattern: RegExp }> = [
+  {
+    label: "unvalidated refund or credit promise",
+    pattern:
+      /\b(?:we|i)(?:'ll| will)\s+(?:issue|process|approve|arrange|provide|send)\s+(?:a\s+)?(?:refund|credit)\b/i
+  },
+  {
+    label: "unvalidated invoice correction promise",
+    pattern: /\b(?:we|i)(?:'ll| will)\s+(?:correct|update|reissue|revise|amend)\s+(?:the\s+)?invoice\b/i
+  },
+  {
+    label: "approved outcome language",
+    pattern:
+      /\b(?:your|the)\s+(?:refund|credit)\s+(?:has been|is)\s+(?:approved|processed|completed|confirmed)\b|\b(?:the\s+)?invoice\s+(?:has been|is)\s+(?:corrected|updated|reissued|revised|amended)\b/i
+  }
+];
+
+interface DraftSafetyContext {
+  draftMode: DraftGroundingMode;
+  groundingContent: string;
+  organizationName: string;
+}
 
 const steps = [
   "Start",
@@ -175,10 +224,11 @@ function findTicket(ticketId: string): Ticket | null {
   return seedTickets.find((item) => item.id === ticketId) ?? null;
 }
 
-function makeCustomTicket(description: string): Ticket {
+function makeCustomTicket(description: string, ticketId?: string): Ticket {
   const subject = description.length > 80 ? description.slice(0, 80) + "…" : description;
   return {
     id: `ticket-custom-${Date.now()}`,
+    ticketId,
     customerName: "Demo User",
     subject,
     description,
@@ -197,7 +247,8 @@ function understandingToAnalysis(und: ReturnType<typeof understandForProfile>): 
     intent: und.intent,
     urgency: und.urgency,
     suggestedTags: und.tags,
-    detectedSignals: und.detectedSignals
+    detectedSignals: und.detectedSignals,
+    extractedFields: und.extractedFields
   };
 }
 
@@ -210,7 +261,48 @@ function toUnderstanding(analysis: AIAnalysis): Understanding {
     intent: analysis.intent,
     urgency: analysis.urgency,
     tags: analysis.suggestedTags,
-    detectedSignals: analysis.detectedSignals ?? []
+    detectedSignals: analysis.detectedSignals ?? [],
+    extractedFields: analysis.extractedFields ?? emptyExtractedTicketFields()
+  };
+}
+
+function emptyExtractedTicketFields(): ExtractedTicketFields {
+  return {
+    senderName: null,
+    senderRole: null,
+    companyName: null,
+    deadline: null,
+    subIssues: [],
+    urgencyIndicators: []
+  };
+}
+
+function mergeExtractedTicketFields(
+  base: ExtractedTicketFields,
+  advisoryFields?: ExtractedTicketFields
+): ExtractedTicketFields {
+  if (!advisoryFields) return base;
+
+  return {
+    senderName: advisoryFields.senderName ?? base.senderName,
+    senderRole: advisoryFields.senderRole ?? base.senderRole,
+    companyName: advisoryFields.companyName ?? base.companyName,
+    deadline: advisoryFields.deadline ?? base.deadline,
+    subIssues: advisoryFields.subIssues.length > 0 ? advisoryFields.subIssues : base.subIssues,
+    urgencyIndicators: advisoryFields.urgencyIndicators.length > 0 ? advisoryFields.urgencyIndicators : base.urgencyIndicators
+  };
+}
+
+function applyAdvisoryExtractedFields(
+  understanding: ReturnType<typeof understandForProfile>,
+  advisory: AIAdvisory | null
+): ReturnType<typeof understandForProfile> {
+  return {
+    ...understanding,
+    extractedFields: mergeExtractedTicketFields(
+      understanding.extractedFields ?? emptyExtractedTicketFields(),
+      advisory?.analysisSuggestion?.extractedFields
+    )
   };
 }
 
@@ -259,6 +351,10 @@ export default function Home() {
   // Phase 4.5 — emerging patterns
   const [emergingPatterns, setEmergingPatterns] = useState<EmergingPattern[]>([]);
 
+  // Ticket records (first-class persisted case records)
+  const [ticketRecords, setTicketRecords] = useState<TicketRecord[]>([]);
+  const [activeTicketRecord, setActiveTicketRecord] = useState<TicketRecord | null>(null);
+
   // LLM match discrimination — reasoning surfaced in the analysis step
   const [discriminationReasoning, setDiscriminationReasoning] = useState<string | null>(null);
   const [discriminatedMatchTitle, setDiscriminatedMatchTitle] = useState<string | null>(null);
@@ -286,6 +382,7 @@ export default function Home() {
     setOrgMetrics(loadOrgMetrics());
     setIntelligenceLog(loadOrgLog());
     setEmergingPatterns(loadEmergingPatterns());
+    setTicketRecords(loadTicketRecords());
     setDarkMode(window.localStorage.getItem("maesa-theme") === "dark");
     setHydrated(true);
   }, []);
@@ -317,6 +414,10 @@ export default function Home() {
   useEffect(() => {
     if (hydrated) saveEmergingPatterns(emergingPatterns);
   }, [emergingPatterns, hydrated]);
+
+  useEffect(() => {
+    if (hydrated) saveTicketRecords(ticketRecords);
+  }, [ticketRecords, hydrated]);
 
   useEffect(() => {
     if (hydrated) saveOrganizationProfile(organizationProfile);
@@ -580,6 +681,35 @@ export default function Home() {
     } else {
       updateMetrics({ humanApprovedResponses: 1, canonicalProblemsTouched: 1, knowledgeVersionsCreated: 1 });
     }
+    // Create ticket records for each bulk-uploaded query
+    const bulkRecords: TicketRecord[] = (cluster.items ?? []).map((item) => {
+      const bulkTicketId = generateTicketId(organizationProfile);
+      const rec = createTicketRecord(bulkTicketId, organizationProfile.id, item.entry.message, item.ticket.subject);
+      return {
+        ...rec,
+        classification: {
+          category: item.understanding.category,
+          intent: item.understanding.intent ?? "unspecified",
+          canonicalProblem: item.canonicalProblem.title,
+          classifiedBy: "deterministic" as const,
+          confidence: "bulk",
+        },
+        memoryMatch: { knowledgeId: result.validatedItem.id, matchType: "template" as const, lessonId: null },
+        draftSource: "deterministic" as const,
+        reflection: {
+          decision: prepared.action,
+          lessonCreatedId: null,
+          lessonReinforcedId: null,
+          knowledgeChanged: result.validatedItem.id,
+        },
+        validationRecordIds: [result.validation.id],
+        status: "resolved" as const,
+      };
+    });
+    if (bulkRecords.length > 0) {
+      setTicketRecords((prev) => [...prev, ...bulkRecords]);
+    }
+
     addLogEntries([
       createLogEntry("Bulk cluster validated", `${cluster.count} uploaded queries committed as ${prepared.action.replace(/_/g, " ")} for ${cluster.canonicalProblemTitle}`),
       createLogEntry("Validation record created", result.validation.id),
@@ -749,6 +879,7 @@ export default function Home() {
     setErrorMessage("");
     setDiscriminationReasoning(null);
     setDiscriminatedMatchTitle(null);
+    setActiveTicketRecord(null);
   }
 
   function startDemo(ticket?: Ticket) {
@@ -778,6 +909,8 @@ export default function Home() {
     setOrgMetrics(seedOrgMetrics());
     setIntelligenceLog([]);
     setEmergingPatterns(seedEmergingPatterns());
+    setTicketRecords([]);
+    setActiveTicketRecord(null);
     resetWorkflowState();
     setCurrentStep(0);
   }
@@ -944,15 +1077,68 @@ export default function Home() {
     return null;
   }
 
+  function stripAllowedSupportSignoff(draft: string, organizationName: string): string {
+    const escapedOrganizationName = organizationName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return draft.replace(new RegExp(`\\b${escapedOrganizationName}\\s+support\\s+team\\b`, "gi"), "");
+  }
+
+  function findUnsupportedPattern(
+    text: string,
+    rules: Array<{ label: string; pattern: RegExp }>,
+    groundedText: string
+  ): string | null {
+    for (const rule of rules) {
+      if (rule.pattern.test(text) && !rule.pattern.test(groundedText)) {
+        return rule.label;
+      }
+    }
+    return null;
+  }
+
+  function validateNoUnvalidatedCommitments(draft: string, context: DraftSafetyContext): string | null {
+    const draftWithoutSignoff = stripAllowedSupportSignoff(draft, context.organizationName);
+    const groundedText = context.groundingContent;
+
+    const unsupportedProcess = findUnsupportedPattern(
+      draftWithoutSignoff,
+      UNVALIDATED_PROCESS_REFERENCES,
+      groundedText
+    );
+    if (unsupportedProcess) {
+      return `AI draft invented an unsupported organization process or role: "${unsupportedProcess}".`;
+    }
+
+    const unsupportedTimeline = findUnsupportedPattern(
+      draftWithoutSignoff,
+      UNGROUNDED_TIMELINE_REFERENCES,
+      groundedText
+    );
+    if (unsupportedTimeline) {
+      return `AI draft committed to an unsupported timeline: "${unsupportedTimeline}".`;
+    }
+
+    const unsupportedOutcome = findUnsupportedPattern(draftWithoutSignoff, OUTCOME_COMMITMENT_RULES, groundedText);
+    if (unsupportedOutcome) {
+      return `AI draft made an unsupported commitment: ${unsupportedOutcome}.`;
+    }
+
+    return null;
+  }
+
   function getAIDraftRejectionReason(
     understanding: Understanding,
-    result: AIProviderResult<{ draftResponse: string; confidence: number }>
+    result: AIProviderResult<{ draftResponse: string; confidence: number }>,
+    context: DraftSafetyContext
   ): string | null {
     const draft = result.data?.draftResponse?.trim();
     if (!result.ok || !draft) return result.error ?? "AI draft was empty.";
     const lower = draft.toLowerCase();
     if (lower.includes("internal guidance") || lower.includes("root cause hypothesis")) {
       return "AI draft included internal-only guidance.";
+    }
+    const commitmentViolation = validateNoUnvalidatedCommitments(draft, context);
+    if (commitmentViolation) {
+      return commitmentViolation;
     }
     if (understanding.category === "Activation") {
       return validateActivationDraft(draft);
@@ -965,9 +1151,10 @@ export default function Home() {
 
   function isUsableAIDraft(
     understanding: Understanding,
-    result: AIProviderResult<{ draftResponse: string; confidence: number }>
+    result: AIProviderResult<{ draftResponse: string; confidence: number }>,
+    context: DraftSafetyContext
   ): boolean {
-    return getAIDraftRejectionReason(understanding, result) === null;
+    return getAIDraftRejectionReason(understanding, result, context) === null;
   }
 
   function createAIStatusLogEntry(advisory: AIAdvisory): IntelligenceLogEntry {
@@ -1205,9 +1392,14 @@ export default function Home() {
 
     recordAIResults([draftResult, enrichmentResult], nextAdvisory.status, nextAdvisory.agreementPct);
 
-    const draftRejectionReason = getAIDraftRejectionReason(understanding, draftResult);
+    const draftSafetyContext: DraftSafetyContext = {
+      draftMode,
+      groundingContent,
+      organizationName: organizationProfile.name
+    };
+    const draftRejectionReason = getAIDraftRejectionReason(understanding, draftResult, draftSafetyContext);
 
-    if (draftRejectionReason === null && isUsableAIDraft(understanding, draftResult)) {
+    if (draftRejectionReason === null && isUsableAIDraft(understanding, draftResult, draftSafetyContext)) {
       return {
         advisory: nextAdvisory,
         usedAIDraft: true,
@@ -1226,11 +1418,16 @@ export default function Home() {
     }
 
     if (draftRejectionReason && draftResult.ok) {
+      const rejectionEvent = draftRejectionReason.includes("Activation category")
+        ? "AI draft rejected because it did not match Activation category."
+        : draftRejectionReason.includes("email recovery intent")
+        ? "AI draft rejected because it did not match email recovery intent."
+        : draftRejectionReason.includes("unsupported")
+        ? "AI draft rejected because it made unsupported commitments."
+        : "AI draft rejected.";
       addLogEntries([
         createLogEntry(
-          draftRejectionReason.includes("Activation category")
-            ? "AI draft rejected because it did not match Activation category."
-            : "AI draft rejected because it did not match email recovery intent.",
+          rejectionEvent,
           draftRejectionReason
         )
       ]);
@@ -1294,20 +1491,21 @@ export default function Home() {
     const obs = observe(ticket, source);
     const und = understandForProfile(ticket, organizationProfile);
     const canonicalProblem = identifyCanonicalProblem(und, organizationProfile);
-    const analysis = understandingToAnalysis(und);
     const advisory = await requestAnalysisAdvisory(ticket, und, {
       title: canonicalProblem.title,
       problemSummary: canonicalProblem.problemSummary,
       category: canonicalProblem.category
     });
+    const enrichedUnderstanding = applyAdvisoryExtractedFields(und, advisory);
+    const analysis = understandingToAnalysis(enrichedUnderstanding);
 
     const logEntries = [
       ...createRelevanceLogEntries(relevance),
       createLogEntry("Observed ticket input", `Source: ${source} · Ticket: ${ticket.id}`),
-      createLogEntry(`Extracted category: ${und.category}`, `Urgency: ${und.urgency} · Tags: ${und.tags.join(", ")}`),
+      createLogEntry(`Extracted category: ${enrichedUnderstanding.category}`, `Urgency: ${enrichedUnderstanding.urgency} · Tags: ${enrichedUnderstanding.tags.join(", ")}`),
       createLogEntry("Canonical problem proposed", `${canonicalProblem.title} · ${canonicalProblem.problemSummary}`),
-      und.detectedSignals.length > 0
-        ? createLogEntry(`Detected signals: ${und.detectedSignals.join(", ")}`)
+      enrichedUnderstanding.detectedSignals.length > 0
+        ? createLogEntry(`Detected signals: ${enrichedUnderstanding.detectedSignals.join(", ")}`)
         : createLogEntry("Signal detection: no strong signals found")
     ];
 
@@ -1416,6 +1614,24 @@ export default function Home() {
     const existingMatch = findCanonicalProblem(und, knowledgeItems, organizationProfile);
     const reflection = generateReflection(und, reviewedResponse, existingMatch);
     setReflectionDecision(reflection);
+
+    // Update ticket record with resolution
+    if (activeTicketRecord) {
+      const originalDraft = suggestedResponse?.draftResponse ?? "";
+      const humanEdited = reviewedResponse !== originalDraft;
+      const editNote = humanEdited ? computeEditDistance(originalDraft, reviewedResponse) : null;
+      const updated: TicketRecord = {
+        ...activeTicketRecord,
+        resolution: {
+          finalResponse: reviewedResponse,
+          humanEdited,
+          editDistanceNote: editNote,
+          resolvedAt: new Date().toISOString(),
+        },
+      };
+      setActiveTicketRecord(updated);
+      setTicketRecords((prev) => upsertTicketRecord(prev, updated));
+    }
 
     addLogEntries([
       createLogEntry("Human approved response", "Response reviewed and approved by human reviewer"),
@@ -1670,6 +1886,31 @@ export default function Home() {
       addLogEntries([createLogEntry("Human accepted AI suggestion", "AI advisory draft approved after human review")]);
     }
 
+    // Update ticket record with reflection outcome and resolve
+    if (activeTicketRecord) {
+      const lessonCreated = lessonDraft?.mode === "new"
+        ? knowledgeItems.find((k) => k.id === lastSavedKnowledgeId)?.lessons?.at(-1)?.id ?? null
+        : null;
+      const lessonReinforced = lessonDraft?.mode === "improves_existing" ? lessonDraft.existingLessonId ?? null : null;
+      const updated: TicketRecord = {
+        ...activeTicketRecord,
+        reflection: {
+          decision: reflectionDecision.action,
+          lessonCreatedId: lessonCreated,
+          lessonReinforcedId: lessonReinforced,
+          knowledgeChanged: lastSavedKnowledgeId,
+        },
+        validationRecordIds: validationRecords
+          .filter((v) => v.candidateId && knowledgeCandidates.some(
+            (c) => c.id === v.candidateId && c.sourceTicketIds.includes(selectedTicket.id)
+          ))
+          .map((v) => v.id),
+        status: "resolved",
+      };
+      setActiveTicketRecord(updated);
+      setTicketRecords((prev) => upsertTicketRecord(prev, updated));
+    }
+
     setErrorMessage("");
     setCurrentStep(8);
   }
@@ -1722,18 +1963,19 @@ export default function Home() {
       problemSummary: canonicalProblem.problemSummary,
       category: canonicalProblem.category
     });
-    const matches = retrieveMemory(und, knowledgeItems, sessionCreatedIds);
+    const enrichedUnderstanding = applyAdvisoryExtractedFields(und, advisory);
+    const matches = retrieveMemory(enrichedUnderstanding, knowledgeItems, sessionCreatedIds);
 
     // Among the strongly-relevant matches, the organization reaches for its
     // MOST TRUSTED knowledge — that is what enables auto-resolution over time.
     // Category-incompatible items are excluded before the trust-based selection so
     // a high-trust Activation item cannot drive a Login ticket's reuse response.
-    const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(und, m.item) || !!findMatchingLesson(second, m.item));
+    const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(enrichedUnderstanding, m.item) || !!findMatchingLesson(second, m.item));
 
     // Cold Start path: no matches or no compatible matches → route to human review
     if (matches.length === 0 || compatibleMatches.length === 0) {
-      const coldStartDraft = draftResponse(second, und, null, organizationProfile, knowledgeItems.length === 0);
-      const secondAnalysis = understandingToAnalysis(und);
+      const coldStartDraft = draftResponse(second, enrichedUnderstanding, null, organizationProfile, knowledgeItems.length === 0);
+      const secondAnalysis = understandingToAnalysis(enrichedUnderstanding);
       setSecondTicket({ ...second, status: "analyzed" });
       setAiAnalysis(secondAnalysis);
       setAiAdvisory(advisory);
@@ -1766,12 +2008,12 @@ export default function Home() {
     // LLM discrimination on the reuse candidate — prevents false-positive memory reuse
     setDiscriminationReasoning(null);
     setDiscriminatedMatchTitle(null);
-    const effectiveReuseMatch = await requestMatchDiscrimination(second, reusedMatch, und);
+    const effectiveReuseMatch = await requestMatchDiscrimination(second, reusedMatch, enrichedUnderstanding);
 
     // If discrimination says this is a distinct problem, treat as cold-start (no match)
     if (!effectiveReuseMatch) {
-      const coldStartDraft = draftResponse(second, und, null, organizationProfile);
-      const secondAnalysis = understandingToAnalysis(und);
+      const coldStartDraft = draftResponse(second, enrichedUnderstanding, null, organizationProfile);
+      const secondAnalysis = understandingToAnalysis(enrichedUnderstanding);
       setSecondTicket({ ...second, status: "analyzed" });
       setAiAnalysis(secondAnalysis);
       setAiAdvisory(advisory);
@@ -1794,15 +2036,15 @@ export default function Home() {
       return;
     }
 
-    const draft = draftResponse(second, und, effectiveReuseMatch, organizationProfile);
-    const aiDraft = await requestDraftAdvisory(second, und, canonicalProblem.title, effectiveReuseMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", advisory);
+    const draft = draftResponse(second, enrichedUnderstanding, effectiveReuseMatch, organizationProfile);
+    const aiDraft = await requestDraftAdvisory(second, enrichedUnderstanding, canonicalProblem.title, effectiveReuseMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", advisory);
     const draftSource = aiDraft.response.source ?? "deterministic";
-    const isUnknownIssue = und.category === "Uncategorized" || und.category === "General";
+    const isUnknownIssue = enrichedUnderstanding.category === "Uncategorized" || enrichedUnderstanding.category === "General";
     const effectiveReuseDecision: TrustDecision =
       isUnknownIssue ? "human_required"
       : draftSource === "ai_advisory" && trust.decision === "auto_resolution" ? "human_required"
       : trust.decision;
-    const secondAnalysis = understandingToAnalysis(und);
+    const secondAnalysis = understandingToAnalysis(enrichedUnderstanding);
 
     setSecondTicket({ ...second, status: "analyzed" });
     setAiAnalysis(secondAnalysis);
@@ -1820,7 +2062,7 @@ export default function Home() {
     addLogEntries([
       ...createRelevanceLogEntries(relevance),
       createLogEntry("Observed reuse ticket", `Ticket: ${second.id}`),
-      createLogEntry(`Category detected: ${und.category}`, `Tags: ${und.tags.join(", ")}`),
+      createLogEntry(`Category detected: ${enrichedUnderstanding.category}`, `Tags: ${enrichedUnderstanding.tags.join(", ")}`),
       createLogEntry(
         `Retrieved ${matches.length} memory candidate${matches.length !== 1 ? "s" : ""}`,
         `Top: "${effectiveReuseMatch.item.title}" — ${effectiveReuseMatch.matchScore}% similarity`
@@ -1883,9 +2125,15 @@ export default function Home() {
     if (!text.trim() || isProcessing) return;
     setIsProcessing(true);
     setErrorMessage("");
-    const ticket = makeCustomTicket(text.trim());
+    const tId = generateTicketId(organizationProfile);
+    const ticket = makeCustomTicket(text.trim(), tId);
     setSelectedTicket(ticket);
     setCurrentStep(1);
+
+    // Create ticket record at submission
+    let record = createTicketRecord(tId, organizationProfile.id, text.trim(), ticket.subject);
+    setActiveTicketRecord(record);
+    setTicketRecords((prev) => upsertTicketRecord(prev, record));
 
     // Phase 1: Analysis
     const relevance = assessBusinessRelevanceForProfile(`${ticket.subject} ${ticket.description}`, organizationProfile);
@@ -1894,6 +2142,9 @@ export default function Home() {
 
     if (!relevance.isRelevant && relevance.status === "out_of_scope") {
       setErrorMessage(`Rejected by Business Relevance Guardrail: ${relevance.reason}`);
+      record = { ...record, status: "rejected" };
+      setActiveTicketRecord(record);
+      setTicketRecords((prev) => upsertTicketRecord(prev, record));
       setIsProcessing(false);
       return;
     }
@@ -1912,31 +2163,58 @@ export default function Home() {
     const obs = observe(ticket, "manual-demo-input");
     const und = understandForProfile(ticket, organizationProfile);
     const canonicalProblem = identifyCanonicalProblem(und, organizationProfile);
-    const analysis = understandingToAnalysis(und);
     const advisory = await requestAnalysisAdvisory(ticket, und, {
       title: canonicalProblem.title,
       problemSummary: canonicalProblem.problemSummary,
       category: canonicalProblem.category
     });
+    const enrichedUnderstanding = applyAdvisoryExtractedFields(und, advisory);
+    const analysis = understandingToAnalysis(enrichedUnderstanding);
+
+    // Update record with classification
+    record = {
+      ...record,
+      classification: {
+        category: enrichedUnderstanding.category,
+        intent: enrichedUnderstanding.intent ?? "unspecified",
+        canonicalProblem: canonicalProblem.title,
+        classifiedBy: "deterministic",
+        confidence: domain.confidence,
+      },
+    };
+    setActiveTicketRecord(record);
+    setTicketRecords((prev) => upsertTicketRecord(prev, record));
 
     setObservation(obs);
     setAiAnalysis(analysis);
     setAiAdvisory(advisory);
     setSelectedTicket({ ...ticket, status: "analyzed" });
     addLogEntries([
-      createLogEntry("Observed ticket input", `Ticket: ${ticket.id}`),
-      createLogEntry(`Extracted category: ${und.category}`, `Urgency: ${und.urgency}`),
+      createLogEntry("Observed ticket input", `Ticket: ${tId}`),
+      createLogEntry(`Extracted category: ${enrichedUnderstanding.category}`, `Urgency: ${enrichedUnderstanding.urgency}`),
       createLogEntry("Canonical problem proposed", canonicalProblem.title),
     ]);
     updateMetrics({ ticketsProcessed: 1 });
     setCurrentStep(2);
 
     // Phase 2: Memory retrieval
-    const matches = retrieveMemory(und, knowledgeItems, sessionCreatedIds);
+    const matches = retrieveMemory(enrichedUnderstanding, knowledgeItems, sessionCreatedIds);
     const topMatch = matches.length > 0 ? matches[0] : null;
-    const newReasoning = buildReasoning(und, topMatch);
-    const newConfidence = buildConfidence(und, topMatch);
+    const newReasoning = buildReasoning(enrichedUnderstanding, topMatch);
+    const newConfidence = buildConfidence(enrichedUnderstanding, topMatch);
     const topTrust = topMatch ? evaluateTrust(topMatch.item, organizationProfile, validationRecords) : null;
+
+    const lessonMatchForRecord = topMatch ? findMatchingLesson(ticket, topMatch.item) : null;
+    record = {
+      ...record,
+      memoryMatch: {
+        knowledgeId: topMatch?.item.id ?? null,
+        matchType: lessonMatchForRecord ? "lesson" : topMatch ? "template" : "none",
+        lessonId: lessonMatchForRecord?.lesson.id ?? null,
+      },
+    };
+    setActiveTicketRecord(record);
+    setTicketRecords((prev) => upsertTicketRecord(prev, record));
 
     setSimilarKnowledge(matches);
     setReasoning(newReasoning);
@@ -1963,6 +2241,15 @@ export default function Home() {
     const draft = draftResponse(ticket, und, effectiveTopMatch, organizationProfile, knowledgeItems.length === 0);
     const aiDraft = await requestDraftAdvisory(ticket, und, canonicalProblem.title, effectiveTopMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", advisory);
     const response = aiDraft.response;
+
+    // Update record with draft source and move to in_review
+    record = {
+      ...record,
+      draftSource: response.source as TicketRecord["draftSource"],
+      status: "in_review",
+    };
+    setActiveTicketRecord(record);
+    setTicketRecords((prev) => upsertTicketRecord(prev, record));
 
     addLogEntries([
       createLogEntry("Generated draft response", response.source === "ai_advisory" ? "AI advisory draft" : "Deterministic draft")
@@ -2105,6 +2392,18 @@ export default function Home() {
                 />
               )}
             </div>
+          )}
+
+          {activeView === "cases" && (
+            <CaseLookupView
+              ticketRecords={ticketRecords}
+              knowledgeItems={knowledgeItems}
+              darkMode={darkMode}
+              onNavigateToKnowledge={(knowledgeId) => {
+                setActiveView("knowledge");
+              }}
+              onNavigate={setActiveView}
+            />
           )}
 
           {activeView === "knowledge" && (

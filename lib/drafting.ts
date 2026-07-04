@@ -1,7 +1,12 @@
-﻿import type { Ticket } from "@/types";
+import type { Ticket } from "@/types";
 import type { Understanding } from "@/types/oip";
 import type { KnowledgeItem, KnowledgeMatch, OrganizationProfile, SuggestedResponse, Lesson } from "@/types";
-import { getCustomerResponseTemplate, renderCustomerResponse } from "@/lib/canonicalProblemEngine";
+import {
+  getCustomerResponseTemplate,
+  renderCustomerResponse,
+  renderCustomerTemplateForTicket,
+  resolveCustomerAddressingName
+} from "@/lib/canonicalProblemEngine";
 import { defaultOrganizationProfile } from "@/data/seedOrganizationProfiles";
 
 const UNCATEGORIZED_CATEGORY = "Uncategorized";
@@ -109,33 +114,32 @@ export function findMatchingLesson(ticket: Ticket, item: KnowledgeItem): LessonM
   return best;
 }
 
-function renderLessonResponse(lesson: Lesson, ticket: Ticket, profile: OrganizationProfile): string {
-  return lesson.customerResponse
-    .replaceAll("{{customerName}}", ticket.customerName)
-    .replaceAll("{{organizationName}}", profile.name);
+function renderLessonResponse(lesson: Lesson, ticket: Ticket, profile: OrganizationProfile, understanding: Understanding): string {
+  return renderCustomerTemplateForTicket(lesson.customerResponse, ticket, profile, understanding);
 }
 
-function tonePrefix(profile: OrganizationProfile, ticket: Ticket): string {
+function tonePrefix(profile: OrganizationProfile, ticket: Ticket, understanding: Understanding): string {
+  const name = resolveCustomerAddressingName(ticket, understanding);
   switch (profile.customerTone) {
     case "friendly":
-      return `Hi ${ticket.customerName}, thanks for reaching out to ${profile.name}. Let's help you check this.`;
+      return name ? `Hi ${name.split(/\s+/)[0]}, thanks for reaching out to ${profile.name}. Let's help you check this.` : `Hello, thanks for reaching out to ${profile.name}. Let's help you check this.`;
     case "formal":
-      return `Dear ${ticket.customerName}, we acknowledge your request to ${profile.name}.`;
+      return name ? `Dear ${name}, we acknowledge your request to ${profile.name}.` : `Hello, we acknowledge your request to ${profile.name}.`;
     case "empathetic":
-      return `Hi ${ticket.customerName}, I am sorry you are running into this with ${profile.name}. We will help you check it carefully.`;
+      return name ? `Hi ${name.split(/\s+/)[0]}, I am sorry you are running into this with ${profile.name}. We will help you check it carefully.` : `Hello, I am sorry you are running into this with ${profile.name}. We will help you check it carefully.`;
     case "professional":
     default:
-      return `Hi ${ticket.customerName}, thank you for contacting ${profile.name}.`;
+      return name ? `Hello ${name}, thank you for contacting ${profile.name}.` : `Hello, thank you for contacting ${profile.name}.`;
   }
 }
 
-function applyProfileTone(draft: string, ticket: Ticket, profile: OrganizationProfile): string {
+function applyProfileTone(draft: string, ticket: Ticket, profile: OrganizationProfile, understanding: Understanding): string {
   const withoutLegacyGreeting = draft
-    .replace(new RegExp(`^Hi ${ticket.customerName},\\s*`, "i"), "")
-    .replace(/^Dear\s+[^,]+,\s*/i, "")
+    .replace(/^(Hi|Hello|Dear)\b[^,]*,\s*/i, "")
     .trim();
-  const closing = profile.customerTone === "formal" ? `\n\nSincerely,\n${profile.name} Support` : `\n\nKind regards,\n${profile.name} Support Team`;
-  return `${tonePrefix(profile, ticket)} ${withoutLegacyGreeting}${closing}`;
+  const ticketRef = ticket.ticketId ? `\n\nYour ticket reference is ${ticket.ticketId}.` : "";
+  const closing = `${ticketRef}\n\nKind regards,\n${profile.name} Support Team`;
+  return `${tonePrefix(profile, ticket, understanding)} ${withoutLegacyGreeting}${closing}`;
 }
 
 export function draftResponse(
@@ -147,9 +151,12 @@ export function draftResponse(
 ): Pick<SuggestedResponse, "draftResponse" | "basedOnKnowledgeIds" | "confidenceNote" | "source"> {
   const templateFn = CATEGORY_TEMPLATES[understanding.category] ?? CATEGORY_TEMPLATES["General"];
   const profileTemplate = getCustomerResponseTemplate(understanding.category, profile, understanding);
-  let draft = profileTemplate.includes("{{customerName}}")
-    ? profileTemplate.replaceAll("{{customerName}}", ticket.customerName).replaceAll("{{organizationName}}", profile.name)
-    : applyProfileTone(templateFn(ticket), ticket, profile);
+  let draft = profileTemplate.includes("{{customerName}}") || profileTemplate.includes("{{greetingLine}}")
+    ? renderCustomerTemplateForTicket(profileTemplate, ticket, profile, understanding)
+    : applyProfileTone(templateFn(ticket), ticket, profile, understanding);
+  if (ticket.ticketId && !draft.includes(ticket.ticketId)) {
+    draft += `\n\nYour ticket reference is ${ticket.ticketId}.`;
+  }
   let confidenceNote: string;
   const basedOnKnowledgeIds: string[] = [];
 
@@ -163,7 +170,8 @@ export function draftResponse(
   const lessonMatch = compatibleMatch ? lessonSignalMatch ?? findMatchingLesson(ticket, compatibleMatch.item) : null;
 
   if (lessonMatch && compatibleMatch) {
-    draft = renderLessonResponse(lessonMatch.lesson, ticket, profile);
+    draft = renderLessonResponse(lessonMatch.lesson, ticket, profile, understanding);
+    if (ticket.ticketId) draft += `\n\nYour ticket reference is ${ticket.ticketId}.`;
     confidenceNote = `Lesson-informed draft: "${lessonMatch.lesson.rootCause}" (matched signals: ${lessonMatch.matchedSignals.join(", ")}). Root cause: ${lessonMatch.lesson.rootCause}. Solution: ${lessonMatch.lesson.solution}. Human review is still required unless trust allows auto-resolution.`;
     basedOnKnowledgeIds.push(compatibleMatch.item.id);
     return { draftResponse: draft, basedOnKnowledgeIds, confidenceNote, source: "deterministic" };
@@ -179,11 +187,13 @@ export function draftResponse(
   }
 
   if (compatibleMatch && compatibleMatch.matchScore >= 55) {
-    draft = renderCustomerResponse(compatibleMatch.item, ticket, profile);
+    draft = renderCustomerResponse(compatibleMatch.item, ticket, profile, understanding);
+    if (ticket.ticketId) draft += `\n\nYour ticket reference is ${ticket.ticketId}.`;
     confidenceNote = `Medium-high confidence (canonical problem match ${compatibleMatch.matchScore}%). This draft uses the customer-facing response template, not internal agent guidance. Human review is still required unless trust allows auto-resolution.`;
     basedOnKnowledgeIds.push(compatibleMatch.item.id);
   } else if (compatibleMatch && compatibleMatch.matchScore > 0) {
-    draft = renderCustomerResponse(compatibleMatch.item, ticket, profile);
+    draft = renderCustomerResponse(compatibleMatch.item, ticket, profile, understanding);
+    if (ticket.ticketId) draft += `\n\nYour ticket reference is ${ticket.ticketId}.`;
     confidenceNote = `Low-medium confidence (partial canonical problem match ${compatibleMatch.matchScore}%). The customer-facing template is used, but human review is required.`;
     basedOnKnowledgeIds.push(compatibleMatch.item.id);
   } else if (rejectedForCategory) {

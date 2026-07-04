@@ -185,6 +185,20 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `createLMStudioProvider()` — provider factory.
 - `callChatCompletion()` — LM Studio request primitive.
 
+## Recent Load-Bearing Additions
+
+- Extracted customer context
+  See `types/oip.ts` for `ExtractedTicketFields`, `lib/analyzer.ts` for deterministic sender-name fallback extraction, `lib/ai/lmStudio.ts` for AI extracted-field normalization, and `app/page.tsx` for merging advisory fields back into `Understanding`.
+
+- Draft personalization and tone enforcement
+  See `lib/ai/prompts.ts` for tone-specific AI draft instructions and required response structure, `lib/canonicalProblemEngine.ts` for `resolveCustomerAddressingName()` plus `renderCustomerTemplateForTicket()`, and `lib/drafting.ts` for deterministic greeting/sign-off shaping.
+
+- Extracted-field visibility in the UI
+  See `components/views/TicketWorkspace.tsx`, which now surfaces sender name, role, company, deadline, sub-issues, and urgency indicators from the current analysis state.
+
+- Post-prompt AI draft safety gate
+  See `app/page.tsx` `validateNoUnvalidatedCommitments()` and `requestDraftAdvisory()`, which reject unsupported teams, processes, timelines, or unconditional commitments even when the provider returns valid JSON.
+
 ## Where To Look For X
 
 - Classification and intents — `lib/analyzer.ts`

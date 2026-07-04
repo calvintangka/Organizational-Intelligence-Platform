@@ -1,4 +1,6 @@
-﻿export interface AIAnalysis {
+import type { ExtractedTicketFields } from "./oip";
+
+export interface AIAnalysis {
   ticketId: string;
   summary: string;
   coreProblem: string;
@@ -7,6 +9,7 @@
   urgency: "low" | "medium" | "high";
   suggestedTags: string[];
   detectedSignals?: string[];
+  extractedFields?: ExtractedTicketFields;
 }
 
 export type DraftGroundingMode = "lesson_grounded" | "memory_grounded" | "cold_start";
@@ -53,6 +56,7 @@ export interface AIAnalysisSuggestion {
   tags: string[];
   confidence: number;
   rationale?: string;
+  extractedFields?: ExtractedTicketFields;
 }
 
 export interface AICanonicalProblemSuggestion {

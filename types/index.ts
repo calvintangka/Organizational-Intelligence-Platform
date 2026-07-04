@@ -1,4 +1,13 @@
-﻿export type { Ticket, TicketStatus } from "./ticket";
+﻿export type {
+  Ticket,
+  TicketStatus,
+  TicketRecord,
+  TicketRecordStatus,
+  TicketRecordClassification,
+  TicketRecordMemoryMatch,
+  TicketRecordResolution,
+  TicketRecordReflection
+} from "./ticket";
 export type {
   AIAnalysis,
   DraftGroundingMode,
@@ -38,7 +47,7 @@ export type {
   LessonMode
 } from "./knowledge";
 export type { Metrics, OrgMetrics } from "./metrics";
-export type { Observation, Understanding, ReasoningSummary, Confidence, BusinessRelevance, BusinessDomainClassification, IntelligenceLogEntry } from "./oip";
+export type { Observation, ExtractedTicketFields, Understanding, ReasoningSummary, Confidence, BusinessRelevance, BusinessDomainClassification, IntelligenceLogEntry } from "./oip";
 export type { EmergingPattern, EmergingPatternExample } from "./patterns";
 export type { OrganizationProfile, CustomerTone } from "./organization";
 export type {

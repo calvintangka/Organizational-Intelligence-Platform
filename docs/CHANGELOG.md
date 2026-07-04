@@ -14,7 +14,7 @@ Every significant implementation should append a new dated entry.
 
 | Item | Status |
 |------|--------|
-| Current Version | **0.8.0** |
+| Current Version | **0.9.0** |
 | Architecture | Organizational Intelligence Platform |
 | Current AI | Gemma 4 E4B (LM Studio) |
 | AI Mode | AI Advisory (Deterministic Governance) |
@@ -27,6 +27,67 @@ Every significant implementation should append a new dated entry.
 | Hackathon Status | Active Development |
 
 This section provides a quick snapshot of the current implementation state. Update it whenever major architectural milestones are completed.
+
+---
+
+## Version 0.9.0
+
+Date: 2026-07-04
+
+### Added
+
+- **Deterministic Ticket IDs** — Tickets receive a stable, human-readable ID at submission in the format `{OrgPrefix}-YYYYMMDD-NNNN` (e.g., `MT-20260704-0001`). The prefix is derived from the organization name initials. A per-org counter is persisted in localStorage and increments monotonically. The ID is displayed immediately in the UI upon submission and included in the draft closing line.
+
+- **Ticket Records** — Tickets are now first-class persisted records (`TicketRecord`) that capture the full pipeline journey: classification (category, intent, canonical problem, confidence), memory match (knowledge ID, match type, lesson ID), draft source, resolution (final response, human-edited flag, edit distance, resolved-at timestamp), reflection (decision, lesson created/reinforced, knowledge changed), validation record references, and status. Records are updated at each pipeline stage and persisted to localStorage.
+
+- **Case Lookup View** — New "Cases" nav item providing retrospective search and review of ticket records. Features include: search by ticket ID, text, or category; five filter chips (All, Heavily edited, Cold start, Uncategorized, Rejected); paginated list with "Load more" (20 per page); and a detail view showing the full pipeline journey with clickable knowledge item links.
+
+- **Edit Distance Computation** — Levenshtein distance calculation between the original draft and the human-reviewed response, used to populate the "heavily edited" filter chip and the resolution's `editDistanceNote` field. No new analysis or LLM involvement — computed from existing data at approval time.
+
+- **Ticket Reference in Draft Closings** — All draft generation paths (profile template, lesson match, canonical match, AI cold start) now append `Your ticket reference is {ticketId}.` to the closing. A guard in `draftResponse` prevents double-insertion.
+
+- **Bulk Upload Ticket Records** — Bulk-uploaded queries receive deterministic ticket IDs and create ticket records when their cluster is committed through the reflection workflow.
+
+### Changed
+
+- `Ticket` interface extended with optional `ticketId` field.
+- `makeCustomTicket` accepts an optional `ticketId` parameter.
+- `processTicketPipeline` generates the ticket ID before any pipeline stage and threads it through the ticket object.
+- `approveResponse` computes edit distance and updates the ticket record's resolution fields.
+- `confirmReflection` updates the ticket record with reflection data and sets final status to `resolved`.
+- `clearOrganization` now also clears ticket records and the ticket counter.
+- Sidebar `ActiveView` type extended with `"cases"`.
+
+### Fixed
+
+- Draft closing missing ticket reference — `buildTemplate` always includes `{{greetingLine}}`, so the `renderCustomerTemplateForTicket` path was always taken, bypassing `applyProfileTone` which was the only path that added the ticket reference. Fixed by adding a guard after both draft paths in `draftResponse` that appends the reference if not already present.
+
+### Major Files Affected
+
+- `types/ticket.ts` — `TicketRecord`, `TicketRecordStatus`, `TicketRecordClassification`, `TicketRecordMemoryMatch`, `TicketRecordResolution`, `TicketRecordReflection` type definitions; `ticketId` added to `Ticket`
+- `lib/ticketRecords.ts` — New module: ID generation, record CRUD, localStorage persistence, search, filter chips, edit distance
+- `lib/drafting.ts` — Ticket reference guard for all draft paths
+- `lib/ai/prompts.ts` — Cold start prompt includes ticket reference instruction
+- `app/page.tsx` — Pipeline integration: record creation, stage updates, persistence, Cases view rendering
+- `components/views/CaseLookupView.tsx` — New component: case list, detail view, search, filter chips, pagination
+- `components/maesa/Sidebar.tsx` — Cases nav item and icon
+- `lib/orgMemory.ts` — `clearTicketRecords()` call in `clearOrganization()`
+
+### Verification
+
+- Production build passes (`next build` completes without errors).
+- Submit ticket → ID `MT-20260704-0001` appears immediately in UI; subsequent ticket increments to `MT-20260704-0002`.
+- Full pipeline completion → Cases view shows record with all journey sections populated (Classification, Memory, Resolution, Learning).
+- Reload app → ticket records survive in localStorage; search by ticket ID returns correct result.
+- Filter chips: Cold start filter returns cold-start cases; Rejected filter returns 0 when no tickets were rejected.
+- Draft closing includes ticket reference (`Your ticket reference is MT-20260704-0002.`).
+
+### Known Limitations
+
+- Ticket counter is per-org but not per-day — the sequence number does not reset daily.
+- Ticket records use localStorage like all other persistence — subject to the same browser storage limits.
+- Bulk upload ticket record creation only occurs at cluster commit, not at individual query upload.
+- The `extractedFields` and `subIssues` fields from the original spec are not yet included in `TicketRecord`.
 
 ---
 

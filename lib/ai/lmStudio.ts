@@ -22,6 +22,7 @@ import type {
   AIAnalysisSuggestion,
   AICanonicalProblemSuggestion,
   AICustomerResponseSuggestion,
+  ExtractedTicketFields,
   AIKnowledgeEnrichment,
   AIPatternSuggestion,
   MatchDiscriminationResult
@@ -37,6 +38,8 @@ interface ChatCompletionPayload {
 interface ChatCompletionOptions {
   maxTokens?: number;
 }
+
+const MAX_AI_TIMEOUT_MS = 120000;
 
 function readDiagnostics(
   config: AIConfig,
@@ -99,7 +102,7 @@ async function callChatCompletion<T>(
 ): Promise<AIProviderResult<T>> {
   const startedAt = Date.now();
   const controller = new AbortController();
-  const timeoutMs = Math.max(5000, Math.min(config.timeoutMs, 30000));
+  const timeoutMs = Math.max(5000, Math.min(config.timeoutMs, MAX_AI_TIMEOUT_MS));
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const endpoint =
     typeof window === "undefined"
@@ -237,6 +240,22 @@ function normalizeList(values: unknown): string[] {
     : [];
 }
 
+function normalizeNullableString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function normalizeExtractedTicketFields(value: unknown): ExtractedTicketFields {
+  const record = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return {
+    senderName: normalizeNullableString(record.senderName),
+    senderRole: normalizeNullableString(record.senderRole),
+    companyName: normalizeNullableString(record.companyName),
+    deadline: normalizeNullableString(record.deadline),
+    subIssues: normalizeList(record.subIssues),
+    urgencyIndicators: normalizeList(record.urgencyIndicators)
+  };
+}
+
 function clampConfidence(value: unknown): number {
   if (typeof value !== "number" || Number.isNaN(value)) return 50;
   return Math.max(0, Math.min(100, Math.round(value)));
@@ -273,7 +292,8 @@ export function createLMStudioProvider(config: AIConfig): AIProvider {
           entities: normalizeList(result.data.entities),
           tags: normalizeList(result.data.tags),
           confidence: clampConfidence(result.data.confidence),
-          rationale: typeof result.data.rationale === "string" ? result.data.rationale : undefined
+          rationale: typeof result.data.rationale === "string" ? result.data.rationale : undefined,
+          extractedFields: normalizeExtractedTicketFields(result.data.extractedFields)
         }
       };
     },

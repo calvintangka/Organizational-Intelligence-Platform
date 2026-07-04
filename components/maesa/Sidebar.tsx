@@ -1,6 +1,6 @@
 "use client";
 
-export type ActiveView = "home" | "tickets" | "knowledge" | "dashboard" | "organization" | "settings";
+export type ActiveView = "home" | "tickets" | "cases" | "knowledge" | "dashboard" | "organization" | "settings";
 
 interface SidebarProps {
   activeView: ActiveView;
@@ -69,6 +69,17 @@ function OrgIcon({ active, darkMode, accent }: { active: boolean; darkMode: bool
   );
 }
 
+function CasesIcon({ active, darkMode, accent }: { active: boolean; darkMode: boolean; accent: string }) {
+  const color = active ? (darkMode ? "#fff" : accent) : "#667085";
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="2" y="3" width="12" height="10" rx="1.5" stroke={color} strokeWidth="1.5" />
+      <path d="M5 3V1.5h6V3" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M2 7h12" stroke={color} strokeWidth="1.2" />
+    </svg>
+  );
+}
+
 function SettingsIcon({ active, darkMode, accent }: { active: boolean; darkMode: boolean; accent: string }) {
   const color = active ? (darkMode ? "#fff" : accent) : "#667085";
   return (
@@ -82,6 +93,7 @@ function SettingsIcon({ active, darkMode, accent }: { active: boolean; darkMode:
 const NAV_ITEMS: { id: ActiveView; label: string }[] = [
   { id: "home", label: "Home" },
   { id: "tickets", label: "Tickets" },
+  { id: "cases", label: "Cases" },
   { id: "knowledge", label: "Knowledge" },
   { id: "dashboard", label: "Dashboard" },
   { id: "organization", label: "Organization" },
@@ -91,6 +103,7 @@ const NAV_ITEMS: { id: ActiveView; label: string }[] = [
 function NavIcon({ id, active, darkMode, accent }: { id: ActiveView; active: boolean; darkMode: boolean; accent: string }) {
   if (id === "home") return <HomeIcon active={active} darkMode={darkMode} accent={accent} />;
   if (id === "tickets") return <TicketIcon active={active} darkMode={darkMode} accent={accent} />;
+  if (id === "cases") return <CasesIcon active={active} darkMode={darkMode} accent={accent} />;
   if (id === "knowledge") return <KnowledgeIcon active={active} darkMode={darkMode} accent={accent} />;
   if (id === "dashboard") return <DashboardIcon active={active} darkMode={darkMode} accent={accent} />;
   if (id === "organization") return <OrgIcon active={active} darkMode={darkMode} accent={accent} />;

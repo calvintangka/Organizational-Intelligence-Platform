@@ -133,3 +133,17 @@
 **Boundaries touched:** All boundaries were documented and preserved; no application code was modified.
 **Verification:** Spot-checked enforcing functions in `app/page.tsx`, `lib/trustEngine.ts`, `lib/drafting.ts`, `lib/reflection.ts`, `lib/canonicalProblemEngine.ts`, `lib/bulkUpload.ts`, and `app/api/ai/chat/route.ts`; reviewed git history and current file set.
 **Open items:** `graphify query` still fails locally; prompt artifacts named `oip_*.md` are not present in the repository and are therefore documented as absent rather than fabricated.
+
+## [2026-07-03] Safer personalized AI customer drafts
+**Layer:** coding
+**Task/Prompt:** Improve quality and safety of customer-facing AI drafts without adding a second AI round trip
+**Files changed:** `app/page.tsx`, `components/views/TicketWorkspace.tsx`, `lib/ai/lmStudio.ts`, `lib/ai/prompts.ts`, `lib/analyzer.ts`, `lib/canonicalProblemEngine.ts`, `lib/drafting.ts`, `types/ai.ts`, `types/index.ts`, `types/oip.ts`, `ai/BOUNDARIES.md`, `ai/CURRENT_STATUS.md`, `ai/ARCHITECTURE.md`, `ai/CODEBASE_MAP.md`, `ai/CHANGELOG.md`
+**What changed:**
+- Added `ExtractedTicketFields` to deterministic understanding and AI analysis so sender name, deadline, sub-issues, and urgency signals can flow from intake into drafting and the UI.
+- Reused the existing AI analysis call to request structured extraction, while adding a deterministic sender-signature fallback when AI is unavailable.
+- Enforced tone-aware greeting/body/closing structure and a named no-unvalidated-commitments rule across `lesson_grounded`, `memory_grounded`, and `cold_start` AI draft prompts.
+- Updated deterministic rendering to avoid `Demo User` greetings, prefer extracted sender names, and standardize sign-off as `<Organization name> Support Team`.
+- Added a post-prompt rejection gate that blocks invented teams/processes, unsupported timelines, and unconditional refund/credit/invoice commitments before an AI draft can be surfaced.
+**Boundaries touched:** Preserved F-04 human review for AI drafts and added explicit enforcement for no unvalidated commitments in AI customer responses.
+**Verification:** `npm.cmd run build`; live ticket-flow verification still required for LM Studio on/off behavior, tone-change observability, and the Dewi Rahayu scenario.
+**Open items:** End-to-end browser verification remains to be completed, and `graphify update .` should be retried after the local Graphify CLI issue is repaired if it fails again.

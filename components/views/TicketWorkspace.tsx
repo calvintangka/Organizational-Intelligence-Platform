@@ -318,6 +318,15 @@ export function TicketWorkspace({
   onSwitchToBulk,
 }: TicketWorkspaceProps) {
   const topMatch = similarKnowledge.length > 0 ? similarKnowledge[0] : null;
+  const extractedFields = aiAnalysis?.extractedFields;
+  const hasExtractedFieldDetails = !!extractedFields && (
+    !!extractedFields.senderName ||
+    !!extractedFields.senderRole ||
+    !!extractedFields.companyName ||
+    !!extractedFields.deadline ||
+    extractedFields.subIssues.length > 0 ||
+    extractedFields.urgencyIndicators.length > 0
+  );
   const timelineItems = getTimelineItems(currentStep, isProcessing, aiAnalysis, topMatch, suggestedResponse, reflectionDecision, lastSavedKnowledgeId, domainClassification);
   const isColdStart = knowledgeItems.length === 0 || (!!suggestedResponse && suggestedResponse.basedOnKnowledgeIds.length === 0);
   const reuseLessonMatch = reuseItem && customSecondText.trim()
@@ -388,6 +397,14 @@ export function TicketWorkspace({
             ) : (
               /* Submitted ticket (read-only) */
               <div>
+                {selectedTicket?.ticketId && (
+                  <div className={`mb-2 flex items-center gap-2`}>
+                    <span className={`font-mono text-xs font-bold ${darkMode ? "text-blue-300" : "text-[#2563EB]"}`}>
+                      {selectedTicket.ticketId}
+                    </span>
+                    <span className={`text-[10px] ${darkMode ? "text-emerald-400" : "text-emerald-600"}`}>created</span>
+                  </div>
+                )}
                 <p className={`text-xs font-semibold mb-1 ${darkMode ? "text-slate-400" : "text-slate-500"}`}>Customer issue</p>
                 <div className={`rounded-xl p-3 text-sm leading-6 ${darkMode ? "bg-[#111827] text-slate-300" : "bg-slate-50 text-[#111827]"}`}>
                   {selectedTicket?.description ?? selectedTicket?.subject}
@@ -429,6 +446,33 @@ export function TicketWorkspace({
             {errorMessage && (
               <div className={`mt-4 rounded-xl p-3 text-sm ${darkMode ? "bg-red-900/20 text-red-300" : "bg-amber-50 text-amber-800"}`}>
                 {errorMessage}
+              </div>
+            )}
+
+            {hasExtractedFieldDetails && extractedFields && (
+              <div className={`mt-4 rounded-2xl border p-4 ${darkMode ? "border-[#2d3f52] bg-[#111827]" : "border-slate-200 bg-slate-50"}`}>
+                <p className={`text-xs font-bold uppercase tracking-wide ${darkMode ? "text-blue-300" : "text-[#2563EB]"}`}>
+                  Extracted customer context
+                </p>
+                <div className={`mt-2 grid gap-2 text-sm ${darkMode ? "text-slate-300" : "text-slate-700"}`}>
+                  {extractedFields.senderName && <p><strong>Sender:</strong> {extractedFields.senderName}</p>}
+                  {extractedFields.senderRole && <p><strong>Role:</strong> {extractedFields.senderRole}</p>}
+                  {extractedFields.companyName && <p><strong>Company:</strong> {extractedFields.companyName}</p>}
+                  {extractedFields.deadline && <p><strong>Deadline:</strong> {extractedFields.deadline}</p>}
+                  {extractedFields.subIssues.length > 0 && (
+                    <div>
+                      <p><strong>Sub-issues:</strong></p>
+                      <ul className="mt-1 list-disc pl-5">
+                        {extractedFields.subIssues.map((issue) => (
+                          <li key={issue}>{issue}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {extractedFields.urgencyIndicators.length > 0 && (
+                    <p><strong>Urgency indicators:</strong> {extractedFields.urgencyIndicators.join(", ")}</p>
+                  )}
+                </div>
               </div>
             )}
           </div>

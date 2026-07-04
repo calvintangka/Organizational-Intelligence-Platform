@@ -6,6 +6,15 @@ export interface Observation {
   preservedOriginalText: string;
 }
 
+export interface ExtractedTicketFields {
+  senderName: string | null;
+  senderRole: string | null;
+  companyName: string | null;
+  deadline: string | null;
+  subIssues: string[];
+  urgencyIndicators: string[];
+}
+
 export interface Understanding {
   ticketId: string;
   summary: string;
@@ -15,6 +24,7 @@ export interface Understanding {
   urgency: "low" | "medium" | "high";
   tags: string[];
   detectedSignals: string[];
+  extractedFields: ExtractedTicketFields;
 }
 
 export interface ReasoningSummary {

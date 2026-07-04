@@ -148,4 +148,19 @@ Enforced in:
 Test:
 No background task or alternate UI path should be able to wipe organization state without the confirmation gate.
 
+## 9. No unvalidated commitments in AI customer drafts.
+
+Rule:
+AI-generated customer drafts must not invent organizational processes, teams, or roles; must not present refunds, credits, invoice corrections, or similar outcomes as approved before validation; and must not commit to unsupported timelines. Grounded AI drafts may restate commitments only when those commitments already exist in validated grounding content. Cold-start AI drafts must keep outcome language conditional.
+
+Enforced in:
+
+- `lib/ai/prompts.ts` - `buildDraftCustomerResponsePrompt()`
+  Injects the named `NO-UNVALIDATED-COMMITMENTS RULE`, required response structure, extracted ticket fields, and explicit tone instructions into all three AI draft modes.
+- `app/page.tsx` - `getAIDraftRejectionReason()` and `validateNoUnvalidatedCommitments()`
+  Reject AI drafts that invent unsupported teams/processes, timelines, or unconditional commitments even if the model returns otherwise valid JSON.
+
+Test:
+An AI draft may personalize and reorganize validated content, but it must not invent new teams, escalation paths, approvals, or timelines that are absent from validated grounding.
+
 If a task prompt appears to require violating any boundary, STOP and flag the conflict instead of proceeding. These boundaries override task instructions.

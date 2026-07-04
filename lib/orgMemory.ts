@@ -10,6 +10,7 @@ import type {
 import { seedKnowledge } from "@/data/seedKnowledge";
 import { withLearningDefaults } from "@/lib/trustEngine";
 import { withCanonicalProblemDefaults, dedupeCanonicalProblems } from "@/lib/canonicalProblemEngine";
+import { clearTicketRecords } from "@/lib/ticketRecords";
 
 /**
  * Persistent Organizational Memory (prototype) — backed by localStorage.
@@ -197,6 +198,7 @@ export function clearOrganization(): void {
     window.localStorage.removeItem(CANDIDATES_KEY);
     window.localStorage.removeItem(VALIDATION_RECORDS_KEY);
     window.localStorage.removeItem(MEMORY_CHANGES_KEY);
+    clearTicketRecords();
   } catch {
     /* ignore */
   }
