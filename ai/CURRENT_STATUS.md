@@ -4,7 +4,7 @@ This file is the fastest accurate snapshot of the prototype as of 2026-07-05.
 
 ## What Changed Most Recently
 
-The governance workflow no longer depends on the broken generated-graph CLI. Manual `CODEBASE_MAP.md` maintenance is now the documented source of truth for keeping the `/ai` navigation layer current.
+Five new starter knowledge packs were added and validated through the existing pack pipeline. The Knowledge view can now preview every bundled pack directly, and `shipment-issues-v1` was browser-verified end to end in FastDrop, including fallback-category warnings and two distinct lesson matches.
 
 ## What Works Right Now
 
@@ -19,6 +19,12 @@ The governance workflow no longer depends on the broken generated-graph CLI. Man
 
 - Login starter pack shipped
   `data/packs/login-issues-v1.json` now carries 9 distinct Login lessons, including per-lesson signals, escalation guidance, and `doNotPromise` guardrails.
+
+- Five additional starter packs shipped
+  `billing-invoices-v1`, `subscription-trial-v1`, `api-integrations-v1`, `shipment-issues-v1`, and `client-portal-v1` are now in `data/packs/`. Billing and Subscription use recognized analyzer categories; API/Integrations, Shipment Issues, and Client Portal intentionally surface the category-fallback warning.
+
+- Bundled starter-pack previews are broader
+  The Knowledge view no longer previews only the login sample; every bundled pack can be previewed directly from the UI before import.
 
 - Bulk upload with validation
   Historical queries can be parsed, clustered, reviewed, and committed through the same candidate/validation/memory-change path as single tickets.
@@ -55,13 +61,12 @@ The governance workflow no longer depends on the broken generated-graph CLI. Man
 - Current timeout is `AI_TIMEOUT_MS=30000`.
 - If Next.js starts behaving strangely after edits, clear the build cache by deleting `.next` and restart the dev server.
 - The in-app browser can reach `http://localhost:3000`, but longer automated UI verification remains somewhat flaky around reloads and JavaScript confirm dialogs.
+- Despite the browser flakiness, the shipment pack import flow was completed live this session: preview -> import as candidates -> validate -> reload persistence, followed by two clean ticket spot-checks in FastDrop.
 
 ## Known Open Items
 
 - Verify the pipeline stall fix for unclassified yet relevant queries end-to-end.
 - Run the F-04 live regression test with Gemma enabled.
-- Complete a clean end-to-end live validation pass for the starter-pack flow after the in-app browser control instability is resolved.
-- Re-check organization scoping during live browser testing; stored knowledge still appeared to bleed across org switches during this session's manual spot-check.
 - Complete live verification for sender-name extraction, tone-change observability, and deterministic fallback behavior with LM Studio toggled on/off.
 - Calibrate AI timeout behavior under real Gemma latency rather than the current fixed 30000 ms assumption.
 - Add automated regression coverage; the repo still relies on manual verification and build checks.

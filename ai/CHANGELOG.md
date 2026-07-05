@@ -13,6 +13,18 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-05] Add five starter knowledge packs and bundled previews
+**Layer:** content/coding
+**Task/Prompt:** "Author five new Starter Knowledge Packs for Maesa Tech / OIP, validate them through the real loader, browser-import one pack end to end, and update /ai docs."
+**Files changed:** `data/packs/billing-invoices-v1.json`, `data/packs/subscription-trial-v1.json`, `data/packs/api-integrations-v1.json`, `data/packs/shipment-issues-v1.json`, `data/packs/client-portal-v1.json`, `components/views/KnowledgeView.tsx`, `ai/CHANGELOG.md`, `ai/CURRENT_STATUS.md`, `ai/CODEBASE_MAP.md`
+**What changed:**
+- Added five authored starter packs with distinct lessons, signals, escalation criteria, and per-lesson `doNotPromise` guidance for Billing, Subscription, API/Integrations, Shipment Issues, and Client Portal support.
+- Extended the Knowledge view's bundled preview affordance so every shipped pack in `data/packs/` can be previewed without using the file picker.
+- Kept pack categories aligned with the current analyzer where possible and intentionally shipped fallback-warning packs for `API & Integration`, `Shipment Issue`, and `Client Portal Issue`, relying on lesson signals plus LLM fallback as documented.
+**Boundaries touched:** none
+**Verification:** Loader validation via `parseKnowledgePack()` for all five JSON files; exact within-pack signal-overlap check confirmed no pair of lessons shares more than one exact signal phrase; `npm.cmd run build`; `npm.cmd run dev`; live browser verification in FastDrop confirmed `shipment-issues-v1` preview -> import -> validate -> reload persistence, plus clean-ticket matches for `my package says delivered but I never got it` -> `Marked delivered but not received` and `the tracking hasn't moved since Monday` -> `Tracking not updating for days`.
+**Open items:** none
+
 ## [2026-07-05] Remove broken generated-graph workflow steps
 **Layer:** governance
 **Task/Prompt:** "Clean up the /ai governance folder by removing the broken generated-graph workflow dependency and documenting manual map maintenance as the replacement."

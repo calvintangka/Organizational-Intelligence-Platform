@@ -1,0 +1,159 @@
+{
+  "packId": "shipment-issues-v1",
+  "packName": "Shipment Issues Starter Pack",
+  "description": "Starter knowledge pack for FastDrop Logistics shipment, tracking, COD, damage, return, and proof-of-delivery support cases.",
+  "language": "en",
+  "canonicalProblem": {
+    "title": "Shipment Issue",
+    "category": "Shipment Issue",
+    "description": "Customers need help with tracking progress, delivery outcomes, failed delivery handling, COD settlement, damaged parcels, return pickups, and proof-of-delivery requests."
+  },
+  "lessons": [
+    {
+      "title": "Tracking not updating for days",
+      "rootCause": "The shipment is between scans or waiting for the next courier handoff, so the tracking number appears frozen even though the package is not necessarily lost.",
+      "solution": "Confirm the last scan date, explain the difference between a scan gap and a truly stalled shipment, and start a deeper investigation only if the inactivity window crosses the operational threshold.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for reaching out. I understand the tracking number has not updated for several days and the shipment now looks stuck.\n\nPlease send the tracking number or waybill number and tell us the last status date you can see. A shipment can go through a scan gap while it is moving between hubs or waiting for the next courier handoff, so the first step is to compare the last scan time with the normal movement window for that route. Once we confirm that timing, we can tell you whether this still looks like an in-transit scan gap or whether it needs a deeper shipment check.\n\nIf you have already seen no movement beyond the expected window, include that detail in your reply.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "tracking hasn't moved",
+        "tracking number not updating",
+        "waybill stuck",
+        "resi hasn't changed",
+        "courier status frozen"
+      ],
+      "whenToEscalate": "Escalate if the last scan is older than the route's normal movement window and there is no downstream handoff confirmation.",
+      "doNotPromise": [
+        "that a scan gap means the package is lost",
+        "a delivery date before the next movement scan is verified"
+      ]
+    },
+    {
+      "title": "Marked delivered but not received",
+      "rootCause": "The delivery was marked complete in the courier system, but the parcel may have been left in a safe location, handed to someone nearby, or mis-scanned before the customer physically received it.",
+      "solution": "Ask the customer to check safe-drop areas, neighbors, and building staff first, then open a delivery investigation if the package still cannot be found within the allowed window.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for letting us know. I understand the package is marked delivered, but you have not actually received it.\n\nPlease first check the immediate drop-off area, building reception, security desk, mailbox area, and any neighbor or household member who may have accepted the parcel on your behalf. If nothing is found there, reply with the tracking number, delivery date, and delivery address so we can start the delivery investigation within the supported review window.\n\nOnce that review opens, we can follow the courier proof trail and explain the next supported update.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "marked delivered",
+        "package says delivered",
+        "never got it",
+        "delivery status says complete",
+        "delivered but not received"
+      ],
+      "whenToEscalate": "Escalate if safe locations, neighbors, and building staff have been checked and the shipment is still missing within the investigation window.",
+      "doNotPromise": [
+        "a refund before the delivery investigation is completed",
+        "automatic redelivery before the courier proof review finishes"
+      ]
+    },
+    {
+      "title": "Delivered to the wrong address",
+      "rootCause": "The parcel was completed against an incorrect destination point, often because the drop-off execution did not match the confirmed address on the shipment.",
+      "solution": "Confirm the intended address, compare it with the shipment label, and route the case into address-mismatch investigation rather than generic missing-parcel handling.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for the details. I understand the package appears to have been delivered to the wrong address.\n\nPlease reply with the tracking number, the correct destination address, and the address details shown in the shipment confirmation if you still have them. This helps us compare the intended destination with the delivery record and determine whether the issue is a label mismatch, an old address, or a courier delivery error. Once that comparison is complete, we can guide the correct investigation path for an address mismatch.\n\nIf possible, also tell us whether the destination was a home, office, or apartment building.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "delivered to wrong address",
+        "wrong house number",
+        "courier left it at another address",
+        "package sent to old address",
+        "not my address"
+      ],
+      "whenToEscalate": "Escalate if the shipment label and confirmed destination do not match the delivery-completion address on record.",
+      "doNotPromise": [
+        "that the parcel can be recovered immediately",
+        "an immediate compensation outcome before the address investigation is complete"
+      ]
+    },
+    {
+      "title": "Reschedule a failed delivery attempt",
+      "rootCause": "The first delivery attempt failed because the customer was unavailable, the access point was closed, or the courier could not complete the drop at that time.",
+      "solution": "Confirm the failed-attempt status, collect the preferred next delivery window or access note, and check whether self-serve rescheduling is available for that route.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for contacting us. I understand the first delivery attempt failed and you want to arrange the next drop-off.\n\nPlease share the tracking number and tell us whether the failed attempt was caused by no one being available, limited building access, or another delivery note shown in tracking. If you have a preferred next delivery day, access instruction, or safe contact number for the courier, include that in your reply as well. Once we verify the failed-attempt status on the shipment, we can guide the supported reschedule option for that route.\n\nIf the tracking page already shows a self-serve reschedule action, you can also mention what it is allowing you to select.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "failed delivery attempt",
+        "missed the courier",
+        "reschedule delivery",
+        "nobody was home",
+        "attempted delivery notice"
+      ],
+      "whenToEscalate": "Escalate if the shipment cannot be rescheduled through the normal route controls or if repeated failed attempts continue after updated access notes are provided.",
+      "doNotPromise": [
+        "a same-day redelivery before route confirmation",
+        "that the courier can follow special timing not supported on the route"
+      ]
+    },
+    {
+      "title": "COD collected but system shows payment pending",
+      "rootCause": "Cash-on-delivery payment was handed to the courier, but the settlement has not fully synced back into the billing system yet.",
+      "solution": "Collect the delivery date, amount, and any courier receipt, then explain the settlement-lag distinction before opening a payment reconciliation check.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for raising this. I understand the COD payment was already collected, but the system still shows the shipment as unpaid or pending.\n\nPlease send the tracking number, the COD amount, the delivery date, and any receipt or confirmation the courier gave you at the time of payment. COD collections can take time to settle back into the system after the handoff is completed, so the first step is to compare the delivery event with the settlement record. Once that review starts, we can explain whether the shipment is still within the normal settlement window or needs reconciliation.\n\nIf the payment was made by someone else at the address, mention that too.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "cod paid but still pending",
+        "courier collected cash",
+        "payment pending after delivery",
+        "cash on delivery not updated",
+        "resi says unpaid after COD"
+      ],
+      "whenToEscalate": "Escalate if the COD settlement still shows pending after the normal reconciliation window and receipt details have been provided.",
+      "doNotPromise": [
+        "instant payment reconciliation without checking settlement records",
+        "a billing correction timeline before COD review starts"
+      ]
+    },
+    {
+      "title": "Damaged item and return pickup request",
+      "rootCause": "The parcel arrived damaged and the customer needs the approved return-pickup path rather than a standard delivery complaint response.",
+      "solution": "Ask for damage photos, packaging condition, and shipment details, then guide the customer into the return-pickup request flow tied to the damaged parcel record.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for the report. I understand the item arrived damaged and you want to arrange a return pickup.\n\nPlease reply with the tracking number, clear photos of the damaged item, and photos of the outer packaging if it is still available. Also tell us whether the parcel was accepted with visible damage or whether the issue was only noticed after opening it. Those details let us link the damage report to the shipment record and route it into the approved return-pickup process.\n\nOnce we review the condition evidence, we can explain the next supported pickup step.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "damaged item pickup",
+        "box arrived damaged",
+        "return because parcel is damaged",
+        "need courier to collect damaged goods",
+        "package contents broken"
+      ],
+      "whenToEscalate": "Escalate if the damage evidence is complete and the return pickup request must be formally approved for a damaged-shipment case.",
+      "doNotPromise": [
+        "replacement or refund before damage review",
+        "pickup scheduling before condition evidence is accepted"
+      ]
+    },
+    {
+      "title": "Return approved but pickup never happened",
+      "rootCause": "The return authorization exists, but the pickup booking either did not dispatch correctly or missed the collection attempt window.",
+      "solution": "Confirm the return authorization number, pickup date, and address, then check whether the pickup was booked, missed, or needs re-dispatch.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for the follow-up. I understand the return was approved, but the courier never came to collect the parcel.\n\nPlease send the return or pickup reference number, the pickup address, and the date the collection was expected. This helps us confirm whether the return authorization was fully converted into a courier pickup booking or whether the booking missed its dispatch window. If the parcel was already packed and waiting, include that note as well.\n\nOnce the pickup record is checked, we can guide the next supported collection step.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "return pickup never came",
+        "approved return no collection",
+        "courier did not pick up return",
+        "scheduled pickup missed",
+        "waiting for return collection"
+      ],
+      "whenToEscalate": "Escalate if a confirmed pickup booking was missed or no pickup booking exists despite an approved return reference.",
+      "doNotPromise": [
+        "same-day pickup rebooking without route confirmation",
+        "that approval alone guarantees a courier dispatch was created"
+      ]
+    },
+    {
+      "title": "Need proof of delivery or delivery manifest",
+      "rootCause": "The customer needs formal evidence of the completed handoff, such as the delivery confirmation trail or manifest details, for internal or recipient verification.",
+      "solution": "Verify the shipment reference and the requester relationship to the delivery, then guide the proof-of-delivery request through the supported documentation path.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for your request. I understand you need proof of delivery or the delivery confirmation record for this shipment.\n\nPlease reply with the tracking number, the delivery date, and why the proof is needed, for example internal receiving control, customer confirmation, or billing support. We will first verify the shipment reference and the request context, then guide the supported documentation path for delivery proof or manifest details.\n\nIf the shipment belongs to a business account, include the company name used on the booking so the request can be matched correctly.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "proof of delivery",
+        "delivery manifest",
+        "need POD document",
+        "who signed for the package",
+        "delivery confirmation record"
+      ],
+      "whenToEscalate": "Escalate if formal delivery proof must be issued for a business account or if recipient verification is required before documentation can be shared.",
+      "doNotPromise": [
+        "releasing delivery proof without verifying the requester",
+        "the exact form of documentation before the shipment record is reviewed"
+      ]
+    }
+  ],
+  "version": "1.0.0",
+  "author": "FastDrop Logistics"
+}

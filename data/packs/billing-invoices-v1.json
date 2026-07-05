@@ -1,0 +1,141 @@
+{
+  "packId": "billing-invoices-v1",
+  "packName": "Billing & Invoices Starter Pack",
+  "description": "Starter knowledge pack for Maesa Tech billing and invoice questions, covering charges, invoice details, renewals, refunds, and tax-document clarification.",
+  "language": "en",
+  "canonicalProblem": {
+    "title": "Billing & Invoice Issue",
+    "category": "Billing",
+    "description": "Customers need help understanding charges, invoices, renewal pricing, refund requests, payment-state mismatches, or tax information on Maesa Tech billing documents."
+  },
+  "lessons": [
+    {
+      "title": "Duplicate charge in one billing cycle",
+      "rootCause": "Two payment attempts were captured in the same billing cycle because a bank-side retry or delayed authorization reversal made the same renewal appear to bill twice.",
+      "solution": "Ask the customer for both charge timestamps or references, explain that one entry may still be a pending authorization, and verify the ledger before discussing refund or reversal options.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for flagging this. I understand it looks like you were charged twice in the same billing cycle.\n\nPlease send us the two charge dates, the last four digits of the payment method, and any bank or card reference numbers shown for each entry. In some cases a second line item is a retry or a pending authorization that reverses after the bank finishes settlement, so we need to compare both transactions before confirming the next step.\n\nOnce we review the billing record against the bank references, we will explain whether this is a duplicate capture or a temporary authorization display.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "charged twice",
+        "duplicate charge",
+        "same invoice twice",
+        "two charges for one renewal",
+        "billing charged me again"
+      ],
+      "whenToEscalate": "Escalate if two separate settled captures appear in the billing ledger for the same service period after the payment references are verified.",
+      "doNotPromise": [
+        "an automatic refund before transaction verification",
+        "a bank reversal timeline that has not been confirmed"
+      ]
+    },
+    {
+      "title": "Invoice shows outdated company details",
+      "rootCause": "The invoice was generated from the billing profile that existed at the time of charge, so later updates to legal name, NPWP, or address do not rewrite historical invoice records.",
+      "solution": "Explain that current profile edits affect future invoices, confirm which detail changed, and clarify whether a profile correction or a forward-looking billing update is needed.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for the clarification. I understand the invoice is showing older company details such as the legal name, NPWP, or billing address.\n\nPlease reply with the invoice number and tell us exactly which field is outdated. Historical invoices are generated from the billing profile that was active when the payment was processed, so updating the account profile now will normally apply to future invoices rather than silently rewriting past records.\n\nAfter we review the billed record, we can confirm whether you only need the profile corrected for upcoming invoices or whether there is a supported documentation option for your finance team.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "wrong company name on invoice",
+        "old address on invoice",
+        "invoice shows previous NPWP",
+        "need invoice with new legal name",
+        "invoice details are outdated"
+      ],
+      "whenToEscalate": "Escalate if the customer requires a formally reviewed documentation path for finance or compliance after the exact outdated fields have been confirmed.",
+      "doNotPromise": [
+        "that historical invoices will be reissued automatically",
+        "that profile edits retroactively rewrite booked invoice data"
+      ]
+    },
+    {
+      "title": "Missing invoice or cannot find invoice",
+      "rootCause": "The invoice exists, but the customer is looking in the wrong billing contact inbox, export area, or self-serve billing page.",
+      "solution": "Direct the customer to the invoice download path first, then confirm the billing contact email and payment date if the document still cannot be located.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for reaching out. I understand you need the invoice for a payment and cannot find it yet.\n\nPlease first check the Billing or Subscription area of your account for the invoice history tied to the payment date in question. If your workspace uses a separate billing contact, also confirm whether the invoice may have been sent to that finance email rather than the day-to-day login inbox. If you still cannot locate it, reply with the payment date, amount, and the email address that should receive billing documents.\n\nWith those details, we can verify where the invoice was issued and guide the next retrieval step.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "missing invoice",
+        "can't find invoice",
+        "where do I download my invoice",
+        "invoice not sent",
+        "need receipt for payment"
+      ],
+      "whenToEscalate": "Escalate if no invoice record is visible in the billing history after the payment date and billing contact details have been checked.",
+      "doNotPromise": [
+        "that an invoice was never generated before checking billing history",
+        "instant manual issuance of a replacement document without verifying the payment"
+      ]
+    },
+    {
+      "title": "Unexpected price increase on renewal",
+      "rootCause": "The renewal billed against the current renewal rate because the prior promotional term, legacy discount, or earlier plan price was no longer in effect.",
+      "solution": "Have the customer share the renewal invoice and prior billing reference, then compare the previous term basis against the current renewal rate before discussing options.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for raising this. I understand the renewal amount was higher than you expected.\n\nPlease send the latest renewal invoice number together with the previous invoice or billing period you are comparing it against. Renewal totals can change when a promotional term ends, a discounted rate expires, or the workspace renews on the current plan price instead of an older legacy amount, so we need to compare both billing periods side by side.\n\nAfter we review those records, we will explain which pricing basis was used for the renewal and what supported options are available on the account.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "renewal price increased",
+        "price went up on renewal",
+        "charged more this year",
+        "renewal cost is higher",
+        "plan renewed at a different price"
+      ],
+      "whenToEscalate": "Escalate if the renewal amount does not match the current contracted price or an approved discount term after invoice comparison.",
+      "doNotPromise": [
+        "that the prior promotional price will be restored",
+        "a credit or adjustment before pricing review is complete"
+      ]
+    },
+    {
+      "title": "Payment method declined but service still active",
+      "rootCause": "The failed renewal entered a grace-period state, so access remained active temporarily even though the payment attempt itself did not succeed.",
+      "solution": "Explain the grace-period distinction, ask the customer to update the payment method or retry from billing, and confirm the actual service-interruption date only from the account record.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for checking with us. I understand the payment method was declined, but the service still appears to be active.\n\nThat usually means the account has entered a temporary grace period after the failed billing attempt. Please update the payment method in the billing settings or retry the payment from the invoice page so the renewal can complete before the grace period ends. If you have already updated the card, let us know the time of the retry so we can review the latest billing attempt.\n\nWe can then confirm the current account state and the next supported step based on the actual billing record.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "card declined but service still works",
+        "payment failed but account is active",
+        "billing says failed but I can still use it",
+        "grace period after failed payment",
+        "declined payment no interruption"
+      ],
+      "whenToEscalate": "Escalate if the account remains in an inconsistent active state after the payment method has been updated and a fresh attempt still does not post.",
+      "doNotPromise": [
+        "the exact grace-period end time without checking the account record",
+        "that service will remain active until the next retry"
+      ]
+    },
+    {
+      "title": "Refund request for unused service period",
+      "rootCause": "The customer is canceling mid-term and expects the remaining unused period to be refunded automatically, but refund eligibility depends on the billing policy and verified service term.",
+      "solution": "Capture the cancellation date, invoice reference, and reason for the request, then review the refund policy against the remaining term before discussing any outcome.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for explaining the situation. I understand you are requesting a refund for the unused portion of the service period.\n\nPlease reply with the invoice number, the date you want the cancellation to take effect, and a short note about why the service was not used. Refund requests for partially used terms need to be reviewed against the billing policy and the exact service period on the account before we can confirm whether any adjustment is available.\n\nOnce that review is complete, we will outline the supported next step for the billing record.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "refund for unused months",
+        "cancel and refund remaining time",
+        "didn't use the service",
+        "prorated refund",
+        "money back for unused period"
+      ],
+      "whenToEscalate": "Escalate if the customer cites a contractual refund exception or the request falls into a policy-reviewed cancellation case.",
+      "doNotPromise": [
+        "a prorated refund before policy review",
+        "that cancellation automatically creates a refund"
+      ]
+    },
+    {
+      "title": "Tax or VAT questions on invoices",
+      "rootCause": "The customer needs clarification on the tax fields shown on the invoice, but the support path can only point to billed tax details and cannot interpret tax treatment or outcomes.",
+      "solution": "Direct the customer to the tax lines shown on the invoice, confirm the document number being reviewed, and escalate any jurisdiction-specific or advisory question to the appropriate internal review path.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for the question. I understand you need help interpreting the tax or VAT information shown on the invoice.\n\nPlease share the invoice number and tell us which field you are reviewing, for example the VAT line, company tax identifier, or billed total. We can point you to where those tax details appear on the invoice and confirm which values were included in the billing document. If your question requires jurisdiction-specific interpretation or a formal tax explanation, we will route it for the appropriate internal review rather than speculate.\n\nOnce we have the invoice reference, we can guide you to the exact document fields first.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "VAT on invoice",
+        "tax invoice question",
+        "PPN amount",
+        "invoice tax details",
+        "NPWP on billing document"
+      ],
+      "whenToEscalate": "Escalate whenever the customer is asking for tax interpretation, tax treatment confirmation, or jurisdiction-specific advice beyond the billed invoice fields.",
+      "doNotPromise": [
+        "tax advice or tax filing guidance",
+        "a specific tax outcome, exemption, or correction before formal review"
+      ]
+    }
+  ],
+  "version": "1.0.0",
+  "author": "Maesa Tech"
+}

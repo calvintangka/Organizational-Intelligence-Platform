@@ -1,0 +1,123 @@
+{
+  "packId": "api-integrations-v1",
+  "packName": "API & Integrations Starter Pack",
+  "description": "Starter knowledge pack for Maesa Tech API keys, webhook delivery, export workflows, and third-party integration reconnection issues.",
+  "language": "en",
+  "canonicalProblem": {
+    "title": "API & Integration Issue",
+    "category": "API & Integration",
+    "description": "Customers need help with API key ownership, webhook delivery, duplicate webhook subscriptions, export jobs, expired export links, or third-party integration authentication changes."
+  },
+  "lessons": [
+    {
+      "title": "API key stopped working after team member was removed",
+      "rootCause": "The API key was tied to the user account that created it, so removing that team member invalidated the key even though the workspace still exists.",
+      "solution": "Explain the account-tied key model, confirm which member created the key, and have an active admin generate a replacement key under a current account.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for the details. I understand the API key stopped working after a team member was removed from the workspace.\n\nPlease confirm whether that user originally created the key. In this setup, keys can be tied to the account that issued them, so removing the owning member can invalidate the credential even while the workspace remains active. Have a current workspace admin create a new key from an active account and update the integration with that new value.\n\nIf you are unsure which account owned the credential, reply with the workspace name and the approximate date the old key was created so we can guide the next verification step.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "api key stopped working",
+        "key invalid after removing user",
+        "401 after teammate left",
+        "token died when member was deleted",
+        "credentials broke after user removal"
+      ],
+      "whenToEscalate": "Escalate if the key appears to belong to an active account but still fails after ownership and workspace status are verified.",
+      "doNotPromise": [
+        "restoring a deleted user's API key",
+        "disclosing credential ownership without verifying the workspace admin"
+      ]
+    },
+    {
+      "title": "Webhooks not firing silently",
+      "rootCause": "Webhook deliveries are being rejected before dispatch because the target authentication or endpoint validation fails, so the customer sees no successful callback at all.",
+      "solution": "Confirm the endpoint URL, any auth requirement, and whether a test event reaches the endpoint, then verify delivery expectations from the most recent event type.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for reporting this. I understand the webhook is not reaching your endpoint and no delivery seems to appear on your side.\n\nPlease confirm the exact webhook URL that is configured and whether the endpoint expects a token, signature, or other authentication check before accepting the request. Then trigger a test event if that option is available and compare whether your endpoint logs any incoming attempt at all. If nothing arrives, include the event type you expected and the approximate time you triggered it.\n\nWith that information, we can help narrow whether the request is being rejected before successful dispatch.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "webhook not firing",
+        "no webhook received",
+        "events are not reaching us",
+        "callback never hits our endpoint",
+        "test event not delivered"
+      ],
+      "whenToEscalate": "Escalate if a verified endpoint with the correct authentication still shows no incoming attempt from a recent test event.",
+      "doNotPromise": [
+        "that silent delivery means the platform never sent the request",
+        "instant replay of events before endpoint verification"
+      ]
+    },
+    {
+      "title": "Webhook duplicate events",
+      "rootCause": "More than one webhook endpoint is subscribed to the same event type, so the customer sees the same event arrive multiple times and mistakes the duplicate subscriptions for a retry bug.",
+      "solution": "Review every active endpoint subscription for that event type, then deduplicate the configuration before investigating retries.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for the explanation. I understand you are receiving duplicate webhook events for the same activity.\n\nPlease review all active webhook endpoints in the workspace and confirm whether more than one endpoint is subscribed to the same event type. Duplicate deliveries are often caused by overlapping endpoint subscriptions rather than the same endpoint being retried unexpectedly. If possible, compare the endpoint URLs and event subscriptions side by side and note whether the repeated payloads are being delivered to one endpoint or several.\n\nOnce you have that comparison, send us the event type and the endpoints involved so we can guide the next step.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "duplicate webhook",
+        "same event sent twice",
+        "receiving the same callback multiple times",
+        "webhook duplicates",
+        "event delivered more than once"
+      ],
+      "whenToEscalate": "Escalate if only one endpoint is subscribed and the same event ID is still being delivered multiple times beyond the expected retry pattern.",
+      "doNotPromise": [
+        "that duplicates are always a platform bug before subscription review",
+        "turning off retries globally without checking endpoint setup"
+      ]
+    },
+    {
+      "title": "Data export timing out on large datasets",
+      "rootCause": "The requested export is too large for an immediate browser download path, so the job needs to be treated as a longer-running per-workspace export instead of an inline response.",
+      "solution": "Confirm the workspace and export scope, reduce the export if possible, or use the deferred export path that notifies the customer when the file is ready.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for the context. I understand the export is timing out when you try to download a large dataset.\n\nPlease confirm which workspace the export is coming from and what date range or object type you are trying to include. Large exports can exceed the immediate browser-download path, so the best next step is often to reduce the scope first or use the longer-running export flow that prepares the file and notifies you once it is ready. If you already narrowed the range and it still times out, tell us the approximate record volume you are exporting.\n\nThat will help us guide the most suitable export path for this workspace.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "export timed out",
+        "large export fails",
+        "download keeps timing out",
+        "too much data to export",
+        "export never finishes"
+      ],
+      "whenToEscalate": "Escalate if a narrowed export or deferred export request still times out for a single workspace after the scope has been confirmed.",
+      "doNotPromise": [
+        "that every export can complete synchronously in the browser",
+        "a fixed completion time for very large export jobs"
+      ]
+    },
+    {
+      "title": "Export download link expired",
+      "rootCause": "The export was prepared successfully, but the signed download link has passed its validity window and must be regenerated.",
+      "solution": "Have the customer request a fresh export or regenerate the download from the original job if supported.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for the update. I understand the export file was prepared, but the download link has already expired.\n\nPlease return to the export history or the original export notification and request a new download if that option is available. These links are often time-limited for security reasons, so an older link may stop working even though the export job itself completed successfully. If you no longer see the export in history, reply with the approximate time it was created and the workspace it belongs to.\n\nOnce we have that information, we can guide the next supported step for generating a fresh link.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "export link expired",
+        "download url expired",
+        "cannot open the export link",
+        "export email link no longer works",
+        "need a fresh export link"
+      ],
+      "whenToEscalate": "Escalate if a newly generated export link expires immediately or the completed export no longer appears in the job history.",
+      "doNotPromise": [
+        "that an expired link can be reactivated in place",
+        "permanent access to old export URLs"
+      ]
+    },
+    {
+      "title": "Third-party integration disconnected after password or SSO change",
+      "rootCause": "The third-party integration lost its stored authentication session when the underlying password or SSO identity changed, so the integration now requires a fresh authorization flow.",
+      "solution": "Confirm which identity path changed, reconnect the integration from the active account, and verify that the correct owner performs the re-authentication.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for explaining the timing. I understand the third-party integration disconnected after a password change or SSO update.\n\nPlease confirm which connected app is affected and whether the account owner recently changed their password, switched identity provider settings, or signed in through a different SSO path. In many cases the integration must be re-authorized after those identity changes because the previous token is no longer valid. Have the current integration owner reconnect the app from an active session and complete the authorization flow again.\n\nIf the reconnect still fails, reply with the integration name and the exact re-authentication message you see.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "integration disconnected after password change",
+        "sso change broke integration",
+        "reconnect after password reset",
+        "app disconnected after login update",
+        "integration asks to re-authenticate"
+      ],
+      "whenToEscalate": "Escalate if the current owner re-authorizes the integration successfully but the connection still drops again immediately afterward.",
+      "doNotPromise": [
+        "preserving the old integration token after an identity change",
+        "reconnecting the app without the current authorized owner"
+      ]
+    }
+  ],
+  "version": "1.0.0",
+  "author": "Maesa Tech"
+}

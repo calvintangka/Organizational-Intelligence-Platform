@@ -11,7 +11,12 @@ import type {
   MemoryChangeRecord,
   ValidationRecord
 } from "@/types";
+import apiIntegrationsPack from "@/data/packs/api-integrations-v1.json";
+import billingInvoicesPack from "@/data/packs/billing-invoices-v1.json";
+import clientPortalPack from "@/data/packs/client-portal-v1.json";
 import loginIssuesPack from "@/data/packs/login-issues-v1.json";
+import shipmentIssuesPack from "@/data/packs/shipment-issues-v1.json";
+import subscriptionTrialPack from "@/data/packs/subscription-trial-v1.json";
 import { candidateToPackDraft, getKnowledgePackCategoryWarning, parseKnowledgePackText } from "@/lib/knowledgePacks";
 import { MemoryNetworkOverlay } from "@/components/MemoryNetworkOverlay";
 
@@ -141,6 +146,15 @@ function parseCsvLine(value: string): string[] {
     .filter(Boolean);
 }
 
+const bundledPackPreviews = [
+  { fileName: "data/packs/login-issues-v1.json", pack: loginIssuesPack as KnowledgePack },
+  { fileName: "data/packs/billing-invoices-v1.json", pack: billingInvoicesPack as KnowledgePack },
+  { fileName: "data/packs/subscription-trial-v1.json", pack: subscriptionTrialPack as KnowledgePack },
+  { fileName: "data/packs/api-integrations-v1.json", pack: apiIntegrationsPack as KnowledgePack },
+  { fileName: "data/packs/shipment-issues-v1.json", pack: shipmentIssuesPack as KnowledgePack },
+  { fileName: "data/packs/client-portal-v1.json", pack: clientPortalPack as KnowledgePack }
+];
+
 export function KnowledgeView({
   knowledgeItems,
   knowledgeCandidates,
@@ -246,20 +260,23 @@ export function KnowledgeView({
             >
               Import knowledge pack
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setImportError("");
-                setPreview({
-                  pack: loginIssuesPack as KnowledgePack,
-                  categoryWarning: getKnowledgePackCategoryWarning(loginIssuesPack as KnowledgePack)
-                });
-                setPreviewFileName("data/packs/login-issues-v1.json");
-              }}
-              className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${darkMode ? "bg-slate-800 text-slate-200 hover:bg-slate-700" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
-            >
-              Preview bundled sample
-            </button>
+            {bundledPackPreviews.map(({ fileName, pack }) => (
+              <button
+                key={pack.packId}
+                type="button"
+                onClick={() => {
+                  setImportError("");
+                  setPreview({
+                    pack,
+                    categoryWarning: getKnowledgePackCategoryWarning(pack)
+                  });
+                  setPreviewFileName(fileName);
+                }}
+                className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${darkMode ? "bg-slate-800 text-slate-200 hover:bg-slate-700" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
+              >
+                Preview {pack.packName}
+              </button>
+            ))}
             <span className={`self-center text-xs ${darkMode ? "text-slate-500" : "text-slate-400"}`}>
               {pendingPackCandidates.length} awaiting validation
             </span>

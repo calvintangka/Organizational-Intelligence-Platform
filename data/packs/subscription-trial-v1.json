@@ -1,0 +1,141 @@
+{
+  "packId": "subscription-trial-v1",
+  "packName": "Subscription & Trial Starter Pack",
+  "description": "Starter knowledge pack for Maesa Tech subscription, trial, feature-access, seat, cancellation, downgrade, and renewal questions.",
+  "language": "en",
+  "canonicalProblem": {
+    "title": "Subscription & Trial Issue",
+    "category": "Subscription",
+    "description": "Customers need help with trial timing, plan access, seats, cancellation effects, downgrades, subscription start dates, and unexpected renewal charges."
+  },
+  "lessons": [
+    {
+      "title": "Trial expired before evaluation finished",
+      "rootCause": "The evaluation window ended before the customer completed their review, even though the workspace configuration and data remain intact.",
+      "solution": "Confirm the workspace, when the trial ended, and whether an extension request or immediate plan selection is the right next step.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for reaching out. I understand the trial expired before your evaluation was complete.\n\nPlease reply with the workspace name and the date the trial ended. Your configuration and data are normally preserved after the trial closes, so the first step is to confirm whether you need a reviewed extension path or whether you prefer to continue by selecting a paid plan now. Once we verify the workspace status, we can guide the supported next step for continuing the evaluation.\n\nIf there was a specific blocker that prevented testing during the trial window, include that detail as well so we can document it in the review.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "trial expired",
+        "need more time to evaluate",
+        "evaluation not finished",
+        "trial ended too soon",
+        "trial already ended"
+      ],
+      "whenToEscalate": "Escalate if the workspace qualifies for a reviewed trial extension request or if the customer cites a documented evaluation blocker.",
+      "doNotPromise": [
+        "a trial extension before workspace review",
+        "that expired trials will be reopened automatically"
+      ]
+    },
+    {
+      "title": "Upgraded plan but features are not unlocked",
+      "rootCause": "The plan change posted, but the workspace entitlement refresh has not fully applied to the new feature set yet.",
+      "solution": "Confirm the upgrade invoice or plan change time, have the customer refresh the workspace session, and verify whether the new entitlements appear on the correct workspace.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for the update. I understand you upgraded the plan, but the expected features are still not available.\n\nPlease send the plan name you upgraded to and the approximate time the upgrade completed. Then sign out of the workspace, refresh the browser, and sign back in so the entitlement state can reload cleanly. If your team manages more than one workspace, also confirm that you are checking the correct one for the upgraded subscription.\n\nOnce we compare the upgrade record with the workspace entitlement state, we can guide the next step if the new features still do not appear.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "upgraded but feature still locked",
+        "paid for higher plan no access",
+        "new plan not activated",
+        "upgrade completed but nothing changed",
+        "features still unavailable after upgrade"
+      ],
+      "whenToEscalate": "Escalate if the paid plan is confirmed on the billing record but the correct workspace still shows old entitlements after a fresh session check.",
+      "doNotPromise": [
+        "instant entitlement activation without checking the upgrade record",
+        "a refund because features are missing before entitlement review"
+      ]
+    },
+    {
+      "title": "Seat limit reached despite correct plan",
+      "rootCause": "The workspace is counting invited or pending users against the seat allocation, so the customer appears to hit the seat limit before all seats are actively used.",
+      "solution": "Ask the customer to review pending invitations and deactivated users, then compare the current seat count against the plan allowance.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for the details. I understand the workspace says the seat limit has been reached even though the plan should allow more users.\n\nPlease review the team or user-management page and check for invitations that are still pending, users who were invited twice, or deactivated accounts that may still be occupying a seat until the change finishes syncing. Then confirm the plan's seat allowance and the number of active plus pending users you see in the workspace.\n\nIf the count still does not line up after that review, send us the seat total you see on screen so we can compare it with the subscription record.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "seat limit reached",
+        "cannot invite more users",
+        "too many seats used",
+        "pending invites count as seats",
+        "plan should allow more members"
+      ],
+      "whenToEscalate": "Escalate if the workspace shows a seat mismatch after pending invitations and user counts have been reconciled against the subscription allowance.",
+      "doNotPromise": [
+        "manual extra seats without subscription review",
+        "that pending users can always be removed instantly"
+      ]
+    },
+    {
+      "title": "Cancellation request and what happens to data",
+      "rootCause": "The customer wants to cancel but is unsure how long workspace data remains available and whether access stops immediately or at term end.",
+      "solution": "Explain the cancellation timing, ask whether they want cancellation at renewal or sooner if supported, and direct them to export anything needed before access changes.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for contacting us. I understand you want to cancel the subscription and need to know what happens to the workspace data afterward.\n\nPlease confirm whether you want the cancellation to take effect at the end of the current term or whether you are asking about an earlier stop date. Before the subscription changes, make sure your team exports any reports or records you need to keep locally. Once we verify the current subscription term, we can explain the supported access timeline and what state the workspace enters after cancellation.\n\nIf you want us to review the cancellation path with you, include the workspace name in your reply.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "cancel my subscription",
+        "what happens to my data",
+        "delete account after cancellation",
+        "will files remain after canceling",
+        "access after cancellation"
+      ],
+      "whenToEscalate": "Escalate if the customer needs a policy-confirmed data-retention answer for a regulated workspace or is requesting a non-standard cancellation date.",
+      "doNotPromise": [
+        "permanent data retention without checking the policy",
+        "immediate data deletion on request without confirming the subscription state"
+      ]
+    },
+    {
+      "title": "Downgrade timing and proration confusion",
+      "rootCause": "The customer expects the lower plan and billing adjustment to apply immediately, but downgrade timing and any credit treatment follow the subscription change rules.",
+      "solution": "Clarify when the downgrade should take effect, compare the current term end date, and explain that any billing adjustment must be reviewed against the plan-change policy.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for your message. I understand there is confusion about when the downgrade takes effect and whether the billing difference is prorated.\n\nPlease tell us which plan you want to move to and the date you expected the change to apply. In many cases the downgrade takes effect on the next renewal rather than rewriting the current term immediately, so we need to compare the requested change date with the active subscription period first. If you are asking about credits or billing adjustment, include the current invoice reference so we can review the plan-change record accurately.\n\nAfter that review, we can explain the supported timing for the downgrade.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "downgrade plan timing",
+        "proration for downgrade",
+        "when does lower plan start",
+        "downgraded but still billed old plan",
+        "credit for moving to smaller plan"
+      ],
+      "whenToEscalate": "Escalate if the downgrade effective date shown in the subscription record conflicts with the approved plan-change request.",
+      "doNotPromise": [
+        "a prorated credit before policy review",
+        "same-day downgrade activation without checking the current term"
+      ]
+    },
+    {
+      "title": "Subscription start date confusion after trial",
+      "rootCause": "The customer is treating the subscription as if it started on the trial start date, but the paid term begins when the paid activation or conversion actually takes effect.",
+      "solution": "Compare the trial timeline against the paid activation date and explain which date controls the billing term.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for checking this. I understand there is confusion about why the subscription dates do not match the original trial timeline.\n\nPlease send the date the workspace first entered trial and the date the paid plan was activated or converted. The billing term for the subscription normally starts from the paid activation point rather than the trial start date, so we need to compare those two events directly. Once we confirm the activation record, we can explain which date controls the current subscription period and renewal schedule.\n\nIf you are comparing this to a specific invoice, include that invoice number as well.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "subscription start date wrong",
+        "trial date vs paid date",
+        "billing started after trial",
+        "when did subscription begin",
+        "renewal date from activation"
+      ],
+      "whenToEscalate": "Escalate if the recorded paid activation date does not align with the invoice or conversion event stored on the account.",
+      "doNotPromise": [
+        "that the subscription term will be backdated to the trial start",
+        "a date correction before the activation record is reviewed"
+      ]
+    },
+    {
+      "title": "Auto-renewal charged unexpectedly",
+      "rootCause": "The subscription renewed automatically because renewal was still enabled, and the customer either missed the notice or expected the plan to stop without an explicit cancellation.",
+      "solution": "Confirm the renewal invoice, review the renewal setting and notice path, and separate that review from any refund request.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for reaching out. I understand the subscription renewed automatically and the charge was unexpected.\n\nPlease send the renewal invoice number and confirm whether you intended the subscription to cancel before that renewal date. We will review the renewal setting on the account together with the billing record and explain what renewal state was active at the time the charge was created. If you also want the subscription to stop going forward, let us know so we can guide the correct cancellation step separately.\n\nOnce the renewal record is reviewed, we can outline the supported next step for the charge and the subscription state.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "auto renewal charged me",
+        "unexpected renewal charge",
+        "forgot to turn off renewal",
+        "charged after free trial ended",
+        "subscription renewed without noticing"
+      ],
+      "whenToEscalate": "Escalate if the renewal setting or renewal notice history appears inconsistent with the actual charge event on the account.",
+      "doNotPromise": [
+        "a refund before the renewal record is reviewed",
+        "that auto-renewal will be reversed automatically"
+      ]
+    }
+  ],
+  "version": "1.0.0",
+  "author": "Maesa Tech"
+}

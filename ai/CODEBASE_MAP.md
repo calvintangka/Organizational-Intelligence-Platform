@@ -26,7 +26,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `components/views/HomeView.tsx` - Landing workspace with summary cards and entry actions.
 - `components/views/TicketWorkspace.tsx` - Single-ticket intake, analysis, review, reflection, reuse testing, and AI advisory surface.
 - `components/views/BulkUploadWorkspace.tsx` - Bulk upload parsing, batch analysis, cluster review, and commit UI.
-- `components/views/KnowledgeView.tsx` - Knowledge browser, pack import/review, provenance, validation history, and memory-network entrypoint.
+- `components/views/KnowledgeView.tsx` - Knowledge browser, pack import/review, bundled-pack preview buttons, provenance, validation history, and memory-network entrypoint.
 - `components/views/DashboardView.tsx` - Metrics and health dashboards.
 - `components/views/OrganizationView.tsx` - Profile selection and organization settings.
 - `components/maesa/Sidebar.tsx` - Primary navigation between views.
@@ -59,6 +59,11 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `data/seedTickets.ts` - Demo tickets for first and second-ticket flows.
 - `data/seedResponses.ts` - Older response seeds still referenced by the prototype data layer.
 - `data/packs/login-issues-v1.json` - Shipped Login starter pack with 9 pre-authored lessons.
+- `data/packs/billing-invoices-v1.json` - Billing and invoice starter pack for Maesa Tech with 7 lessons and a recognized `Billing` category.
+- `data/packs/subscription-trial-v1.json` - Subscription and trial starter pack for Maesa Tech with 7 lessons and a recognized `Subscription` category.
+- `data/packs/api-integrations-v1.json` - API and integrations starter pack for Maesa Tech with 6 lessons and an intentional unknown-category fallback warning.
+- `data/packs/shipment-issues-v1.json` - Shipment support starter pack for FastDrop Logistics with 8 lessons and an intentional unknown-category fallback warning.
+- `data/packs/client-portal-v1.json` - Client portal starter pack for Pramana Legal with 7 lessons and an intentional unknown-category fallback warning.
 
 ## Core Libraries
 
@@ -216,7 +221,7 @@ Use this file to find the minimum source needed for a task. It is written for co
   See `app/page.tsx` `validateNoUnvalidatedCommitments()` and `requestDraftAdvisory()`, which reject unsupported teams, processes, timelines, or unconditional commitments even when the provider returns valid JSON.
 
 - Starter Knowledge Packs
-  See `types/knowledgePack.ts`, `data/packs/login-issues-v1.json`, `lib/knowledgePacks.ts`, `components/views/KnowledgeView.tsx`, and `app/page.tsx` `importKnowledgePack()` / `validateKnowledgePackCandidate()` / `rejectKnowledgePackCandidate()`.
+  See `types/knowledgePack.ts`, `data/packs/*.json`, `lib/knowledgePacks.ts`, `components/views/KnowledgeView.tsx`, and `app/page.tsx` `importKnowledgePack()` / `validateKnowledgePackCandidate()` / `rejectKnowledgePackCandidate()`.
 
 ## Where To Look For X
 

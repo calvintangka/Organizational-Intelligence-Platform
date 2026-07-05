@@ -1,0 +1,141 @@
+{
+  "packId": "client-portal-v1",
+  "packName": "Client Portal Starter Pack",
+  "description": "Starter knowledge pack for Pramana Legal client portal access, document handling, e-signature, deadline-sensitive uploads, and authorized-contact requests.",
+  "language": "en",
+  "canonicalProblem": {
+    "title": "Client Portal Issue",
+    "category": "Client Portal Issue",
+    "description": "Clients need assistance with portal permissions, document replacement, e-signature expiry, urgent uploads, portal synchronization, authorized-contact access, and locating signed engagement documents."
+  },
+  "lessons": [
+    {
+      "title": "Cannot access case file due to permission denied",
+      "rootCause": "The portal account is authenticated successfully, but the matter-level permission for that specific case file has not been granted to the current contact.",
+      "solution": "Confirm the matter reference and the email address used to sign in, then verify whether the portal access should include that matter before changing permissions.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for your message. I understand you can sign in to the client portal, but you are receiving a permission-related message when trying to open a case file.\n\nPlease reply with the matter reference, the document or folder you were trying to open, and the email address used for the portal sign-in. Access to portal materials is controlled at the matter level, so the next step is to verify whether this portal account is currently authorized for that specific case workspace before any access change is considered.\n\nOnce we confirm the matter linkage, we will guide the appropriate next step.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "permission denied",
+        "cannot open case file",
+        "portal says no access",
+        "matter access blocked",
+        "file access denied"
+      ],
+      "whenToEscalate": "Escalate if the matter should already be shared with the current portal contact but the permission check still shows no authorized linkage.",
+      "doNotPromise": [
+        "immediate access restoration before permission verification",
+        "that portal access implies permission to every matter"
+      ]
+    },
+    {
+      "title": "Uploaded the wrong document and need to replace it",
+      "rootCause": "The wrong file was uploaded to the matter, and the client wants it removed or superseded, but the portal preserves an audit trail instead of silently deleting history.",
+      "solution": "Confirm which file was uploaded in error, capture the correct replacement document request, and explain that versioning or recorded replacement is used instead of untracked deletion.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for informing us. I understand the wrong document was uploaded to the portal and you need to correct that filing.\n\nPlease reply with the matter reference, the name of the file uploaded in error, and whether you already have the correct replacement document ready. Portal records are normally versioned or replaced through a tracked update path rather than through silent deletion, so the first step is to identify the incorrect upload precisely and confirm what should replace it.\n\nAfter that review, we will guide the appropriate documented correction path for the matter.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "uploaded wrong document",
+        "replace portal file",
+        "remove incorrect upload",
+        "wrong attachment in portal",
+        "need to swap the document"
+      ],
+      "whenToEscalate": "Escalate if a tracked document-replacement action is required on a matter record after the incorrect upload is confirmed.",
+      "doNotPromise": [
+        "silent deletion of a filed document",
+        "that portal history can be erased without an audit record"
+      ]
+    },
+    {
+      "title": "E-signature request expired",
+      "rootCause": "The original e-signature request reached its expiration window before the signer completed it and now needs a fresh send.",
+      "solution": "Confirm which signature request expired, verify the recipient email, and route a resend request through the matter team if the signer details are still correct.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for the update. I understand the electronic signature request has expired before it was completed.\n\nPlease send the matter reference, the signer email address, and the name of the document that still requires signature. We will first confirm that the expired request belongs to the correct recipient and then guide the proper resend path if the signer details are still current. If the signer should now be different, include that clarification in your reply so the request can be reviewed correctly.\n\nOnce the request details are confirmed, we will explain the next supported step.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "signature request expired",
+        "esign link expired",
+        "cannot sign document now",
+        "need signature request resent",
+        "portal signing link no longer works"
+      ],
+      "whenToEscalate": "Escalate if the matter team must issue a new signature request after confirming the signer identity and document reference.",
+      "doNotPromise": [
+        "resending a signature request without recipient verification",
+        "that the original expired signing link can be reactivated"
+      ]
+    },
+    {
+      "title": "Portal timeout during urgent deadline upload",
+      "rootCause": "The portal session expired or timed out during a deadline-sensitive upload, so the client may need an alternate submission path while the portal issue is reviewed.",
+      "solution": "Capture the matter, deadline, and file details immediately, then direct the client to the documented alternate submission route while escalating the deadline-critical portal failure.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for contacting us promptly. I understand the portal timed out while you were trying to upload a document tied to an urgent deadline.\n\nPlease reply immediately with the matter reference, the filing or submission deadline, the document name, and the approximate size of the file you were attempting to upload. Where a deadline-sensitive upload is blocked by a portal timeout, the first priority is to route the document through the documented alternate submission path while the portal issue itself is escalated for review. Include any error message shown on screen if you still have it.\n\nOnce those details are received, we will guide the next approved submission step for the matter.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "portal timed out during upload",
+        "urgent deadline upload failed",
+        "session expired while uploading",
+        "could not submit before deadline",
+        "portal upload timeout"
+      ],
+      "whenToEscalate": "Escalate immediately when the client ties the failed upload to an active filing or hearing deadline.",
+      "doNotPromise": [
+        "that the portal timestamp controls the legal deadline",
+        "deadline protection or filing completion before the alternate submission path is confirmed"
+      ]
+    },
+    {
+      "title": "Hearing date shows outdated information",
+      "rootCause": "The portal view is lagging behind the latest matter update, so the displayed hearing date is not yet synchronized with the assigned team's current record.",
+      "solution": "Confirm the matter reference and the outdated date shown, then verify the latest schedule with the assigned team before giving any authoritative timing answer.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for flagging this. I understand the hearing date shown in the client portal appears to be outdated.\n\nPlease reply with the matter reference and the exact hearing date currently displayed in the portal. We will compare that portal view with the latest schedule held by the assigned team before confirming whether the portal is simply waiting to sync or whether the matter record itself needs review. Until that verification is complete, please do not rely solely on the portal entry as the authoritative hearing schedule.\n\nOnce the matter team confirms the current listing, we will guide the next step.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "hearing date is wrong",
+        "portal shows old court date",
+        "case schedule not updated",
+        "outdated hearing information",
+        "portal date still old"
+      ],
+      "whenToEscalate": "Escalate if the portal date conflicts with the assigned team's current matter record or if the hearing timing is imminently deadline-sensitive.",
+      "doNotPromise": [
+        "that the portal date is the authoritative schedule before verification",
+        "legal advice about hearing consequences based only on the portal entry"
+      ]
+    },
+    {
+      "title": "Add an authorized contact or assistant to the account",
+      "rootCause": "The client wants another person added to the portal, but access changes require identity verification and approval before a new authorized contact can be linked to the matter.",
+      "solution": "Gather the new contact's details, confirm the requester relationship to the matter, and route the access request through the verification path before any portal invitation is issued.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for your request. I understand you would like an assistant or other authorized contact added to the client portal access list.\n\nPlease reply with the matter reference, the full name of the person to be added, their email address, and their relationship to your matter. Access changes require identity and authorization review before a portal invitation can be issued, so we must first confirm that the requesting party is permitted to extend portal access and that the new contact should be linked to the relevant matter.\n\nAfter that verification step is complete, we will explain the supported next action for adding the contact.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "add my assistant",
+        "give portal access to colleague",
+        "authorized contact for portal",
+        "share account with assistant",
+        "need another contact added"
+      ],
+      "whenToEscalate": "Escalate when an access-extension request is received and identity verification plus matter authorization must be reviewed before any invitation is sent.",
+      "doNotPromise": [
+        "portal access changes without verification",
+        "that a new contact can see the matter before authorization is approved"
+      ]
+    },
+    {
+      "title": "Cannot find the signed retainer agreement",
+      "rootCause": "The signed retainer exists, but the client is looking in the wrong portal location, the matter folder has not been surfaced to that contact, or the signature step completed outside the client's expected document path.",
+      "solution": "Confirm the matter, when the agreement was signed, and where the client already searched, then guide them to the correct document area or verify whether the signed copy still needs to be surfaced.",
+      "customerResponse": "{{greetingLine}}\n\nThank you for your message. I understand you are unable to locate the signed retainer agreement in the client portal.\n\nPlease reply with the matter reference, the approximate date the retainer was signed, and the portal area where you already looked for the document. In some cases the signed agreement is stored in a specific matter folder or linked after the signature process completes, so we first need to verify where the final signed version should appear for your portal access level.\n\nOnce we confirm that location, we will guide the appropriate next step for retrieving the document.\n\nKind regards,\n{{organizationName}} Support Team",
+      "signals": [
+        "cannot find signed retainer",
+        "where is my engagement letter",
+        "signed agreement missing",
+        "retainer document not in portal",
+        "need the executed retainer"
+      ],
+      "whenToEscalate": "Escalate if the retainer should already be available to the client contact but does not appear in the verified matter document area.",
+      "doNotPromise": [
+        "that every signed document is immediately visible in every portal folder",
+        "legal advice or confirmation of engagement terms from portal search alone"
+      ]
+    }
+  ],
+  "version": "1.0.0",
+  "author": "Pramana Legal"
+}
