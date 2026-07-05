@@ -9,7 +9,6 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `components/` - React UI components and full-page workspaces.
 - `data/` - Seed tickets, seed knowledge, seed organization profiles, and starter knowledge packs.
 - `docs/` - Product, architecture, roadmap, canon, and implementation references for broader OIP context.
-- `graphify-out/` - Generated code graph artifacts and graph report.
 - `lib/` - Core business logic, memory lifecycle, AI provider adapters, and pipeline engines.
 - `outputs/` - Generated output artifacts.
 - `tmp/` - Temporary generation helpers and rendered assets.

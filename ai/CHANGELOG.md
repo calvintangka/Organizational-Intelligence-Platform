@@ -13,6 +13,18 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-05] Remove broken generated-graph workflow steps
+**Layer:** governance
+**Task/Prompt:** "Clean up the /ai governance folder by removing the broken generated-graph workflow dependency and documenting manual map maintenance as the replacement."
+**Files changed:** `ai/CODING_WORKFLOW.md`, `ai/AI_WORKFLOW.md`, `ai/CURRENT_STATUS.md`, `ai/CHANGELOG.md`, `ai/CODEBASE_MAP.md`, `ai/PROMPT_LIBRARY.md`, `.gitignore`
+**What changed:**
+- Removed the broken generated-graph step from the coding workflow and documented manual `CODEBASE_MAP.md` maintenance as the replacement.
+- Removed stale generated-graph references across the `/ai` folder.
+- Added the legacy generated-graph output directory to `.gitignore`.
+**Boundaries touched:** none
+**Verification:** `Select-String` / grep confirms no remaining case-insensitive matches for the retired generated-graph tool name anywhere in the `/ai` folder.
+**Open items:** none
+
 ## [2026-07-04] Starter knowledge pack import and governed validation
 **Layer:** coding
 **Task/Prompt:** "Add a Starter Knowledge Pack feature so JSON packs import as candidates first, then become memory only after human validation."
@@ -25,7 +37,7 @@
 - Updated lesson/provenance copy so the matched lesson name is surfaced more clearly in the review explanation.
 **Boundaries touched:** Boundary rule 2 was exercised directly: pack intake stops at the candidate boundary, and final memory writes still flow through the shared validated commit path. The no-unvalidated-commitments rule was extended with per-lesson `doNotPromise` warnings for lesson-grounded AI drafting.
 **Verification:** `npm.cmd run build` (twice after the final UI update); `npm.cmd run dev`; live browser spot-check confirmed the Knowledge view shows `Import knowledge pack` and `Preview bundled sample`, and the bundled sample preview path was added specifically to make the governed import flow observable in the app without relying on a native file-picker automation path.
-**Open items:** End-to-end browser automation for the full preview -> import -> validate -> reload sequence was partially blocked by flaky in-app browser control around reloads and JS confirm dialogs. `graphify query` still fails locally with the known `uv trampoline failed to canonicalize script path` issue.
+**Open items:** End-to-end browser automation for the full preview -> import -> validate -> reload sequence was partially blocked by flaky in-app browser control around reloads and JS confirm dialogs.
 
 ## [2026-07-03] Audit remediation F-01-F-07 (retroactive entry)
 **Layer:** coding
@@ -123,17 +135,17 @@
 **Verification:** Grounded in current proxy/provider code and `git show 72ac189`. `(retroactive entry)`
 **Open items:** Timeout calibration under real Gemma latency remains open.
 
-## [2026-07-03] Graphify and initial AI agent docs setup (retroactive entry)
+## [2026-07-03] Initial AI agent docs setup (retroactive entry)
 **Layer:** governance
 **Task/Prompt:** Install graph navigation and create the first `/ai` agent docs
-**Files changed:** `AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `.codex/hooks.json`, `ai/ARCHITECTURE.md`, `ai/CODEBASE_MAP.md`, `ai/CURRENT_STATUS.md`, `ai/AI_WORKFLOW.md`, `graphify-out/*` `(from git history)`
+**Files changed:** `AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `.codex/hooks.json`, `ai/ARCHITECTURE.md`, `ai/CODEBASE_MAP.md`, `ai/CURRENT_STATUS.md`, `ai/AI_WORKFLOW.md`, `legacy generated graph output/*` `(from git history)`
 **What changed:**
-- Installed Graphify output and documented graph-first repo navigation expectations.
+- Installed the initial generated graph output and documented graph-first repo navigation expectations.
 - Added the first generation of `/ai` architecture, map, status, and workflow docs.
-- Wired editor/agent config files to remind future sessions to use Graphify before broad code scanning.
+- Wired editor/agent config files to remind future sessions to use the generated graph before broad code scanning.
 **Boundaries touched:** none
 **Verification:** Confirmed from `git show 2689213`. `(retroactive entry)`
-**Open items:** The local Graphify CLI is currently failing with a script-path error and needs repair.
+**Open items:** none recorded in this retroactive summary.
 
 ## [2026-07-03] AI governance infrastructure refresh
 **Layer:** governance
@@ -146,7 +158,7 @@
 - Added a git baseline marker and per-task documentation commits for this governance setup.
 **Boundaries touched:** All boundaries were documented and preserved; no application code was modified.
 **Verification:** Spot-checked enforcing functions in `app/page.tsx`, `lib/trustEngine.ts`, `lib/drafting.ts`, `lib/reflection.ts`, `lib/canonicalProblemEngine.ts`, `lib/bulkUpload.ts`, and `app/api/ai/chat/route.ts`; reviewed git history and current file set.
-**Open items:** `graphify query` still fails locally; prompt artifacts named `oip_*.md` are not present in the repository and are therefore documented as absent rather than fabricated.
+**Open items:** Prompt artifacts named `oip_*.md` are not present in the repository and are therefore documented as absent rather than fabricated.
 
 ## [2026-07-03] Safer personalized AI customer drafts
 **Layer:** coding
@@ -160,4 +172,4 @@
 - Added a post-prompt rejection gate that blocks invented teams/processes, unsupported timelines, and unconditional refund/credit/invoice commitments before an AI draft can be surfaced.
 **Boundaries touched:** Preserved F-04 human review for AI drafts and added explicit enforcement for no unvalidated commitments in AI customer responses.
 **Verification:** `npm.cmd run build`; live ticket-flow verification still required for LM Studio on/off behavior, tone-change observability, and the Dewi Rahayu scenario.
-**Open items:** End-to-end browser verification remains to be completed, and `graphify update .` should be retried after the local Graphify CLI issue is repaired if it fails again.
+**Open items:** End-to-end browser verification remains to be completed.

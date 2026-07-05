@@ -1,10 +1,10 @@
 # Current Status
 
-This file is the fastest accurate snapshot of the prototype as of 2026-07-04.
+This file is the fastest accurate snapshot of the prototype as of 2026-07-05.
 
 ## What Changed Most Recently
 
-Starter Knowledge Packs now exist as a governed Door 1 / Door 2 intake path. The Knowledge workspace can preview a JSON pack, import it as a proposed `KnowledgeCandidate`, and route human validation through the same candidate -> validation record -> memory change -> knowledge item path already used by bulk upload and reflection.
+The governance workflow no longer depends on the broken generated-graph CLI. Manual `CODEBASE_MAP.md` maintenance is now the documented source of truth for keeping the `/ai` navigation layer current.
 
 ## What Works Right Now
 
@@ -54,7 +54,6 @@ Starter Knowledge Packs now exist as a governed Door 1 / Door 2 intake path. The
 - Current model is `google/gemma-4-e4b`.
 - Current timeout is `AI_TIMEOUT_MS=30000`.
 - If Next.js starts behaving strangely after edits, clear the build cache by deleting `.next` and restart the dev server.
-- `graphify-out/graph.json` exists, but `graphify query` currently fails locally with `uv trampoline failed to canonicalize script path`, so direct graph CLI use may need repair before relying on it.
 - The in-app browser can reach `http://localhost:3000`, but longer automated UI verification remains somewhat flaky around reloads and JavaScript confirm dialogs.
 
 ## Known Open Items
