@@ -11,7 +11,7 @@ export interface Ticket {
   createdAt: string;
 }
 
-export type TicketRecordStatus = "open" | "in_review" | "resolved" | "rejected";
+export type TicketRecordStatus = "open" | "in_review" | "resolved" | "rejected" | "discarded";
 
 export interface TicketRecordClassification {
   category: string;

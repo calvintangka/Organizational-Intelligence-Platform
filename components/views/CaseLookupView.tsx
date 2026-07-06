@@ -23,6 +23,7 @@ const FILTER_CHIPS: { id: CaseFilterChip; label: string }[] = [
   { id: "cold_start", label: "Cold start" },
   { id: "uncategorized", label: "Uncategorized" },
   { id: "rejected", label: "Rejected" },
+  { id: "discarded", label: "Discarded" },
 ];
 
 const PAGE_SIZE = 20;
@@ -41,6 +42,10 @@ function statusBadge(status: TicketRecord["status"], darkMode: boolean): string 
       return darkMode
         ? "bg-red-900/40 text-red-300"
         : "bg-red-50 text-red-700";
+    case "discarded":
+      return darkMode
+        ? "bg-slate-700/60 text-slate-400"
+        : "bg-slate-200 text-slate-500";
     default:
       return darkMode
         ? "bg-slate-700 text-slate-300"

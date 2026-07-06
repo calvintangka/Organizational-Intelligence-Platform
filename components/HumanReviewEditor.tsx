@@ -6,12 +6,16 @@
   placeholderText?: string;
   sourceLabel?: string;
   fallbackNotice?: string;
+  fallbackTechnicalDetails?: string;
   /** Raw validated template - shown alongside the AI draft for comparison */
   deterministicDraft?: string;
   /** Whether the current draft came from the AI advisory */
   isAIDraft?: boolean;
   /** Whether no deterministic template exists and the human must author from scratch */
   isNoTemplate?: boolean;
+  showRetryButton?: boolean;
+  isRetrying?: boolean;
+  onRetryAIDraft?: () => void;
 }
 
 export function HumanReviewEditor({
@@ -22,9 +26,13 @@ export function HumanReviewEditor({
   placeholderText,
   sourceLabel,
   fallbackNotice,
+  fallbackTechnicalDetails,
   deterministicDraft,
   isAIDraft = false,
-  isNoTemplate = false
+  isNoTemplate = false,
+  showRetryButton = false,
+  isRetrying = false,
+  onRetryAIDraft,
 }: HumanReviewEditorProps) {
   const showComparison = isAIDraft && deterministicDraft && deterministicDraft.trim() !== reviewedResponse.trim();
   const sourceBadge = isNoTemplate ? "No template available" : isAIDraft ? "AI advisory" : "Deterministic draft";
@@ -54,8 +62,26 @@ export function HumanReviewEditor({
       </p>
 
       {fallbackNotice && (
-        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">
-          {fallbackNotice}
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm font-semibold text-amber-800">{fallbackNotice}</p>
+            {showRetryButton && onRetryAIDraft && (
+              <button
+                type="button"
+                onClick={onRetryAIDraft}
+                disabled={isRetrying}
+                className="flex-shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isRetrying ? "Retrying..." : "Retry AI draft"}
+              </button>
+            )}
+          </div>
+          {fallbackTechnicalDetails && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs text-amber-600 hover:text-amber-800">Technical details</summary>
+              <pre className="mt-1 whitespace-pre-wrap rounded-lg bg-amber-100/60 p-2 font-mono text-[11px] leading-5 text-amber-900/80">{fallbackTechnicalDetails}</pre>
+            </details>
+          )}
         </div>
       )}
 

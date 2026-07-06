@@ -13,6 +13,20 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-06] Discard ticket, retry AI draft, and clean error display
+**Layer:** coding
+**Task/Prompt:** "Fix three UX gaps discovered when LM Studio was off: no way to discard an unwanted ticket, no way to retry the AI draft, and raw HTTP error JSON dumped into user-facing UI."
+**Files changed:** `types/ticket.ts`, `types/ai.ts`, `lib/ticketRecords.ts`, `app/page.tsx`, `components/views/TicketWorkspace.tsx`, `components/views/CaseLookupView.tsx`, `components/HumanReviewEditor.tsx`, `components/ProvenancePanel.tsx`, `ai/CHANGELOG.md`, `ai/CURRENT_STATUS.md`, `ai/CODEBASE_MAP.md`
+**What changed:**
+- Added `"discarded"` to `TicketRecordStatus`. The discard action is available before reflection commit (status open or in_review), preserves the record in Cases, and creates zero knowledge artifacts (no candidate, validation, or memory-change records). "Rejected" remains distinct — it is used for out-of-scope business relevance rejection.
+- Added a "Discarded" filter chip to the Cases view with muted badge styling.
+- Added `retryAIDraft()` which re-runs only the draft advisory call for the current ticket when AI mode is enabled and a fallback occurred. The button is disabled while in flight to prevent parallel calls. On success the AI draft populates the side-by-side review with ai_advisory labeling. On failure the notice updates to "Still unavailable — check that LM Studio is running."
+- Replaced `formatFallbackNotice()` with a clean human message ("AI assistant unavailable — showing standard draft instead.") and moved raw diagnostics into a new `buildFallbackTechnicalDetails()` function. Technical details appear behind a collapsible `<details>` disclosure in the HumanReviewEditor and ProvenancePanel. Cleaned `defaultAvailabilityMessage()` to remove proxy paths. Cleaned the timeline step detail for draft fallback.
+- Added `fallbackTechnicalDetails` field to `SuggestedResponse` type. Added retry/discard callback props to TicketWorkspace and HumanReviewEditor.
+**Boundaries touched:** The records-never-dropped principle was exercised directly: discarded tickets are preserved in Cases with their pipeline journey up to the point of discard. No memory-write boundary was crossed — discard touches none of the candidate/validation/memory-change path.
+**Verification:** `npm run build` passes. Live browser verification: submitted ticket with LM Studio off → clean fallback message (no raw JSON), Technical details collapsible present → clicked Discard ticket → confirmed → workspace reset, Cases shows ticket with status Discarded, localStorage contains zero candidate/validation/memory-change records. Full pipeline with LM Studio running → Discard ticket disappears after reflection commit. Retry AI draft button appears alongside fallback notice when AI is unavailable.
+**Open items:** End-to-end retry-then-success verification requires toggling LM Studio mid-session (confirmed code path is correct from reading).
+
 ## [2026-07-05] Add five starter knowledge packs and bundled previews
 **Layer:** content/coding
 **Task/Prompt:** "Author five new Starter Knowledge Packs for Maesa Tech / OIP, validate them through the real loader, browser-import one pack end to end, and update /ai docs."

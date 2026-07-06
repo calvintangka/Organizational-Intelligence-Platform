@@ -7,6 +7,7 @@ interface ProvenancePanelProps {
   ticket?: Ticket | null;
   isUncategorized?: boolean;
   response?: SuggestedResponse | null;
+  fallbackTechnicalDetails?: string;
 }
 
 function responseGroundingCopy(response?: SuggestedResponse | null): { title: string; body: string } | null {
@@ -18,7 +19,7 @@ function responseGroundingCopy(response?: SuggestedResponse | null): { title: st
       body:
         response.source === "no_template"
           ? "No validated organizational knowledge was available, so OIP kept the cold-start authoring placeholder for human review."
-          : "OIP kept the deterministic fallback because the AI advisory was unavailable or unusable."
+          : "OIP kept the standard draft because the AI assistant could not be reached."
     };
   }
 
@@ -51,7 +52,7 @@ function responseGroundingCopy(response?: SuggestedResponse | null): { title: st
   return null;
 }
 
-export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized = false, response }: ProvenancePanelProps) {
+export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized = false, response, fallbackTechnicalDetails }: ProvenancePanelProps) {
   const lessonMatch = topMatch && ticket ? findMatchingLesson(ticket, topMatch.item) : null;
   const groundingCopy = responseGroundingCopy(response);
 
@@ -61,6 +62,12 @@ export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized
         <p className="text-xs font-bold uppercase tracking-wide text-amber-700">Why this response?</p>
         <p className="mt-2 font-semibold text-ink">{groundingCopy.title}</p>
         <p className="mt-1 text-sm leading-6 text-slate-700">{groundingCopy.body}</p>
+        {fallbackTechnicalDetails && (
+          <details className="mt-3">
+            <summary className="cursor-pointer text-xs text-amber-600 hover:text-amber-800">Technical details</summary>
+            <pre className="mt-1 whitespace-pre-wrap rounded-lg bg-amber-100/60 p-2 font-mono text-[11px] leading-5 text-amber-900/80">{fallbackTechnicalDetails}</pre>
+          </details>
+        )}
       </section>
     );
   }

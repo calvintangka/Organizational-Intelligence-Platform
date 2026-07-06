@@ -101,7 +101,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 ## Shared Types
 
-- `types/ticket.ts` - `Ticket`, `TicketStatus`.
+- `types/ticket.ts` - `Ticket`, `TicketStatus`, `TicketRecordStatus` (includes `discarded`).
 - `types/oip.ts` - `Observation`, `Understanding`, `ReasoningSummary`, `Confidence`, `BusinessRelevance`, `BusinessDomainClassification`, `IntelligenceLogEntry`.
 - `types/knowledge.ts` - `KnowledgeItem`, `Lesson`, `KnowledgeCandidate`, `ValidationRecord`, `MemoryChangeRecord`, `ReflectionDecision`, `TrustEvaluation`, `KnowledgeMatch`.
 - `types/knowledgePack.ts` - `KnowledgePack`, `PackLesson`, preview, and editable pack-candidate draft contracts.
@@ -132,6 +132,8 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `rejectKnowledgePackCandidate()` - Rejects a pending pack without creating validation or memory records.
 - `applyValidatedMemoryChange()` - Canonical write path for candidates, validations, memory changes, and knowledge upserts.
 - `commitValidatedMemoryChange()` - Wrapper returning the final validated knowledge item.
+- `discardTicket()` - Marks the active ticket as discarded, preserves the record, and resets the workspace. No knowledge artifacts created.
+- `retryAIDraft()` - Re-runs only the draft advisory call for the current ticket when AI fallback occurred.
 - `confirmAndResetOrganization()` and `resetOrganization()` - Protected danger-zone reset path.
 
 ### `lib/analyzer.ts`

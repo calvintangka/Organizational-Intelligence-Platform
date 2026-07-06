@@ -376,6 +376,7 @@ export default function Home() {
   const [ticketIntakeMode, setTicketIntakeMode] = useState<"single" | "bulk">("single");
   const [darkMode, setDarkMode] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isRetryingDraft, setIsRetryingDraft] = useState(false);
 
   /* ---------- Persistence: load on mount, save on change ---------- */
 
@@ -995,6 +996,7 @@ export default function Home() {
     setDiscriminationReasoning(null);
     setDiscriminatedMatchTitle(null);
     setActiveTicketRecord(null);
+    setIsRetryingDraft(false);
   }
 
   function startDemo(ticket?: Ticket) {
@@ -1011,6 +1013,58 @@ export default function Home() {
   function resetSession() {
     resetWorkflowState();
     setCurrentStep(0);
+  }
+
+  function discardTicket() {
+    if (!activeTicketRecord) return;
+    const confirmed =
+      typeof window === "undefined" ||
+      window.confirm(
+        "Discard this ticket? It will be marked as discarded and no knowledge will be created. This cannot be undone."
+      );
+    if (!confirmed) return;
+
+    const updated: TicketRecord = { ...activeTicketRecord, status: "discarded" };
+    setTicketRecords((prev) => upsertTicketRecord(prev, updated));
+    addLogEntries([
+      createLogEntry("Ticket discarded", `${activeTicketRecord.ticketId} discarded by user before reflection commit`)
+    ]);
+    resetWorkflowState();
+    setCurrentStep(0);
+  }
+
+  async function retryAIDraft() {
+    if (!selectedTicket || !aiAnalysis || isRetryingDraft) return;
+    if (aiAdapter.config.mode === "disabled") return;
+
+    setIsRetryingDraft(true);
+    try {
+      const und = toUnderstanding(aiAnalysis);
+      const canonicalProblem = identifyCanonicalProblem(und, organizationProfile);
+      const topMatch = similarKnowledge.length > 0 ? similarKnowledge[0] : null;
+      const draft = draftResponse(selectedTicket, und, topMatch, organizationProfile, knowledgeItems.length === 0);
+      const aiDraft = await requestDraftAdvisory(
+        selectedTicket, und, canonicalProblem.title, topMatch,
+        draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", aiAdvisory
+      );
+
+      if (aiDraft.usedAIDraft) {
+        setAiAdvisory(aiDraft.advisory);
+        setLastDraftUsedAI(true);
+        setSuggestedResponse(aiDraft.response);
+        setReviewedResponse(aiDraft.response.draftResponse);
+        addLogEntries([createLogEntry("AI draft retry succeeded", "AI advisory draft now available for review")]);
+      } else {
+        setAiAdvisory(aiDraft.advisory);
+        setSuggestedResponse({
+          ...aiDraft.response,
+          fallbackNotice: "Still unavailable — check that LM Studio is running."
+        });
+        addLogEntries([createLogEntry("AI draft retry failed", "Still unavailable — check that LM Studio is running")]);
+      }
+    } finally {
+      setIsRetryingDraft(false);
+    }
   }
 
   /** Reset Organization — wipes persisted memory and reseeds defaults. */
@@ -1101,12 +1155,12 @@ export default function Home() {
 
   function defaultAvailabilityMessage(): string {
     if (aiAdapter.config.mode === "disabled") {
-      return "AI advisory is disabled. Using deterministic Organizational Intelligence.";
+      return "AI advisory is disabled.";
     }
     if (aiAdapter.config.mode === "amd") {
-      return "AMD Cloud placeholder is not implemented yet. Using deterministic Organizational Intelligence.";
+      return "AMD Cloud placeholder is not implemented yet.";
     }
-    return `AI unavailable. Using deterministic Organizational Intelligence. Proxy: ${aiAdapter.config.proxyPath}.`;
+    return "AI assistant could not be reached.";
   }
 
   function draftModeLabel(mode: DraftGroundingMode, groundingLabel?: string): string {
@@ -1145,11 +1199,16 @@ export default function Home() {
     };
   }
 
-  function formatFallbackNotice(fallbackReason?: string, diagnostics?: AIDiagnostics): string {
+  function formatFallbackNotice(_fallbackReason?: string, _diagnostics?: AIDiagnostics): string {
+    return "AI assistant unavailable — showing standard draft instead.";
+  }
+
+  function buildFallbackTechnicalDetails(fallbackReason?: string, diagnostics?: AIDiagnostics): string {
     const proxyPath = diagnostics?.proxyPath ?? aiAdapter.config.proxyPath;
     const baseUrl = diagnostics?.serverBaseUrl ?? "server-configured";
     const reason = fallbackReason ?? diagnostics?.fallbackReason ?? "AI advisory unavailable.";
-    return `AI fallback: ${reason} Proxy: ${proxyPath}. Server base URL: ${baseUrl}. Deterministic draft shown.`;
+    const proxyStatus = diagnostics?.proxySucceeded === true ? "succeeded" : diagnostics?.proxySucceeded === false ? "failed" : "unknown";
+    return `Reason: ${reason}\nProxy: ${proxyPath}\nServer base URL: ${baseUrl}\nProxy status: ${proxyStatus}\nMode: ${diagnostics?.mode ?? aiAdapter.config.mode}`;
   }
 
   function validateEmailRecoveryDraft(draft: string): string | null {
@@ -1440,7 +1499,8 @@ export default function Home() {
         advisory: baseAdvisory,
         response: {
           ...fallbackResponse,
-          fallbackNotice: formatFallbackNotice(defaultAvailabilityMessage(), baseAdvisory?.diagnostics)
+          fallbackNotice: formatFallbackNotice(defaultAvailabilityMessage(), baseAdvisory?.diagnostics),
+          fallbackTechnicalDetails: buildFallbackTechnicalDetails(defaultAvailabilityMessage(), baseAdvisory?.diagnostics)
         },
         usedAIDraft: false
       };
@@ -1560,6 +1620,10 @@ export default function Home() {
       response: {
         ...fallbackResponse,
         fallbackNotice: formatFallbackNotice(
+          draftRejectionReason ?? draftResult.error ?? enrichmentResult.error ?? defaultAvailabilityMessage(),
+          nextAdvisory.diagnostics
+        ),
+        fallbackTechnicalDetails: buildFallbackTechnicalDetails(
           draftRejectionReason ?? draftResult.error ?? enrichmentResult.error ?? defaultAvailabilityMessage(),
           nextAdvisory.diagnostics
         )
@@ -2496,6 +2560,10 @@ export default function Home() {
                   onSetCustomSecondText={setCustomSecondText}
                   onSwitchToSingle={handleNewTicket}
                   onSwitchToBulk={handleUploadQueries}
+                  aiModeEnabled={aiAdapter.config.mode !== "disabled"}
+                  isRetryingDraft={isRetryingDraft}
+                  onDiscardTicket={discardTicket}
+                  onRetryAIDraft={() => { void retryAIDraft(); }}
                 />
               ) : (
                 <BulkUploadWorkspace

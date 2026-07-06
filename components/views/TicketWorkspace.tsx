@@ -61,6 +61,8 @@ interface TicketWorkspaceProps {
   customSecondText: string;
   darkMode: boolean;
   lastSavedKnowledgeId: string | null;
+  aiModeEnabled: boolean;
+  isRetryingDraft: boolean;
   // Callbacks
   onSubmitTicket: (text: string) => void;
   onUpdateReviewedResponse: (text: string) => void;
@@ -73,6 +75,8 @@ interface TicketWorkspaceProps {
   onSetCustomSecondText: (text: string) => void;
   onSwitchToSingle: () => void;
   onSwitchToBulk: () => void;
+  onDiscardTicket: () => void;
+  onRetryAIDraft: () => void;
 }
 
 type TimelineStatus = "pending" | "running" | "done" | "active";
@@ -237,7 +241,7 @@ function getTimelineItems(
         : step === 3 && isProcessing
         ? "Generating draft with AI..."
         : "Generating draft",
-      detail: suggestedResponse?.fallbackNotice ?? draftGroundingLabel(suggestedResponse),
+      detail: suggestedResponse?.fallbackNotice ? "AI assistant unavailable — standard draft shown" : draftGroundingLabel(suggestedResponse),
       status: step >= 4 ? "done" : step === 3 && isProcessing ? "running" : "pending",
     },
     {
@@ -305,6 +309,8 @@ export function TicketWorkspace({
   customSecondText,
   darkMode,
   lastSavedKnowledgeId,
+  aiModeEnabled,
+  isRetryingDraft,
   onSubmitTicket,
   onUpdateReviewedResponse,
   onApproveResponse,
@@ -316,6 +322,8 @@ export function TicketWorkspace({
   onSetCustomSecondText,
   onSwitchToSingle,
   onSwitchToBulk,
+  onDiscardTicket,
+  onRetryAIDraft,
 }: TicketWorkspaceProps) {
   const topMatch = similarKnowledge.length > 0 ? similarKnowledge[0] : null;
   const extractedFields = aiAnalysis?.extractedFields;
@@ -335,6 +343,10 @@ export function TicketWorkspace({
         reuseItem
       )
     : null;
+
+  const canDiscard = ticketPhase !== "idle" && currentStep < 8;
+  const hasFallback = !!suggestedResponse?.fallbackNotice && suggestedResponse.source !== "ai_advisory";
+  const showRetryButton = hasFallback && aiModeEnabled && (currentStep === 4 || currentStep === 5);
 
   const card = `rounded-2xl border ${darkMode ? "bg-[#1a2b3c] border-[#2d3f52]" : "bg-white border-slate-200"}`;
   const headingCls = `font-bold ${darkMode ? "text-white" : "text-[#111827]"}`;
@@ -409,6 +421,15 @@ export function TicketWorkspace({
                 <div className={`rounded-xl p-3 text-sm leading-6 ${darkMode ? "bg-[#111827] text-slate-300" : "bg-slate-50 text-[#111827]"}`}>
                   {selectedTicket?.description ?? selectedTicket?.subject}
                 </div>
+                {canDiscard && (
+                  <button
+                    type="button"
+                    onClick={onDiscardTicket}
+                    className={`mt-3 text-xs font-medium transition-colors ${darkMode ? "text-slate-500 hover:text-red-400" : "text-slate-400 hover:text-red-600"}`}
+                  >
+                    Discard ticket
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -488,9 +509,13 @@ export function TicketWorkspace({
                 placeholderText={suggestedResponse?.draftResponse}
                 sourceLabel={draftGroundingLabel(suggestedResponse)}
                 fallbackNotice={suggestedResponse?.fallbackNotice}
+                fallbackTechnicalDetails={suggestedResponse?.fallbackTechnicalDetails}
                 deterministicDraft={suggestedResponse?.deterministicDraft}
                 isAIDraft={suggestedResponse?.source === "ai_advisory"}
                 isNoTemplate={suggestedResponse?.source === "no_template"}
+                showRetryButton={showRetryButton}
+                isRetrying={isRetryingDraft}
+                onRetryAIDraft={onRetryAIDraft}
               />
               {suggestedResponse.confidenceNote && (
                 <p className={`mt-3 text-xs ${darkMode ? "text-slate-500" : "text-slate-400"}`}>{suggestedResponse.confidenceNote}</p>
@@ -711,6 +736,7 @@ export function TicketWorkspace({
                 ticket={selectedTicket}
                 isUncategorized={aiAnalysis?.category === "Uncategorized" && !topMatch}
                 response={suggestedResponse}
+                fallbackTechnicalDetails={suggestedResponse?.fallbackTechnicalDetails}
               />
             </div>
           )}

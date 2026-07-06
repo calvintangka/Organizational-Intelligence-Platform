@@ -160,7 +160,7 @@ export function searchTicketRecords(
     .reverse();
 }
 
-export type CaseFilterChip = "all" | "heavily_edited" | "cold_start" | "uncategorized" | "rejected";
+export type CaseFilterChip = "all" | "heavily_edited" | "cold_start" | "uncategorized" | "rejected" | "discarded";
 
 export function filterTicketRecords(
   records: TicketRecord[],
@@ -182,6 +182,8 @@ export function filterTicketRecords(
       );
     case "rejected":
       return records.filter((r) => r.status === "rejected");
+    case "discarded":
+      return records.filter((r) => r.status === "discarded");
     default:
       return records;
   }

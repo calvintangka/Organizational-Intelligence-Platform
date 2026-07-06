@@ -1,10 +1,10 @@
 # Current Status
 
-This file is the fastest accurate snapshot of the prototype as of 2026-07-05.
+This file is the fastest accurate snapshot of the prototype as of 2026-07-06.
 
 ## What Changed Most Recently
 
-Five new starter knowledge packs were added and validated through the existing pack pipeline. The Knowledge view can now preview every bundled pack directly, and `shipment-issues-v1` was browser-verified end to end in FastDrop, including fallback-category warnings and two distinct lesson matches.
+Three UX gaps were fixed for the AI-fallback failure scenario: (1) a "Discard ticket" action is now available before reflection commit — it marks the ticket as discarded, preserves the record in Cases, and creates no knowledge artifacts; (2) a "Retry AI draft" button appears in human review when the AI fallback occurred and AI mode is enabled; (3) raw HTTP error diagnostics (proxy paths, JSON blobs, status codes) no longer render in user-facing UI text — they are replaced with clean human messages and preserved behind a collapsible "Technical details" disclosure.
 
 ## What Works Right Now
 
@@ -41,6 +41,15 @@ Five new starter knowledge packs were added and validated through the existing p
 - Tone of voice is wired, not decorative
   `OrganizationProfile.customerTone` already persisted through the Organization view and deterministic drafting. AI drafting now also uses explicit per-tone prompt instructions instead of relying on profile metadata alone.
 
+- Discard ticket before reflection commit
+  A "Discard ticket" action is available while the ticket status is open or in_review. It marks the record as discarded, preserves it in Cases (records are never dropped), and creates no knowledge candidates, validation records, or memory changes. The action disappears after a reflection commit.
+
+- Retry AI draft after fallback
+  When the AI advisory call fails and AI mode is enabled, a "Retry AI draft" button appears in the human review section. It re-runs only the draft advisory call (classification and memory match stand). The button is disabled while in flight.
+
+- Clean AI error display
+  Raw HTTP diagnostics never render in user-facing UI. The fallback notice shows "AI assistant unavailable — showing standard draft instead." with a collapsible "Technical details" disclosure for debugging.
+
 - LM Studio proxy and advisory flow
   Browser AI calls route through `app/api/ai/chat/route.ts`, with diagnostics, timeout handling, and deterministic fallback behavior.
 
@@ -65,6 +74,7 @@ Five new starter knowledge packs were added and validated through the existing p
 
 ## Known Open Items
 
+- End-to-end retry-then-success verification (toggle LM Studio mid-session) remains open.
 - Verify the pipeline stall fix for unclassified yet relevant queries end-to-end.
 - Run the F-04 live regression test with Gemma enabled.
 - Complete live verification for sender-name extraction, tone-change observability, and deterministic fallback behavior with LM Studio toggled on/off.

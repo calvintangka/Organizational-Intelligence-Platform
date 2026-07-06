@@ -23,6 +23,7 @@ export interface SuggestedResponse {
   draftMode?: DraftGroundingMode;
   groundingLabel?: string;
   fallbackNotice?: string;
+  fallbackTechnicalDetails?: string;
   /** Raw validated template used as the grounding input for the AI-personalized draft.
    *  Present only when source === "ai_advisory" so human review can compare both. */
   deterministicDraft?: string;
