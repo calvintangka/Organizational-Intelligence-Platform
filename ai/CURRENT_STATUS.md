@@ -1,10 +1,10 @@
 # Current Status
 
-This file is the fastest accurate snapshot of the prototype as of 2026-07-06.
+This file is the fastest accurate snapshot of the prototype as of 2026-07-07.
 
 ## What Changed Most Recently
 
-Three UX gaps were fixed for the AI-fallback failure scenario: (1) a "Discard ticket" action is now available before reflection commit — it marks the ticket as discarded, preserves the record in Cases, and creates no knowledge artifacts; (2) a "Retry AI draft" button appears in human review when the AI fallback occurred and AI mode is enabled; (3) raw HTTP error diagnostics (proxy paths, JSON blobs, status codes) no longer render in user-facing UI text — they are replaced with clean human messages and preserved behind a collapsible "Technical details" disclosure.
+Five pre-demo fixes from E2E_AUDIT_REPORT.md were completed: (F-1) "Resume in workspace" button on in-review cases in Cases view, restoring the pipeline at Human Review; (F-2) AI draft greeting now uses extracted sender name ("Hello Sarah Johnson,") with a deterministic safety net; (F-3) bulk upload now routes through LM Studio when available — root cause was truncated JSON from insufficient maxTokens; (F-4) retry AI draft button broadened to show in both cold-start and reuse paths; (F-7) ticket reference appended to AI drafts via prompt instruction and post-processing guard.
 
 ## What Works Right Now
 
@@ -41,11 +41,23 @@ Three UX gaps were fixed for the AI-fallback failure scenario: (1) a "Discard ti
 - Tone of voice is wired, not decorative
   `OrganizationProfile.customerTone` already persisted through the Organization view and deterministic drafting. AI drafting now also uses explicit per-tone prompt instructions instead of relying on profile metadata alone.
 
+- Resume in-progress ticket from Cases (F-1)
+  "Resume in workspace" button on the case detail panel for in_review tickets. Restores the pipeline at Human Review with stored classification, memory match, and deterministic draft. Warns before clobbering a different in-progress workspace. Button absent on resolved/rejected/discarded cases.
+
+- Personalized AI draft greeting (F-2)
+  When sender name is extracted (AI or deterministic), the AI draft greeting uses the name ("Hello Sarah Johnson,"). A deterministic safety net substitutes the name if the AI drops it.
+
+- Bulk upload routes through LLM (F-3)
+  Bulk analysis now uses LM Studio when available. The previous silent fallback was caused by insufficient maxTokens for gemma-4-e4b's verbose JSON. Majority-failure threshold prevents single bad responses from flipping the whole run to deterministic.
+
 - Discard ticket before reflection commit
   A "Discard ticket" action is available while the ticket status is open or in_review. It marks the record as discarded, preserves it in Cases (records are never dropped), and creates no knowledge candidates, validation records, or memory changes. The action disappears after a reflection commit.
 
-- Retry AI draft after fallback
-  When the AI advisory call fails and AI mode is enabled, a "Retry AI draft" button appears in the human review section. It re-runs only the draft advisory call (classification and memory match stand). The button is disabled while in flight.
+- Retry AI draft after fallback (F-4)
+  When AI mode is enabled and the draft source is not ai_advisory, a "Retry AI draft" button appears in the human review section in both cold-start and reuse paths. It re-runs only the draft advisory call (classification and memory match stand). The button is disabled while in flight.
+
+- Ticket reference in AI drafts (F-7)
+  Every AI-generated draft includes the ticket reference (MT-YYYYMMDD-NNNN) in the closing via prompt instruction and a post-processing guard. Deterministic path already had this.
 
 - Clean AI error display
   Raw HTTP diagnostics never render in user-facing UI. The fallback notice shows "AI assistant unavailable — showing standard draft instead." with a collapsible "Technical details" disclosure for debugging.
@@ -74,13 +86,17 @@ Three UX gaps were fixed for the AI-fallback failure scenario: (1) a "Discard ti
 
 ## Known Open Items
 
-- End-to-end retry-then-success verification (toggle LM Studio mid-session) remains open.
+- F-3 live bulk LLM path test: upload a 15-query file with LM Studio running to confirm AI-assisted clustering. Code fix verified; live test deferred.
+- F-4 live toggle test: stop LM Studio → submit ticket → see fallback → start LM Studio → click Retry → confirm AI draft arrives. Code path verified; live test deferred.
+- F-5 (bulk ticket ID chips per query) deferred from audit.
+- F-6 (sub-issue enumeration in UI) deferred from audit.
+- F-8 (discard flow manual check) — button visible, confirm dialog not exercised by audit driver.
+- F-9 (memory network overlay click) — affordance visible but expand behavior not verified.
+- Auto-resolution boundary test never live-verified (trust threshold 80 not reached in test sessions).
 - Verify the pipeline stall fix for unclassified yet relevant queries end-to-end.
 - Run the F-04 live regression test with Gemma enabled.
-- Complete live verification for sender-name extraction, tone-change observability, and deterministic fallback behavior with LM Studio toggled on/off.
 - Calibrate AI timeout behavior under real Gemma latency rather than the current fixed 30000 ms assumption.
 - Add automated regression coverage; the repo still relies on manual verification and build checks.
-- The bulk-upload IDs live test remains open from the previous session.
 - Move beyond client-side persistence when the prototype leaves the demo environment.
 
 ## What Is Intentionally Simplified

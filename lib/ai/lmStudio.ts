@@ -37,6 +37,11 @@ interface ChatCompletionPayload {
 
 interface ChatCompletionOptions {
   maxTokens?: number;
+  /**
+   * F-3: per-call timeout override for batched callers like the bulk analyzer.
+   * Capped at MAX_AI_TIMEOUT_MS. Defaults to config.timeoutMs.
+   */
+  timeoutMs?: number;
 }
 
 const MAX_AI_TIMEOUT_MS = 120000;
@@ -102,7 +107,8 @@ async function callChatCompletion<T>(
 ): Promise<AIProviderResult<T>> {
   const startedAt = Date.now();
   const controller = new AbortController();
-  const timeoutMs = Math.max(5000, Math.min(config.timeoutMs, MAX_AI_TIMEOUT_MS));
+  const requestedTimeout = options.timeoutMs ?? config.timeoutMs;
+  const timeoutMs = Math.max(5000, Math.min(requestedTimeout, MAX_AI_TIMEOUT_MS));
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const endpoint =
     typeof window === "undefined"
@@ -298,7 +304,17 @@ export function createLMStudioProvider(config: AIConfig): AIProvider {
       };
     },
     async suggestCanonicalProblem(input: CanonicalProblemInput) {
-      const result = await callChatCompletion<Record<string, unknown>>(config, buildCanonicalProblemPrompt(input));
+      // F-3: bulk clusters rely on this call. Bumped max_tokens from the 180
+      // default so gemma-style verbose JSON does not truncate before the model
+      // emits the closing brace (which previously flipped the analysis mode
+      // to "deterministic_fallback" even when LM Studio was reachable).
+      // Also uses a longer timeout because bulk analysis happens in batched
+      // context where the user has already accepted waiting for the run.
+      const result = await callChatCompletion<Record<string, unknown>>(
+        config,
+        buildCanonicalProblemPrompt(input),
+        { maxTokens: 400, timeoutMs: 90000 }
+      );
       if (!result.ok || !result.data) return mapFailure<AICanonicalProblemSuggestion>(result);
       return {
         ...result,
@@ -354,7 +370,15 @@ export function createLMStudioProvider(config: AIConfig): AIProvider {
       };
     },
     async discriminateMatch(input: MatchDiscriminationInput) {
-      const result = await callChatCompletion<Record<string, unknown>>(config, buildMatchDiscriminationPrompt(input));
+      // F-3: bulk path uses this per-query; the previous default of 180 tokens
+      // was too tight for gemma-4-e4b's verbose JSON. Bumped to 400 and
+      // accept a longer timeout so a single batched call can complete even
+      // when LM Studio is responding slowly.
+      const result = await callChatCompletion<Record<string, unknown>>(
+        config,
+        buildMatchDiscriminationPrompt(input),
+        { maxTokens: 400, timeoutMs: 90000 }
+      );
       if (!result.ok || !result.data) return mapFailure<MatchDiscriminationResult>(result);
       const confidence = result.data.confidence === "high" || result.data.confidence === "low"
         ? result.data.confidence

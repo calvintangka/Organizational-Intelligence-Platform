@@ -285,6 +285,94 @@ function emptyExtractedTicketFields(): ExtractedTicketFields {
   };
 }
 
+/**
+ * F-1: Best-effort sender-name extraction for the resume path. The original
+ * AI analysis is not re-run on resume, but the deterministic extractor in
+ * `lib/analyzer.ts` only finds names after a closing salutation ("Regards,
+ * Sarah"). Real customer messages often start with "Hi, my name is Sarah
+ * Johnson" or similar. This helper extends coverage so the F-2 greeting fix
+ * still works after a resume. Returns null when nothing matches.
+ */
+function extractSenderNameForResume(rawMessage: string): string | null {
+  const patterns: RegExp[] = [
+    /\bmy name is\s+([A-Z][A-Za-z .'-]{1,80}?)(?:\s+from|\.|,|\n|$)/,
+    /\bthis is\s+([A-Z][A-Za-z .'-]{1,80}?)(?:\s+from|\.|,|\n|$)/,
+    /\bI'?m\s+([A-Z][A-Za-z .'-]{1,80}?)(?:\s+from|\.|,|\n|$)/,
+    /^[ \t]*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})[ \t]*$/
+  ];
+  for (const pattern of patterns) {
+    const match = rawMessage.match(pattern);
+    if (match && match[1]) {
+      const candidate = match[1].trim();
+      if (candidate.length >= 3 && !/@/.test(candidate)) {
+        return candidate;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * F-7: Deterministic post-processing guard so every customer-facing draft,
+ * from every code path, ends with the same ticket reference line. Mirrors the
+ * !draft.includes() guard in `lib/drafting.ts` so the LLM cannot forget it.
+ * Returns the draft unchanged when there is no public-facing ticket reference
+ * to attach (e.g., during analysis-only flows before id assignment).
+ */
+function appendTicketReference(draft: string, ticketRefId: string | undefined): string {
+  if (!ticketRefId) return draft;
+  if (draft.includes(ticketRefId)) return draft;
+  return `${draft.trimEnd()}\n\nYour ticket reference is ${ticketRefId}.`;
+}
+
+/**
+ * F-2: Personalize the greeting line when a sender name was extracted but the
+ * AI used a bare "Hello," / "Hi," / "Dear," opener. The prompt already
+ * instructs the model on this, but observed cold-start drafts have dropped the
+ * name. We substitute the deterministic greeting instead of trusting the LLM.
+ *
+ * Tone rules mirror `preferredGreeting()` in `lib/ai/prompts.ts` so this
+ * safety net is consistent with the prompt's intent.
+ */
+function personalizeAIDraftGreeting(
+  draft: string,
+  senderName: string | null,
+  tone: OrganizationProfile["customerTone"]
+): string {
+  if (!senderName) return draft;
+  const firstName = senderName.trim().split(/\s+/)[0] ?? senderName.trim();
+  // If the AI already used the name in the opening line, don't double it.
+  const firstLine = draft.split(/\n/)[0] ?? "";
+  if (firstLine.includes(senderName) || firstLine.includes(firstName)) return draft;
+  let personalized: string;
+  switch (tone) {
+    case "friendly":
+    case "empathetic":
+      personalized = `Hi ${firstName},`;
+      break;
+    case "formal":
+      personalized = `Dear ${senderName},`;
+      break;
+    case "professional":
+    default:
+      personalized = `Hello ${senderName},`;
+      break;
+  }
+  // Match the first line if it opens with a bare greeting (no name).
+  // Patterns observed in practice: "Hello,", "Hi,", "Dear,", "Hi there,"
+  // followed by any whitespace and the rest of the draft.
+  const greetingPattern = /^(Hello|Hi|Dear)\s*(?:there\s*)?,\s*/i;
+  if (greetingPattern.test(draft)) {
+    return draft.replace(greetingPattern, `${personalized} `);
+  }
+  // Pattern "Hello." with no comma (some prompt drift): "Hello. We..."
+  const greetingPatternNoComma = /^(Hello|Hi|Dear)\s+(?=[A-Z])/;
+  if (greetingPatternNoComma.test(draft)) {
+    return draft.replace(greetingPatternNoComma, `${personalized} `);
+  }
+  return draft;
+}
+
 function mergeExtractedTicketFields(
   base: ExtractedTicketFields,
   advisoryFields?: ExtractedTicketFields
@@ -1033,6 +1121,145 @@ export default function Home() {
     setCurrentStep(0);
   }
 
+  /**
+   * F-1: Resume a half-completed ticket from the Cases view.
+   *
+   * The persisted TicketRecord stores everything required to restore the
+   * pipeline at the safe "Human Review" step: classification, memory match,
+   * draft source, and the edited reviewed text (if any). We reconstruct the
+   * runtime Ticket, aiAnalysis, and re-run the deterministic draft for
+   * comparison; the AI advisory draft is not persisted, so the user lands at
+   * step 5 (Human Review) with the deterministic draft in the editor.
+   *
+   * Does NOT re-run classification or memory retrieval — the stored results
+   * stand. Only the safe display layer is rebuilt.
+   *
+   * Refuses to resume resolved / rejected / discarded / open cases. Warns
+   * before clobbering a different in-progress workspace.
+   */
+  function resumeTicketFromRecord(record: TicketRecord) {
+    // Only in-review tickets can be resumed.
+    if (record.status !== "in_review") return;
+
+    // Warn before clobbering a different in-progress ticket.
+    const otherInProgress =
+      activeTicketRecord &&
+      activeTicketRecord.ticketId !== record.ticketId &&
+      currentStep > 0 &&
+      currentStep < 8 &&
+      activeTicketRecord.status !== "discarded" &&
+      activeTicketRecord.status !== "rejected";
+    if (otherInProgress) {
+      const ok = window.confirm(
+        `You have another ticket in progress (${activeTicketRecord!.ticketId}). Switch to ${record.ticketId} anyway?`
+      );
+      if (!ok) return;
+    }
+
+    const subject = record.subject ?? record.rawMessage.slice(0, 80);
+    // F-1: extract sender name from the persisted message so the F-2 greeting
+    // safety net has something real to substitute.
+    const extractedName = extractSenderNameForResume(record.rawMessage);
+    const reconstructedTicket: Ticket = {
+      id: record.ticketId,
+      ticketId: record.ticketId,
+      customerName: extractedName ?? "Customer",
+      subject,
+      description: record.rawMessage,
+      category: record.classification?.category ?? "General",
+      status: "drafted",
+      createdAt: record.createdAt
+    };
+
+    // Reconstruct the Understanding from persisted classification. Sender
+    // name extraction is preserved when present so the F-2 greeting fix
+    // remains effective after a resume.
+    const reconstructedUnderstanding: Understanding = {
+      ticketId: record.ticketId,
+      summary: record.classification?.canonicalProblem ?? record.subject ?? record.rawMessage.slice(0, 80),
+      coreProblem: record.classification?.canonicalProblem ?? "Unknown",
+      category: record.classification?.category ?? "General",
+      intent: record.classification?.intent ?? "unspecified",
+      urgency: "medium",
+      tags: [],
+      detectedSignals: [],
+      extractedFields: {
+        ...emptyExtractedTicketFields(),
+        senderName: extractedName
+      }
+    };
+
+    // Re-derive similarKnowledge from the persisted knowledgeId when present.
+    const restoredKnowledge = record.memoryMatch?.knowledgeId
+      ? knowledgeItems.find((k) => k.id === record.memoryMatch!.knowledgeId) ?? null
+      : null;
+    const reconstructedSimilarKnowledge: KnowledgeMatch[] = restoredKnowledge
+      ? [
+          {
+            item: restoredKnowledge,
+            matchScore: 80,
+            matchReason: "Restored from case record"
+          }
+        ]
+      : [];
+
+    const draft = draftResponse(
+      reconstructedTicket,
+      reconstructedUnderstanding,
+      reconstructedSimilarKnowledge[0] ?? null,
+      organizationProfile,
+      knowledgeItems.length === 0
+    );
+
+    const reconstructedResponse: SuggestedResponse = {
+      ticketId: record.ticketId,
+      draftResponse: draft.draftResponse,
+      basedOnKnowledgeIds: draft.basedOnKnowledgeIds,
+      confidenceNote: draft.confidenceNote,
+      source: draft.source,
+      draftMode: record.draftSource === "ai_advisory" ? "memory_grounded" : record.memoryMatch?.matchType === "lesson" ? "lesson_grounded" : "memory_grounded",
+      groundingLabel: restoredKnowledge?.title ?? "organizational memory"
+    };
+
+    const reviewedText =
+      record.resolution.finalResponse && record.resolution.finalResponse.trim().length > 0
+        ? record.resolution.finalResponse
+        : draft.draftResponse;
+
+    setActiveTicketRecord(record);
+    setSelectedTicket(reconstructedTicket);
+    setAiAnalysis(understandingToAnalysis(reconstructedUnderstanding));
+    setSimilarKnowledge(reconstructedSimilarKnowledge);
+    setSuggestedResponse(reconstructedResponse);
+    setReviewedResponse(reviewedText);
+    setObservation(null);
+    setReasoning(null);
+    setConfidence(null);
+    setBusinessRelevance(null);
+    setDomainClassification(null);
+    setAiAdvisory(null);
+    setLastDraftUsedAI(false);
+    setLastApprovedSourceTicketId(null);
+    setReusedKnowledgeSourceTicketId(null);
+    setReuseMatchId(null);
+    setReuseDecision(null);
+    setReuseResponseText("");
+    setReuseResolvedMode(null);
+    setLastTrustDelta(0);
+    setRunCount(0);
+    setReflectionDecision(null);
+    setCustomSecondText("");
+    setActiveView("tickets");
+    setTicketIntakeMode("single");
+    setCurrentStep(5); // Human Review
+    addLogEntries([
+      createLogEntry(
+        "Ticket resumed from Cases",
+        `${record.ticketId} restored to Human Review with stored classification and edited text`
+      )
+    ]);
+  }
+
   async function retryAIDraft() {
     if (!selectedTicket || !aiAnalysis || isRetryingDraft) return;
     if (aiAdapter.config.mode === "disabled") return;
@@ -1576,12 +1803,28 @@ export default function Home() {
     const draftRejectionReason = getAIDraftRejectionReason(understanding, draftResult, draftSafetyContext);
 
     if (draftRejectionReason === null && isUsableAIDraft(understanding, draftResult, draftSafetyContext)) {
+      // F-7: deterministic post-processing guard so every AI grounding mode
+      // (lesson_grounded / memory_grounded / cold_start) ends with the same
+      // ticket reference line. Mirrors the !draft.includes() guard in
+      // lib/drafting.ts so the LLM cannot forget it.
+      // F-2: deterministic greeting safety net — substitute personalized
+      // greeting if the AI used a bare "Hello," / "Hi," despite the prompt
+      // instruction. Sender name is sourced from understanding.extractedFields,
+      // which is populated deterministically and (when available) by the AI
+      // analysis call.
+      const senderName = understanding.extractedFields?.senderName ?? null;
+      const greeted = personalizeAIDraftGreeting(
+        draftResult.data!.draftResponse,
+        senderName,
+        organizationProfile.customerTone
+      );
+      const aiDraft = appendTicketReference(greeted, ticket.ticketId);
       return {
         advisory: nextAdvisory,
         usedAIDraft: true,
         response: {
           ticketId: ticket.id,
-          draftResponse: draftResult.data!.draftResponse,
+          draftResponse: aiDraft,
           basedOnKnowledgeIds: matchedKnowledge ? [matchedKnowledge.item.id] : [],
           confidenceNote: `${draftModeLabel(draftMode, groundingLabel)} (${draftResult.data!.confidence}% confidence). Human review is required before sending or learning.`,
           source: "ai_advisory",
@@ -2418,8 +2661,8 @@ export default function Home() {
     const effectiveTopMatch = topMatch
       ? await requestMatchDiscrimination(ticket, topMatch, und)
       : null;
-    const draft = draftResponse(ticket, und, effectiveTopMatch, organizationProfile, knowledgeItems.length === 0);
-    const aiDraft = await requestDraftAdvisory(ticket, und, canonicalProblem.title, effectiveTopMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", advisory);
+    const draft = draftResponse(ticket, enrichedUnderstanding, effectiveTopMatch, organizationProfile, knowledgeItems.length === 0);
+    const aiDraft = await requestDraftAdvisory(ticket, enrichedUnderstanding, canonicalProblem.title, effectiveTopMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", advisory);
     const response = aiDraft.response;
 
     // Update record with draft source and move to in_review
@@ -2587,6 +2830,7 @@ export default function Home() {
                 setActiveView("knowledge");
               }}
               onNavigate={setActiveView}
+              onResumeTicket={resumeTicketFromRecord}
             />
           )}
 

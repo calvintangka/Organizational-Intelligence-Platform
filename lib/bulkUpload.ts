@@ -523,6 +523,11 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
   let analysisMode: BulkAnalysisMode = aiAdapter.config.mode === "disabled" ? "deterministic" : "ai_assisted";
   let usedAIAssistance = false;
   let fallbackUsed = false;
+  // F-3: track AI call attempts so a single bad response no longer flips the
+  // mode to "deterministic_fallback". A majority-failure threshold is applied
+  // at the end of the loop.
+  let aiCallAttempts = 0;
+  let aiCallFailures = 0;
   const analyzedQueries: Array<BulkAnalyzedQuery & { relevanceStatus: "relevant" | "uncertain" | "out_of_scope" }> = [];
 
   for (let index = 0; index < entries.length; index += 1) {
@@ -562,7 +567,12 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
           reasoningParts.push(`AI confirmed the match: ${result.data.reasoning}`);
         }
       } else {
+        // F-3: a single bad response no longer flips the mode. Track per-call
+        // outcomes and decide after the loop whether enough calls failed to
+        // truly be a "deterministic_fallback" vs "mostly AI-assisted".
         fallbackUsed = true;
+        aiCallAttempts += 1;
+        aiCallFailures += 1;
       }
     }
 
@@ -644,6 +654,7 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
           category: representative.canonicalProblem.category
         }
       });
+      aiCallAttempts += 1;
       if (advisory.ok && advisory.data) {
         usedAIAssistance = true;
         if (advisory.data.rationale?.trim()) {
@@ -651,6 +662,7 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
         }
       } else {
         fallbackUsed = true;
+        aiCallFailures += 1;
       }
     }
 
@@ -693,7 +705,11 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
     resolution: item.entry.resolution
   }));
 
-  if (fallbackUsed) {
+  // F-3: a few failed LLM responses should not flip the whole run into
+  // "deterministic_fallback". Require a majority of AI attempts to have
+  // failed before downgrading the analysis mode.
+  const failureRate = aiCallAttempts > 0 ? aiCallFailures / aiCallAttempts : 0;
+  if (fallbackUsed && aiCallAttempts > 0 && failureRate >= 0.5) {
     analysisMode = "deterministic_fallback";
   } else if (!usedAIAssistance) {
     analysisMode = "deterministic";

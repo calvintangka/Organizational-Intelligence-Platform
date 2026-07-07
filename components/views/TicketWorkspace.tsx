@@ -345,8 +345,18 @@ export function TicketWorkspace({
     : null;
 
   const canDiscard = ticketPhase !== "idle" && currentStep < 8;
-  const hasFallback = !!suggestedResponse?.fallbackNotice && suggestedResponse.source !== "ai_advisory";
-  const showRetryButton = hasFallback && aiModeEnabled && (currentStep === 4 || currentStep === 5);
+  // F-4: Always allow re-rolling the AI draft while at human review when AI
+  // mode is on. The button appears in both cold-start and reuse paths. The
+  // button is still gated on AI mode being enabled and being at the draft/review
+  // step; the `hasFallback` indicator only controls the visible fallback notice
+  // styling.
+  const hasFallback =
+    !!suggestedResponse?.fallbackNotice &&
+    suggestedResponse.source !== "ai_advisory";
+  const showRetryButton =
+    aiModeEnabled &&
+    (currentStep === 4 || currentStep === 5) &&
+    (hasFallback || suggestedResponse?.source !== "ai_advisory");
 
   const card = `rounded-2xl border ${darkMode ? "bg-[#1a2b3c] border-[#2d3f52]" : "bg-white border-slate-200"}`;
   const headingCls = `font-bold ${darkMode ? "text-white" : "text-[#111827]"}`;

@@ -15,6 +15,7 @@ interface CaseLookupViewProps {
   darkMode: boolean;
   onNavigateToKnowledge: (knowledgeId: string) => void;
   onNavigate: (view: ActiveView) => void;
+  onResumeTicket?: (record: TicketRecord) => void;
 }
 
 const FILTER_CHIPS: { id: CaseFilterChip; label: string }[] = [
@@ -72,6 +73,7 @@ export function CaseLookupView({
   knowledgeItems,
   darkMode,
   onNavigateToKnowledge,
+  onResumeTicket,
 }: CaseLookupViewProps) {
   const [query, setQuery] = useState("");
   const [activeChip, setActiveChip] = useState<CaseFilterChip>("all");
@@ -105,6 +107,7 @@ export function CaseLookupView({
         headingCls={headingCls}
         mutedCls={mutedCls}
         subCard={subCard}
+        onResume={onResumeTicket ? () => onResumeTicket(selectedCase) : undefined}
       />
     );
   }
@@ -278,6 +281,7 @@ interface CaseDetailViewProps {
   headingCls: string;
   mutedCls: string;
   subCard: string;
+  onResume?: () => void;
 }
 
 function CaseDetailView({
@@ -290,6 +294,7 @@ function CaseDetailView({
   headingCls,
   mutedCls,
   subCard,
+  onResume,
 }: CaseDetailViewProps) {
   const sectionHeading = `text-xs font-bold uppercase tracking-wide ${
     darkMode ? "text-slate-400" : "text-slate-500"
@@ -325,7 +330,7 @@ function CaseDetailView({
 
       {/* Header */}
       <div className={`${card} p-5`}>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <span
             className={`font-mono text-lg font-bold ${
               darkMode ? "text-blue-300" : "text-[#2563EB]"
@@ -341,6 +346,23 @@ function CaseDetailView({
           >
             {record.status.replace("_", " ")}
           </span>
+          {/* F-1: Resume in workspace button. Only available for in_review
+              tickets; resolved / rejected / discarded / open records do not
+              expose it because there is nothing half-done to resume. */}
+          {record.status === "in_review" && onResume && (
+            <button
+              type="button"
+              onClick={onResume}
+              data-testid="case-resume-button"
+              className={`ml-auto rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors ${
+                darkMode
+                  ? "bg-blue-600 hover:bg-blue-500"
+                  : "bg-[#2563EB] hover:bg-blue-700"
+              }`}
+            >
+              Resume in workspace
+            </button>
+          )}
         </div>
         <p className={`mt-1 text-xs ${mutedCls}`}>
           Created {formatDate(record.createdAt)}

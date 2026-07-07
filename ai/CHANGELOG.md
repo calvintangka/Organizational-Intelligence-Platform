@@ -13,6 +13,20 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-07] Pre-demo consolidated fixes — F-1, F-2, F-3, F-4, F-7
+**Layer:** coding
+**Task/Prompt:** oip_consolidated_predemo_fixes_prompt.md (completed after interrupted run)
+**Files changed:** `app/page.tsx`, `components/views/CaseLookupView.tsx`, `components/views/TicketWorkspace.tsx`, `lib/ai/lmStudio.ts`, `lib/bulkUpload.ts`
+**What changed:**
+- F-1: "Resume in workspace" button on in_review cases in Cases detail view. `resumeTicketFromRecord()` restores pipeline state (classification, memory match, draft) at Human Review step. Warns before clobbering a different in-progress ticket. Button absent on resolved/rejected/discarded/open cases.
+- F-2: Extracted sender name used in AI draft greeting. Two-layer fix: (a) prompt already instructs greeting via `preferredGreeting()` with senderName; (b) added `personalizeAIDraftGreeting()` deterministic safety net that substitutes the name when the AI drops it. Fixed a bug where the enriched understanding (with AI-extracted senderName) was not passed to `requestDraftAdvisory()` — the un-enriched deterministic understanding was used instead. Org name was already in signature via `lib/drafting.ts`.
+- F-3: Bulk upload routes through LLM when available. Root cause: `suggestCanonicalProblem()` and `discriminateMatch()` had `maxTokens: 180` — too tight for gemma-4-e4b's verbose JSON output. Truncated JSON → parse failure → deterministic fallback even when LM Studio was reachable. Fix: bumped to `maxTokens: 400, timeoutMs: 90000`. Also changed `analyzeBulkEntries()` to use majority-failure threshold (≥50% of AI calls must fail) before downgrading to `deterministic_fallback`.
+- F-4: Retry AI draft button visible after fallback in both cold-start and reuse paths. Broadened `showRetryButton` condition to fire when AI mode is enabled and source is not `ai_advisory`, not only when `hasFallback` is set.
+- F-7: Ticket reference appended to AI-generated drafts. Prompt instruction in `lib/ai/prompts.ts` already asks the model to include it. Added `appendTicketReference()` post-processing guard in `app/page.tsx` that appends "Your ticket reference is MT-..." if the AI omitted it. Deterministic path already had the guard in `lib/drafting.ts`.
+**Boundaries touched:** none — trust engine, validation pipeline, and F-04 gate untouched
+**Verification:** browser-verified per E2E_AUDIT_REPORT.md remediation notes. Full happy-path regression: submit → classify → memory → draft → approve → reflect → validate & commit → 1 ValidationRecord + 1 MemoryChangeRecord confirmed in localStorage.
+**Open items:** F-3 live bulk LLM path test deferred. F-4 live toggle test (stop/start LM Studio) deferred. F-5 (bulk ticket ID chips), F-6 (sub-issue UI), F-8–F-10 deferred.
+
 ## [2026-07-06] Discard ticket, retry AI draft, and clean error display
 **Layer:** coding
 **Task/Prompt:** "Fix three UX gaps discovered when LM Studio was off: no way to discard an unwanted ticket, no way to retry the AI draft, and raw HTTP error JSON dumped into user-facing UI."
