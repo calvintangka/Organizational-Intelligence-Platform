@@ -1,0 +1,602 @@
+[
+  {
+    "message": "My tracking number FD-202607120845 hasn't updated for 5 days now. Can someone check what's going on?",
+    "expectedLesson": "Tracking not updating for days",
+    "difficulty": "easy",
+    "senderName": "David Park"
+  },
+  {
+    "message": "Hi, the waybill status for my order has been stuck on 'In Transit' since last Wednesday. Tracking number is FD-202607083321. Is the parcel lost?",
+    "expectedLesson": "Tracking not updating for days",
+    "difficulty": "easy",
+    "senderName": "Priya Venkatesh"
+  },
+  {
+    "message": "Resi saya FD-202607044519 belum berubah sejak tanggal 2. Tracking number not updating at all. Please help.",
+    "expectedLesson": "Tracking not updating for days",
+    "difficulty": "easy",
+    "senderName": "Rina Hartono"
+  },
+  {
+    "message": "The courier status is frozen on my shipment. AWB FD-202607099102. It's been four days with zero movement. What's happening?",
+    "expectedLesson": "Tracking not updating for days",
+    "difficulty": "easy",
+    "senderName": "Marcus Johnson"
+  },
+  {
+    "message": "My waybill number hasn't changed in nearly a week. I keep refreshing and it shows the same scan from June 30. This is really frustrating.",
+    "expectedLesson": "Tracking not updating for days",
+    "difficulty": "easy",
+    "senderName": "Fatima Al-Rashid"
+  },
+  {
+    "message": "I've been checking the shipment status every single day and it's showing the exact same scan entry from last Tuesday. Is there a problem at the sorting hub? Order ref FD-202607061188.",
+    "expectedLesson": "Tracking not updating for days",
+    "difficulty": "medium",
+    "senderName": "Carlos Mendes"
+  },
+  {
+    "message": "Look, I placed this order over a week ago. The last thing I see on the tracking page is that it left some warehouse on July 1st and then... nothing. Radio silence. Can you actually look into this instead of giving me a canned response?",
+    "expectedLesson": "Tracking not updating for days",
+    "difficulty": "medium",
+    "senderName": "Sarah O'Brien"
+  },
+  {
+    "message": "Hi team, just wanted to flag that AWB FD-202607073456 seems to have stalled. The last scan was at the regional distribution center five days ago. Could there be a backlog? Appreciate any info you can share.",
+    "expectedLesson": "Tracking not updating for days",
+    "difficulty": "medium",
+    "senderName": "Hiroshi Tanaka"
+  },
+  {
+    "message": "Every time I check my parcel status it's the same thing — departed from origin facility on July 2nd. That's it. No further scans. Is there a system issue or has my package actually gone missing?",
+    "expectedLesson": "Tracking not updating for days",
+    "difficulty": "medium",
+    "senderName": "Amara Osei"
+  },
+  {
+    "message": "I'm getting increasingly worried. I ordered medication that I need by this weekend, and the delivery progress has shown absolutely no change for the past six days. There's no new information at all since it supposedly left the origin city. What are my options here?",
+    "expectedLesson": "Tracking not updating for days",
+    "difficulty": "hard",
+    "senderName": "Elena Volkov"
+  },
+  {
+    "message": "I have two shipments — one arrived fine, but the other one seems to be in limbo. The app just shows a single line from days ago and nothing since. It's like it vanished after the first scan. FD-202607058877.",
+    "expectedLesson": "Tracking not updating for days",
+    "difficulty": "hard",
+    "senderName": "Mohammed Khalil"
+  },
+  {
+    "message": "Not sure if this is a glitch on your end or what, but my package appears to be sitting somewhere doing nothing. The timeline on the tracking page has had a single entry for almost a week. I need this for a work event on Friday. Is there any way to expedite or at least figure out where it actually is?",
+    "expectedLesson": "Tracking not updating for days",
+    "difficulty": "hard",
+    "senderName": "Ingrid Svensson"
+  },
+  {
+    "message": "My package says delivered but I never got it. Tracking number FD-202607091234. Can you investigate?",
+    "expectedLesson": "Marked delivered but not received",
+    "difficulty": "easy",
+    "senderName": "James Thornton"
+  },
+  {
+    "message": "The delivery status says complete for my order, but there's nothing at my door, my lobby, or with my neighbors. I definitely did not receive this package.",
+    "expectedLesson": "Marked delivered but not received",
+    "difficulty": "easy",
+    "senderName": "Aisha Bello"
+  },
+  {
+    "message": "Hi, my order is marked delivered as of this morning but I've been home all day and nobody came. Never got it. Please check ASAP.",
+    "expectedLesson": "Marked delivered but not received",
+    "difficulty": "easy",
+    "senderName": "Tomasz Kowalski"
+  },
+  {
+    "message": "Resi FD-202607107788 shows delivered but not received. I checked everywhere — nothing. This is a COD order so I definitely would have seen the courier.",
+    "expectedLesson": "Marked delivered but not received",
+    "difficulty": "easy",
+    "senderName": "Dewi Anggraeni"
+  },
+  {
+    "message": "Your system claims my parcel was handed over at 2:14 PM today. I was literally standing in my doorway at that time. Nobody showed up. Something is very wrong here.",
+    "expectedLesson": "Marked delivered but not received",
+    "difficulty": "medium",
+    "senderName": "Lucia Fernandez"
+  },
+  {
+    "message": "So according to your app the shipment has been completed, but I've asked everyone in my household and checked every possible spot around the house. No one has seen any package today or yesterday. AWB FD-202607115599.",
+    "expectedLesson": "Marked delivered but not received",
+    "difficulty": "medium",
+    "senderName": "Kwame Asante"
+  },
+  {
+    "message": "I got a notification saying my order arrived, but when I went downstairs to get it from the building reception, they said no courier came today. I've checked CCTV and there's no delivery van. What's going on?",
+    "expectedLesson": "Marked delivered but not received",
+    "difficulty": "medium",
+    "senderName": "Yuki Nakamura"
+  },
+  {
+    "message": "I got a text this morning congratulating me on a successful delivery. Problem is, I'm currently traveling abroad and my apartment is empty — nobody could have accepted it. I don't understand how this was closed out as delivered.",
+    "expectedLesson": "Marked delivered but not received",
+    "difficulty": "medium",
+    "senderName": "Rafael Gutierrez"
+  },
+  {
+    "message": "I ordered something for my daughter's birthday which is tomorrow. The app says it was delivered yesterday afternoon, but nobody in our building has seen it. I asked the security guard, checked the mailroom, nothing. I'm really panicking here — is there any way to trace where the courier actually left it?",
+    "expectedLesson": "Marked delivered but not received",
+    "difficulty": "hard",
+    "senderName": "Nadia Okonkwo"
+  },
+  {
+    "message": "This is the second time in three months that a shipment through your service has been recorded as completed when I never actually received anything. I'm honestly losing trust. Can you escalate this to a supervisor? FD-202607126644.",
+    "expectedLesson": "Marked delivered but not received",
+    "difficulty": "hard",
+    "senderName": "Andrei Petrov"
+  },
+  {
+    "message": "I specifically took the day off work to be home for this delivery. The status changed to 'completed' around noon but I was sitting by my front door the entire time. No doorbell, no knock, no phone call. I even checked my Ring camera and there's zero footage of anyone approaching. Something is seriously off.",
+    "expectedLesson": "Marked delivered but not received",
+    "difficulty": "hard",
+    "senderName": "Mei-Ling Wu"
+  },
+  {
+    "message": "My package was delivered to the wrong address. AWB FD-202607087712. It went to house number 45 but I live at 54.",
+    "expectedLesson": "Delivered to the wrong address",
+    "difficulty": "easy",
+    "senderName": "Patrick Nkosi"
+  },
+  {
+    "message": "The courier left my parcel at another address. My neighbor three doors down just told me they received a package with my name on it.",
+    "expectedLesson": "Delivered to the wrong address",
+    "difficulty": "easy",
+    "senderName": "Isabella Rossi"
+  },
+  {
+    "message": "Package was sent to my old address even though I updated it before shipment. I moved two months ago. FD-202607099834.",
+    "expectedLesson": "Delivered to the wrong address",
+    "difficulty": "easy",
+    "senderName": "Budi Santoso"
+  },
+  {
+    "message": "Hi, your courier delivered my order to the wrong house number. The tracking shows it was left at Jl. Anggrek No. 12, but my address is Jl. Anggrek No. 21. Can you help recover it?",
+    "expectedLesson": "Delivered to the wrong address",
+    "difficulty": "easy",
+    "senderName": "Siti Rahmawati"
+  },
+  {
+    "message": "Delivered to wrong address. Not my address at all. The photo the courier uploaded shows a gate I've never seen before. FD-202607134421.",
+    "expectedLesson": "Delivered to the wrong address",
+    "difficulty": "easy",
+    "senderName": "Oluwaseun Adeyemi"
+  },
+  {
+    "message": "I just checked the delivery photo and that is definitely not my house. The courier must have mixed up the drop-off location. I live in a completely different part of the neighborhood from where that photo was taken.",
+    "expectedLesson": "Delivered to the wrong address",
+    "difficulty": "medium",
+    "senderName": "Hannah Mueller"
+  },
+  {
+    "message": "I think there was a mix-up with my delivery. The tracking says it was left at an address on Jl. Merpati, but I'm on Jl. Merak. The street names are similar so I bet the driver got confused. Can this be retrieved?",
+    "expectedLesson": "Delivered to the wrong address",
+    "difficulty": "medium",
+    "senderName": "Arief Wicaksono"
+  },
+  {
+    "message": "A stranger just knocked on my door and handed me a package — turns out the courier gave them MY order by mistake. But now I'm wondering if my actual neighbor got one of my other pending orders too. This is the second time a driver has gone to the wrong location for my deliveries.",
+    "expectedLesson": "Delivered to the wrong address",
+    "difficulty": "medium",
+    "senderName": "Grace Kimani"
+  },
+  {
+    "message": "I moved to a new apartment last month and placed an order with the new address. But the confirmation email shows my previous address, and the package has already been dropped off there. I don't have access to that building anymore. What do I do?",
+    "expectedLesson": "Delivered to the wrong address",
+    "difficulty": "hard",
+    "senderName": "Raj Patel"
+  },
+  {
+    "message": "The driver called me asking for directions, I explained exactly how to get here, and somehow the package still ended up at a shop two blocks away. The shop owner is holding it but says he's closing for the holiday tomorrow. Can you send someone to pick it up and redeliver to the correct location before he closes?",
+    "expectedLesson": "Delivered to the wrong address",
+    "difficulty": "hard",
+    "senderName": "Layla Hassan"
+  },
+  {
+    "message": "So I got a notification that my package was delivered, but the GPS pin on the delivery confirmation is pointing to a location about 500 meters from my house. I walked over there and it's a random warung. Nobody there knows anything about a package. I need this resolved today.",
+    "expectedLesson": "Delivered to the wrong address",
+    "difficulty": "hard",
+    "senderName": "Dimas Prasetyo"
+  },
+  {
+    "message": "I had a failed delivery attempt today. Nobody was home. Can I reschedule delivery for tomorrow? FD-202607142288.",
+    "expectedLesson": "Reschedule a failed delivery attempt",
+    "difficulty": "easy",
+    "senderName": "Emily Watson"
+  },
+  {
+    "message": "Missed the courier earlier today. Got an attempted delivery notice on my door. How do I reschedule?",
+    "expectedLesson": "Reschedule a failed delivery attempt",
+    "difficulty": "easy",
+    "senderName": "Ahmad Fauzi"
+  },
+  {
+    "message": "Hi, I got a notification that delivery was attempted but failed because nobody was home. I'd like to reschedule delivery for this Friday please.",
+    "expectedLesson": "Reschedule a failed delivery attempt",
+    "difficulty": "easy",
+    "senderName": "Cynthia Okafor"
+  },
+  {
+    "message": "The courier came while I was at work and couldn't deliver. I need to reschedule this for the weekend. AWB FD-202607156633.",
+    "expectedLesson": "Reschedule a failed delivery attempt",
+    "difficulty": "easy",
+    "senderName": "Miguel Santos"
+  },
+  {
+    "message": "Failed delivery attempt on my package — I missed the courier. Can I pick a different time for redelivery?",
+    "expectedLesson": "Reschedule a failed delivery attempt",
+    "difficulty": "easy",
+    "senderName": "Noor Azizah"
+  },
+  {
+    "message": "I saw the driver pull up on my security camera but by the time I got to the door he was already gone. He didn't even ring the bell. Can you arrange another attempt, preferably in the afternoon when I'm definitely available?",
+    "expectedLesson": "Reschedule a failed delivery attempt",
+    "difficulty": "medium",
+    "senderName": "Daniel Eriksson"
+  },
+  {
+    "message": "Your courier tried to deliver today but I wasn't available. The thing is, I won't be home during weekday mornings for the rest of the week either. Is it possible to request an evening delivery slot or a Saturday drop-off?",
+    "expectedLesson": "Reschedule a failed delivery attempt",
+    "difficulty": "medium",
+    "senderName": "Zainab Ibrahim"
+  },
+  {
+    "message": "I got a slip saying the courier came at 10 AM. I work 9 to 5 so that'll never work. How do I tell your system to try again after 6 PM? This is my third order and the same thing keeps happening.",
+    "expectedLesson": "Reschedule a failed delivery attempt",
+    "difficulty": "medium",
+    "senderName": "Viktor Horvath"
+  },
+  {
+    "message": "I live in a gated community and the courier apparently couldn't get past security because my name wasn't on the visitor list for today. It's not really a failed attempt on my end — I was home the whole time. Can we try again tomorrow? I'll make sure security has the courier's details. FD-202607163311.",
+    "expectedLesson": "Reschedule a failed delivery attempt",
+    "difficulty": "hard",
+    "senderName": "Chioma Eze"
+  },
+  {
+    "message": "The driver marked my delivery as 'recipient unavailable' but I think the real issue is that my apartment buzzer is broken and he couldn't reach me. I've been waiting all day. Is there a way to add my phone number so the next courier calls me directly instead of using the intercom?",
+    "expectedLesson": "Reschedule a failed delivery attempt",
+    "difficulty": "hard",
+    "senderName": "Kenji Watanabe"
+  },
+  {
+    "message": "Third failed attempt and I'm told the package will be returned to sender. I was home for two of those attempts but the courier never actually came to my unit — I think they went to the ground floor office instead of the 7th floor residence. Please don't return it. Can we coordinate so the driver comes to the right floor?",
+    "expectedLesson": "Reschedule a failed delivery attempt",
+    "difficulty": "hard",
+    "senderName": "Maria da Silva"
+  },
+  {
+    "message": "I paid COD to the courier but the system still shows payment pending. Resi FD-202607175544. Please update.",
+    "expectedLesson": "COD collected but system shows payment pending",
+    "difficulty": "easy",
+    "senderName": "Teguh Firmansyah"
+  },
+  {
+    "message": "Cash on delivery was collected by your driver this morning, but my order status says payment pending. I have the receipt. AWB FD-202607182200.",
+    "expectedLesson": "COD collected but system shows payment pending",
+    "difficulty": "easy",
+    "senderName": "Putri Maharani"
+  },
+  {
+    "message": "COD paid but still pending in the system. The courier took my money and I got the package, but the app hasn't updated. Can you fix this?",
+    "expectedLesson": "COD collected but system shows payment pending",
+    "difficulty": "easy",
+    "senderName": "Blessing Mutua"
+  },
+  {
+    "message": "Resi says unpaid after COD. I gave the courier Rp 450,000 cash and he confirmed it. Why does the system not reflect this? FD-202607199876.",
+    "expectedLesson": "COD collected but system shows payment pending",
+    "difficulty": "easy",
+    "senderName": "Hendra Wijaya"
+  },
+  {
+    "message": "The courier collected cash from me for my COD order and even gave me a paper receipt, but when I check online it still shows the payment as outstanding. Is there a delay in the system or is something wrong?",
+    "expectedLesson": "COD collected but system shows payment pending",
+    "difficulty": "medium",
+    "senderName": "Fatou Diallo"
+  },
+  {
+    "message": "I received my order two days ago via cash on delivery. The driver counted the money in front of me. But the seller just messaged me saying they haven't received confirmation of payment from FastDrop. Can you check what's going on with FD-202607203344?",
+    "expectedLesson": "COD collected but system shows payment pending",
+    "difficulty": "medium",
+    "senderName": "Oscar Ramirez"
+  },
+  {
+    "message": "Hi, I'm a seller on Tokopedia and one of my buyers confirmed they paid COD to the FastDrop driver three days ago, but the remittance report on my dashboard still shows this order as 'payment unconfirmed.' My buyer is getting worried and so am I. Resi FD-202607211199.",
+    "expectedLesson": "COD collected but system shows payment pending",
+    "difficulty": "medium",
+    "senderName": "Ratna Permata"
+  },
+  {
+    "message": "I'm really confused — I handed the courier the exact amount for my COD order, he gave me a receipt, and now the seller is asking me to pay again because apparently the system shows no payment. I am NOT paying twice. Here's a photo of the receipt. Please sort this out immediately.",
+    "expectedLesson": "COD collected but system shows payment pending",
+    "difficulty": "medium",
+    "senderName": "Alejandro Cruz"
+  },
+  {
+    "message": "My wife accepted a COD delivery for me yesterday and paid the courier. I just got a message from the seller threatening to blacklist me because FastDrop told them the payment was never received. I can provide the receipt and even CCTV footage of the handover. This is incredibly frustrating — please escalate this. FD-202607224455.",
+    "expectedLesson": "COD collected but system shows payment pending",
+    "difficulty": "hard",
+    "senderName": "Bambang Suryadi"
+  },
+  {
+    "message": "I've received the goods already, paid cash to the driver, and the order should be fully closed. But the seller's system and my app both show the financial status as incomplete. I'm worried this will affect my account standing. Can someone on your finance team verify the driver's cash collection log? AWB FD-202607237788.",
+    "expectedLesson": "COD collected but system shows payment pending",
+    "difficulty": "hard",
+    "senderName": "Amina Yusuf"
+  },
+  {
+    "message": "The courier dropped off my order three days ago and took the COD payment, all good on my end. But now I'm getting automated reminders saying I have an unpaid balance. Is the driver not submitting collections? I don't want this sent to some collection agency over a system error.",
+    "expectedLesson": "COD collected but system shows payment pending",
+    "difficulty": "hard",
+    "senderName": "Tomoko Ishida"
+  },
+  {
+    "message": "My box arrived damaged. The item inside is broken. I need a return pickup. Order FD-202607241122.",
+    "expectedLesson": "Damaged item and return pickup request",
+    "difficulty": "easy",
+    "senderName": "Laura Thompson"
+  },
+  {
+    "message": "Package contents are broken — the glass was shattered when I opened the box. I need the courier to collect this for return. AWB FD-202607253300.",
+    "expectedLesson": "Damaged item and return pickup request",
+    "difficulty": "easy",
+    "senderName": "Rizky Aditya"
+  },
+  {
+    "message": "Hi, my parcel arrived and the box is completely crushed. The product inside is damaged beyond use. Can you arrange a return pickup?",
+    "expectedLesson": "Damaged item and return pickup request",
+    "difficulty": "easy",
+    "senderName": "Abigail Mensah"
+  },
+  {
+    "message": "Damaged item received. Need courier to collect damaged goods for return. I've taken photos of everything. FD-202607264488.",
+    "expectedLesson": "Damaged item and return pickup request",
+    "difficulty": "easy",
+    "senderName": "Ivan Sokolov"
+  },
+  {
+    "message": "Return because parcel is damaged — the outer packaging was ripped open and the product has a huge crack. Please schedule a pickup at my address.",
+    "expectedLesson": "Damaged item and return pickup request",
+    "difficulty": "easy",
+    "senderName": "Anisa Putri"
+  },
+  {
+    "message": "I ordered a ceramic vase and it arrived in about fifteen pieces. The box had no bubble wrap, just a thin layer of paper. I'd like to return this — can someone come pick it up from my place?",
+    "expectedLesson": "Damaged item and return pickup request",
+    "difficulty": "medium",
+    "senderName": "Sophie Laurent"
+  },
+  {
+    "message": "When I opened my delivery, water was leaking from inside the box. Turns out one of the bottles cracked during shipping and soaked everything else. I need to send all of it back. What's the process for getting a courier to come collect this?",
+    "expectedLesson": "Damaged item and return pickup request",
+    "difficulty": "medium",
+    "senderName": "Kofi Agyeman"
+  },
+  {
+    "message": "The laptop I ordered has a cracked screen — looks like it took a hit during transit. The box has a visible dent on one corner. I've already filed a claim with the seller, and they said to arrange the return shipment through FastDrop. How do I get someone to come pick this up? FD-202607278899.",
+    "expectedLesson": "Damaged item and return pickup request",
+    "difficulty": "medium",
+    "senderName": "Diana Reyes"
+  },
+  {
+    "message": "I run a small business and received a bulk shipment of porcelain plates. About 30% of them are chipped or broken — clearly mishandled somewhere in the chain. The seller agreed to replace them but I need FastDrop to come collect the damaged batch. It's quite heavy, maybe 15 kg total. Can the driver bring packaging material or do I need to repack everything myself?",
+    "expectedLesson": "Damaged item and return pickup request",
+    "difficulty": "hard",
+    "senderName": "Chen Wei"
+  },
+  {
+    "message": "The item I received works but the housing is visibly cracked and one of the buttons is jammed, which I suspect happened because of how roughly the package was handled — the box was soaking wet and falling apart. I want to return it but I also want to know what happens with the insurance claim. Can you handle the pickup and the damage report at the same time?",
+    "expectedLesson": "Damaged item and return pickup request",
+    "difficulty": "hard",
+    "senderName": "Tariq Mansour"
+  },
+  {
+    "message": "I honestly don't even know where to start. I ordered a birthday gift — a custom photo frame — and when it arrived the glass was shattered, the frame is bent, and the photo inside is torn. It's irreplaceable. I need this picked up for return and I want a formal complaint logged about the handling. This was supposed to be special.",
+    "expectedLesson": "Damaged item and return pickup request",
+    "difficulty": "hard",
+    "senderName": "Valentina Popov"
+  },
+  {
+    "message": "My return was approved but the pickup never came. It's been 3 days. When is someone coming to collect it? FD-202607286677.",
+    "expectedLesson": "Return approved but pickup never happened",
+    "difficulty": "easy",
+    "senderName": "George Ochieng"
+  },
+  {
+    "message": "Approved return, no collection yet. I've been waiting since Monday for the courier to pick up my return. AWB FD-202607295500.",
+    "expectedLesson": "Return approved but pickup never happened",
+    "difficulty": "easy",
+    "senderName": "Nurul Hidayah"
+  },
+  {
+    "message": "Hi, the return pickup never came. It was scheduled for yesterday but nobody showed up. Can you resend the courier?",
+    "expectedLesson": "Return approved but pickup never happened",
+    "difficulty": "easy",
+    "senderName": "Luis Herrera"
+  },
+  {
+    "message": "Courier did not pick up my return parcel. The return was approved last Thursday and I was told pickup would be within 2 business days. It's now Tuesday. FD-202607308833.",
+    "expectedLesson": "Return approved but pickup never happened",
+    "difficulty": "easy",
+    "senderName": "Ayesha Khan"
+  },
+  {
+    "message": "Waiting for return collection — it's been almost a week since approval. Scheduled pickup was missed and nobody contacted me. What's going on?",
+    "expectedLesson": "Return approved but pickup never happened",
+    "difficulty": "easy",
+    "senderName": "Samuel Otieno"
+  },
+  {
+    "message": "I got the approval email for my return on Friday. It said a courier would come within 48 hours. It's now Wednesday and I've been staying home every day waiting. No one has come, no one has called. I'm running out of patience.",
+    "expectedLesson": "Return approved but pickup never happened",
+    "difficulty": "medium",
+    "senderName": "Katarina Novak"
+  },
+  {
+    "message": "The seller confirmed my return was processed through FastDrop four days ago and gave me a return AWB number. But no driver has shown up to collect the package. I've called your hotline twice and both times they said 'it's scheduled' but nothing happens. FD-202607319911.",
+    "expectedLesson": "Return approved but pickup never happened",
+    "difficulty": "medium",
+    "senderName": "Eko Prasetyo"
+  },
+  {
+    "message": "This is a follow-up to my earlier ticket about the return pickup. I was told it would be collected on Monday. It's now Thursday. I've rearranged my schedule three times to be available and still no courier. Can someone give me an actual confirmed time slot?",
+    "expectedLesson": "Return approved but pickup never happened",
+    "difficulty": "medium",
+    "senderName": "Adeline Dubois"
+  },
+  {
+    "message": "I have a return-approved package sitting in my hallway for over a week now. The refund won't process until you collect it, and the seller's return window closes in two days. If nobody picks it up by then, I lose both the product AND my money. Please treat this as urgent.",
+    "expectedLesson": "Return approved but pickup never happened",
+    "difficulty": "hard",
+    "senderName": "Olga Kravchenko"
+  },
+  {
+    "message": "I'm at my wit's end. The return was approved, I got a confirmation email with a pickup date, and I've now waited through THREE scheduled pickups — none of which actually happened. Each time I call I get told it's been 'rescheduled.' Meanwhile I'm stuck with a defective product and no refund. I want a supervisor to call me directly. FD-202607321100.",
+    "expectedLesson": "Return approved but pickup never happened",
+    "difficulty": "hard",
+    "senderName": "Idris Abdullahi"
+  },
+  {
+    "message": "I need to ship this return back but nobody comes to get it. I even tried dropping it off at a FastDrop counter near me and they said they can't accept return pickups — only the assigned driver can collect it. So I'm completely stuck. The item is heavy and I can't keep holding onto it. What are my actual options here?",
+    "expectedLesson": "Return approved but pickup never happened",
+    "difficulty": "hard",
+    "senderName": "Jing-Yi Lin"
+  },
+  {
+    "message": "I need the proof of delivery for my shipment FD-202607335566. Can you send me the POD document?",
+    "expectedLesson": "Need proof of delivery or delivery manifest",
+    "difficulty": "easy",
+    "senderName": "Michael Brennan"
+  },
+  {
+    "message": "Can I get a delivery manifest for AWB FD-202607342200? I need it for my records.",
+    "expectedLesson": "Need proof of delivery or delivery manifest",
+    "difficulty": "easy",
+    "senderName": "Sri Wahyuni"
+  },
+  {
+    "message": "Hi, I need the POD document for a recent delivery. Who signed for the package? Order FD-202607359988.",
+    "expectedLesson": "Need proof of delivery or delivery manifest",
+    "difficulty": "easy",
+    "senderName": "Aminata Diop"
+  },
+  {
+    "message": "Please send me the delivery confirmation record for FD-202607361177. I need proof of delivery for an insurance claim.",
+    "expectedLesson": "Need proof of delivery or delivery manifest",
+    "difficulty": "easy",
+    "senderName": "Roberto Bianchi"
+  },
+  {
+    "message": "I need proof of delivery — specifically who signed for the package and the exact time it was delivered. AWB FD-202607374455.",
+    "expectedLesson": "Need proof of delivery or delivery manifest",
+    "difficulty": "easy",
+    "senderName": "Yusuf Osman"
+  },
+  {
+    "message": "I'm doing an audit of all shipments we received this quarter and I need the signed POD for about six deliveries. Can I request them in bulk, or do I need to ask one at a time? Starting with FD-202607383322.",
+    "expectedLesson": "Need proof of delivery or delivery manifest",
+    "difficulty": "medium",
+    "senderName": "Christina Papadopoulos"
+  },
+  {
+    "message": "My customer is disputing that they received the goods. I need the delivery manifest showing the recipient's name, signature, and timestamp. This might end up being a legal matter so I need an official document, not just a screenshot from the app.",
+    "expectedLesson": "Need proof of delivery or delivery manifest",
+    "difficulty": "medium",
+    "senderName": "Brian Omondi"
+  },
+  {
+    "message": "We received a shipment last week but our warehouse team isn't sure who accepted it or when exactly it arrived. Can you provide the full delivery record including the driver's name, time of handover, and any signature or photo confirmation? FD-202607399011.",
+    "expectedLesson": "Need proof of delivery or delivery manifest",
+    "difficulty": "medium",
+    "senderName": "Tanaka Moyo"
+  },
+  {
+    "message": "I'm trying to sort out a discrepancy with my supplier. They say they shipped 3 boxes but we only have 2 in our receiving log. I need the delivery manifest from FastDrop to see how many parcels were actually handed over and who on our side signed for them. This is for AWB FD-202607407788.",
+    "expectedLesson": "Need proof of delivery or delivery manifest",
+    "difficulty": "medium",
+    "senderName": "Hassan El-Amin"
+  },
+  {
+    "message": "Our accounting department flagged a delivery from last month as unverified because we don't have matching documentation. I need whatever proof-of-receipt paperwork you can generate — timestamped, ideally with the signee's full name. We're being audited next week and this is one of the gaps. FD-202607415544.",
+    "expectedLesson": "Need proof of delivery or delivery manifest",
+    "difficulty": "hard",
+    "senderName": "Andrea Fischer"
+  },
+  {
+    "message": "We're in a dispute with a vendor who claims we received a shipment on June 28th, but our receiving team has no record of it. Before this goes to legal, can you pull the complete delivery trail — GPS coordinates, photo evidence if any, recipient name, and the driver's logged delivery time? I need everything you have on FD-202607422233.",
+    "expectedLesson": "Need proof of delivery or delivery manifest",
+    "difficulty": "hard",
+    "senderName": "Sandra Nyambura"
+  },
+  {
+    "message": "Hi, I'm the logistics coordinator for a retail chain. We had a series of deliveries over the past two weeks and our inventory reconciliation is off. I need PODs for all shipments to our Surabaya warehouse between June 25 and July 5. Can you generate a consolidated delivery report or do I need to request each one individually? This is time-sensitive — our quarterly close is Friday.",
+    "expectedLesson": "Need proof of delivery or delivery manifest",
+    "difficulty": "hard",
+    "senderName": "Wayan Sudiarta"
+  },
+  {
+    "message": "Resi saya FD-202607431199 sudah dari kemarin nggak update sama sekali. Status terakhir masih di warehouse origin. Tolong dicek ya, saya butuh barangnya minggu ini.",
+    "expectedLesson": "Tracking not updating for days",
+    "difficulty": "medium",
+    "senderName": "Agus Setiawan"
+  },
+  {
+    "message": "Just following up on my earlier message — the package is still showing 'delivered' on my end but I genuinely have not received anything. It's been 48 hours since I first reported this. Can someone please get back to me with an update? FD-202607445566.",
+    "expectedLesson": "Marked delivered but not received",
+    "difficulty": "medium",
+    "senderName": "Thabo Molefe"
+  },
+  {
+    "message": "Hi, this is a follow-up. You told me the courier would come today between 9-12 to collect my return. It's now 4 PM and nobody showed up. Again. This is the second time. I'd really appreciate it if someone could give me a concrete answer.",
+    "expectedLesson": "Return approved but pickup never happened",
+    "difficulty": "medium",
+    "senderName": "Francesca Romano"
+  },
+  {
+    "message": "Can you check something for me? The courier was here yesterday and I gave him the COD amount — Rp 375,000. But when I look at the order now, the payment field is blank. Not 'paid,' not 'pending,' just empty. Is that normal or did something go wrong? FD-202607458877.",
+    "expectedLesson": "COD collected but system shows payment pending",
+    "difficulty": "medium",
+    "senderName": "Nia Kartika"
+  },
+  {
+    "message": "I've got a delivery that the tracking says went to 'Komplek Permata Blok C-14' but I'm at Blok C-41. Classic digit swap. The package isn't at C-14 either — they said they haven't seen it. So now it's just missing. FD-202607462233.",
+    "expectedLesson": "Delivered to the wrong address",
+    "difficulty": "hard",
+    "senderName": "Jonathan Adebayo"
+  },
+  {
+    "message": "Item arrived smashed to pieces inside the box. The outer carton looks like it was used as a football. I want this picked up and I want a full refund, not store credit. Please send a courier ASAP. FD-202607477788.",
+    "expectedLesson": "Damaged item and return pickup request",
+    "difficulty": "medium",
+    "senderName": "Pavel Novotny"
+  },
+  {
+    "message": "I need someone to explain why my shipment appears to be going backwards. It was in Jakarta on Monday, then scanned in Semarang on Wednesday, and now the tracking hasn't moved since. Is it lost? Is it being rerouted? What's happening? FD-202607483344.",
+    "expectedLesson": "Tracking not updating for days",
+    "difficulty": "hard",
+    "senderName": "Mariam Touré"
+  },
+  {
+    "message": "Quick question — my company needs official proof that a shipment was delivered to our Bandung office. We need it as a PDF with all the details: time, date, recipient name, and signature. Can you generate that for FD-202607496611?",
+    "expectedLesson": "Need proof of delivery or delivery manifest",
+    "difficulty": "medium",
+    "senderName": "Alexander Holm"
+  },
+  {
+    "message": "Nobody was home when the courier tried to deliver my package this afternoon. I got a text saying the attempt failed. Can I have it redelivered on Saturday instead? FD-202607501122.",
+    "expectedLesson": "Reschedule a failed delivery attempt",
+    "difficulty": "easy",
+    "senderName": "Lina Soerensen"
+  },
+  {
+    "message": "The delivery driver apparently came at 7:30 AM while everyone in my house was still asleep. We didn't hear the doorbell. Now the app says 'delivery attempted — recipient not available.' I really need this package — it's equipment for a training session on Monday. Can we arrange another attempt, preferably midday? I'll make sure someone is at the door.",
+    "expectedLesson": "Reschedule a failed delivery attempt",
+    "difficulty": "hard",
+    "senderName": "Emmanuel Okoro"
+  }
+]

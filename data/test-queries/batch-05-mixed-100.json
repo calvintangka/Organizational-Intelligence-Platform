@@ -1,0 +1,602 @@
+[
+  {
+    "message": "Hi, I've been trying to log into my account for the past hour and every time I enter my password it says invalid credentials. I know the password is correct because I just reset it yesterday. My colleague mentioned this might be a browser issue but I've tried Chrome, Firefox, and Edge. We're on a tight deadline for a quarterly report and I really need access to download our latest invoice as well. Can someone help?",
+    "expectedLesson": "Invalid credentials despite correct password",
+    "difficulty": "hard",
+    "senderName": "Priya Venkataraman"
+  },
+  {
+    "message": "forgot my password, need to reset it please",
+    "expectedLesson": "Forgot password",
+    "difficulty": "easy",
+    "senderName": "Jake Morrison"
+  },
+  {
+    "message": "I got locked out after entering the wrong password a few times. Now it says my account is locked. How long do I have to wait?",
+    "expectedLesson": "Account locked after too many attempts",
+    "difficulty": "easy",
+    "senderName": "Fatima Al-Rashidi"
+  },
+  {
+    "message": "I clicked the password reset link you sent me but it says it's expired. I only received the email 10 minutes ago. This is the third time this has happened. Ticket #LG-4421 from last week was about the same issue.",
+    "expectedLesson": "Password reset link expired or not received",
+    "difficulty": "medium",
+    "senderName": "Carlos Mendoza"
+  },
+  {
+    "message": "We recently switched to Okta for SSO across the company and now half our team can't log in through the external provider. The Okta dashboard shows the app is configured correctly. Our IT admin is out this week so I'm trying to sort this out myself.",
+    "expectedLesson": "SSO or external login provider issue",
+    "difficulty": "hard",
+    "senderName": "Ingrid Johansson"
+  },
+  {
+    "message": "my 2fa code isn't coming through. I've waited like 15 minutes already",
+    "expectedLesson": "2FA code not received during login",
+    "difficulty": "easy",
+    "senderName": "DeShawn Williams"
+  },
+  {
+    "message": "I signed up two days ago but when I try to log in it tells me my account hasn't been activated. I never received any activation email. I checked spam too. Can you resend it or just activate it manually? My email is j.tanaka@nexuslogistics.co.jp",
+    "expectedLesson": "Account not activated yet",
+    "difficulty": "medium",
+    "senderName": "Jun Tanaka"
+  },
+  {
+    "message": "This is a follow-up to my call yesterday with your agent Maria. She said clearing my browser cache would fix the login loop but it didn't work. Every time I log in I get redirected back to the login page. I've tried incognito mode too. I need to access my account to check on a shipment that was supposed to arrive last Thursday.",
+    "expectedLesson": "Browser cache or session issue",
+    "difficulty": "hard",
+    "senderName": "Okonkwo Chukwuemeka"
+  },
+  {
+    "message": "I think I might be using the wrong email to log in. I have two accounts, one personal and one work, and I can't remember which one I registered with. Can you check if there's an account under sarah.lin@gmail.com or s.lin@meridianhealth.com?",
+    "expectedLesson": "Wrong email address",
+    "difficulty": "medium",
+    "senderName": "Sarah Lin"
+  },
+  {
+    "message": "Keep getting invalid password error. Changed it twice today. Still not working.",
+    "expectedLesson": "Invalid credentials despite correct password",
+    "difficulty": "easy",
+    "senderName": "Tomasz Kowalski"
+  },
+  {
+    "message": "Hi support team. I'm writing because I attempted to log in this morning and was told my account is locked. I'm the primary administrator for our company account at BrightPath Consulting (account #BP-7892) and I need to process payroll through the system before end of day. This is extremely urgent. I also noticed my password reset emails go to an old address we no longer use. Please help.",
+    "expectedLesson": "Account locked after too many attempts",
+    "difficulty": "hard",
+    "senderName": "Amara Osei"
+  },
+  {
+    "message": "password reset link not working, tried 3 times",
+    "expectedLesson": "Password reset link expired or not received",
+    "difficulty": "easy",
+    "senderName": "Liam O'Brien"
+  },
+  {
+    "message": "Our Google Workspace SSO integration stopped working after your platform update last night. None of our 45 users can authenticate. This is blocking our entire operations team. We're on the Enterprise plan.",
+    "expectedLesson": "SSO or external login provider issue",
+    "difficulty": "hard",
+    "senderName": "Mei-Ling Huang"
+  },
+  {
+    "message": "I can't get the two-factor authentication code. I recently changed my phone number and forgot to update it in my account settings. Is there a way to bypass 2FA or update my phone number without logging in?",
+    "expectedLesson": "2FA code not received during login",
+    "difficulty": "medium",
+    "senderName": "Alessandro Ferretti"
+  },
+  {
+    "message": "Still waiting for the activation email. Signed up on July 3rd. Nothing in inbox or spam. Using the email d.kuznetsova@volga-tech.ru",
+    "expectedLesson": "Account not activated yet",
+    "difficulty": "medium",
+    "senderName": "Darya Kuznetsova"
+  },
+  {
+    "message": "hey, I can't get into my account and I also can't find where to download my latest invoice. Every time I log in it just shows a blank white page. I've tried on my phone too. Is your site down?",
+    "expectedLesson": "Missing invoice or cannot find invoice",
+    "difficulty": "medium",
+    "senderName": "Kofi Asante"
+  },
+  {
+    "message": "I forgot my password and when I try to reset it the system says no account exists with my email. But I definitely have an account, I've been a customer since 2023.",
+    "expectedLesson": "Wrong email address",
+    "difficulty": "medium",
+    "senderName": "Nadia Petrov"
+  },
+  {
+    "message": "can I get a password reset? thanks",
+    "expectedLesson": "Forgot password",
+    "difficulty": "easy",
+    "senderName": "Marcus Johnson"
+  },
+  {
+    "message": "I'm locked out of my account and I also need to cancel my subscription before the renewal date on July 15th. Can you handle both? I don't want to be charged for another year if I can't even access the platform.",
+    "expectedLesson": "Cancellation request and what happens to data",
+    "difficulty": "hard",
+    "senderName": "Yuki Hashimoto"
+  },
+  {
+    "message": "I just created an account and tried to log in immediately but it says account not activated. The confirmation email hasn't arrived. I need to upload documents for a case filing deadline tomorrow morning.",
+    "expectedLesson": "Account not activated yet",
+    "difficulty": "medium",
+    "senderName": "Gabriela Santos"
+  },
+  {
+    "message": "We were charged twice for our July billing cycle. The amounts are $249.99 each, posted on July 1st and July 3rd. Our account number is BIL-20398. Please refund the duplicate.",
+    "expectedLesson": "Duplicate charge in one billing cycle",
+    "difficulty": "easy",
+    "senderName": "Rajesh Sharma"
+  },
+  {
+    "message": "Our company changed its legal name from Henderson & Associates to Henderson Legal Group LLC six months ago but the invoices still show the old name. We need this corrected for tax filing purposes. We updated our profile in March but it didn't carry over to invoicing.",
+    "expectedLesson": "Invoice shows outdated company details",
+    "difficulty": "medium",
+    "senderName": "Patricia Henderson"
+  },
+  {
+    "message": "where can I find my invoice from last month? I looked in the billing section but only see this month's",
+    "expectedLesson": "Missing invoice or cannot find invoice",
+    "difficulty": "easy",
+    "senderName": "Ahmed Hassan"
+  },
+  {
+    "message": "I just got my renewal notice and the price jumped from $99/month to $149/month with no warning. When I signed up last year I was told the price was locked for 24 months. I have the original sales email if you need to see it. This feels like a bait and switch honestly.",
+    "expectedLesson": "Unexpected price increase on renewal",
+    "difficulty": "easy",
+    "senderName": "Svetlana Morozova"
+  },
+  {
+    "message": "My credit card was declined when trying to pay the subscription but somehow the service is still active. I want to update my payment method but I also want to understand why I wasn't cut off. Will I be charged a late fee? We're on the Pro plan under Greenfield Technologies.",
+    "expectedLesson": "Payment method declined but service still active",
+    "difficulty": "hard",
+    "senderName": "Benjamin Achterberg"
+  },
+  {
+    "message": "I'd like a refund for the remaining 4 months on my annual subscription. I cancelled the service on June 30th. Account email: r.ibrahim@coastaleng.com",
+    "expectedLesson": "Refund request for unused service period",
+    "difficulty": "medium",
+    "senderName": "Rania Ibrahim"
+  },
+  {
+    "message": "Quick question - do your invoices include VAT? We're an EU-based company and need proper VAT invoices for our records. Our VAT number is DE123456789.",
+    "expectedLesson": "Tax or VAT questions on invoices",
+    "difficulty": "easy",
+    "senderName": "Lukas Braun"
+  },
+  {
+    "message": "I see two charges on my bank statement from your company for June. One is $79 and the other is $79. The second one posted on June 28th. I only have one account with you. I also noticed the invoice for the first charge shows our old office address. Can you fix both issues?",
+    "expectedLesson": "Duplicate charge in one billing cycle",
+    "difficulty": "hard",
+    "senderName": "Chidinma Eze"
+  },
+  {
+    "message": "My invoices still show our old address at 123 Main St even though I updated the company profile months ago. Our new address is 456 Innovation Drive, Suite 800, Austin TX 78701.",
+    "expectedLesson": "Invoice shows outdated company details",
+    "difficulty": "easy",
+    "senderName": "Rachel Goldstein"
+  },
+  {
+    "message": "I've been trying to locate the invoice for our Q1 payment but it's nowhere in the portal. I need it for an audit that's happening this week. Our company is TerraVista Solutions, account #TV-5567. The payment of $1,200 was made on March 15th.",
+    "expectedLesson": "Missing invoice or cannot find invoice",
+    "difficulty": "medium",
+    "senderName": "Miguel Alvarez"
+  },
+  {
+    "message": "why did my bill go up $30 this month? nobody told me about a price change",
+    "expectedLesson": "Unexpected price increase on renewal",
+    "difficulty": "easy",
+    "senderName": "Aisha Bello"
+  },
+  {
+    "message": "Card on file was declined, updated it to a new Visa ending in 4829. But the system is still trying to charge the old card. Also would like to know if you can send me a breakdown of all charges for the last 6 months since I can't find some of the invoices.",
+    "expectedLesson": "Payment method declined but service still active",
+    "difficulty": "hard",
+    "senderName": "Haruto Nakamura"
+  },
+  {
+    "message": "We stopped using the service in May but were charged for June and July. I want a refund for both months. This is getting ridiculous.",
+    "expectedLesson": "Refund request for unused service period",
+    "difficulty": "medium",
+    "senderName": "Olga Kravchenko"
+  },
+  {
+    "message": "Our finance department is asking about the tax treatment on our invoices. We're a nonprofit based in Canada and should be exempt from certain taxes. Can you update our tax status and reissue the last 3 invoices? Organization: Northern Lights Community Foundation.",
+    "expectedLesson": "Tax or VAT questions on invoices",
+    "difficulty": "hard",
+    "senderName": "Ethan Whitehorse"
+  },
+  {
+    "message": "I can't download my invoice from April. The download button does nothing. Tried Chrome and Safari.",
+    "expectedLesson": "Missing invoice or cannot find invoice",
+    "difficulty": "easy",
+    "senderName": "Seo-yeon Park"
+  },
+  {
+    "message": "We were supposed to get a prorated refund when we switched from annual to monthly billing but it never showed up on our statement. It's been 3 weeks. The original annual payment was $2,400 and we switched on June 10th. Can someone from billing look into this?",
+    "expectedLesson": "Refund request for unused service period",
+    "difficulty": "hard",
+    "senderName": "David Okafor"
+  },
+  {
+    "message": "Hi, I need to update our company's tax ID on all future invoices. New TIN is 45-6789012. Also, can you confirm whether the $15 charge labeled 'platform fee' on our June invoice includes sales tax?",
+    "expectedLesson": "Tax or VAT questions on invoices",
+    "difficulty": "medium",
+    "senderName": "Isabelle Dupont"
+  },
+  {
+    "message": "I signed up for a 14-day trial on June 25th and today is July 7th. I still need a few more days to finish evaluating the API integration. Our developers ran into some issues with the webhook setup and we lost about 4 days troubleshooting. Any chance of extending the trial?",
+    "expectedLesson": "Trial expired before evaluation finished",
+    "difficulty": "medium",
+    "senderName": "Viktor Andersen"
+  },
+  {
+    "message": "our trial ended and we didn't get to test it properly. can we get a few more days?",
+    "expectedLesson": "Trial expired before evaluation finished",
+    "difficulty": "easy",
+    "senderName": "Zainab Osman"
+  },
+  {
+    "message": "We upgraded to the Business plan yesterday but the advanced reporting and custom dashboard features are still showing as locked. I've logged out and back in. Our account is under Pinnacle Strategies Inc, and I have the upgrade confirmation email (order #UP-78234).",
+    "expectedLesson": "Upgraded plan but features are not unlocked",
+    "difficulty": "medium",
+    "senderName": "Kwame Mensah"
+  },
+  {
+    "message": "We're on the Team plan for 10 seats but when our 8th team member tried to join it said the seat limit was reached. That makes no sense. We should have 2 seats available.",
+    "expectedLesson": "Seat limit reached despite correct plan",
+    "difficulty": "medium",
+    "senderName": "Elena Volkov"
+  },
+  {
+    "message": "I want to cancel my subscription. Before I do, I need to know: what happens to all the data we've uploaded over the past year? Do you export it? How long do you keep it after cancellation? We have about 2GB of case files and client records in the system.",
+    "expectedLesson": "Cancellation request and what happens to data",
+    "difficulty": "easy",
+    "senderName": "Anand Krishnamurthy"
+  },
+  {
+    "message": "Confused about our billing. We downgraded from Pro to Basic on July 1st but were charged the Pro rate for July. Shouldn't the lower rate have kicked in immediately? Also, if I upgrade again mid-cycle, how does the proration work?",
+    "expectedLesson": "Downgrade timing and proration confusion",
+    "difficulty": "easy",
+    "senderName": "Sofia Lindqvist"
+  },
+  {
+    "message": "My trial ended on June 30 and I subscribed on July 2. But my subscription page says it started on June 16 which is when the trial began. Does that mean I lost 2 days of paid service?",
+    "expectedLesson": "Subscription start date confusion after trial",
+    "difficulty": "medium",
+    "senderName": "Pierre Leclerc"
+  },
+  {
+    "message": "I was charged $199 for auto-renewal today. I thought I cancelled last month. I definitely clicked the cancel button. I need this reversed immediately, I'm on a fixed budget and this is money I can't afford to lose right now.",
+    "expectedLesson": "Auto-renewal charged unexpectedly",
+    "difficulty": "medium",
+    "senderName": "Thandiwe Ndlovu"
+  },
+  {
+    "message": "Just upgraded to Enterprise but still can't use SSO or the audit log feature. It's been 24 hours. Our team of 30 is waiting to onboard and we can't proceed without SSO working. This is delaying our entire migration project.",
+    "expectedLesson": "Upgraded plan but features are not unlocked",
+    "difficulty": "hard",
+    "senderName": "Hiroshi Yamamoto"
+  },
+  {
+    "message": "I need to cancel. Please confirm what happens to my data and when it gets deleted.",
+    "expectedLesson": "Cancellation request and what happens to data",
+    "difficulty": "easy",
+    "senderName": "Maria Gonzalez"
+  },
+  {
+    "message": "The system says we've used all 25 seats on our plan but when I count active users in the admin panel I only see 19. I think some deactivated users might still be counting against our limit. We need to add 3 new hires by Friday.",
+    "expectedLesson": "Seat limit reached despite correct plan",
+    "difficulty": "hard",
+    "senderName": "Bjorn Eriksen"
+  },
+  {
+    "message": "I got charged for auto-renewal. Didn't know it was on. how do I turn it off and get a refund?",
+    "expectedLesson": "Auto-renewal charged unexpectedly",
+    "difficulty": "easy",
+    "senderName": "Leila Nazari"
+  },
+  {
+    "message": "We're considering downgrading from Business to Starter next month. A few questions: does the downgrade happen immediately or at end of cycle? Will we lose access to archived projects? And if we downgrade mid-month do we get a prorated credit? We need to plan our budget for Q3.",
+    "expectedLesson": "Downgrade timing and proration confusion",
+    "difficulty": "hard",
+    "senderName": "Christopher Achampong"
+  },
+  {
+    "message": "When exactly did my paid subscription start? I finished the trial and subscribed right away but the dates don't match up on my billing page.",
+    "expectedLesson": "Subscription start date confusion after trial",
+    "difficulty": "easy",
+    "senderName": "Anya Popova"
+  },
+  {
+    "message": "Following up on ticket #TR-9981 from last week. The trial extension was approved but it still shows as expired in my account. I also wanted to ask - if I subscribe now, will I be charged from today or from when the original trial started? I need to get this sorted before our board meeting on Thursday.",
+    "expectedLesson": "Trial expired before evaluation finished",
+    "difficulty": "easy",
+    "senderName": "Tariq Al-Mansour"
+  },
+  {
+    "message": "auto-renewal hit my account for $499 annual plan. I swear I set it to not renew. My account is under wellington.partners@lawfirm.co.uk. Also while you're at it, can you update the company name on my invoices to Wellington & Partners LLP?",
+    "expectedLesson": "Auto-renewal charged unexpectedly",
+    "difficulty": "easy",
+    "senderName": "James Wellington"
+  },
+  {
+    "message": "My tracking number hasn't updated in 5 days. It still shows 'in transit' since July 2nd. Order #SH-44892. I'm starting to worry it's lost.",
+    "expectedLesson": "Tracking not updating for days",
+    "difficulty": "easy",
+    "senderName": "Adewale Babatunde"
+  },
+  {
+    "message": "The delivery status says it was delivered yesterday at 2:47 PM but I was home all day and nothing arrived. No package at the door, no notice left. I live in an apartment building with no doorman. Order #SH-51203.",
+    "expectedLesson": "Marked delivered but not received",
+    "difficulty": "medium",
+    "senderName": "Christina Papadopoulos"
+  },
+  {
+    "message": "My package was delivered to 445 Oak Lane but my address is 445 Oak Drive. These are completely different streets in the same town. The carrier clearly misread the label. I need this resolved today as the contents are medical supplies.",
+    "expectedLesson": "Delivered to the wrong address",
+    "difficulty": "easy",
+    "senderName": "Samuel Odhiambo"
+  },
+  {
+    "message": "Missed the delivery attempt today because I was at work. Can I reschedule for Saturday morning? Tracking number: TRK-7783921.",
+    "expectedLesson": "Reschedule a failed delivery attempt",
+    "difficulty": "easy",
+    "senderName": "Rosa Gutierrez"
+  },
+  {
+    "message": "The delivery driver collected the cash-on-delivery payment of $85 from me at the door but my account page still says payment is pending. This was 4 days ago. I don't want to be charged again or have this affect my account status.",
+    "expectedLesson": "COD collected but system shows payment pending",
+    "difficulty": "medium",
+    "senderName": "Vikram Patel"
+  },
+  {
+    "message": "Received my order today but the box was completely crushed and the monitor inside has a cracked screen. I need a replacement or refund and I'd like someone to pick up the damaged item. Order #SH-67321, delivered July 5th.",
+    "expectedLesson": "Damaged item and return pickup request",
+    "difficulty": "medium",
+    "senderName": "Natalia Sokolova"
+  },
+  {
+    "message": "My return was approved on June 28 (return auth #RA-1192) and I was told a pickup would be scheduled within 48 hours. It's been over a week and no one has come. I've been keeping the item boxed up waiting. This is very frustrating because I can't get my refund until the return is processed.",
+    "expectedLesson": "Return approved but pickup never happened",
+    "difficulty": "easy",
+    "senderName": "Fernando Castillo"
+  },
+  {
+    "message": "I need proof of delivery for order #SH-39201. Our receiving department says they never got it but shipping says it was delivered. I need the signed delivery manifest with the name of who accepted it and a timestamp.",
+    "expectedLesson": "Need proof of delivery or delivery manifest",
+    "difficulty": "medium",
+    "senderName": "Ayesha Khan"
+  },
+  {
+    "message": "tracking hasn't moved in 3 days, is it lost?",
+    "expectedLesson": "Tracking not updating for days",
+    "difficulty": "easy",
+    "senderName": "Luca Bianchi"
+  },
+  {
+    "message": "Package shows delivered but I never got it. I checked with my neighbors and the building mailroom too. This is the second time this has happened with your courier service. Last time was order #SH-28744 in April. I'm really losing patience here. I also need to update my billing address because we moved offices and I think that might be related.",
+    "expectedLesson": "Marked delivered but not received",
+    "difficulty": "easy",
+    "senderName": "Elif Yilmaz"
+  },
+  {
+    "message": "My shipment went to an address I haven't lived at in two years. I updated my address in my profile. Why didn't it carry over to this order?",
+    "expectedLesson": "Delivered to the wrong address",
+    "difficulty": "medium",
+    "senderName": "Omar Diallo"
+  },
+  {
+    "message": "Failed delivery attempt today. I need to reschedule and also change the delivery to a different address - my office at 200 Commerce Blvd, Floor 3, because I won't be home again until next week. Is that possible?",
+    "expectedLesson": "Reschedule a failed delivery attempt",
+    "difficulty": "medium",
+    "senderName": "Yun-hee Choi"
+  },
+  {
+    "message": "I paid COD for my delivery 6 days ago. The driver gave me a handwritten receipt but the online system still shows payment pending. I uploaded a photo of the receipt to ticket #SH-COD-449. Nobody has responded. I'm worried about being double-charged since my card is also on file.",
+    "expectedLesson": "COD collected but system shows payment pending",
+    "difficulty": "easy",
+    "senderName": "Abdul Rahman Hashim"
+  },
+  {
+    "message": "item arrived damaged. need return pickup and refund",
+    "expectedLesson": "Damaged item and return pickup request",
+    "difficulty": "easy",
+    "senderName": "Diana Reyes"
+  },
+  {
+    "message": "This is my third email about return pickup for RA-2201. Approved 12 days ago, still no pickup scheduled. I've called twice and was told 'someone will call back within 24 hours' both times. No one has called. I want this escalated to a manager.",
+    "expectedLesson": "Return approved but pickup never happened",
+    "difficulty": "easy",
+    "senderName": "Ivan Horvat"
+  },
+  {
+    "message": "Can you send me the delivery confirmation for the shipment to our warehouse on June 20? I need it for our inventory reconciliation. The order was placed by our procurement team under PO #WH-2026-0620.",
+    "expectedLesson": "Need proof of delivery or delivery manifest",
+    "difficulty": "medium",
+    "senderName": "Grace Mutua"
+  },
+  {
+    "message": "I'm trying to open the case file for Matter #CF-2024-8830 but I get a 'permission denied' error. I'm the lead attorney on this case and should definitely have access. My colleague accessed it fine yesterday from her account. We have a filing deadline in 3 hours.",
+    "expectedLesson": "Cannot access case file due to permission denied",
+    "difficulty": "easy",
+    "senderName": "Jonathan Abrams"
+  },
+  {
+    "message": "I accidentally uploaded the wrong version of the settlement agreement to case #CF-2024-7712. I need to delete the incorrect file (Settlement_Draft_v2.pdf uploaded at 10:15 AM today) and replace it with the correct one. How do I do this?",
+    "expectedLesson": "Uploaded the wrong document and need to replace it",
+    "difficulty": "medium",
+    "senderName": "Sakura Matsumoto"
+  },
+  {
+    "message": "The e-signature request for the retainer agreement with client Marquez expired before the client could sign it. Can you resend it? The client's email is a.marquez@email.com. This was originally sent on June 25th.",
+    "expectedLesson": "E-signature request expired",
+    "difficulty": "medium",
+    "senderName": "Daniela Ruiz"
+  },
+  {
+    "message": "I was uploading a 45MB PDF to the portal and it timed out right at the end. The deadline to file with the court is tonight at midnight and this document is the key exhibit. The upload got to 98% and then the session expired. I can't even log back in now. Please help, this is extremely urgent.",
+    "expectedLesson": "Portal timeout during urgent deadline upload",
+    "difficulty": "easy",
+    "senderName": "Nathan Okonkwo"
+  },
+  {
+    "message": "The hearing date on case #CF-2024-9102 shows December 15, 2025 but it was rescheduled to February 3, 2026. The court sent the updated notice weeks ago. Can you update this in the system?",
+    "expectedLesson": "Hearing date shows outdated information",
+    "difficulty": "medium",
+    "senderName": "Anastasia Romanova"
+  },
+  {
+    "message": "I need to add my paralegal Tina Fernandez (t.fernandez@lawoffice.com) as an authorized contact on my account so she can upload documents and communicate with your team on my behalf. She'll be handling the day-to-day while I'm in trial for the next two weeks.",
+    "expectedLesson": "Add an authorized contact or assistant to the account",
+    "difficulty": "medium",
+    "senderName": "Robert Blackwood"
+  },
+  {
+    "message": "I can't find the signed retainer agreement anywhere in the portal. I know we signed it electronically back in January when we onboarded. I need it for a bar audit that's due next week.",
+    "expectedLesson": "Cannot find the signed retainer agreement",
+    "difficulty": "medium",
+    "senderName": "Sunita Desai"
+  },
+  {
+    "message": "permission denied on my case files. please fix ASAP",
+    "expectedLesson": "Cannot access case file due to permission denied",
+    "difficulty": "easy",
+    "senderName": "Franco Moretti"
+  },
+  {
+    "message": "I uploaded a document to the wrong case folder. The file 'Exhibit_C_Deposition.pdf' should be in Matter #CF-2024-8901 but I accidentally put it in #CF-2024-8910. Can you move it or do I need to re-upload?",
+    "expectedLesson": "Uploaded the wrong document and need to replace it",
+    "difficulty": "medium",
+    "senderName": "Catherine Nguyen"
+  },
+  {
+    "message": "The e-signature link for the non-disclosure agreement sent to our client expired. This is time-sensitive as the deal is closing next Monday. Can you extend the signing window or generate a new link? Client email: james.whitfield@acquisitioncorp.com. Also, I cannot find the original signed retainer in the system — it might have been filed under the old matter number.",
+    "expectedLesson": "E-signature request expired",
+    "difficulty": "hard",
+    "senderName": "Hana Kato"
+  },
+  {
+    "message": "The portal keeps timing out when I try to upload anything over 10MB. I've tried 4 times. Our internet is 200Mbps so it's not our connection. I need to get these trial exhibits uploaded by end of business today.",
+    "expectedLesson": "Portal timeout during urgent deadline upload",
+    "difficulty": "medium",
+    "senderName": "Andrei Volescu"
+  },
+  {
+    "message": "The hearing date listed in the portal for Case #CF-2024-8555 is wrong. It shows March 10 but the actual date is April 7. I filed a correction request two weeks ago through ticket #CP-3321 but it hasn't been updated yet. Opposing counsel is using the portal date in their filings and it's creating confusion.",
+    "expectedLesson": "Hearing date shows outdated information",
+    "difficulty": "easy",
+    "senderName": "Emmanuel Toussaint"
+  },
+  {
+    "message": "how do I add someone else to my account so they can manage documents for me?",
+    "expectedLesson": "Add an authorized contact or assistant to the account",
+    "difficulty": "easy",
+    "senderName": "Miriam Schwartz"
+  },
+  {
+    "message": "I'm looking for the retainer agreement we signed with your firm. I've searched under 'Documents', 'Agreements', and 'Signed Files' but nothing comes up. It was signed around March 2026. I need it for an insurance claim.",
+    "expectedLesson": "Cannot find the signed retainer agreement",
+    "difficulty": "medium",
+    "senderName": "Ricardo Almeida"
+  },
+  {
+    "message": "I can't access my account at all — it either says permission denied on the case files or it just logs me out. I've been going back and forth between your support team and my IT department for three days now. Someone suggested it might be a session issue, someone else said permissions. I just need to download one document for a court deadline tomorrow. I don't care what the root cause is at this point, I just need access.",
+    "expectedLesson": "Cannot access case file due to permission denied",
+    "difficulty": "easy",
+    "senderName": "Kenji Takahashi"
+  },
+  {
+    "message": "I upgraded our subscription last week but now I can't access case files that I could access before the upgrade. Getting a permissions error. Also the new features from the upgraded plan don't seem to be active either. Our firm is Henderson & Associates, account #HA-2200.",
+    "expectedLesson": "Upgraded plan but features are not unlocked",
+    "difficulty": "hard",
+    "senderName": "Bianca Nicolescu"
+  },
+  {
+    "message": "Hi, I'm trying to log into the client portal to check on my case status but it says 'invalid credentials'. I'm sure my password is right. I also wanted to check if the hearing date listed is still accurate because my lawyer mentioned it might have changed.",
+    "expectedLesson": "Invalid credentials despite correct password",
+    "difficulty": "hard",
+    "senderName": "Marco Esposito"
+  },
+  {
+    "message": "I cancelled my subscription last month but I just got an invoice for this month. Also when I try to log in to dispute the charge, my account seems to be deactivated. How am I supposed to sort this out if I can't even access my account?",
+    "expectedLesson": "Auto-renewal charged unexpectedly",
+    "difficulty": "hard",
+    "senderName": "Lisa Johansson"
+  },
+  {
+    "message": "I'm trying to track my shipment but the tracking page won't load because the portal keeps timing out. I've been trying for two hours. The session just expires. I need to know where my package is because it contains time-sensitive legal documents.",
+    "expectedLesson": "Portal timeout during urgent deadline upload",
+    "difficulty": "hard",
+    "senderName": "Chidi Nwankwo"
+  },
+  {
+    "message": "Our trial just expired and we really liked the platform. We want to subscribe but first need to understand: our trial data — all the test configurations and uploaded documents — will those carry over to the paid plan or do we start fresh? We put significant effort into the setup.",
+    "expectedLesson": "Cancellation request and what happens to data",
+    "difficulty": "hard",
+    "senderName": "Mariam Toure"
+  },
+  {
+    "message": "My return pickup was approved two weeks ago but nobody has come. Meanwhile the refund for this item is being held up. I checked my invoice and I notice I was also charged twice in the same billing cycle. So I'm owed money for the return AND for the duplicate charge. This is really unacceptable service.",
+    "expectedLesson": "Return approved but pickup never happened",
+    "difficulty": "hard",
+    "senderName": "Oluwaseun Adeyemi"
+  },
+  {
+    "message": "I need to replace a document I uploaded to the portal. I also need proof that the previous version was uploaded — like a timestamp or audit log — because opposing counsel is claiming we never submitted it on time. Matter #CF-2024-9200.",
+    "expectedLesson": "Uploaded the wrong document and need to replace it",
+    "difficulty": "hard",
+    "senderName": "Helena Johansson"
+  },
+  {
+    "message": "I just realized my password reset emails have been going to my old work email that I no longer have access to. That's why I never received the reset link. Can you update my email to m.bergstrom@newcompany.com and then send the reset?",
+    "expectedLesson": "Password reset link expired or not received",
+    "difficulty": "hard",
+    "senderName": "Magnus Bergstrom"
+  },
+  {
+    "message": "Package was marked as delivered to a neighbor but I live in a rural area with no neighbors for miles. I also checked and the delivery address on my order confirmation is correct. Someone clearly made an error. I need this investigated and either my package found or a replacement sent.",
+    "expectedLesson": "Marked delivered but not received",
+    "difficulty": "medium",
+    "senderName": "Chloe Tremblay"
+  },
+  {
+    "message": "Hello, this is regarding our account with your platform. We recently changed our company structure from a sole proprietorship to an LLC and need to update multiple things: the legal name on invoices, add two authorized users to the portal, and we noticed our subscription shows seats for 5 but we need 8. Can you handle all of this in one go or do I need separate tickets?",
+    "expectedLesson": "Invoice shows outdated company details",
+    "difficulty": "hard",
+    "senderName": "William Achebe"
+  },
+  {
+    "message": "I just want to download a delivery manifest for 3 orders we received last week. Order numbers: SH-70021, SH-70022, SH-70025. We need them for our warehouse audit. Can you email them all to logistics@acmecorp.com?",
+    "expectedLesson": "Need proof of delivery or delivery manifest",
+    "difficulty": "easy",
+    "senderName": "Karla Magnusson"
+  },
+  {
+    "message": "where is the signed retainer? I know I signed it digitally but I can't find it anywhere in the portal. checked all folders.",
+    "expectedLesson": "Cannot find the signed retainer agreement",
+    "difficulty": "easy",
+    "senderName": "Amira Benali"
+  },
+  {
+    "message": "Our tracking number TRK-9920381 has been stuck on 'label created' since July 1st. It's now the 7th. The shipment contains perishable goods. Is the package even in transit or was it never shipped? I've tried calling the carrier directly but they say I need to go through you since you generated the label.",
+    "expectedLesson": "Tracking not updating for days",
+    "difficulty": "easy",
+    "senderName": "Noor Al-Hashemi"
+  },
+  {
+    "message": "The delivery went to our old warehouse at 100 Industrial Pkwy instead of the new one at 300 Commerce Way. We updated the address in your system a month ago. I can see it's correct in our profile. I also realized the invoice for this shipment shows the old address too. Something is wrong with how address changes propagate in your system.",
+    "expectedLesson": "Invoice shows outdated company details",
+    "difficulty": "medium",
+    "senderName": "Aleksandar Jovic"
+  },
+  {
+    "message": "I uploaded several documents to my case file last week but now they're all showing as unavailable. The folder says I don't have permission. Matter #CF-2024-9310. I'm the primary attorney on record. This started after the system update on Friday.",
+    "expectedLesson": "Cannot access case file due to permission denied",
+    "difficulty": "easy",
+    "senderName": "Aditya Mehta"
+  },
+  {
+    "message": "We switched payment methods from ACH to credit card last month but the system charged our old bank account. Meanwhile I'm trying to upload an urgent filing through the portal and it keeps timing out. The upload fails at around 80% every time. Our deadline is tomorrow at 9 AM. Account under Cascade Ventures, #CV-4401.",
+    "expectedLesson": "Portal timeout during urgent deadline upload",
+    "difficulty": "hard",
+    "senderName": "Valentina Cruz"
+  }
+]

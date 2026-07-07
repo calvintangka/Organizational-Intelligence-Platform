@@ -1,0 +1,602 @@
+[
+  {
+    "message": "I was charged twice this month for my subscription. Can you please look into this?",
+    "expectedLesson": "Duplicate charge in one billing cycle",
+    "difficulty": "easy",
+    "senderName": "Maria Santos"
+  },
+  {
+    "message": "Hi, I just noticed a duplicate charge on my credit card statement dated June 28. The amount of $49.99 appeared two times under the same merchant. Invoice numbers INV-2026-4411 and INV-2026-4412. Please advise.",
+    "expectedLesson": "Duplicate charge in one billing cycle",
+    "difficulty": "easy",
+    "senderName": "David Okonkwo"
+  },
+  {
+    "message": "Same invoice showed up twice on my billing page. What's going on?",
+    "expectedLesson": "Duplicate charge in one billing cycle",
+    "difficulty": "easy",
+    "senderName": "Yuki Tanaka"
+  },
+  {
+    "message": "Billing charged me again for the same period. I already paid on the 1st and now there's another deduction on the 3rd.",
+    "expectedLesson": "Duplicate charge in one billing cycle",
+    "difficulty": "easy",
+    "senderName": "Priya Mehta"
+  },
+  {
+    "message": "Two charges for one renewal just hit my account. The renewal was supposed to be $99 but I see $198 total. This needs to be fixed ASAP.",
+    "expectedLesson": "Duplicate charge in one billing cycle",
+    "difficulty": "easy",
+    "senderName": "Carlos Rivera"
+  },
+  {
+    "message": "Looking at my bank statement, there seem to be two separate deductions for the same amount on different dates this cycle. Could this be an error on your end?",
+    "expectedLesson": "Duplicate charge in one billing cycle",
+    "difficulty": "medium",
+    "senderName": "Amina Diallo"
+  },
+  {
+    "message": "I'm confused because my bank shows the subscription fee leaving my account on both June 1 and June 5. I only have one active plan. Can someone clarify?",
+    "expectedLesson": "Duplicate charge in one billing cycle",
+    "difficulty": "medium",
+    "senderName": "Stefan Eriksson"
+  },
+  {
+    "message": "Our accounting team flagged that the monthly SaaS payment went through twice in the same statement period. We need a credit note or reversal for the extra amount. Ref: INV-2026-5523.",
+    "expectedLesson": "Duplicate charge in one billing cycle",
+    "difficulty": "medium",
+    "senderName": "Budi Santoso"
+  },
+  {
+    "message": "Hey team, my card got hit with the exact same amount twice within three days. Not sure if this was intentional or a glitch. Please check my account.",
+    "expectedLesson": "Duplicate charge in one billing cycle",
+    "difficulty": "medium",
+    "senderName": "Rachel Kim"
+  },
+  {
+    "message": "I see a discrepancy in my June billing — the total deducted is roughly double what I expected. When I look at the transaction log, it appears the system processed the payment on two separate occasions.",
+    "expectedLesson": "Duplicate charge in one billing cycle",
+    "difficulty": "medium",
+    "senderName": "Tomasz Kowalski"
+  },
+  {
+    "message": "Our finance department flagged something on the latest statement and I need to understand why the numbers don't match what we budgeted for this quarter. The line item for your service is appearing with a much larger total than our contract specifies.",
+    "expectedLesson": "Duplicate charge in one billing cycle",
+    "difficulty": "hard",
+    "senderName": "Fatima Al-Rashidi"
+  },
+  {
+    "message": "There's a mismatch between what I expected to pay and what actually came out of my account. It looks like there might have been some kind of processing error because the total is exactly 2x the subscription fee.",
+    "expectedLesson": "Duplicate charge in one billing cycle",
+    "difficulty": "hard",
+    "senderName": "Jean-Pierre Duval"
+  },
+  {
+    "message": "I'm doing a monthly reconciliation and the amount debited for your platform doesn't reconcile with our purchase order. It seems like the transaction was recorded more than once. Could you investigate?",
+    "expectedLesson": "Duplicate charge in one billing cycle",
+    "difficulty": "hard",
+    "senderName": "Oluwaseun Adeyemi"
+  },
+  {
+    "message": "My bank alerted me to unusual activity — same vendor, same amount, within the same week. I want to make sure this isn't a billing system issue before I dispute it with my bank.",
+    "expectedLesson": "Duplicate charge in one billing cycle",
+    "difficulty": "hard",
+    "senderName": "Mei-Ling Chu"
+  },
+  {
+    "message": "The invoice still shows our old company name \"PT Maju Bersama\" but we rebranded to \"PT Solusi Digital\" six months ago. Can you update this?",
+    "expectedLesson": "Invoice shows outdated company details",
+    "difficulty": "easy",
+    "senderName": "Andi Wijaya"
+  },
+  {
+    "message": "Wrong company name on invoice INV-2026-7890. It should be \"Greenfield Analytics Ltd\" not \"Greenfield Consulting Ltd\". Please reissue.",
+    "expectedLesson": "Invoice shows outdated company details",
+    "difficulty": "easy",
+    "senderName": "Sarah Thompson"
+  },
+  {
+    "message": "Our address on the invoice is outdated. We moved offices last year. The invoice still shows our previous location at Jl. Sudirman No. 45.",
+    "expectedLesson": "Invoice shows outdated company details",
+    "difficulty": "easy",
+    "senderName": "Reza Firmansyah"
+  },
+  {
+    "message": "Hi, the invoice shows our previous NPWP number. We got a new NPWP after restructuring. Can you update the billing details?",
+    "expectedLesson": "Invoice shows outdated company details",
+    "difficulty": "easy",
+    "senderName": "Dewi Lestari"
+  },
+  {
+    "message": "We need the invoice reissued with our new legal name. The entity changed from \"Smith & Partners LLC\" to \"Smith Global Inc\" as of January this year.",
+    "expectedLesson": "Invoice shows outdated company details",
+    "difficulty": "easy",
+    "senderName": "James O'Brien"
+  },
+  {
+    "message": "I updated our company profile in the system three months ago, but the latest invoice still pulled the old information. Is there a separate place where billing details need to be changed?",
+    "expectedLesson": "Invoice shows outdated company details",
+    "difficulty": "medium",
+    "senderName": "Lakshmi Narayan"
+  },
+  {
+    "message": "Our accountant is refusing to process the latest invoice because the entity name and registration number don't match our current records. We went through a merger. How do we get corrected documents?",
+    "expectedLesson": "Invoice shows outdated company details",
+    "difficulty": "medium",
+    "senderName": "Viktor Petrov"
+  },
+  {
+    "message": "The billing address on our invoices hasn't been updated even though I submitted a change request last quarter. Our finance team cannot reimburse expenses with incorrect company details on the receipt.",
+    "expectedLesson": "Invoice shows outdated company details",
+    "difficulty": "medium",
+    "senderName": "Citra Purnama"
+  },
+  {
+    "message": "We recently changed our tax registration and the old details are still appearing on every new invoice. This is causing problems with our compliance team. Please advise on how to fix this permanently.",
+    "expectedLesson": "Invoice shows outdated company details",
+    "difficulty": "medium",
+    "senderName": "Hassan Mahmoud"
+  },
+  {
+    "message": "Following up on my earlier request — our company went through a legal restructuring and all financial documents need to reflect the new entity. The invoices from your platform are the last ones still showing the old details, and our auditors are asking questions.",
+    "expectedLesson": "Invoice shows outdated company details",
+    "difficulty": "hard",
+    "senderName": "Ana Lucia Ferreira"
+  },
+  {
+    "message": "Our AP department keeps kicking back your invoices because the details don't align with what's in our vendor master file. We updated everything on our end months ago. What do we need to do to get this sorted?",
+    "expectedLesson": "Invoice shows outdated company details",
+    "difficulty": "hard",
+    "senderName": "Mohammed Al-Fahad"
+  },
+  {
+    "message": "We have an internal audit coming up and the documentation trail needs to be clean. Several of your invoices reference an entity and address that no longer exist. Can we get corrected versions for Q1 and Q2?",
+    "expectedLesson": "Invoice shows outdated company details",
+    "difficulty": "hard",
+    "senderName": "Nguyen Thi Lan"
+  },
+  {
+    "message": "The compliance team flagged that our recent invoices from your platform still carry the pre-acquisition details. Since the acquisition closed in March, all documents should reflect the acquiring entity. This is blocking our quarter-close.",
+    "expectedLesson": "Invoice shows outdated company details",
+    "difficulty": "hard",
+    "senderName": "Erik Johansson"
+  },
+  {
+    "message": "I can't find my invoice for the June payment. Where do I download my invoice?",
+    "expectedLesson": "Missing invoice or cannot find invoice",
+    "difficulty": "easy",
+    "senderName": "Patricia Williams"
+  },
+  {
+    "message": "Missing invoice for my last payment. I checked my email and the billing portal but nothing is there.",
+    "expectedLesson": "Missing invoice or cannot find invoice",
+    "difficulty": "easy",
+    "senderName": "Kofi Asante"
+  },
+  {
+    "message": "Invoice not sent for my July renewal. I need it for expense reporting. Can you resend?",
+    "expectedLesson": "Missing invoice or cannot find invoice",
+    "difficulty": "easy",
+    "senderName": "Aisha Patel"
+  },
+  {
+    "message": "Hi, I need a receipt for my payment on June 15. I paid $299 for the annual plan but never received a confirmation or invoice.",
+    "expectedLesson": "Missing invoice or cannot find invoice",
+    "difficulty": "easy",
+    "senderName": "Roberto Gonzalez"
+  },
+  {
+    "message": "Can't find the invoice anywhere in my account dashboard. I've looked under Billing, Account, and Settings. Am I looking in the wrong place?",
+    "expectedLesson": "Missing invoice or cannot find invoice",
+    "difficulty": "easy",
+    "senderName": "Siti Nurhaliza"
+  },
+  {
+    "message": "I usually get an email with my invoice attached right after payment, but this month nothing came through. I checked spam too. Could you send it to me directly?",
+    "expectedLesson": "Missing invoice or cannot find invoice",
+    "difficulty": "medium",
+    "senderName": "Daniel Ochieng"
+  },
+  {
+    "message": "My company requires me to submit receipts for all SaaS subscriptions. The payment went through on my credit card last week but I have no documentation from your side to show for it. How can I get a formal document?",
+    "expectedLesson": "Missing invoice or cannot find invoice",
+    "difficulty": "medium",
+    "senderName": "Isabella Rossi"
+  },
+  {
+    "message": "Our finance team is asking me for the payment documentation for the past three months. I can see the charges on our card but there's nothing in the system I can download or forward to them.",
+    "expectedLesson": "Missing invoice or cannot find invoice",
+    "difficulty": "medium",
+    "senderName": "Arief Hidayat"
+  },
+  {
+    "message": "I've been trying to locate the billing document for our Q2 subscription but the billing history in my account only goes back to April. The May and June entries seem to be missing entirely.",
+    "expectedLesson": "Missing invoice or cannot find invoice",
+    "difficulty": "medium",
+    "senderName": "Chen Wei"
+  },
+  {
+    "message": "We're closing our books for the quarter and I'm trying to reconcile all vendor payments. Your platform shows the payment was successful but there's no corresponding document I can pull. Our auditor needs something on letterhead with a transaction reference.",
+    "expectedLesson": "Missing invoice or cannot find invoice",
+    "difficulty": "hard",
+    "senderName": "Grace Muthoni"
+  },
+  {
+    "message": "I need to file an expense report by Friday and I'm stuck because the billing section of your platform doesn't have any downloadable documents for my account. The payment definitely happened — I can see it on my bank statement. What are my options here?",
+    "expectedLesson": "Missing invoice or cannot find invoice",
+    "difficulty": "hard",
+    "senderName": "Raj Krishnamurthy"
+  },
+  {
+    "message": "This is the third time I'm reaching out about this. I still don't have any formal payment documentation for the charges billed to our corporate card. Our AP team cannot process vendor payments without proper documentation and this is creating a backlog. Please escalate.",
+    "expectedLesson": "Missing invoice or cannot find invoice",
+    "difficulty": "hard",
+    "senderName": "Olga Smirnova"
+  },
+  {
+    "message": "I just noticed my plan renewed at a higher price than what I originally signed up for. The original was IDR 500,000/month and now it's IDR 650,000. Why?",
+    "expectedLesson": "Unexpected price increase on renewal",
+    "difficulty": "easy",
+    "senderName": "Hendra Kusuma"
+  },
+  {
+    "message": "My renewal price increased without any notice. I was paying $29/month and now I'm being charged $39/month. What happened?",
+    "expectedLesson": "Unexpected price increase on renewal",
+    "difficulty": "easy",
+    "senderName": "Emily Watson"
+  },
+  {
+    "message": "Charged more this year for the annual renewal. Last year it was EUR 499, this year EUR 599. I didn't agree to this.",
+    "expectedLesson": "Unexpected price increase on renewal",
+    "difficulty": "easy",
+    "senderName": "Ahmed Hassan"
+  },
+  {
+    "message": "The price went up on my renewal and I wasn't told beforehand. This feels wrong. I want an explanation.",
+    "expectedLesson": "Unexpected price increase on renewal",
+    "difficulty": "easy",
+    "senderName": "Keiko Yamamoto"
+  },
+  {
+    "message": "My plan renewed at a different price than what's shown on my original order confirmation. INV-2026-3344 shows $59.99 but my original agreement says $49.99.",
+    "expectedLesson": "Unexpected price increase on renewal",
+    "difficulty": "easy",
+    "senderName": "Michael Brennan"
+  },
+  {
+    "message": "I've been a customer for two years and the cost has quietly crept up each renewal cycle. Is there a way to lock in a rate? The incremental increases are adding up and I'm considering alternatives.",
+    "expectedLesson": "Unexpected price increase on renewal",
+    "difficulty": "medium",
+    "senderName": "Farah Zahrani"
+  },
+  {
+    "message": "When I compare last year's invoice to this year's, the per-seat cost has gone up by about 15%. I don't recall receiving any communication about pricing changes. Was this announced somewhere?",
+    "expectedLesson": "Unexpected price increase on renewal",
+    "difficulty": "medium",
+    "senderName": "Lucas Martinez"
+  },
+  {
+    "message": "I got a notification that my subscription auto-renewed, and when I checked the amount it was noticeably higher than before. I assumed the price was fixed for the duration of my contract. Can you explain the difference?",
+    "expectedLesson": "Unexpected price increase on renewal",
+    "difficulty": "medium",
+    "senderName": "Nadia Osman"
+  },
+  {
+    "message": "Hi, quick question — I'm reviewing our vendor spend for this year vs. last year and your platform shows a delta that doesn't correspond to any additional seats or upgrades on our end. Could it be a pricing adjustment we weren't notified about?",
+    "expectedLesson": "Unexpected price increase on renewal",
+    "difficulty": "medium",
+    "senderName": "Tatiana Volkov"
+  },
+  {
+    "message": "Our procurement team is asking why the renewal cost is different from the original PO. We budgeted based on the initial quote and the new invoice exceeds that by a significant margin. This is causing friction with our finance department and we need clarity before we can approve payment.",
+    "expectedLesson": "Unexpected price increase on renewal",
+    "difficulty": "hard",
+    "senderName": "Kwame Mensah"
+  },
+  {
+    "message": "I'm trying to reconcile our annual SaaS budget and your line item is off from projections. We didn't add any users or change tiers, so the variance is unexpected. Can you walk me through what's driving the cost difference between the last renewal and this one?",
+    "expectedLesson": "Unexpected price increase on renewal",
+    "difficulty": "hard",
+    "senderName": "Rina Hartono"
+  },
+  {
+    "message": "We signed a 2-year agreement and the terms stated a fixed monthly rate. The latest invoice suggests otherwise. I'd like to understand whether this is a billing error or if there's a clause I missed. Attaching the original agreement for reference.",
+    "expectedLesson": "Unexpected price increase on renewal",
+    "difficulty": "hard",
+    "senderName": "Jorge Castillo"
+  },
+  {
+    "message": "Something odd — my credit card was declined for the subscription payment but I can still log in and use everything. Is that normal?",
+    "expectedLesson": "Payment method declined but service still active",
+    "difficulty": "easy",
+    "senderName": "Sophie Laurent"
+  },
+  {
+    "message": "My payment failed but my account is still active. I got an email saying the card was declined. Do I need to do anything?",
+    "expectedLesson": "Payment method declined but service still active",
+    "difficulty": "easy",
+    "senderName": "Ravi Shankar"
+  },
+  {
+    "message": "Card declined but service still works. Just want to make sure I won't suddenly lose access. When is the grace period over?",
+    "expectedLesson": "Payment method declined but service still active",
+    "difficulty": "easy",
+    "senderName": "Jessica Adebayo"
+  },
+  {
+    "message": "Billing says my payment failed but I can still use the platform with no interruption. Is there a grace period? How long do I have to update my card?",
+    "expectedLesson": "Payment method declined but service still active",
+    "difficulty": "easy",
+    "senderName": "Martin Novak"
+  },
+  {
+    "message": "I got a declined payment notification but nothing changed with my access. Want to make sure I don't get locked out without warning.",
+    "expectedLesson": "Payment method declined but service still active",
+    "difficulty": "easy",
+    "senderName": "Lina Putri"
+  },
+  {
+    "message": "I received an email saying there was a problem processing my payment, but when I log in everything seems normal. Should I be concerned? I updated my card details just now — will it retry automatically?",
+    "expectedLesson": "Payment method declined but service still active",
+    "difficulty": "medium",
+    "senderName": "Alejandro Vega"
+  },
+  {
+    "message": "My bank blocked the transaction because the charge looked unusual, but your system doesn't seem to have noticed. Everything is still working on my end. I've whitelisted the merchant now — will the next attempt go through on its own?",
+    "expectedLesson": "Payment method declined but service still active",
+    "difficulty": "medium",
+    "senderName": "Naomi Kimura"
+  },
+  {
+    "message": "Interesting situation — the billing page shows a failed payment from three days ago, but all features are still fully functional. I assume there's some buffer period? I'd like to know when access would actually be affected so I can plan accordingly.",
+    "expectedLesson": "Payment method declined but service still active",
+    "difficulty": "medium",
+    "senderName": "Benjamin Osei"
+  },
+  {
+    "message": "I just realized my corporate card expired last month and I haven't updated it here. But we've been using the platform daily with no issues. How far into a failed payment cycle can we go before there are consequences? I need to coordinate the card update with our admin.",
+    "expectedLesson": "Payment method declined but service still active",
+    "difficulty": "medium",
+    "senderName": "Irene Sugiarto"
+  },
+  {
+    "message": "We had a temporary hold on our payment method due to a fraud investigation by our bank, which has since been resolved. I noticed your billing system attempted to charge us and it was rejected, but there's been no service degradation. I'd like to understand what happens next — does the system retry, or do I need to manually trigger a payment?",
+    "expectedLesson": "Payment method declined but service still active",
+    "difficulty": "hard",
+    "senderName": "Omar Benali"
+  },
+  {
+    "message": "Our CFO flagged that the subscription payment bounced due to a card limit issue, but no one on the team noticed any access changes. I've since arranged an alternative payment method. What's the process to settle the outstanding balance and make sure we're in good standing going forward?",
+    "expectedLesson": "Payment method declined but service still active",
+    "difficulty": "hard",
+    "senderName": "Diana Restrepo"
+  },
+  {
+    "message": "I'm a bit confused about the billing status on our account. The dashboard shows an overdue payment but all team members still have full access. We want to make sure we resolve this before it becomes a bigger issue. Can you help me understand the timeline and what steps I need to take?",
+    "expectedLesson": "Payment method declined but service still active",
+    "difficulty": "hard",
+    "senderName": "Yusuf Ibrahim"
+  },
+  {
+    "message": "We switched banks recently and forgot to update the payment info here. The old card was charged and obviously declined. But the service never went down. How does your billing retry policy work, and is there anything we owe at this point?",
+    "expectedLesson": "Payment method declined but service still active",
+    "difficulty": "hard",
+    "senderName": "Anastasia Popova"
+  },
+  {
+    "message": "I'd like a refund for the unused months on my subscription. I cancelled last week but I had paid for the full year.",
+    "expectedLesson": "Refund request for unused service period",
+    "difficulty": "easy",
+    "senderName": "Thomas Mueller"
+  },
+  {
+    "message": "Can I get a prorated refund? I'm cancelling my plan mid-cycle and I've only used 10 days of this month.",
+    "expectedLesson": "Refund request for unused service period",
+    "difficulty": "easy",
+    "senderName": "Zainab Abubakar"
+  },
+  {
+    "message": "I didn't use the service at all this month. Can I get my money back for the unused period?",
+    "expectedLesson": "Refund request for unused service period",
+    "difficulty": "easy",
+    "senderName": "Kevin Park"
+  },
+  {
+    "message": "Requesting a refund for the remaining time on my annual plan. I've decided to switch to a different provider and would like the unused portion back.",
+    "expectedLesson": "Refund request for unused service period",
+    "difficulty": "easy",
+    "senderName": "Laura Fernandez"
+  },
+  {
+    "message": "Cancel and refund remaining time please. I signed up for 12 months, used 4. I'd like the balance returned to my card.",
+    "expectedLesson": "Refund request for unused service period",
+    "difficulty": "easy",
+    "senderName": "Abdul Rahman"
+  },
+  {
+    "message": "I paid for a yearly subscription in January but our team stopped using the platform in March. Is it possible to get a partial refund for the months we haven't used? We're a small startup and the budget matters.",
+    "expectedLesson": "Refund request for unused service period",
+    "difficulty": "medium",
+    "senderName": "Camille Dubois"
+  },
+  {
+    "message": "We downgraded our plan last month but the previous charge was for the higher tier. Since we didn't use any of the premium features during that period, we're hoping to get the difference credited back.",
+    "expectedLesson": "Refund request for unused service period",
+    "difficulty": "medium",
+    "senderName": "Hiroshi Nakamura"
+  },
+  {
+    "message": "I've been on medical leave and haven't accessed the platform in over two months. My subscription kept running. I understand it's my responsibility to cancel, but is there any possibility of getting a partial refund for the time I was away?",
+    "expectedLesson": "Refund request for unused service period",
+    "difficulty": "medium",
+    "senderName": "Blessing Nwosu"
+  },
+  {
+    "message": "Our project ended earlier than expected and we no longer need the platform. We have about 7 months remaining on our annual license. What's your policy on returning the unused portion? We'd appreciate any credit or refund you can offer.",
+    "expectedLesson": "Refund request for unused service period",
+    "difficulty": "medium",
+    "senderName": "Tara Sundaram"
+  },
+  {
+    "message": "We onboarded your platform for a specific campaign that wrapped up in April. The annual subscription runs through December. Given that we completed our use case and have no further need, I'd like to discuss options for recovering some of the remaining investment. Our usage logs should confirm minimal activity since then.",
+    "expectedLesson": "Refund request for unused service period",
+    "difficulty": "hard",
+    "senderName": "Ivan Horvat"
+  },
+  {
+    "message": "I signed up for the annual plan on a recommendation but quickly realized it wasn't the right fit for our workflow. We used it for maybe two weeks total. I know it's been a couple of months since purchase, but the usage was so minimal — is there any flexibility on getting a partial refund?",
+    "expectedLesson": "Refund request for unused service period",
+    "difficulty": "hard",
+    "senderName": "Gabriela Morales"
+  },
+  {
+    "message": "Our team was reorganized and the department that used your platform was dissolved. The subscription still has several months left. I'd like to understand what options exist for recouping the remaining value, whether that's a refund, credit, or transfer to another team within our organization.",
+    "expectedLesson": "Refund request for unused service period",
+    "difficulty": "hard",
+    "senderName": "Dmitri Volkov"
+  },
+  {
+    "message": "We've been evaluating our vendor contracts and realized we've been paying for a service that our team barely touches. The contract renews in 3 months but I'd like to explore whether we can negotiate a refund or early termination for the unused capacity. Happy to provide usage data.",
+    "expectedLesson": "Refund request for unused service period",
+    "difficulty": "hard",
+    "senderName": "Nkem Eze"
+  },
+  {
+    "message": "Can you explain the VAT amount on my latest invoice? I see a line item for PPN 11% but I'm not sure if that's correct.",
+    "expectedLesson": "Tax or VAT questions on invoices",
+    "difficulty": "easy",
+    "senderName": "Bagus Prasetyo"
+  },
+  {
+    "message": "I have a question about the tax on my invoice. Is VAT included in the listed price or is it added on top?",
+    "expectedLesson": "Tax or VAT questions on invoices",
+    "difficulty": "easy",
+    "senderName": "Emma Clarke"
+  },
+  {
+    "message": "Where can I find the tax details on my invoice? I need to report the PPN amount separately for our records.",
+    "expectedLesson": "Tax or VAT questions on invoices",
+    "difficulty": "easy",
+    "senderName": "Rizky Ramadhan"
+  },
+  {
+    "message": "Do you issue a Faktur Pajak? Our finance team needs it for our PPN reporting. NPWP: 01.234.567.8-901.000.",
+    "expectedLesson": "Tax or VAT questions on invoices",
+    "difficulty": "easy",
+    "senderName": "Wulan Sari"
+  },
+  {
+    "message": "Hi, quick question — is your company registered for VAT? I need a proper tax invoice for our European entity and the current invoice doesn't show a VAT registration number.",
+    "expectedLesson": "Tax or VAT questions on invoices",
+    "difficulty": "easy",
+    "senderName": "Frank Becker"
+  },
+  {
+    "message": "I need the NPWP on the billing document for tax compliance. Can you add our NPWP to future invoices?",
+    "expectedLesson": "Tax or VAT questions on invoices",
+    "difficulty": "easy",
+    "senderName": "Indra Permana"
+  },
+  {
+    "message": "The tax invoice question I have is about the PPN amount — it seems to be calculated on the full price before our discount. Shouldn't it be on the net amount after discount?",
+    "expectedLesson": "Tax or VAT questions on invoices",
+    "difficulty": "medium",
+    "senderName": "Nurul Aisyah"
+  },
+  {
+    "message": "We're a tax-exempt nonprofit organization. Is there a way to have the VAT removed from our invoices? We can provide our exemption certificate.",
+    "expectedLesson": "Tax or VAT questions on invoices",
+    "difficulty": "medium",
+    "senderName": "Catherine Mensah"
+  },
+  {
+    "message": "I'm based in Singapore and I noticed GST is being charged on my invoice. I thought cross-border digital services to Singapore weren't subject to your country's VAT. Can you clarify?",
+    "expectedLesson": "Tax or VAT questions on invoices",
+    "difficulty": "medium",
+    "senderName": "Jonathan Lim"
+  },
+  {
+    "message": "Our company has two NPWP numbers — one for the head office and one for a branch. The invoice is currently using the branch NPWP but our tax team needs it under the head office number for proper Faktur Pajak issuance. How do we change this?",
+    "expectedLesson": "Tax or VAT questions on invoices",
+    "difficulty": "medium",
+    "senderName": "Agus Setiawan"
+  },
+  {
+    "message": "We operate in multiple EU jurisdictions and need to apply the reverse charge mechanism for B2B transactions. Currently your invoices include VAT which we then have to reclaim. Can you issue invoices without VAT if we provide our EU VAT registration number?",
+    "expectedLesson": "Tax or VAT questions on invoices",
+    "difficulty": "medium",
+    "senderName": "Magdalena Nowak"
+  },
+  {
+    "message": "Our tax advisor is asking about the nature of the service for VAT categorization purposes. Specifically, they need to know if this is classified as a digital service, consulting service, or software license, because each has different tax treatment in our jurisdiction.",
+    "expectedLesson": "Tax or VAT questions on invoices",
+    "difficulty": "hard",
+    "senderName": "Ahmad Fauzi"
+  },
+  {
+    "message": "We're going through a tax audit and the auditor is questioning the PPN treatment on several of your invoices from 2025. They want to see the underlying Faktur Pajak for each transaction. Can you provide the Faktur Pajak numbers and the corresponding DJP validation codes for INV-2025-1201 through INV-2025-1212?",
+    "expectedLesson": "Tax or VAT questions on invoices",
+    "difficulty": "hard",
+    "senderName": "Ratih Kusumawardani"
+  },
+  {
+    "message": "I'm preparing our annual tax filing and I need a summary of all tax amounts charged across our invoices for the 2025 fiscal year. Specifically, I need the breakdown by tax type (PPN vs WHT if applicable) and the total taxable base. Is this something your billing system can generate?",
+    "expectedLesson": "Tax or VAT questions on invoices",
+    "difficulty": "hard",
+    "senderName": "Peter Andersen"
+  },
+  {
+    "message": "We have a complex tax situation — our holding company is in the Netherlands, the contracting entity is in Indonesia, and the end users are in Australia. The invoice currently applies Indonesian PPN but our tax counsel believes it should be zero-rated given the service delivery location. Can someone from your finance team clarify the tax treatment?",
+    "expectedLesson": "Tax or VAT questions on invoices",
+    "difficulty": "hard",
+    "senderName": "Siska Handayani"
+  },
+  {
+    "message": "Following up on our earlier conversation about WHT — our local regulations require us to withhold 2% on payments to domestic vendors. I need to confirm: does your company accept withholding tax deductions, and if so, what documentation do you need from us (bukti potong, etc.)?",
+    "expectedLesson": "Tax or VAT questions on invoices",
+    "difficulty": "hard",
+    "senderName": "Bayu Nugroho"
+  },
+  {
+    "message": "Hi, I made a payment on June 10 for my subscription renewal but I never received any invoice or receipt by email. I've also checked the billing section in my account and there's nothing there either. Could you send me the invoice for that payment? Thanks, Mark.",
+    "expectedLesson": "Missing invoice or cannot find invoice",
+    "difficulty": "medium",
+    "senderName": "Mark Andersen"
+  },
+  {
+    "message": "Hi, I just saw that my subscription renewed at IDR 750,000 but last year the same plan was IDR 600,000. I didn't receive any notification about a price change. Can you explain why the cost went up? Regards, Fitri.",
+    "expectedLesson": "Unexpected price increase on renewal",
+    "difficulty": "medium",
+    "senderName": "Fitri Handoko"
+  },
+  {
+    "message": "Where is my receipt?? I paid three days ago and I have NOTHING to show for it. I need this for my expense report which is due TOMORROW. Please help.",
+    "expectedLesson": "Missing invoice or cannot find invoice",
+    "difficulty": "easy",
+    "senderName": "Takeshi Mori"
+  },
+  {
+    "message": "Good morning, I hope you're doing well. I wanted to bring to your attention that our latest subscription invoice (INV-2026-8891) still references our former business address and trade name. As we completed our rebranding in Q1, all financial documents should now reflect the updated details. Could you kindly arrange for a corrected invoice at your earliest convenience? Many thanks.",
+    "expectedLesson": "Invoice shows outdated company details",
+    "difficulty": "medium",
+    "senderName": "Charlotte van der Berg"
+  },
+  {
+    "message": "Not happy. My renewal went from USD 199 to USD 249 with ZERO heads up. I've been a loyal customer for 3 years. This is not how you treat people. Considering cancelling.",
+    "expectedLesson": "Unexpected price increase on renewal",
+    "difficulty": "easy",
+    "senderName": "Andre Simmons"
+  },
+  {
+    "message": "Hi, my card was replaced by the bank due to suspicious activity. The old card was declined for the subscription payment yesterday but I can still access everything. I've added the new card now. Will the system pick it up automatically on the next retry? Just want to make sure nothing falls through the cracks.",
+    "expectedLesson": "Payment method declined but service still active",
+    "difficulty": "medium",
+    "senderName": "Elif Yilmaz"
+  },
+  {
+    "message": "We prepaid for 12 months but are shutting down operations after month 5. Requesting a refund for the remaining 7 months. Total paid was IDR 12,000,000 so we're looking for approximately IDR 7,000,000 back. Please process this as soon as possible.\n\nBest regards,\nPak Hasan",
+    "expectedLesson": "Refund request for unused service period",
+    "difficulty": "medium",
+    "senderName": "Hasan Basri"
+  }
+]

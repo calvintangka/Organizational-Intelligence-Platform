@@ -1,0 +1,602 @@
+[
+  {
+    "message": "My trial expired and I wasn't done evaluating. Can you extend it?",
+    "expectedLesson": "Trial expired before evaluation finished",
+    "difficulty": "easy",
+    "senderName": "Priya Sharma"
+  },
+  {
+    "message": "Hi, our 14-day trial ended yesterday but we hadn't finished our evaluation. We were comparing your platform with two others and need at least another week. Is there any way to get more time?",
+    "expectedLesson": "Trial expired before evaluation finished",
+    "difficulty": "medium",
+    "senderName": "Marcus Johansson"
+  },
+  {
+    "message": "The trial ended too soon. We only started testing last Monday because our IT team was delayed on provisioning. Please help.",
+    "expectedLesson": "Trial expired before evaluation finished",
+    "difficulty": "easy",
+    "senderName": "Amara Okafor"
+  },
+  {
+    "message": "We were in the middle of testing the platform with our engineering team when access suddenly got cut off. We've got a vendor review meeting this Friday and I need to present findings. What are our options?",
+    "expectedLesson": "Trial expired before evaluation finished",
+    "difficulty": "medium",
+    "senderName": "David Chen"
+  },
+  {
+    "message": "I signed up for a trial a couple weeks ago but honestly didn't get around to exploring it properly because of a product launch on our side. Now I can't log in. Is the window completely closed?",
+    "expectedLesson": "Trial expired before evaluation finished",
+    "difficulty": "hard",
+    "senderName": "Fatima Al-Rashid"
+  },
+  {
+    "message": "Trial expired before my team could evaluate your reporting module. Need more time to evaluate please.",
+    "expectedLesson": "Trial expired before evaluation finished",
+    "difficulty": "easy",
+    "senderName": "Tomasz Kowalski"
+  },
+  {
+    "message": "Our evaluation period wasn't long enough. My manager just got back from leave and wants to see a demo before we commit to purchasing. The trial already ended though. Any chance we can reactivate?",
+    "expectedLesson": "Trial expired before evaluation finished",
+    "difficulty": "medium",
+    "senderName": "Kenji Nakamura"
+  },
+  {
+    "message": "I need more time on the trial. The evaluation is not finished and we have stakeholders who haven't even logged in yet.",
+    "expectedLesson": "Trial expired before evaluation finished",
+    "difficulty": "easy",
+    "senderName": "Sofia Gutierrez"
+  },
+  {
+    "message": "Hi support, we ran into some internal delays and couldn't properly vet the platform during the window we were given. Our procurement process requires a full security review which takes 3 weeks minimum. Is there a way to continue our assessment without having to pay upfront?",
+    "expectedLesson": "Trial expired before evaluation finished",
+    "difficulty": "hard",
+    "senderName": "Ibrahim Diallo"
+  },
+  {
+    "message": "The free period ran out before we could get meaningful results from our pilot group. We had 8 people testing it and only 3 managed to complete their tasks. Would appreciate an extension.\n\nThanks,\nRachel",
+    "expectedLesson": "Trial expired before evaluation finished",
+    "difficulty": "medium",
+    "senderName": "Rachel Kim"
+  },
+  {
+    "message": "Trial already ended and we weren't done. Can you reactivate it for our workspace \"Acme Design Co\"?",
+    "expectedLesson": "Trial expired before evaluation finished",
+    "difficulty": "easy",
+    "senderName": "Carlos Mendez"
+  },
+  {
+    "message": "I'm getting a message that says my access has been revoked. We started exploring your tool for our Q3 planning but the timing was terrible on our end. Is this a billing issue or did the test period just lapse?",
+    "expectedLesson": "Trial expired before evaluation finished",
+    "difficulty": "hard",
+    "senderName": "Aisha Patel"
+  },
+  {
+    "message": "Our trial ended but our evaluation is incomplete. We need at least 5 more business days. The team was on holiday for the first week.",
+    "expectedLesson": "Trial expired before evaluation finished",
+    "difficulty": "medium",
+    "senderName": "Oluwaseun Adeyemi"
+  },
+  {
+    "message": "Hi there, the trial expired and my boss is asking me to finalize a recommendation but I haven't tested the API integrations yet. Is there a grace period or do I need to subscribe to keep testing?\n\nBest regards,\nLukas",
+    "expectedLesson": "Trial expired before evaluation finished",
+    "difficulty": "medium",
+    "senderName": "Lukas Weber"
+  },
+  {
+    "message": "I upgraded to the Pro plan last week but the advanced analytics feature is still locked. What's going on?",
+    "expectedLesson": "Upgraded plan but features are not unlocked",
+    "difficulty": "easy",
+    "senderName": "Mei Lin Wong"
+  },
+  {
+    "message": "We just moved from the Starter plan to Business. The invoice shows the upgrade went through, but when I go to the dashboard, I still can't access custom workflows or the priority support chat. This is really frustrating.",
+    "expectedLesson": "Upgraded plan but features are not unlocked",
+    "difficulty": "medium",
+    "senderName": "James Okonkwo"
+  },
+  {
+    "message": "Paid for the higher plan but I have no access to the new features. The charge already hit my credit card.",
+    "expectedLesson": "Upgraded plan but features are not unlocked",
+    "difficulty": "easy",
+    "senderName": "Natasha Volkov"
+  },
+  {
+    "message": "I completed the upgrade to Enterprise yesterday morning. My billing page confirms it. However, my team still sees the same feature set as before. SSO configuration is greyed out, and the audit log page says it requires Enterprise. We're on Enterprise!",
+    "expectedLesson": "Upgraded plan but features are not unlocked",
+    "difficulty": "medium",
+    "senderName": "Raj Krishnamurthy"
+  },
+  {
+    "message": "After upgrading, nothing changed in my account. Features are still unavailable. I upgraded to get the API access and I need it for a client demo tomorrow. Please escalate this.",
+    "expectedLesson": "Upgraded plan but features are not unlocked",
+    "difficulty": "easy",
+    "senderName": "Elena Rossi"
+  },
+  {
+    "message": "I switched tiers three days ago hoping to unlock the bulk export functionality for a data migration we're running. The payment processed fine but the export button still shows a padlock icon. I've tried logging out and back in, clearing cache, different browser. Nothing works.",
+    "expectedLesson": "Upgraded plan but features are not unlocked",
+    "difficulty": "medium",
+    "senderName": "Kwame Asante"
+  },
+  {
+    "message": "My account shows Pro but the feature gates haven't updated. The new plan is not activated properly it seems. Can someone look into workspace ID #4481?",
+    "expectedLesson": "Upgraded plan but features are not unlocked",
+    "difficulty": "easy",
+    "senderName": "Yuki Tanaka"
+  },
+  {
+    "message": "So I paid the difference to move up to the next tier. Got the confirmation email and everything. But honestly my experience is exactly the same as before. I thought I'd see the new reporting templates and the integrations marketplace. Am I missing a step or is something broken on your end?",
+    "expectedLesson": "Upgraded plan but features are not unlocked",
+    "difficulty": "medium",
+    "senderName": "Daniela Ferreira"
+  },
+  {
+    "message": "Our finance team approved the Enterprise upgrade and it was processed on June 30th. Today is July 3rd and I still can't create custom roles or configure SAML. My CTO is asking why we paid more money for the same experience. This is becoming an internal credibility issue for me.\n\nPlease advise urgently.",
+    "expectedLesson": "Upgraded plan but features are not unlocked",
+    "difficulty": "hard",
+    "senderName": "Ahmed Hassan"
+  },
+  {
+    "message": "We upgraded our plan but the features are still locked. Upgrade completed but nothing changed. Very disappointed.",
+    "expectedLesson": "Upgraded plan but features are not unlocked",
+    "difficulty": "easy",
+    "senderName": "Linh Nguyen"
+  },
+  {
+    "message": "I bumped our subscription up a level specifically for the advanced permissions system, but the permissions page looks identical to what we had before. Is there a propagation delay or something? It's been 48 hours.",
+    "expectedLesson": "Upgraded plan but features are not unlocked",
+    "difficulty": "medium",
+    "senderName": "Oscar Reyes"
+  },
+  {
+    "message": "This is a follow-up to my earlier ticket. The upgrade still hasn't taken effect. I was told it would resolve within 24 hours but it's now been three days. My team is blocked.",
+    "expectedLesson": "Upgraded plan but features are not unlocked",
+    "difficulty": "hard",
+    "senderName": "Hannah Bergstrom"
+  },
+  {
+    "message": "We moved to Business plan to get the dedicated support channel and larger file uploads. The billing reflects the change but functionally everything is the same. We're uploading files and still hitting the old 25MB limit. What gives?\n\n— Trevor",
+    "expectedLesson": "Upgraded plan but features are not unlocked",
+    "difficulty": "medium",
+    "senderName": "Trevor Nkosi"
+  },
+  {
+    "message": "I upgraded to the Business tier on Monday. My receipt confirms it. But when I try to use the sandbox environment or the webhook builder, both say they require Business or higher. I'm literally on Business. This is blocking a critical integration.\n\nPlease help ASAP,\nSimon",
+    "expectedLesson": "Upgraded plan but features are not unlocked",
+    "difficulty": "hard",
+    "senderName": "Simon Achterberg"
+  },
+  {
+    "message": "I just tried to invite a new team member but got a seat limit error. Our Business plan should allow 25 seats and we only have 18 people.",
+    "expectedLesson": "Seat limit reached despite correct plan",
+    "difficulty": "easy",
+    "senderName": "Maria Gonzalez"
+  },
+  {
+    "message": "Seat limit reached but our plan says we can have up to 50 members. We currently have 43 active users. Why can't I add anyone else?",
+    "expectedLesson": "Seat limit reached despite correct plan",
+    "difficulty": "easy",
+    "senderName": "Pavel Novak"
+  },
+  {
+    "message": "I'm trying to onboard three new hires this week but the system is telling me we've maxed out our seats. I counted our team list and we should have room. Do pending invitations count toward the limit? Because I sent out a bunch of invites last month that were never accepted.",
+    "expectedLesson": "Seat limit reached despite correct plan",
+    "difficulty": "medium",
+    "senderName": "Chidinma Eze"
+  },
+  {
+    "message": "Cannot invite more users to our workspace. The error says we're at capacity but I only see 12 active members on a plan that allows 20.",
+    "expectedLesson": "Seat limit reached despite correct plan",
+    "difficulty": "easy",
+    "senderName": "Jun Watanabe"
+  },
+  {
+    "message": "We're on the Enterprise plan with 100 seats. When I go to the members page it shows 100/100 but several of those people left the company months ago. I deactivated them but they still seem to count. Our plan should allow more members than we're actually using.",
+    "expectedLesson": "Seat limit reached despite correct plan",
+    "difficulty": "medium",
+    "senderName": "Sarah Al-Mahmoud"
+  },
+  {
+    "message": "Too many seats used apparently, but half the people on the list haven't logged in since January. I need to add our new contractor today. How do I free up seats?",
+    "expectedLesson": "Seat limit reached despite correct plan",
+    "difficulty": "easy",
+    "senderName": "Diego Vargas"
+  },
+  {
+    "message": "Hi, I manage a team of 30 on the Pro plan (50 seat limit). I'm getting blocked when adding user #32. I noticed there are some old invitations from when we were setting things up that nobody ever accepted. Could those phantom invites be eating into our seat count? That feels like a bug.\n\nRegards,\nNkechi",
+    "expectedLesson": "Seat limit reached despite correct plan",
+    "difficulty": "medium",
+    "senderName": "Nkechi Obi"
+  },
+  {
+    "message": "Our workspace is showing a capacity warning but the numbers don't add up. We have 15 active users, 3 deactivated accounts, and 7 pending invites on a 20-seat plan. So technically only 15 real users. Can you clarify what counts as a seat?",
+    "expectedLesson": "Seat limit reached despite correct plan",
+    "difficulty": "hard",
+    "senderName": "Lars Eriksson"
+  },
+  {
+    "message": "I'm the admin for our company workspace. We just finished a reorg and I need to add 5 people from the newly merged team, but the system says no more seats. We're on Business with a 40 seat allocation. I see exactly 35 active users but also about 8 pending invitations from a batch I sent out weeks ago. Do I need to revoke those old invites first?",
+    "expectedLesson": "Seat limit reached despite correct plan",
+    "difficulty": "hard",
+    "senderName": "Rania Khoury"
+  },
+  {
+    "message": "Seat limit error when trying to add our newest team member. We definitely haven't exceeded our plan capacity. This is blocking our onboarding.\n\nThanks,\nFrank",
+    "expectedLesson": "Seat limit reached despite correct plan",
+    "difficulty": "easy",
+    "senderName": "Frank Muller"
+  },
+  {
+    "message": "We just went through layoffs and I removed 10 people from the platform. But when I try to add 2 replacements it still says we're maxed out. The member count doesn't seem to have updated after the removals. Is there a sync delay?\n\nVery frustrated with this.",
+    "expectedLesson": "Seat limit reached despite correct plan",
+    "difficulty": "medium",
+    "senderName": "Beatriz Costa"
+  },
+  {
+    "message": "Pending invites seem to count as seats, which is causing a confusing situation for us. We have 20 active users and 10 unaccepted invites on a 25-seat Pro plan. Can we reclaim those invite slots without losing the ability to re-invite those people later?",
+    "expectedLesson": "Seat limit reached despite correct plan",
+    "difficulty": "medium",
+    "senderName": "Vikram Reddy"
+  },
+  {
+    "message": "We had a contractor who was never properly removed from the system. Now that ghost account plus some stale invitations are preventing me from adding legitimate team members. Our seat allocation should be fine for our actual headcount. Can you help untangle this?",
+    "expectedLesson": "Seat limit reached despite correct plan",
+    "difficulty": "hard",
+    "senderName": "Anya Sokolov"
+  },
+  {
+    "message": "I'm trying to add our summer interns to the platform but the system won't let me. Says we're at the seat cap. We should have plenty of room on our plan. Could the issue be that I have a bunch of old invitations sitting in limbo from our last hiring round?",
+    "expectedLesson": "Seat limit reached despite correct plan",
+    "difficulty": "medium",
+    "senderName": "Marta Szymanska"
+  },
+  {
+    "message": "I'd like to cancel my subscription. What happens to my data after cancellation?",
+    "expectedLesson": "Cancellation request and what happens to data",
+    "difficulty": "easy",
+    "senderName": "Michael Thompson"
+  },
+  {
+    "message": "Please cancel my subscription effective immediately. Before you do, I need to know: will my files remain accessible after canceling? We have about 3 years of project data in there and I need to make sure I can export everything first.",
+    "expectedLesson": "Cancellation request and what happens to data",
+    "difficulty": "medium",
+    "senderName": "Sakura Ito"
+  },
+  {
+    "message": "Cancel my account. Will files remain after canceling or is everything deleted right away?",
+    "expectedLesson": "Cancellation request and what happens to data",
+    "difficulty": "easy",
+    "senderName": "Emmanuel Mensah"
+  },
+  {
+    "message": "Hi, we've decided to go with a different solution. I need to understand the full offboarding process. Specifically: once the subscription is terminated, how long do we have to retrieve our documents? Are there any data retention policies I should be aware of? We're in a regulated industry so I need specifics.\n\nThank you,\nDr. Naomi Osei",
+    "expectedLesson": "Cancellation request and what happens to data",
+    "difficulty": "hard",
+    "senderName": "Naomi Osei"
+  },
+  {
+    "message": "I want to delete my account after cancellation. Is there a way to get a full data export before everything is wiped?",
+    "expectedLesson": "Cancellation request and what happens to data",
+    "difficulty": "easy",
+    "senderName": "Andre Bouchard"
+  },
+  {
+    "message": "We're shutting down our department's workspace. What's the process for cancellation and what happens to all the shared documents, integrations, and user data? We need to comply with our company's data governance policy, so if there's a formal data deletion certificate we can request, that would be ideal.",
+    "expectedLesson": "Cancellation request and what happens to data",
+    "difficulty": "hard",
+    "senderName": "Zara Hussain"
+  },
+  {
+    "message": "I'm considering canceling but I'm worried about losing our historical data. We have two years of analytics reports saved in the platform. Can I still access them after my subscription ends, or do I need to download everything first?\n\nBest,\nTomas",
+    "expectedLesson": "Cancellation request and what happens to data",
+    "difficulty": "medium",
+    "senderName": "Tomas Lindqvist"
+  },
+  {
+    "message": "Cancel my subscription please. Also curious about access after cancellation. Do I lose everything on the spot?",
+    "expectedLesson": "Cancellation request and what happens to data",
+    "difficulty": "easy",
+    "senderName": "Grace Mwangi"
+  },
+  {
+    "message": "We won't be renewing. My question is about data portability. If we cancel today, can we come back in 6 months and find our projects intact, or is there a cleanup window where everything gets purged? We might revisit this platform next fiscal year.",
+    "expectedLesson": "Cancellation request and what happens to data",
+    "difficulty": "medium",
+    "senderName": "Alejandro Ruiz"
+  },
+  {
+    "message": "This is a follow-up to my cancellation request from last week. Nobody has confirmed what will happen to our data. I have 150+ client files in the system and I am not comfortable proceeding until I understand the retention policy.\n\nPlease respond today.",
+    "expectedLesson": "Cancellation request and what happens to data",
+    "difficulty": "medium",
+    "senderName": "Ingrid Svensson"
+  },
+  {
+    "message": "We're moving to a competitor. Need to cancel and also want clarity on whether our API webhook configurations and custom templates will be preserved in any exportable format, or if I need to manually document everything before pulling the plug.\n\nRegards,\nKofi",
+    "expectedLesson": "Cancellation request and what happens to data",
+    "difficulty": "hard",
+    "senderName": "Kofi Appiah"
+  },
+  {
+    "message": "Cancel my subscription. What happens to my data? Will it be deleted or can I recover it later?",
+    "expectedLesson": "Cancellation request and what happens to data",
+    "difficulty": "easy",
+    "senderName": "Hana Yoshida"
+  },
+  {
+    "message": "My team lead asked me to handle our account cancellation. We need a detailed breakdown of post-cancellation data handling: retention period, what's deleted vs archived, and whether there's a reactivation path that would restore our data. We're on the Enterprise plan with about 200GB of assets.\n\nCheers,\nBen",
+    "expectedLesson": "Cancellation request and what happens to data",
+    "difficulty": "hard",
+    "senderName": "Ben Okafor-Hughes"
+  },
+  {
+    "message": "Looking to end our subscription at the end of this billing cycle. Quick question: will our shared team templates and saved workflows survive, or do those go away too?",
+    "expectedLesson": "Cancellation request and what happens to data",
+    "difficulty": "medium",
+    "senderName": "Lina Cheng"
+  },
+  {
+    "message": "Please cancel our subscription for workspace \"Greenleaf Analytics\". Before you do: our team has built extensive automation rules and saved report configurations. If we cancel now and resubscribe in Q1, will any of that be recoverable or do we start from scratch?",
+    "expectedLesson": "Cancellation request and what happens to data",
+    "difficulty": "hard",
+    "senderName": "Declan Murphy"
+  },
+  {
+    "message": "I downgraded my plan but I'm still being billed at the old rate. When does the lower plan actually start?",
+    "expectedLesson": "Downgrade timing and proration confusion",
+    "difficulty": "easy",
+    "senderName": "Roberto Marquez"
+  },
+  {
+    "message": "I moved from Business to Starter last Tuesday. My next invoice still shows the Business price. Shouldn't I get a credit or proration for the downgrade?",
+    "expectedLesson": "Downgrade timing and proration confusion",
+    "difficulty": "medium",
+    "senderName": "Aditi Deshmukh"
+  },
+  {
+    "message": "Downgrade plan timing question: I downgraded on July 1st. When does the smaller plan kick in? I'm confused about why I'm still seeing the old plan features and the old price.",
+    "expectedLesson": "Downgrade timing and proration confusion",
+    "difficulty": "easy",
+    "senderName": "Patrick O'Brien"
+  },
+  {
+    "message": "I switched from Enterprise to Pro mid-billing cycle. I expected a prorated credit on my next invoice but I got charged the full Enterprise rate again. Can you explain how proration works for downgrades? This seems wrong.",
+    "expectedLesson": "Downgrade timing and proration confusion",
+    "difficulty": "medium",
+    "senderName": "Miriam Becker"
+  },
+  {
+    "message": "Downgraded but still billed at the old plan rate. Very confused. Why hasn't the change taken effect yet?",
+    "expectedLesson": "Downgrade timing and proration confusion",
+    "difficulty": "easy",
+    "senderName": "Tariq Mahmoud"
+  },
+  {
+    "message": "I submitted a downgrade request two weeks ago. Since then I've been charged once at the old rate. I understand downgrades might not be immediate, but I'd like to understand the exact mechanics. Does the downgrade happen at the end of my current billing period? And if so, why doesn't the system show my upcoming plan anywhere?\n\nAppreciate your help,\nMonica",
+    "expectedLesson": "Downgrade timing and proration confusion",
+    "difficulty": "medium",
+    "senderName": "Monica Ferrer"
+  },
+  {
+    "message": "I need a credit for moving to a smaller plan. I downgraded from Pro to Starter on June 28 and was charged full Pro pricing on July 1. That doesn't seem right.",
+    "expectedLesson": "Downgrade timing and proration confusion",
+    "difficulty": "easy",
+    "senderName": "Chen Wei"
+  },
+  {
+    "message": "So I reduced my subscription level about 10 days ago. I see the confirmation email. But my invoice just came through and it's the exact same amount as before. I'm confused about the timing here. Does the pricing change only apply to the next full cycle? And if I overpaid this cycle, do I get anything back?\n\nFrustrated,\nKhadija",
+    "expectedLesson": "Downgrade timing and proration confusion",
+    "difficulty": "medium",
+    "senderName": "Khadija Abdi"
+  },
+  {
+    "message": "When does my lower plan start after a downgrade? I changed it 5 days ago and nothing has changed in my account.",
+    "expectedLesson": "Downgrade timing and proration confusion",
+    "difficulty": "easy",
+    "senderName": "Soren Dahl"
+  },
+  {
+    "message": "I have a billing question. We scaled back our plan at the beginning of last month to save costs. I assumed the rate would adjust immediately, but we've now had two invoices at the higher amount. Our CFO is asking me to explain the discrepancy and frankly I can't. Can you provide a detailed breakdown of how and when the downgrade pricing takes effect?",
+    "expectedLesson": "Downgrade timing and proration confusion",
+    "difficulty": "hard",
+    "senderName": "Angela Mensah-Bonsu"
+  },
+  {
+    "message": "Proration for downgrade: does it exist? I dropped from Business to Pro halfway through the month and expected a partial refund. Instead I got nothing. Is this by design?",
+    "expectedLesson": "Downgrade timing and proration confusion",
+    "difficulty": "medium",
+    "senderName": "Nikolai Petrov"
+  },
+  {
+    "message": "We moved to a less expensive tier as part of budget cuts. My boss is now asking why the savings haven't appeared on our latest statement. I've tried looking at the billing FAQ but it doesn't clearly explain the transition timing. Feels like we're paying for a plan we're not even on anymore.",
+    "expectedLesson": "Downgrade timing and proration confusion",
+    "difficulty": "hard",
+    "senderName": "Fumiko Saito"
+  },
+  {
+    "message": "Downgraded to the smaller plan last week. Still being charged the old amount. When exactly does the new pricing apply? And will I get a credit for the overlap period?\n\nThanks,\nRashid",
+    "expectedLesson": "Downgrade timing and proration confusion",
+    "difficulty": "easy",
+    "senderName": "Rashid Yusuf"
+  },
+  {
+    "message": "I reduced our plan level and I'm trying to reconcile our expenses. The invoices don't reflect the change yet and finance is flagging it. We need clarity on the effective date of the new pricing so I can close out our quarterly budget report. This is time-sensitive.",
+    "expectedLesson": "Downgrade timing and proration confusion",
+    "difficulty": "hard",
+    "senderName": "Vera Antonova"
+  },
+  {
+    "message": "My subscription start date seems wrong. It shows the date I started the trial, not when I actually began paying.",
+    "expectedLesson": "Subscription start date confusion after trial",
+    "difficulty": "easy",
+    "senderName": "Owen Clarke"
+  },
+  {
+    "message": "I started a free trial on May 15 and converted to a paid plan on June 1. But my account page shows May 15 as my subscription start date. Shouldn't it be June 1 since that's when billing actually started?",
+    "expectedLesson": "Subscription start date confusion after trial",
+    "difficulty": "medium",
+    "senderName": "Amina Traore"
+  },
+  {
+    "message": "Billing started after my trial but the subscription start date still shows the trial date. Can you fix this?",
+    "expectedLesson": "Subscription start date confusion after trial",
+    "difficulty": "easy",
+    "senderName": "Lucas Almeida"
+  },
+  {
+    "message": "I'm trying to figure out when my annual renewal is. The system shows my subscription started in March, but I didn't start paying until April when the trial ended. So does my renewal happen in March or April? I need to know for budget planning.\n\nThanks,\nAnna",
+    "expectedLesson": "Subscription start date confusion after trial",
+    "difficulty": "medium",
+    "senderName": "Anna Kowalczyk"
+  },
+  {
+    "message": "When did my subscription actually begin? The date shown is the trial activation date, not the paid date. This is confusing for our records.",
+    "expectedLesson": "Subscription start date confusion after trial",
+    "difficulty": "easy",
+    "senderName": "Youssef El-Amin"
+  },
+  {
+    "message": "Our procurement team is asking for the exact date our paid subscription commenced. The platform shows April 10 but I'm fairly certain we only entered payment details and converted from the free period around April 24. Which date is authoritative for contractual purposes?",
+    "expectedLesson": "Subscription start date confusion after trial",
+    "difficulty": "hard",
+    "senderName": "Catherine Dubois"
+  },
+  {
+    "message": "Subscription start date wrong. Shows trial start, not when I converted to paid. My renewal date is calculated from the wrong date now.",
+    "expectedLesson": "Subscription start date confusion after trial",
+    "difficulty": "easy",
+    "senderName": "Daisuke Mori"
+  },
+  {
+    "message": "Quick question about my renewal date. I signed up for a trial in January and upgraded to Pro in February. My subscription page says renewal is in January but that was just the trial. The paid plan should renew in February right? I want to make sure I'm not getting charged early.\n\nCheers,\nSam",
+    "expectedLesson": "Subscription start date confusion after trial",
+    "difficulty": "medium",
+    "senderName": "Sam Oduya"
+  },
+  {
+    "message": "I need an accurate subscription commencement letter for our auditors. The date in the system reflects when our team first accessed the platform on a trial basis, not when the paid agreement was activated. These are two different events for compliance purposes and the distinction matters.",
+    "expectedLesson": "Subscription start date confusion after trial",
+    "difficulty": "hard",
+    "senderName": "Henrik Lindgren"
+  },
+  {
+    "message": "My account shows I've been subscribed since March 3rd but I only started paying on March 17th after the trial. The trial date vs paid date thing is messing up my renewal calendar. Can you clarify when my next billing date actually is?",
+    "expectedLesson": "Subscription start date confusion after trial",
+    "difficulty": "medium",
+    "senderName": "Rosa Martinez"
+  },
+  {
+    "message": "The subscription activation date on my profile doesn't match when I actually started the paid plan. It's showing the date from when I first created an account to try things out. This is causing confusion with our finance department's records.",
+    "expectedLesson": "Subscription start date confusion after trial",
+    "difficulty": "medium",
+    "senderName": "Jean-Pierre Durand"
+  },
+  {
+    "message": "I signed up months ago just to browse, then forgot about it. Recently came back and subscribed properly. But the system treats my original sign-up date as the subscription start. For tax documentation I need the actual payment start date. Can you update it or provide documentation showing both dates?\n\nRegards,\nThandi",
+    "expectedLesson": "Subscription start date confusion after trial",
+    "difficulty": "hard",
+    "senderName": "Thandi Nkomo"
+  },
+  {
+    "message": "Renewal date seems to be based on when I activated the trial, not when I started paying. Is that right?",
+    "expectedLesson": "Subscription start date confusion after trial",
+    "difficulty": "easy",
+    "senderName": "Pietro Bianchi"
+  },
+  {
+    "message": "I need help understanding my billing timeline. I remember signing up for a free trial around the end of Q1, then converting. Now my dashboard says my subscription anniversary is coming up in March but I'm pretty sure I didn't pay anything until April. Can you pull up the actual transaction history?\n\nThanks,\nMinh",
+    "expectedLesson": "Subscription start date confusion after trial",
+    "difficulty": "medium",
+    "senderName": "Minh Tran"
+  },
+  {
+    "message": "I just got charged for auto-renewal and I didn't expect it. I forgot to turn off auto-renewal before the cycle ended.",
+    "expectedLesson": "Auto-renewal charged unexpectedly",
+    "difficulty": "easy",
+    "senderName": "Jordan Mitchell"
+  },
+  {
+    "message": "I see a charge of $299 from your company on my statement. I had no idea my subscription was going to renew automatically. I thought it would just expire. Can I get a refund?",
+    "expectedLesson": "Auto-renewal charged unexpectedly",
+    "difficulty": "medium",
+    "senderName": "Sunita Rao"
+  },
+  {
+    "message": "Auto renewal charged me without warning. I wanted to cancel but missed the window. Please reverse this charge.",
+    "expectedLesson": "Auto-renewal charged unexpectedly",
+    "difficulty": "easy",
+    "senderName": "Thomas Andersen"
+  },
+  {
+    "message": "I signed up for a free trial months ago and apparently it converted to a paid plan without me realizing. I just noticed recurring charges on my credit card statement going back several months. I never intentionally subscribed. How do I stop this and get my money back?",
+    "expectedLesson": "Auto-renewal charged unexpectedly",
+    "difficulty": "hard",
+    "senderName": "Leila Fahimi"
+  },
+  {
+    "message": "Unexpected renewal charge on my account. The subscription renewed without me noticing and I haven't even used the platform in months.",
+    "expectedLesson": "Auto-renewal charged unexpectedly",
+    "difficulty": "easy",
+    "senderName": "Martin Holub"
+  },
+  {
+    "message": "Hi, I have a billing dispute. My annual subscription apparently renewed last week. I wasn't using the product anymore and assumed it would just lapse. I never received a renewal reminder email (or if I did, it went to spam). Is there a grace period for cancellation after renewal?\n\nRegards,\nFatoumata",
+    "expectedLesson": "Auto-renewal charged unexpectedly",
+    "difficulty": "medium",
+    "senderName": "Fatoumata Diop"
+  },
+  {
+    "message": "Charged after my free trial ended. I didn't realize it would automatically convert to a paid subscription. I want a refund.",
+    "expectedLesson": "Auto-renewal charged unexpectedly",
+    "difficulty": "easy",
+    "senderName": "Gabriel Santos"
+  },
+  {
+    "message": "I'm seeing a charge for $49/month that I don't recognize. After digging around, I think it's from a subscription I set up last year for a side project and completely forgot about. It's been renewing quietly ever since. Is there any way to get a partial refund for the months I wasn't using it?\n\nThanks,\nDmitri",
+    "expectedLesson": "Auto-renewal charged unexpectedly",
+    "difficulty": "hard",
+    "senderName": "Dmitri Volkov"
+  },
+  {
+    "message": "My subscription renewed without my consent. I forgot to turn off renewal. How do I cancel and get refunded?",
+    "expectedLesson": "Auto-renewal charged unexpectedly",
+    "difficulty": "easy",
+    "senderName": "Esther Afolabi"
+  },
+  {
+    "message": "I thought I had canceled my account back in February but apparently I only turned off email notifications, not the actual subscription. So it's been charging me for five months. I feel misled by the settings page. The cancellation process is not intuitive at all.",
+    "expectedLesson": "Auto-renewal charged unexpectedly",
+    "difficulty": "hard",
+    "senderName": "Ivan Horvat"
+  },
+  {
+    "message": "My credit card was charged $199 today for an annual renewal. I didn't authorize this renewal. I had planned to switch to a different tool. Can you process a refund?",
+    "expectedLesson": "Auto-renewal charged unexpectedly",
+    "difficulty": "medium",
+    "senderName": "Nadia Benjelloun"
+  },
+  {
+    "message": "I was surprised to see a renewal charge on my statement this morning. I set up the account for a specific project that ended months ago and forgot it was still active. Nobody on my team has logged in since March.\n\nIs there any recourse here? We genuinely haven't used the service.\n\nBest,\nAkiko",
+    "expectedLesson": "Auto-renewal charged unexpectedly",
+    "difficulty": "medium",
+    "senderName": "Akiko Yamamoto"
+  },
+  {
+    "message": "I got charged for the annual plan renewal today. I swear I turned off auto-renewal last month. Can you check the audit log for my account? Something isn't right.",
+    "expectedLesson": "Auto-renewal charged unexpectedly",
+    "difficulty": "medium",
+    "senderName": "Ricardo Souza"
+  },
+  {
+    "message": "Hi, I just noticed a $79 charge. Looks like my subscription auto-renewed. I haven't logged into the platform in weeks and didn't get any heads up that a renewal was coming. I'd like to cancel and request a refund if possible.\n\nThanks,\nOlga",
+    "expectedLesson": "Auto-renewal charged unexpectedly",
+    "difficulty": "medium",
+    "senderName": "Olga Petrenko"
+  },
+  {
+    "message": "Two issues: first, I got hit with an unexpected renewal charge even though I'm sure I disabled auto-renew. Second, the renewed plan seems to have reset some of my workspace settings. This is really disruptive. Can someone look into both of these?",
+    "expectedLesson": "Auto-renewal charged unexpectedly",
+    "difficulty": "hard",
+    "senderName": "Kenneth Osei-Mensah"
+  }
+]

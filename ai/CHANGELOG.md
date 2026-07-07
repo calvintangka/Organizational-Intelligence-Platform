@@ -13,6 +13,23 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-07] Stress-test query corpus — 500 bulk queries across 5 domains
+**Layer:** coding
+**Task/Prompt:** Generate 500 realistic customer support queries to stress-test every knowledge pack
+**Files changed:** `data/test-queries/batch-01-login-100.json`, `data/test-queries/batch-02-billing-100.json`, `data/test-queries/batch-03-subscription-100.json`, `data/test-queries/batch-04-shipment-100.json`, `data/test-queries/batch-05-mixed-100.json`
+**What changed:**
+- 100 login queries covering all 9 lessons (Forgot password through SSO issues)
+- 100 billing queries covering all 7 lessons (duplicate charges through tax/VAT)
+- 100 subscription queries covering all 7 lessons (trial expiry through auto-renewal)
+- 100 shipment queries covering all 8 lessons (tracking gaps through proof of delivery)
+- 100 mixed cross-domain queries spanning all 5 packs with ambiguous and multi-domain scenarios
+- Each query carries `expectedLesson`, `difficulty` (easy/medium/hard ~40/35/25), and `senderName`
+- Difficulty tiers: easy = direct signal match, medium = paraphrased, hard = oblique or multi-issue
+- 500 unique messages, 0 cross-file duplicates, diverse global names, varied emotional register and length
+**Boundaries touched:** none — test data only, no code changes
+**Verification:** automated validation script confirmed 100 entries per file, valid JSON, exact lesson title matches, correct difficulty values, and zero duplicate messages across all 500 entries
+**Open items:** none
+
 ## [2026-07-07] Pre-demo consolidated fixes — F-1, F-2, F-3, F-4, F-7
 **Layer:** coding
 **Task/Prompt:** oip_consolidated_predemo_fixes_prompt.md (completed after interrupted run)

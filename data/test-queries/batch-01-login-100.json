@@ -1,0 +1,602 @@
+[
+  {
+    "message": "Hi, I forgot my password and I can't log in. Can you help me reset it?",
+    "expectedLesson": "Forgot password",
+    "difficulty": "easy",
+    "senderName": "Maria Santos"
+  },
+  {
+    "message": "I need to reset my password. I've been locked out of my account since yesterday and I have a client presentation in two hours. Please help ASAP.",
+    "expectedLesson": "Forgot password",
+    "difficulty": "easy",
+    "senderName": "James Okonkwo"
+  },
+  {
+    "message": "Can't remember my password. I changed it last month and now I have no idea what it is. Where do I go to reset it?\n\nThanks,\nPreeti",
+    "expectedLesson": "Forgot password",
+    "difficulty": "easy",
+    "senderName": "Preeti Sharma"
+  },
+  {
+    "message": "I can't seem to get into my account anymore. Whatever I type in the password field just gets rejected. I'm sure I used to know this but it's been a few weeks since I last logged in and my brain is drawing a blank.",
+    "expectedLesson": "Forgot password",
+    "difficulty": "medium",
+    "senderName": "Daniel Eriksson"
+  },
+  {
+    "message": "Hey there, I haven't used the platform in about three months and honestly have no clue what credentials I set up originally. Is there a way to start fresh with a new password?\n\nRegards,\nFatima",
+    "expectedLesson": "Forgot password",
+    "difficulty": "medium",
+    "senderName": "Fatima Al-Rashid"
+  },
+  {
+    "message": "I've been staring at the login page for 10 minutes trying every combination I can think of. None of my usual passwords are working. I think I might have set something random when I signed up. What are my options here?",
+    "expectedLesson": "Forgot password",
+    "difficulty": "medium",
+    "senderName": "Chris Tanaka"
+  },
+  {
+    "message": "I switched to a new laptop last week and my browser doesn't have any of my saved logins anymore. I genuinely have no idea what I used for your site - it was always autofilled before. I need to get into my account today for a deadline.",
+    "expectedLesson": "Forgot password",
+    "difficulty": "hard",
+    "senderName": "Amara Diallo"
+  },
+  {
+    "message": "My password manager crashed and lost all my entries. I have accounts on about 30 different platforms and yours is one of them. I need to regain access but I don't have any record of what my login details were.",
+    "expectedLesson": "Forgot password",
+    "difficulty": "hard",
+    "senderName": "Liam O'Brien"
+  },
+  {
+    "message": "Look, I know this is probably a simple thing but I just can't get in. I've tried everything I can think of and nothing works. I don't even remember if I used my work email or personal email. Can someone walk me through getting back into my account?\n\nThanks in advance",
+    "expectedLesson": "Forgot password",
+    "difficulty": "hard",
+    "senderName": "Sofia Mendoza"
+  },
+  {
+    "message": "forgot password pls help",
+    "expectedLesson": "Forgot password",
+    "difficulty": "easy",
+    "senderName": "Wei Zhang"
+  },
+  {
+    "message": "Good morning. I seem to have forgotten my password and would appreciate assistance with resetting it at your earliest convenience. My account email is associated with my company, Meridian Consulting.\n\nBest regards,\nRobert Chen",
+    "expectedLesson": "Forgot password",
+    "difficulty": "easy",
+    "senderName": "Robert Chen"
+  },
+  {
+    "message": "I'm typing my password exactly as I have it written down but your system keeps saying invalid credentials. This is incredibly frustrating.",
+    "expectedLesson": "Invalid credentials despite correct password",
+    "difficulty": "easy",
+    "senderName": "Aisha Mohammed"
+  },
+  {
+    "message": "My password is correct but the login page says my credentials are invalid. I just changed it yesterday and I'm 100% sure I'm entering it right. What is going on?",
+    "expectedLesson": "Invalid credentials despite correct password",
+    "difficulty": "easy",
+    "senderName": "Thomas Andersson"
+  },
+  {
+    "message": "The system keeps rejecting my password even though I KNOW it's right. I literally copied and pasted it from my password manager. Please fix this.",
+    "expectedLesson": "Invalid credentials despite correct password",
+    "difficulty": "easy",
+    "senderName": "Nina Petrović"
+  },
+  {
+    "message": "Credentials are invalid apparently, but I just used this same password to log in on my phone yesterday with zero problems. Now on my desktop it won't accept it.",
+    "expectedLesson": "Invalid credentials despite correct password",
+    "difficulty": "easy",
+    "senderName": "Marcus Johnson"
+  },
+  {
+    "message": "I've double-checked, triple-checked, even had my colleague look over my shoulder while I typed it. The password is absolutely correct but the system disagrees. Is there some kind of bug on your end?\n\nRegards,\nHiroshi",
+    "expectedLesson": "Invalid credentials despite correct password",
+    "difficulty": "medium",
+    "senderName": "Hiroshi Yamamoto"
+  },
+  {
+    "message": "Something strange is happening. I can log into the mobile app fine but when I try the exact same credentials on the website, it tells me they're wrong. I even tried typing very slowly to make sure there are no typos.",
+    "expectedLesson": "Invalid credentials despite correct password",
+    "difficulty": "medium",
+    "senderName": "Elena Volkov"
+  },
+  {
+    "message": "I reset my password 20 minutes ago, got the confirmation email, and now the new password I just set isn't being accepted either. I'm going in circles here. Is the login system having issues today?",
+    "expectedLesson": "Invalid credentials despite correct password",
+    "difficulty": "medium",
+    "senderName": "Kofi Asante"
+  },
+  {
+    "message": "I just set up my account last week and everything was fine. Today I go to log in and it's like the system doesn't recognize me at all. I haven't changed anything. Same computer, same browser, same everything. But it's acting like what I'm entering is completely wrong.",
+    "expectedLesson": "Invalid credentials despite correct password",
+    "difficulty": "hard",
+    "senderName": "Camille Dubois"
+  },
+  {
+    "message": "I don't understand what's happening. My coworker and I set up our accounts at the same time with similar passwords. Hers works fine, mine doesn't. We're on the same network, same browser version. Is there something wrong with my specific account?\n\nThanks,\nRaj",
+    "expectedLesson": "Invalid credentials despite correct password",
+    "difficulty": "hard",
+    "senderName": "Raj Patel"
+  },
+  {
+    "message": "This is the third day in a row I've been unable to access the platform. Every morning I enter my details and every morning it bounces me back. I've tried from my laptop, my tablet, and my phone. At this point I'm wondering if my account was compromised or something changed on your end without notice.",
+    "expectedLesson": "Invalid credentials despite correct password",
+    "difficulty": "hard",
+    "senderName": "Isabella Rossi"
+  },
+  {
+    "message": "I can't get past the sign-in — it just flatly rejects what I type, no further explanation. I've been using the platform for months without trouble. Nothing has changed on my end.",
+    "expectedLesson": "Invalid credentials despite correct password",
+    "difficulty": "medium",
+    "senderName": "André Ferreira"
+  },
+  {
+    "message": "I think I'm using the wrong email to log in. I have several email addresses and I can't remember which one I registered with. Can you look up my account?",
+    "expectedLesson": "Wrong email address",
+    "difficulty": "easy",
+    "senderName": "Yuki Nakamura"
+  },
+  {
+    "message": "The system says there's no account with that email. But I definitely signed up. Maybe I used a different email?",
+    "expectedLesson": "Wrong email address",
+    "difficulty": "easy",
+    "senderName": "Olumide Adeyemi"
+  },
+  {
+    "message": "It says email not found when I try to log in. I'm not sure which email I used when I registered - it could be my work email or my Gmail.",
+    "expectedLesson": "Wrong email address",
+    "difficulty": "easy",
+    "senderName": "Sarah Kim"
+  },
+  {
+    "message": "I just got a new work email and I think my account might be under my old company address that got deactivated. Can you check if there's an account under the old domain? I used to work at Brightfield Technologies.",
+    "expectedLesson": "Wrong email address",
+    "difficulty": "medium",
+    "senderName": "Michael Osei"
+  },
+  {
+    "message": "Hey, my IT department changed everyone's email format last month from firstname.lastname to first initial + lastname. Is it possible my account is tied to the old format? I can't seem to get in with the new one.\n\nThanks,\nLaura",
+    "expectedLesson": "Wrong email address",
+    "difficulty": "medium",
+    "senderName": "Laura Gutiérrez"
+  },
+  {
+    "message": "I signed up during a webinar a few months ago and I honestly don't remember if I used my personal email or my company one. The login just keeps telling me it can't find my account. Could you search by my name instead?",
+    "expectedLesson": "Wrong email address",
+    "difficulty": "medium",
+    "senderName": "Dimitri Papadopoulos"
+  },
+  {
+    "message": "I'm completely stuck. I've tried logging in with all four of my email addresses and none of them work. I know I have an account because I got an invoice from you last month. The invoice went to our accounts payable team though, so maybe the account is under their email?",
+    "expectedLesson": "Wrong email address",
+    "difficulty": "hard",
+    "senderName": "Naomi Watanabe"
+  },
+  {
+    "message": "My assistant originally set up the account on my behalf and she's on maternity leave. I have no idea what email she used. I just know I used to be able to log in through a bookmark she set up, but that link doesn't work anymore either.",
+    "expectedLesson": "Wrong email address",
+    "difficulty": "hard",
+    "senderName": "Hassan El-Amin"
+  },
+  {
+    "message": "When I try to log in it acts like I don't exist in your system at all. I've been a paying customer for over a year. Is it possible something happened to my account? I'm worried my data might be gone.",
+    "expectedLesson": "Wrong email address",
+    "difficulty": "hard",
+    "senderName": "Tatiana Sokolova"
+  },
+  {
+    "message": "wrong email i think? keeps saying no account found. which email did i sign up with??",
+    "expectedLesson": "Wrong email address",
+    "difficulty": "easy",
+    "senderName": "Kevin Tran"
+  },
+  {
+    "message": "Hi, I recently got married and changed my last name, so my company issued me a new email address. My account is still under my maiden name email. Can I update it or do I need to create a new account?\n\nThanks,\nJessica",
+    "expectedLesson": "Wrong email address",
+    "difficulty": "medium",
+    "senderName": "Jessica Hartley-Nguyen"
+  },
+  {
+    "message": "I set my password to something really long and complicated because your system required special characters, numbers, uppercase, etc. I wrote it on a sticky note which I've since thrown away. Is there any way to see what my current password is, or do I have to go through the whole reset process?\n\nThanks,\nRashid",
+    "expectedLesson": "Forgot password",
+    "difficulty": "medium",
+    "senderName": "Rashid Ogundimu"
+  },
+  {
+    "message": "I've been completely locked out of my account. It seems like there might be a limit on login attempts? I entered the wrong password a few times and now it's blocked.\n\nPlease help,\nBridget",
+    "expectedLesson": "Account locked after too many attempts",
+    "difficulty": "easy",
+    "senderName": "Bridget Nwosu"
+  },
+  {
+    "message": "My account is locked. I got a message saying too many failed attempts. How long do I have to wait before I can try again?",
+    "expectedLesson": "Account locked after too many attempts",
+    "difficulty": "easy",
+    "senderName": "Pavel Novák"
+  },
+  {
+    "message": "I'm temporarily blocked from logging in. I was trying different passwords because I couldn't remember which one was right and now the whole account is locked out.",
+    "expectedLesson": "Account locked after too many attempts",
+    "difficulty": "easy",
+    "senderName": "Lucia Vargas"
+  },
+  {
+    "message": "I let my kid use my laptop and they apparently tried to log into something on your site a bunch of times. Now I can't get in at all - it says I've exceeded the maximum number of attempts. Can you unlock my account?",
+    "expectedLesson": "Account locked after too many attempts",
+    "difficulty": "medium",
+    "senderName": "David Mensah"
+  },
+  {
+    "message": "I was testing a few different password variations this morning and I guess I went overboard because now the system won't even let me try anymore. I know the right password now but it's too late apparently. Is there a cooldown period or do I need someone to manually unlock it?",
+    "expectedLesson": "Account locked after too many attempts",
+    "difficulty": "medium",
+    "senderName": "Elif Demir"
+  },
+  {
+    "message": "Someone might be trying to hack into my account. I got several emails saying there were failed login attempts, and now when I try to log in myself, the account appears to be frozen. I'm concerned about security. Can you check the login history?",
+    "expectedLesson": "Account locked after too many attempts",
+    "difficulty": "medium",
+    "senderName": "Jean-Pierre Lefèvre"
+  },
+  {
+    "message": "This is urgent. I was in the middle of a live demo with a client when my session expired. I tried to quickly log back in but in my rush I kept mistyping and now the system has completely shut me out. I still have the client waiting. Please escalate this.",
+    "expectedLesson": "Account locked after too many attempts",
+    "difficulty": "hard",
+    "senderName": "Priya Kapoor"
+  },
+  {
+    "message": "Every time I try to access the platform it just shows a generic error message with no explanation. I've tried probably 15 or 20 times today. My colleague thinks the system might have flagged my IP or something? We're on a shared office network. I really need to pull some reports before end of day.",
+    "expectedLesson": "Account locked after too many attempts",
+    "difficulty": "hard",
+    "senderName": "Oscar Lindqvist"
+  },
+  {
+    "message": "I can't get in and the error message is different from what I normally see. It used to say 'incorrect password' but now it just says access is denied entirely. I didn't do anything different. Our IT team thought maybe something got triggered on your end from repeated login attempts across our department — multiple people share this account.",
+    "expectedLesson": "Account locked after too many attempts",
+    "difficulty": "hard",
+    "senderName": "Carmen Reyes"
+  },
+  {
+    "message": "locked out after too many attempts. can you reset it please",
+    "expectedLesson": "Account locked after too many attempts",
+    "difficulty": "easy",
+    "senderName": "Tom Bakker"
+  },
+  {
+    "message": "account locked, 3 failed attempts. need access now for quarterly close.\n\n- Feng",
+    "expectedLesson": "Account locked after too many attempts",
+    "difficulty": "easy",
+    "senderName": "Feng Li"
+  },
+  {
+    "message": "I requested a password reset but the reset link has expired by the time I clicked it. Can you send a new one?",
+    "expectedLesson": "Password reset link expired or not received",
+    "difficulty": "easy",
+    "senderName": "Grace Achebe"
+  },
+  {
+    "message": "I never received the reset email. I've checked spam and junk folders. It's been over 30 minutes. Can you resend it?",
+    "expectedLesson": "Password reset link expired or not received",
+    "difficulty": "easy",
+    "senderName": "Martin Johansson"
+  },
+  {
+    "message": "The password reset email never arrived. I've tried requesting it three times now. My email is definitely correct because I get your newsletters just fine.",
+    "expectedLesson": "Password reset link expired or not received",
+    "difficulty": "easy",
+    "senderName": "Aaliyah Washington"
+  },
+  {
+    "message": "The reset link doesn't work — it just takes me to a page that says the link is no longer valid. I clicked it within a few minutes of receiving the email so I don't understand why it would be expired already.",
+    "expectedLesson": "Password reset link expired or not received",
+    "difficulty": "easy",
+    "senderName": "Ravi Krishnan"
+  },
+  {
+    "message": "I'm trying to recover my account and I've gone through the reset process, but the email seems to be getting caught somewhere. Our company uses Microsoft 365 with pretty aggressive email filtering. Is there a specific sender address I should whitelist?\n\nBest,\nAnna",
+    "expectedLesson": "Password reset link expired or not received",
+    "difficulty": "medium",
+    "senderName": "Anna Kowalski"
+  },
+  {
+    "message": "I got the reset email on my phone while I was commuting, but by the time I sat down at my desk to actually do the reset on my computer, the link had already expired. Is there a way to extend the window? 15 minutes seems really short.",
+    "expectedLesson": "Password reset link expired or not received",
+    "difficulty": "medium",
+    "senderName": "Samuel Oduya"
+  },
+  {
+    "message": "Following up — I submitted two password reset requests yesterday but neither email has come through. I've checked all folders including spam. My IT team confirmed there are no blocks on their end. Our domain is globalfinance.com if that helps you investigate.",
+    "expectedLesson": "Password reset link expired or not received",
+    "difficulty": "medium",
+    "senderName": "Chloe Beaumont"
+  },
+  {
+    "message": "I've been going back and forth trying to get into my account for two days now. Every time I request a recovery email, either it doesn't show up at all or by the time it arrives it's already useless. I'm stuck in a loop and can't break out of it. At this point can an admin just manually set my password?",
+    "expectedLesson": "Password reset link expired or not received",
+    "difficulty": "hard",
+    "senderName": "Jorge Castillo"
+  },
+  {
+    "message": "I clicked the link in the email and it seemed to load for a second, then showed a white page with a tiny error at the top. I tried opening it in a different browser and it said the token was invalid. I'm not very technical so I don't know what that means. I just need to change my password so I can use the platform for my team's training session tomorrow.",
+    "expectedLesson": "Password reset link expired or not received",
+    "difficulty": "hard",
+    "senderName": "Mei-Ling Hsu"
+  },
+  {
+    "message": "I went through your account recovery flow and it said an email was sent. That was 4 hours ago. I've tried again twice since then. Nothing in inbox, nothing in spam, nothing in promotions tab. I even tried from a different email client. My colleague on the same domain received their reset email instantly last week. What's different about my account?",
+    "expectedLesson": "Password reset link expired or not received",
+    "difficulty": "hard",
+    "senderName": "Tariq Benali"
+  },
+  {
+    "message": "reset link expired. send new one please. acct email is listed on this ticket.",
+    "expectedLesson": "Password reset link expired or not received",
+    "difficulty": "easy",
+    "senderName": "Ingrid Haugen"
+  },
+  {
+    "message": "After I log in, the page just keeps loading and never actually takes me to the dashboard. It works fine in incognito mode though. What's going on?",
+    "expectedLesson": "Browser cache or session issue",
+    "difficulty": "easy",
+    "senderName": "Alex Popescu"
+  },
+  {
+    "message": "I log in successfully but then I'm immediately logged out. My session seems to expire the second it starts. This only started happening today.",
+    "expectedLesson": "Browser cache or session issue",
+    "difficulty": "easy",
+    "senderName": "Fatou Diop"
+  },
+  {
+    "message": "The login page gets stuck after I enter my credentials. The little spinner just keeps going forever. But when I open an incognito window and try the same thing, it works perfectly.",
+    "expectedLesson": "Browser cache or session issue",
+    "difficulty": "easy",
+    "senderName": "Brendan Murphy"
+  },
+  {
+    "message": "I keep getting logged out every few minutes. It says session expired and I have to enter my password all over again. I've cleared my cookies and it helped for about an hour but then started happening again.\n\nRegards,\nYasmin",
+    "expectedLesson": "Browser cache or session issue",
+    "difficulty": "easy",
+    "senderName": "Yasmin Hadid"
+  },
+  {
+    "message": "Something weird is happening with my browser. On Chrome, the login page loads but after I submit my credentials it just goes to a blank white page. Firefox works fine. I've tried disabling all my Chrome extensions but it didn't help.",
+    "expectedLesson": "Browser cache or session issue",
+    "difficulty": "medium",
+    "senderName": "Victor Nilsson"
+  },
+  {
+    "message": "I can log in from my personal laptop at home but not from my work computer. On the work machine, the page just freezes after I hit the login button. IT has already checked the firewall rules and they say everything should be allowed through. Could it be a caching issue?",
+    "expectedLesson": "Browser cache or session issue",
+    "difficulty": "medium",
+    "senderName": "Ruth Kimani"
+  },
+  {
+    "message": "Following up on my earlier ticket — still can't get past the login screen after clearing cookies like you suggested. The page accepts my password but then just dumps me back to the same login form. I've tried Chrome, Edge, and Firefox. Chrome and Edge both fail, Firefox works. All are up to date.",
+    "expectedLesson": "Browser cache or session issue",
+    "difficulty": "medium",
+    "senderName": "Patrick Müller"
+  },
+  {
+    "message": "I've been trying to log in all morning. Tried resetting my password, tried different browsers, nothing works. Then I tried from my phone on mobile data (not our office wifi) and it went right through. Could there be some kind of network or caching issue specific to our office?",
+    "expectedLesson": "Browser cache or session issue",
+    "difficulty": "hard",
+    "senderName": "Angela Bassett-Reid"
+  },
+  {
+    "message": "I've been having an intermittent issue where I can sometimes log in and sometimes not. When it fails, the page looks like it's loading but eventually shows a generic error. No pattern that I can see — same credentials, same computer, same time of day. A teammate sitting next to me has no issues at all.",
+    "expectedLesson": "Browser cache or session issue",
+    "difficulty": "hard",
+    "senderName": "Sanjay Mehta"
+  },
+  {
+    "message": "Our whole department has been having trouble with your platform this week. Some people can log in, others can't. The ones who can't seem to have the same symptom — the page just hangs after entering credentials. We've noticed that clearing all browser data fixes it temporarily. Is there a known issue with how your site handles cookies or local storage?",
+    "expectedLesson": "Browser cache or session issue",
+    "difficulty": "hard",
+    "senderName": "Chiara Lombardi"
+  },
+  {
+    "message": "keeps loading after login, spinning wheel forever. works in incognito. help?",
+    "expectedLesson": "Browser cache or session issue",
+    "difficulty": "easy",
+    "senderName": "Ryan Choi"
+  },
+  {
+    "message": "I'm not receiving the 2FA verification code during login. I've waited several minutes and nothing comes through. Can you help?",
+    "expectedLesson": "2FA code not received during login",
+    "difficulty": "easy",
+    "senderName": "Amina Yusuf"
+  },
+  {
+    "message": "The two-factor authentication code never arrives when I try to log in. I've checked my SMS messages and there's nothing from you. This is blocking me from accessing my account.",
+    "expectedLesson": "2FA code not received during login",
+    "difficulty": "easy",
+    "senderName": "Lucas Bergström"
+  },
+  {
+    "message": "My authenticator app code isn't being accepted. I'm entering it exactly as shown in Google Authenticator but the system says it's wrong every time.",
+    "expectedLesson": "2FA code not received during login",
+    "difficulty": "easy",
+    "senderName": "Zainab Osman"
+  },
+  {
+    "message": "2fa code not received. tried 3 times. need to get in urgently.",
+    "expectedLesson": "2FA code not received during login",
+    "difficulty": "easy",
+    "senderName": "Jake Morrison"
+  },
+  {
+    "message": "I changed my phone number last month and forgot to update it in my account settings. Now when I try to log in, it sends the verification code to my old number. I no longer have access to that number. What are my options?\n\nThanks,\nEva",
+    "expectedLesson": "2FA code not received during login",
+    "difficulty": "medium",
+    "senderName": "Eva Horváth"
+  },
+  {
+    "message": "I got a new phone and set up my authenticator app from scratch, but the codes it generates for your platform aren't working. I think maybe the time sync is off? I'm not sure how to fix this. Everything else in the authenticator works fine for my other accounts.",
+    "expectedLesson": "2FA code not received during login",
+    "difficulty": "medium",
+    "senderName": "Ibrahim Coulibaly"
+  },
+  {
+    "message": "The login process gets stuck at the second step. I enter my password successfully, then it asks for a verification code, but no code ever shows up — not by text, not by email. I've been waiting for 20 minutes. Is there another way to verify my identity?",
+    "expectedLesson": "2FA code not received during login",
+    "difficulty": "medium",
+    "senderName": "Natasha Romanova"
+  },
+  {
+    "message": "I can get through the first login screen fine but then it asks me for a six-digit code and I have absolutely no idea where this code is supposed to come from. I don't remember setting up any kind of two-step verification. Did this get turned on automatically? I just want to log in normally.",
+    "expectedLesson": "2FA code not received during login",
+    "difficulty": "hard",
+    "senderName": "George Stephanopoulos"
+  },
+  {
+    "message": "My phone was stolen last week and I wiped it remotely. Now I can't access any of my accounts that use that phone for the extra security step, including yours. I have my password and my email, I just can't complete the second part of the sign-in process. I can provide whatever identity verification you need.",
+    "expectedLesson": "2FA code not received during login",
+    "difficulty": "hard",
+    "senderName": "Adaeze Eze"
+  },
+  {
+    "message": "Every time I log in there's an extra step now asking for some kind of code. I travel frequently and I'm currently in a country where SMS delivery is extremely unreliable. The codes either arrive 30 minutes late or not at all. Can we temporarily disable this requirement so I can access the platform during my trip? I'll be back in the US in two weeks.",
+    "expectedLesson": "2FA code not received during login",
+    "difficulty": "hard",
+    "senderName": "Marcus Okonjo"
+  },
+  {
+    "message": "I've entered the code three times — each time I get it from my authenticator app, type it in quickly, and it says it's expired or invalid. I'm doing it as fast as I can. My phone clock should be synced automatically.",
+    "expectedLesson": "2FA code not received during login",
+    "difficulty": "medium",
+    "senderName": "Clara Johansdóttir"
+  },
+  {
+    "message": "I signed up for an account last week but I never activated it. Now I'm trying to log in and it won't let me. Can you resend the activation email?",
+    "expectedLesson": "Account not activated yet",
+    "difficulty": "easy",
+    "senderName": "Benjamin Adjei"
+  },
+  {
+    "message": "My account is not active. I registered a few days ago but I think I missed the activation email. Can you send it again?",
+    "expectedLesson": "Account not activated yet",
+    "difficulty": "easy",
+    "senderName": "Sandra López"
+  },
+  {
+    "message": "I haven't confirmed my email yet and now when I try to log in it says my account isn't activated. The original activation email must have gone to spam and I deleted it. Help?\n\nThanks,\nMarta",
+    "expectedLesson": "Account not activated yet",
+    "difficulty": "easy",
+    "senderName": "Marta Kowalczyk"
+  },
+  {
+    "message": "I never got the activation email when I first signed up. I've checked every folder. Is there a way to manually activate my account or resend the confirmation?",
+    "expectedLesson": "Account not activated yet",
+    "difficulty": "easy",
+    "senderName": "Tariq Hassan"
+  },
+  {
+    "message": "I created my account during onboarding at my new company but I think I skipped a step. The HR team sent me a registration link, I filled in my details, but then got pulled into a meeting before finishing. Now the system says something about my account not being fully set up.\n\nRegards,\nStephanie",
+    "expectedLesson": "Account not activated yet",
+    "difficulty": "medium",
+    "senderName": "Stephanie Dubois-Martin"
+  },
+  {
+    "message": "Our admin bulk-created accounts for the whole team last Friday. Everyone else seems to be able to log in fine but mine says it's pending or something. I definitely never received any kind of welcome or confirmation email. Can you check if my account was set up correctly?",
+    "expectedLesson": "Account not activated yet",
+    "difficulty": "medium",
+    "senderName": "Yuto Takahashi"
+  },
+  {
+    "message": "I registered months ago but never ended up using the platform. Now my company needs me to start using it and I can't get in. The login form accepts my email but then shows an error I don't really understand. Could my account have been deactivated due to inactivity or did I just never finish setting it up?",
+    "expectedLesson": "Account not activated yet",
+    "difficulty": "medium",
+    "senderName": "Anika Jansen"
+  },
+  {
+    "message": "I'm trying to access the training portal my manager enrolled me in. I can see the login page but when I enter the credentials from the enrollment email, it just shows a red bar at the top with no specific error. My manager says I should have gotten a separate email to complete my registration but I never saw one. I really need to start the training by end of week.",
+    "expectedLesson": "Account not activated yet",
+    "difficulty": "hard",
+    "senderName": "Emmanuel Obi"
+  },
+  {
+    "message": "My login sort of half works? It accepts my email and password but then drops me on a page that says I need to complete some steps. But the page is mostly blank with just a header. I created the account weeks ago so I assumed it would be ready to use by now. Is there something broken or am I missing something obvious?",
+    "expectedLesson": "Account not activated yet",
+    "difficulty": "hard",
+    "senderName": "Katarina Nilsson"
+  },
+  {
+    "message": "I keep getting bounced from the login page with a vague message. I can see my account exists because the password reset flow recognizes my email, but actual login fails. I set this account up at a conference booth — the rep helped me fill in the form on a tablet. Maybe the process didn't complete fully? I never got any follow-up email.\n\nPlease advise,\nDaniel",
+    "expectedLesson": "Account not activated yet",
+    "difficulty": "hard",
+    "senderName": "Daniel Abebe"
+  },
+  {
+    "message": "never activated my account. can you resend the email? thx",
+    "expectedLesson": "Account not activated yet",
+    "difficulty": "easy",
+    "senderName": "Min-Ji Park"
+  },
+  {
+    "message": "I'm trying to log in with my Google account but the SSO login isn't working. It redirects me to Google and then just comes back to the login page with no error.",
+    "expectedLesson": "SSO or external login provider issue",
+    "difficulty": "easy",
+    "senderName": "Kwame Mensah"
+  },
+  {
+    "message": "Our company uses single sign-on and it stopped working today. Everyone on our team is affected. Is there a problem with the SSO integration?",
+    "expectedLesson": "SSO or external login provider issue",
+    "difficulty": "easy",
+    "senderName": "Helena Bjork"
+  },
+  {
+    "message": "The 'Login with Google' button doesn't do anything. I click it and nothing happens. I've always used Google to sign in so I don't have a regular password.\n\n- Ahmed",
+    "expectedLesson": "SSO or external login provider issue",
+    "difficulty": "easy",
+    "senderName": "Ahmed Khalil"
+  },
+  {
+    "message": "I normally use my company login to access your platform but today it's giving me an error about the identity provider. Our IT team says everything is fine on their end and the issue must be on yours.\n\nRegards,\nOlivia",
+    "expectedLesson": "SSO or external login provider issue",
+    "difficulty": "easy",
+    "senderName": "Olivia Park-Williams"
+  },
+  {
+    "message": "We recently migrated our company's identity provider from Okta to Azure AD. Since the switch, none of our employees can log into your platform through SSO. We need to update the configuration but I'm not sure where to do that on your end. Can you point me in the right direction?",
+    "expectedLesson": "SSO or external login provider issue",
+    "difficulty": "medium",
+    "senderName": "Roberto Sánchez"
+  },
+  {
+    "message": "The SSO redirect is sending me to a login page that looks different from what I'm used to. It asks for credentials that I don't recognize — it's not my Google password or my company password. Did something change with how your platform handles federated login?",
+    "expectedLesson": "SSO or external login provider issue",
+    "difficulty": "medium",
+    "senderName": "Nadia Bouzid"
+  },
+  {
+    "message": "I started at a new company and they use your platform. They told me to log in with my work Microsoft 365 account, but when I click the Microsoft login button, it shows an error about the tenant not being authorized. My other Microsoft-connected apps work fine. Is there something our admin needs to configure on your platform?\n\nThanks,\nAnkit",
+    "expectedLesson": "SSO or external login provider issue",
+    "difficulty": "medium",
+    "senderName": "Ankit Verma"
+  },
+  {
+    "message": "We have a pretty complex authentication setup — our team uses SAML-based SSO through our company's identity gateway, which then connects to your platform. Recently some of our users can get through but others get a 403 error after the redirect. The users who fail are all in a specific Active Directory group. Our IT is pulling their hair out trying to figure out if it's a role mapping issue or something else.",
+    "expectedLesson": "SSO or external login provider issue",
+    "difficulty": "hard",
+    "senderName": "Monika Schneider"
+  },
+  {
+    "message": "I used to log in using my company credentials (we use Okta) and it worked seamlessly. Then I switched departments within the same company and now SSO doesn't work for me anymore, though my colleagues in the new department can log in fine. I've verified that my Okta profile has been updated. The error I see after the redirect is just a generic 'authentication failed' with no details.",
+    "expectedLesson": "SSO or external login provider issue",
+    "difficulty": "hard",
+    "senderName": "Diana Mbeki"
+  },
+  {
+    "message": "I've been trying to log in all morning, tried resetting everything, different browsers, nothing works — my boss needs the report by noon. I've never had issues before today. I normally just click the link from our internal portal and I'm in, but today it keeps bouncing me around between pages and eventually shows an error.",
+    "expectedLesson": "SSO or external login provider issue",
+    "difficulty": "hard",
+    "senderName": "Francisco Torres"
+  },
+  {
+    "message": "company login (sso) broken since this morning. getting auth errors. rest of team affected too.\n\nPlease look into ASAP\n- Jing",
+    "expectedLesson": "SSO or external login provider issue",
+    "difficulty": "easy",
+    "senderName": "Jing Wu"
+  }
+]
