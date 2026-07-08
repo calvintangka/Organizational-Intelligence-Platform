@@ -24,6 +24,8 @@ export interface SuggestedResponse {
   groundingLabel?: string;
   fallbackNotice?: string;
   fallbackTechnicalDetails?: string;
+  /** Which AI provider produced this draft (e.g. "LM Studio", "Claude API"). */
+  providerLabel?: string;
   /** Raw validated template used as the grounding input for the AI-personalized draft.
    *  Present only when source === "ai_advisory" so human review can compare both. */
   deterministicDraft?: string;
@@ -35,7 +37,7 @@ export interface MatchDiscriminationResult {
   reasoning: string;
 }
 
-export type AIProviderMode = "disabled" | "lmstudio" | "amd";
+export type AIProviderMode = "disabled" | "lmstudio" | "claude" | "amd";
 export type AIAdvisoryStatus = "verified" | "advisory_only" | "needs_human_review" | "unavailable" | "disabled";
 
 export interface AIDiagnostics {

@@ -1285,9 +1285,9 @@ export default function Home() {
         setAiAdvisory(aiDraft.advisory);
         setSuggestedResponse({
           ...aiDraft.response,
-          fallbackNotice: "Still unavailable — check that LM Studio is running."
+          fallbackNotice: "Still unavailable — check that LM Studio is running or configure a Claude API key."
         });
-        addLogEntries([createLogEntry("AI draft retry failed", "Still unavailable — check that LM Studio is running")]);
+        addLogEntries([createLogEntry("AI draft retry failed", "All AI tiers unavailable")]);
       }
     } finally {
       setIsRetryingDraft(false);
@@ -1427,7 +1427,7 @@ export default function Home() {
   }
 
   function formatFallbackNotice(_fallbackReason?: string, _diagnostics?: AIDiagnostics): string {
-    return "AI assistant unavailable — showing standard draft instead.";
+    return "AI assistant unavailable — showing standard template instead.";
   }
 
   function buildFallbackTechnicalDetails(fallbackReason?: string, diagnostics?: AIDiagnostics): string {
@@ -1830,6 +1830,7 @@ export default function Home() {
           source: "ai_advisory",
           draftMode,
           groundingLabel,
+          providerLabel: draftResult.providerLabel,
           // Raw validated template preserved for side-by-side comparison in human review
           deterministicDraft: draftMode === "cold_start" ? undefined : deterministicDraft
         }

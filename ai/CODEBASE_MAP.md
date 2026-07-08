@@ -20,6 +20,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `app/globals.css` - Global styling and design tokens used by the prototype UI.
 - `app/page.tsx` - Main client orchestrator; owns pipeline state, persistence wiring, view selection, and all write-path coordination.
 - `app/api/ai/chat/route.ts` - LM Studio proxy route with request validation, timeout, and diagnostic headers.
+- `app/api/ai/claude/route.ts` - Claude API proxy route; translates OpenAI-format requests to Anthropic Messages API, returns OpenAI-compatible responses. Reads `ANTHROPIC_API_KEY` from env (server-side only). Returns 503 if key is missing.
 
 ## View Components
 
@@ -92,10 +93,11 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 ### AI layer
 
-- `lib/ai/adapter.ts` - Selects LM Studio, AMD placeholder, or disabled mode from env config.
+- `lib/ai/adapter.ts` - Three-tier chain provider: LM Studio → Claude API → deterministic fallback. Selects chain or disabled mode from env config.
+- `lib/ai/claudeApi.ts` - Claude API provider implementation, session call counter/cap, JSON extraction, and typed response mapping. Uses `/api/ai/claude` proxy.
 - `lib/ai/deterministic.ts` - Advisory agreement scoring, AI draft eligibility checks, and fallback status logic.
 - `lib/ai/lmStudio.ts` - LM Studio provider implementation, timeout handling, JSON extraction, and typed response mapping.
-- `lib/ai/prompts.ts` - Prompt builders for analysis, canonical suggestion, pattern naming, knowledge enrichment, draft generation, and match discrimination.
+- `lib/ai/prompts.ts` - Prompt builders for analysis, canonical suggestion, pattern naming, knowledge enrichment, draft generation, and match discrimination. Provider-agnostic — shared by both LM Studio and Claude API.
 - `lib/ai/provider.ts` - Provider re-export surface.
 - `lib/ai/types.ts` - Provider contracts and request/response types.
 
@@ -202,11 +204,15 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 ### `lib/ai/*`
 
-- `createAIAdapter()` - Provider selection from env.
+- `createAIAdapter()` - Provider selection from env; builds chain provider when mode is `lmstudio`.
+- `createChainProvider()` - Three-tier chain: LM Studio → Claude API → returns failure for deterministic fallback.
 - `buildAIAdvisory()` - Advisory status and diagnostics wrapper.
 - `shouldUseAIDraft()` - Minimum AI draft safety screen.
-- `createLMStudioProvider()` - Provider factory.
+- `createLMStudioProvider()` - LM Studio provider factory.
 - `callChatCompletion()` - LM Studio request primitive.
+- `createClaudeAPIProvider()` - Claude API provider factory.
+- `callClaudeCompletion()` - Claude API request primitive with session call counter.
+- `getClaudeSessionCallCount()` - Returns current session Claude API call count.
 
 ## Recent Load-Bearing Additions
 
@@ -250,6 +256,12 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 - LM Studio proxy and timeout handling - `app/api/ai/chat/route.ts` and `lib/ai/lmStudio.ts`
   See `POST()` and `callChatCompletion()`.
+
+- Claude API proxy and timeout handling - `app/api/ai/claude/route.ts` and `lib/ai/claudeApi.ts`
+  See `POST()` and `callClaudeCompletion()`.
+
+- Three-tier AI fallback chain - `lib/ai/adapter.ts`
+  See `createChainProvider()` and `withFallback()`.
 
 - Human approval gate - `app/page.tsx`
   See `approveResponse()` and `approveReuse()`.

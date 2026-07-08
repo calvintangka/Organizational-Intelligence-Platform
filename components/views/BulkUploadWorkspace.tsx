@@ -45,9 +45,13 @@ function confidenceTone(confidence: BulkCluster["confidence"], darkMode: boolean
   return darkMode ? "bg-amber-900/30 text-amber-300" : "bg-amber-50 text-amber-700";
 }
 
-function analysisModeLabel(mode: BulkAnalysisResult["analysisMode"]): string {
-  if (mode === "ai_assisted") return "AI-assisted clustering";
-  if (mode === "deterministic_fallback") return "Deterministic fallback";
+function analysisModeLabel(mode: BulkAnalysisResult["analysisMode"], providerLabel?: string): string {
+  if (mode === "ai_assisted") {
+    if (providerLabel?.includes("Claude")) return "Clustered via Claude";
+    if (providerLabel?.includes("LM Studio")) return "Clustered via local AI";
+    return "AI-assisted clustering";
+  }
+  if (mode === "deterministic_fallback") return "Clustered via pattern matching (AI unavailable)";
   return "Deterministic clustering";
 }
 
@@ -376,7 +380,7 @@ export function BulkUploadWorkspace({
             ) : null}
             {analysis ? (
               <span className={`rounded-full px-3 py-1 text-xs font-semibold ${darkMode ? "bg-[#111827] text-slate-300" : "bg-slate-100 text-slate-700"}`}>
-                {analysisModeLabel(analysis.analysisMode)} · {analysis.providerLabel}
+                {analysisModeLabel(analysis.analysisMode, analysis.providerLabel)}
               </span>
             ) : null}
           </div>
@@ -392,7 +396,7 @@ export function BulkUploadWorkspace({
           <div className="mt-5 space-y-5">
             {analysis.analysisMode === "deterministic_fallback" ? (
               <div className={`${card} p-4`}>
-                <p className={`text-sm font-semibold ${darkMode ? "text-amber-300" : "text-amber-700"}`}>LLM unavailable. Deterministic fallback remained active without interrupting the upload.</p>
+                <p className={`text-sm font-semibold ${darkMode ? "text-amber-300" : "text-amber-700"}`}>AI unavailable — clustered via pattern matching. The upload completed without interruption.</p>
               </div>
             ) : null}
 

@@ -1,10 +1,10 @@
 # Current Status
 
-This file is the fastest accurate snapshot of the prototype as of 2026-07-07.
+This file is the fastest accurate snapshot of the prototype as of 2026-07-08.
 
 ## What Changed Most Recently
 
-Five pre-demo fixes from E2E_AUDIT_REPORT.md were completed: (F-1) "Resume in workspace" button on in-review cases in Cases view, restoring the pipeline at Human Review; (F-2) AI draft greeting now uses extracted sender name ("Hello Sarah Johnson,") with a deterministic safety net; (F-3) bulk upload now routes through LM Studio when available — root cause was truncated JSON from insufficient maxTokens; (F-4) retry AI draft button broadened to show in both cold-start and reuse paths; (F-7) ticket reference appended to AI drafts via prompt instruction and post-processing guard.
+Three-tier AI fallback chain implemented: LM Studio (local Gemma) → Claude API (cloud) → Deterministic (always works). This replaces the previous two-tier chain (LM Studio → Deterministic) everywhere AI is used: single-ticket drafting, match discrimination, bulk clustering, analysis, canonical suggestion, pattern naming, and knowledge enrichment. The chain tries tiers in order and stops at first success. Claude API tier gracefully skips when ANTHROPIC_API_KEY is missing. UI labels now distinguish which provider produced a draft: "Drafted locally (Gemma)" / "Drafted via Claude" / "Standard template (AI unavailable)". All boundary rules (F-04 human review gate, no-unvalidated-commitments, cold-start honesty, memory-write governance) apply to Claude API drafts identically to Gemma drafts. See ADR-010 in DECISIONS.md.
 
 ## What Works Right Now
 
@@ -62,6 +62,9 @@ Five pre-demo fixes from E2E_AUDIT_REPORT.md were completed: (F-1) "Resume in wo
 - Clean AI error display
   Raw HTTP diagnostics never render in user-facing UI. The fallback notice shows "AI assistant unavailable — showing standard draft instead." with a collapsible "Technical details" disclosure for debugging.
 
+- Three-tier AI fallback chain
+  LM Studio (local Gemma) → Claude API (cloud Haiku) → Deterministic. Implemented in `lib/ai/adapter.ts` as a chain provider. Each tier's failure is logged with the reason. Claude API tier uses `app/api/ai/claude/route.ts` as a server-side proxy (API key never exposed to client). Session call counter caps Claude API at 200 calls per session for cost safety.
+
 - LM Studio proxy and advisory flow
   Browser AI calls route through `app/api/ai/chat/route.ts`, with diagnostics, timeout handling, and deterministic fallback behavior.
 
@@ -78,8 +81,10 @@ Five pre-demo fixes from E2E_AUDIT_REPORT.md were completed: (F-1) "Resume in wo
 
 - AI mode is configured in `.env.local` as `NEXT_PUBLIC_AI_MODE=lmstudio`.
 - LM Studio base URL is `http://127.0.0.1:1234/v1`.
-- Current model is `google/gemma-4-e4b`.
-- Current timeout is `AI_TIMEOUT_MS=30000`.
+- Current local model is `google/gemma-4-e4b`.
+- Current cloud model is `claude-haiku-4-5-20251001` (configured in `app/api/ai/claude/route.ts`).
+- Current timeout is `AI_TIMEOUT_MS=30000` (LM Studio), `CLAUDE_TIMEOUT_MS=8000` (Claude API, configurable via env).
+- Claude API requires `ANTHROPIC_API_KEY` in `.env.local`. When missing, the chain skips tier 2 silently.
 - If Next.js starts behaving strangely after edits, clear the build cache by deleting `.next` and restart the dev server.
 - The in-app browser can reach `http://localhost:3000`, but longer automated UI verification remains somewhat flaky around reloads and JavaScript confirm dialogs.
 - Despite the browser flakiness, the shipment pack import flow was completed live this session: preview -> import as candidates -> validate -> reload persistence, followed by two clean ticket spot-checks in FastDrop.

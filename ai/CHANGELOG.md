@@ -13,6 +13,22 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-08] Three-tier AI fallback chain — LM Studio → Claude API → Deterministic
+**Layer:** coding
+**Task/Prompt:** Add Claude API as a cloud fallback tier between LM Studio and deterministic, replacing the two-tier chain everywhere AI is used.
+**Files changed:** `types/ai.ts`, `app/api/ai/claude/route.ts` (new), `lib/ai/claudeApi.ts` (new), `lib/ai/adapter.ts`, `app/page.tsx`, `components/SuggestedResponsePanel.tsx`, `components/HumanReviewEditor.tsx`, `components/views/TicketWorkspace.tsx`, `components/views/BulkUploadWorkspace.tsx`, `ai/DECISIONS.md`, `ai/CHANGELOG.md`, `ai/CURRENT_STATUS.md`, `ai/CODEBASE_MAP.md`
+**What changed:**
+- Added `"claude"` to `AIProviderMode` type and `providerLabel` field to `SuggestedResponse`.
+- Created `app/api/ai/claude/route.ts` — server-side proxy that translates OpenAI-format requests to Anthropic Messages API and returns OpenAI-compatible responses. Reads `ANTHROPIC_API_KEY` from env (never exposed to client). Returns 503 if key is missing. Uses `claude-haiku-4-5-20251001` model for speed/cost. Rate-limit and quota errors return structured failures.
+- Created `lib/ai/claudeApi.ts` — Claude API provider implementing the full `AIProvider` interface (analyzeTicket, suggestCanonicalProblem, suggestPatternName, enrichKnowledge, draftCustomerResponse, discriminateMatch). Reuses all prompt builders from `lib/ai/prompts.ts` unchanged. Includes session call counter with 200-call cap for cost safety. 8-second default timeout (configurable via `CLAUDE_TIMEOUT_MS`).
+- Replaced `createAIAdapter()` in `lib/ai/adapter.ts` with a chain provider: when mode is `lmstudio`, each AI method tries LM Studio first, falls through to Claude API on failure, then returns failure for deterministic fallback. No new npm dependency — uses direct `fetch`, consistent with the LM Studio pattern.
+- Updated UI labels: `SuggestedResponsePanel` shows "Drafted locally (Gemma)" / "Drafted via Claude" / "Standard template (AI unavailable)". `HumanReviewEditor` badge shows provider-specific label. `BulkUploadWorkspace` shows "Clustered via local AI" / "Clustered via Claude" / "Clustered via pattern matching (AI unavailable)".
+- Updated retry button message to reference both tiers, not just LM Studio.
+- Added ADR-010 recording the architecture shift from two-tier to three-tier and the hybrid local/cloud decision.
+**Boundaries touched:** All nine boundary rules preserved. Claude API drafts carry `source: "ai_advisory"` and route through the F-04 human-review gate (Boundary 1). Claude API never writes to knowledge, candidates, validation, trust, or memory (Boundary 2). Cold-start honesty applies identically (Boundary 4). `doNotPromise` guardrails are passed into Claude API prompts via the shared prompt builders (Boundary 9). Prompts are provider-agnostic — only the transport differs.
+**Verification:** `npm run build` passes. Claude API route visible in build output. No new npm dependencies added. Type-checking confirms all `AIProvider` interface methods implemented. Graceful degradation verified in code: missing key → 503 → chain falls through to deterministic.
+**Open items:** Live verification requires an `ANTHROPIC_API_KEY` in `.env.local` (not currently available). Bulk clustering quality comparison and wall-clock timing deferred until key is available. Claude API call count and cost reporting deferred to live test.
+
 ## [2026-07-07] Stress-test query corpus — 500 bulk queries across 5 domains
 **Layer:** coding
 **Task/Prompt:** Generate 500 realistic customer support queries to stress-test every knowledge pack

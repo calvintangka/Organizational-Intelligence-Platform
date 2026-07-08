@@ -127,3 +127,17 @@ Pure similarity and trust are not enough to prevent semantically adjacent but op
 
 Consequence:
 A rejected top match routes the flow back to cold-start / human review rather than forcing weak reuse.
+
+## ADR-010 — Three-tier AI fallback: LM Studio → Claude API → Deterministic
+
+Status:
+Accepted
+
+Decision:
+The AI provider layer uses a three-tier fallback chain: LM Studio (local Gemma, free) → Claude API (cloud Haiku, paid) → Deterministic (always works). The chain tries tiers in order and stops at first success. This changes the prototype from "fully local" to "hybrid local/cloud" when a Claude API key is configured. When no key is present, the chain degrades to two-tier (LM Studio → Deterministic) with no behavioral change.
+
+Why:
+Bulk clustering repeatedly fell back to deterministic even when LM Studio was confirmed working for single-ticket drafts (F-3). Rather than continuing to debug local connectivity edge cases, a reliable cloud tier provides graceful degradation before the final deterministic fallback. No new npm dependency was added — the Claude API uses direct `fetch` through a server-side proxy, consistent with the LM Studio pattern.
+
+Consequence:
+All boundary rules (F-04 human review gate, no-unvalidated-commitments, cold-start honesty, memory-write governance) apply to Claude API drafts identically to Gemma drafts — source is `ai_advisory`, prompts are shared, and the F-04 gate cannot be bypassed. Cost safety is enforced via a 200-call per-session cap and console logging of call counts. Future AI sessions should be aware that the prototype is no longer exclusively local when a Claude API key is present.

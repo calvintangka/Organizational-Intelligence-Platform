@@ -11,6 +11,8 @@
   deterministicDraft?: string;
   /** Whether the current draft came from the AI advisory */
   isAIDraft?: boolean;
+  /** Which AI provider produced this draft */
+  aiProviderLabel?: string;
   /** Whether no deterministic template exists and the human must author from scratch */
   isNoTemplate?: boolean;
   showRetryButton?: boolean;
@@ -28,6 +30,7 @@ export function HumanReviewEditor({
   fallbackNotice,
   fallbackTechnicalDetails,
   deterministicDraft,
+  aiProviderLabel,
   isAIDraft = false,
   isNoTemplate = false,
   showRetryButton = false,
@@ -35,7 +38,8 @@ export function HumanReviewEditor({
   onRetryAIDraft,
 }: HumanReviewEditorProps) {
   const showComparison = isAIDraft && deterministicDraft && deterministicDraft.trim() !== reviewedResponse.trim();
-  const sourceBadge = isNoTemplate ? "No template available" : isAIDraft ? "AI advisory" : "Deterministic draft";
+  const aiLabel = aiProviderLabel?.includes("Claude") ? "Drafted via Claude" : aiProviderLabel?.includes("LM Studio") ? "Drafted locally (Gemma)" : "AI advisory";
+  const sourceBadge = isNoTemplate ? "No template available" : isAIDraft ? aiLabel : "Standard template";
   const sourceBadgeClass = isNoTemplate
     ? "bg-blue-50 text-[#2563EB]"
     : isAIDraft

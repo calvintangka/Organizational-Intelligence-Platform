@@ -521,6 +521,7 @@ export function TicketWorkspace({
                 fallbackNotice={suggestedResponse?.fallbackNotice}
                 fallbackTechnicalDetails={suggestedResponse?.fallbackTechnicalDetails}
                 deterministicDraft={suggestedResponse?.deterministicDraft}
+                aiProviderLabel={suggestedResponse?.providerLabel}
                 isAIDraft={suggestedResponse?.source === "ai_advisory"}
                 isNoTemplate={suggestedResponse?.source === "no_template"}
                 showRetryButton={showRetryButton}

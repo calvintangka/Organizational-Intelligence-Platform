@@ -4,17 +4,27 @@ interface SuggestedResponsePanelProps {
   response: SuggestedResponse;
 }
 
+function providerTag(response: SuggestedResponse): string {
+  if (response.providerLabel?.includes("Claude")) return "Drafted via Claude";
+  if (response.providerLabel?.includes("LM Studio")) return "Drafted locally (Gemma)";
+  return "AI draft";
+}
+
 function sourceLabel(response: SuggestedResponse): string {
   if (response.fallbackNotice) return response.fallbackNotice;
-  if (response.source !== "ai_advisory") return response.source === "no_template" ? "No template available" : "Deterministic draft";
+  if (response.source !== "ai_advisory") {
+    if (response.fallbackNotice) return response.fallbackNotice;
+    return response.source === "no_template" ? "No template available" : "Standard template (AI unavailable)";
+  }
+  const tag = providerTag(response);
   if (response.draftMode === "lesson_grounded") {
-    return `AI draft grounded in validated lesson: ${response.groundingLabel ?? "matched lesson"}`;
+    return `${tag} · grounded in validated lesson: ${response.groundingLabel ?? "matched lesson"}`;
   }
-  if (response.draftMode === "memory_grounded") return "AI draft grounded in organizational memory";
+  if (response.draftMode === "memory_grounded") return `${tag} · grounded in organizational memory`;
   if (response.draftMode === "cold_start") {
-    return "AI suggestion - no organizational knowledge exists yet; review carefully";
+    return `${tag} · no organizational knowledge exists yet; review carefully`;
   }
-  return "AI-assisted advisory draft";
+  return tag;
 }
 
 export function SuggestedResponsePanel({ response }: SuggestedResponsePanelProps) {
