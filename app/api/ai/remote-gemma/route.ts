@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 const DEFAULT_REMOTE_GEMMA_MODEL = "/workspace/models/gemma-4-31b-qat/gemma-4-31B-it-qat-UD-Q4_K_XL.gguf";
-const DEFAULT_TIMEOUT_MS = 30000;
+// Remote Gemma 31B is a thinking model on only 4 GPU slots; individual responses
+// run 15–27s and climb under concurrent load. 30s left almost no margin, so the
+// proxy->ngrok fetch was aborting before the model finished. Override with
+// REMOTE_GEMMA_TIMEOUT_MS if the remote server changes.
+const DEFAULT_TIMEOUT_MS = 90000;
 const MAX_TIMEOUT_MS = 120000;
 const PROXY_PATH = "/api/ai/remote-gemma";
 
@@ -17,6 +21,10 @@ interface ChatRequestBody {
   temperature?: number;
   max_tokens?: number;
   messages?: ChatMessage[];
+  // llama-server thinking controls, forwarded verbatim when the client sets them.
+  // reasoning_budget: 0 disables the chain-of-thought phase entirely (llama.cpp).
+  reasoning_budget?: number;
+  chat_template_kwargs?: Record<string, unknown>;
 }
 
 function readBaseUrl(): string {
@@ -98,7 +106,11 @@ export async function POST(request: Request) {
         model,
         temperature: typeof body.temperature === "number" ? body.temperature : 0.2,
         max_tokens: typeof body.max_tokens === "number" ? body.max_tokens : 180,
-        messages: body.messages
+        messages: body.messages,
+        // Forward thinking controls only when present; unknown fields are harmless
+        // to llama-server builds that don't support them.
+        ...(typeof body.reasoning_budget === "number" ? { reasoning_budget: body.reasoning_budget } : {}),
+        ...(body.chat_template_kwargs ? { chat_template_kwargs: body.chat_template_kwargs } : {})
       }),
       signal: controller.signal
     });

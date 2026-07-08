@@ -40,7 +40,29 @@ function createChainProvider(config: AIConfig): AIProvider {
   // Remote Gemma 31B via ngrok. The proxy route reads REMOTE_GEMMA_BASE_URL
   // server-side; if unset it returns 503 and the chain falls through to Claude.
   const remoteGemma = createLMStudioProvider(
-    { ...config, proxyPath: "/api/ai/remote-gemma" },
+    {
+      ...config,
+      proxyPath: "/api/ai/remote-gemma",
+      // Remote Gemma 31B (thinking model) can take 15–27s+ under concurrent load and
+      // emits reasoning tokens before the JSON answer, so we need a larger timeout and
+      // token budget. The client timeout must exceed the proxy->ngrok timeout (90s in
+      // app/api/ai/remote-gemma/route.ts) so the client receives the proxy's structured
+      // error instead of aborting the request itself first.
+      timeoutMs: Math.max(config.timeoutMs, 95000),
+      // Floor applied to every Remote Gemma call. draftCustomerResponse (~650-token
+      // answer) hit finish_reason=length even at 2048 because Gemma 4's thinking phase
+      // consumed the whole budget in ~78s — and raising the cap further would cross the
+      // 90s timeout wall instead of helping. So we disable reasoning below and keep 2048
+      // as generous headroom for the answer alone.
+      minMaxTokens: 2048,
+      // Disable llama-server's chain-of-thought for this tier. reasoning_budget: 0 is the
+      // llama.cpp control; enable_thinking:false covers chat templates that read that kwarg.
+      // Both are ignored by builds that don't support them, so this is safe to always send.
+      extraBody: {
+        reasoning_budget: 0,
+        chat_template_kwargs: { enable_thinking: false }
+      }
+    },
     "Remote Gemma"
   );
   const claude = createClaudeAPIProvider();

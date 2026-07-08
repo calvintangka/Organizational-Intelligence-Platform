@@ -115,6 +115,7 @@ async function callChatCompletion<T>(
       ? `${config.baseUrl.replace(/\/$/, "")}/chat/completions`
       : config.proxyPath;
 
+  const resolvedMaxTokens = Math.max(options.maxTokens ?? 180, config.minMaxTokens ?? 0);
   try {
     const response = await fetch(endpoint, {
       method: "POST",
@@ -124,12 +125,13 @@ async function callChatCompletion<T>(
       body: JSON.stringify({
         model: config.model,
         temperature: 0.2,
-        max_tokens: options.maxTokens ?? 180,
+        max_tokens: resolvedMaxTokens,
         messages: [
           { role: "system", content: prompt.system },
           { role: "user", content: prompt.user }
-        ]
-      } satisfies ChatCompletionPayload),
+        ],
+        ...config.extraBody
+      }),
       signal: controller.signal
     });
 
@@ -157,7 +159,9 @@ async function callChatCompletion<T>(
     const finishReason = firstChoice?.finish_reason;
     const content = firstChoice?.message?.content?.trim();
     const reasoningContent = firstChoice?.message?.reasoning_content?.trim();
+    const tier = config.proxyPath;
     if (finishReason === "length") {
+      console.warn(`[callChatCompletion] ${tier}: 200 OK but finish_reason=length — increase max_tokens or reduce reasoning (current: ${resolvedMaxTokens})`);
       return {
         ok: false,
         providerMode: "lmstudio",
@@ -169,6 +173,25 @@ async function callChatCompletion<T>(
       };
     }
     if (!content && reasoningContent) {
+      // Thinking models (e.g. Gemma QAT) sometimes emit the JSON answer in
+      // reasoning_content and leave content null. Try parsing it as a fallback.
+      const parsedFromReasoning = parseJsonObject(reasoningContent);
+      if (parsedFromReasoning && typeof parsedFromReasoning === "object") {
+        console.warn(`[callChatCompletion] ${tier}: 200 OK — content empty, used reasoning_content fallback (thinking model path)`);
+        return {
+          ok: true,
+          providerMode: "lmstudio",
+          providerLabel: "LM Studio",
+          model: config.model,
+          latencyMs: Date.now() - startedAt,
+          data: parsedFromReasoning as T,
+          diagnostics: readDiagnostics(config, endpoint, true, undefined, response.headers)
+        };
+      }
+      console.warn(
+        `[callChatCompletion] ${tier}: 200 OK — content empty, reasoning_content present but not valid JSON.`,
+        `reasoning_content[:300]: ${reasoningContent.slice(0, 300)}`
+      );
       return {
         ok: false,
         providerMode: "lmstudio",
@@ -186,6 +209,10 @@ async function callChatCompletion<T>(
       };
     }
     if (!content) {
+      console.warn(
+        `[callChatCompletion] ${tier}: 200 OK — content and reasoning_content both empty.`,
+        `choices[0]: ${JSON.stringify(payload.choices?.[0]).slice(0, 500)}`
+      );
       return {
         ok: false,
         providerMode: "lmstudio",
@@ -199,6 +226,10 @@ async function callChatCompletion<T>(
 
     const parsed = parseJsonObject(content);
     if (!parsed || typeof parsed !== "object") {
+      console.warn(
+        `[callChatCompletion] ${tier}: 200 OK — parseJsonObject failed.`,
+        `content[:400]: ${content.slice(0, 400)}`
+      );
       return {
         ok: false,
         providerMode: "lmstudio",

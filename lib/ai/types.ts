@@ -21,6 +21,13 @@ export interface AIConfig {
   model: string;
   timeoutMs: number;
   proxyPath: string;
+  /** Floor on max_tokens for any call through this config. Useful for thinking models
+   *  (e.g. Gemma QAT) that emit reasoning tokens before the JSON answer. */
+  minMaxTokens?: number;
+  /** Extra fields merged into the chat-completion request body. Used to pass
+   *  provider-specific controls (e.g. reasoning_budget to cap a thinking model's
+   *  chain of thought) without affecting other tiers that share this provider code. */
+  extraBody?: Record<string, unknown>;
 }
 
 export interface AIProviderResult<T> {

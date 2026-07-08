@@ -141,3 +141,21 @@ Bulk clustering repeatedly fell back to deterministic even when LM Studio was co
 
 Consequence:
 All boundary rules (F-04 human review gate, no-unvalidated-commitments, cold-start honesty, memory-write governance) apply to Claude API drafts identically to Gemma drafts — source is `ai_advisory`, prompts are shared, and the F-04 gate cannot be bypassed. Cost safety is enforced via a 200-call per-session cap and console logging of call counts. Future AI sessions should be aware that the prototype is no longer exclusively local when a Claude API key is present.
+
+## ADR-011 — Remote Gemma 31B as Tier 2, with a dual-timeout and reasoning disabled
+
+Status:
+Accepted
+
+Decision:
+A remote Gemma 4 31B server (llama-server exposed via an ngrok tunnel) is inserted as Tier 2 of the AI fallback chain, making it four-tier: LM Studio (local, free) → Remote Gemma 31B (remote, free) → Claude API (cloud, paid) → Deterministic (always works). The tier reuses `createLMStudioProvider` with a label override and a distinct `proxyPath`, so it shares every prompt and all six `AIProvider` methods with the local tier. Three implementation constraints are load-bearing and must be preserved:
+
+1. **The `ngrok-skip-browser-warning: true` header** is sent on the proxy→ngrok fetch. Without it, ngrok returns an HTML interstitial page and the tier fails to parse a "successful" response.
+2. **A dual timeout.** The request crosses two independent hops — client→proxy (an AbortController in `callChatCompletion`) and proxy→ngrok (a timer in the route handler). These are separate values; raising one does not affect the other. The proxy hop is 90s and the client hop is 95s, deliberately ordered so the client outlives the proxy and surfaces the proxy's structured error instead of racing it with a generic abort.
+3. **Reasoning is disabled for this tier** via `reasoning_budget: 0` (and `enable_thinking: false`), passed through a config-level `extraBody` merged into the request body and forwarded by the proxy.
+
+Why:
+Remote Gemma is a thinking model. On its longest method (`draftCustomerResponse`) it spent the entire token budget on chain-of-thought before emitting the JSON answer, returning `finish_reason=length` — a 200 response that parses to nothing. The instinctive fix (raise `max_tokens`) is a trap: at 2048 tokens the reasoning phase already took ~78s, and any larger cap would cross the 90s timeout wall, converting a truncation failure into a timeout failure. The real bottleneck was reasoning tokens, not the answer cap, so the correct lever is to suppress reasoning — which dropped the call from ~78s (truncated) to ~5s (`ok: true`). This is the general lesson: for a thinking model returning truncated JSON, diagnose whether reasoning or the answer is consuming the budget before touching `max_tokens`.
+
+Consequence:
+Any future thinking-model tier must (a) send provider-specific controls through the `extraBody` passthrough rather than hard-coding them into the shared payload, keeping other tiers unaffected; (b) treat the two network hops as independently configured timeouts; and (c) prefer disabling or budgeting reasoning over inflating `max_tokens` when a thinking model truncates. The tier is inert without `REMOTE_GEMMA_BASE_URL` (a live ngrok URL kept only in the uncommitted `.env.local`); when absent the proxy returns 503 and the chain degrades to LM Studio → Claude → Deterministic with no behavioral change. The thinking-disable depends on the remote `llama-server` honoring request-level `reasoning_budget`; a build that does not may require the `--reasoning-budget 0` launch flag instead.
