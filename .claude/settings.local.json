@@ -5,7 +5,28 @@
       "mcp__Claude_Preview__preview_start",
       "Bash(npx next *)",
       "Bash(Remove-Item -Recurse -Force \"C:\\\\Users\\\\Calvin\\\\Documents\\\\My Project\\\\Hackathon 2\\\\.next\\\\cache\\\\webpack\" -ErrorAction SilentlyContinue)",
-      "PowerShell(\"Cache cleared\")"
+      "PowerShell(\"Cache cleared\")",
+      "Bash(netstat -ano)",
+      "Bash(findstr \"LISTENING\")",
+      "Bash(findstr \":3000\")",
+      "Bash(findstr \":1234\")",
+      "Bash(curl -s -m 5 http://127.0.0.1:1234/v1/models)",
+      "Bash(npm run *)",
+      "Bash(tee \"C:\\\\Users\\\\Calvin\\\\Documents\\\\My Project\\\\Hackathon 2\\\\tmp\\\\dev.log\")",
+      "Bash(curl *)",
+      "Bash(where playwright *)",
+      "Bash(where puppeteer *)",
+      "Bash(where chrome *)",
+      "Bash(where msedge *)",
+      "Bash(npm ls *)",
+      "Read(//c/Program Files/Google/Chrome/Application/**)",
+      "Read(//c/Program Files \\\\\\(x86\\\\\\)/Google/Chrome/Application/**)",
+      "Read(//c/Program Files \\\\\\(x86\\\\\\)/Microsoft/Edge/Application/**)",
+      "Read(//c/Program Files/Microsoft/Edge/Application/**)",
+      "Read(//c/Program Files \\\\\\(x86\\\\\\)/Microsoft/EdgeWebView/Application/**)",
+      "Bash(where node *)",
+      "Bash(npm install *)",
+      "Bash(node tmp/audit/token_usage.mjs)"
     ]
   }
 }
