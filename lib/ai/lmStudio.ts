@@ -279,14 +279,22 @@ function mapFailure<T>(result: AIProviderResult<Record<string, unknown>>): AIPro
   };
 }
 
-export function createLMStudioProvider(config: AIConfig): AIProvider {
+export function createLMStudioProvider(config: AIConfig, labelOverride?: string): AIProvider {
+  const lbl = labelOverride ?? "LM Studio";
+
+  // Post-processes any result to stamp the correct providerLabel, since
+  // callChatCompletion always hardcodes "LM Studio". No-op when label is default.
+  function relabel<T>(r: AIProviderResult<T>): AIProviderResult<T> {
+    return lbl === "LM Studio" ? r : { ...r, providerLabel: lbl };
+  }
+
   return {
     mode: "lmstudio",
-    label: "LM Studio",
+    label: lbl,
     async analyzeTicket(input: AnalyzeTicketInput) {
       const result = await callChatCompletion<Record<string, unknown>>(config, buildAnalyzeTicketPrompt(input));
-      if (!result.ok || !result.data) return mapFailure<AIAnalysisSuggestion>(result);
-      return {
+      if (!result.ok || !result.data) return relabel(mapFailure<AIAnalysisSuggestion>(result));
+      return relabel({
         ...result,
         data: {
           summary: String(result.data.summary ?? input.deterministicUnderstanding.summary),
@@ -301,7 +309,7 @@ export function createLMStudioProvider(config: AIConfig): AIProvider {
           rationale: typeof result.data.rationale === "string" ? result.data.rationale : undefined,
           extractedFields: normalizeExtractedTicketFields(result.data.extractedFields)
         }
-      };
+      });
     },
     async suggestCanonicalProblem(input: CanonicalProblemInput) {
       // F-3: bulk clusters rely on this call. Bumped max_tokens from the 180
@@ -315,32 +323,32 @@ export function createLMStudioProvider(config: AIConfig): AIProvider {
         buildCanonicalProblemPrompt(input),
         { maxTokens: 400, timeoutMs: 90000 }
       );
-      if (!result.ok || !result.data) return mapFailure<AICanonicalProblemSuggestion>(result);
-      return {
+      if (!result.ok || !result.data) return relabel(mapFailure<AICanonicalProblemSuggestion>(result));
+      return relabel({
         ...result,
         data: {
           title: String(result.data.title ?? input.deterministicCanonicalProblem.title),
           confidence: clampConfidence(result.data.confidence),
           rationale: typeof result.data.rationale === "string" ? result.data.rationale : undefined
         }
-      };
+      });
     },
     async suggestPatternName(input: PatternNameInput) {
       const result = await callChatCompletion<Record<string, unknown>>(config, buildPatternNamePrompt(input));
-      if (!result.ok || !result.data) return mapFailure<AIPatternSuggestion>(result);
-      return {
+      if (!result.ok || !result.data) return relabel(mapFailure<AIPatternSuggestion>(result));
+      return relabel({
         ...result,
         data: {
           title: String(result.data.title ?? input.deterministicPatternTitle),
           confidence: clampConfidence(result.data.confidence),
           rationale: typeof result.data.rationale === "string" ? result.data.rationale : undefined
         }
-      };
+      });
     },
     async enrichKnowledge(input: KnowledgeEnrichmentInput) {
       const result = await callChatCompletion<Record<string, unknown>>(config, buildKnowledgeEnrichmentPrompt(input));
-      if (!result.ok || !result.data) return mapFailure<AIKnowledgeEnrichment>(result);
-      return {
+      if (!result.ok || !result.data) return relabel(mapFailure<AIKnowledgeEnrichment>(result));
+      return relabel({
         ...result,
         data: {
           internalGuidance: normalizeList(result.data.internalGuidance),
@@ -349,7 +357,7 @@ export function createLMStudioProvider(config: AIConfig): AIProvider {
           preventiveActions: normalizeList(result.data.preventiveActions),
           confidence: clampConfidence(result.data.confidence)
         }
-      };
+      });
     },
     async draftCustomerResponse(input: DraftCustomerResponseInput) {
       const result = await callChatCompletion<Record<string, unknown>>(
@@ -357,8 +365,8 @@ export function createLMStudioProvider(config: AIConfig): AIProvider {
         buildDraftCustomerResponsePrompt(input),
         { maxTokens: 650 }
       );
-      if (!result.ok || !result.data) return mapFailure<AICustomerResponseSuggestion>(result);
-      return {
+      if (!result.ok || !result.data) return relabel(mapFailure<AICustomerResponseSuggestion>(result));
+      return relabel({
         ...result,
         data: {
           draftResponse: String(result.data.customerResponse ?? result.data.draftResponse ?? input.deterministicDraft),
@@ -367,7 +375,7 @@ export function createLMStudioProvider(config: AIConfig): AIProvider {
           groundingMode: input.groundingMode,
           groundingLabel: input.groundingLabel
         }
-      };
+      });
     },
     async discriminateMatch(input: MatchDiscriminationInput) {
       // F-3: bulk path uses this per-query; the previous default of 180 tokens
@@ -379,11 +387,11 @@ export function createLMStudioProvider(config: AIConfig): AIProvider {
         buildMatchDiscriminationPrompt(input),
         { maxTokens: 400, timeoutMs: 90000 }
       );
-      if (!result.ok || !result.data) return mapFailure<MatchDiscriminationResult>(result);
+      if (!result.ok || !result.data) return relabel(mapFailure<MatchDiscriminationResult>(result));
       const confidence = result.data.confidence === "high" || result.data.confidence === "low"
         ? result.data.confidence
         : "medium";
-      return {
+      return relabel({
         ...result,
         data: {
           isDistinctFromMatch: result.data.isDistinctFromMatch === true,
@@ -392,7 +400,7 @@ export function createLMStudioProvider(config: AIConfig): AIProvider {
             ? result.data.reasoning
             : "No reasoning provided."
         } satisfies MatchDiscriminationResult
-      };
+      });
     }
   };
 }
