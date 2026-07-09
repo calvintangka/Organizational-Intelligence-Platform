@@ -1,0 +1,296 @@
+
+> organizational-intelligence-hackathon@0.1.0 dev
+> next dev
+
+ ⚠ Port 3000 is in use by process 30220, using available port 3001 instead.
+   ▲ Next.js 15.5.19
+   - Local:        http://localhost:3001
+   - Network:      http://192.168.1.7:3001
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 2.4s
+ ○ Compiling / ...
+ ✓ Compiled / in 1391ms (612 modules)
+ GET / 200 in 1940ms
+ GET / 200 in 112ms
+ ✓ Compiled /api/ai/chat in 405ms (632 modules)
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 10388ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 22239ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 7382ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 10057ms
+ GET / 200 in 474ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 7279ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 18326ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 6310ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 11818ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 5997ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 7259ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 29356ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 5889ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 7156ms
+(node:4360) Warning: Failed to load the ES module: C:\Users\Calvin\Documents\My Project\Hackathon 2\tailwind.config.ts. Make sure to set "type": "module" in the nearest package.json file or use the .mjs extension.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ Compiled in 2.7s (627 modules)
+ GET / 200 in 135ms
+ ✓ Compiled /api/ai/chat in 201ms (373 modules)
+ ⨯ Error: Cannot find module './331.js'
+Require stack:
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\webpack-runtime.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\api\ai\chat\route.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\require.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\load-components.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\utils.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\swc\options.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\swc\index.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\next-config-ts\transpile-config.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\config.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\next.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\lib\start-server.js
+    at <unknown> (C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\api\ai\chat\route.js:1:40196)
+    at Object.<anonymous> (C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\api\ai\chat\route.js:1:40241) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array],
+  page: '/api/ai/chat'
+}
+ ⨯ Error: Cannot find module './331.js'
+Require stack:
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\webpack-runtime.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\api\ai\chat\route.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\require.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\load-components.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\utils.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\swc\options.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\swc\index.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\next-config-ts\transpile-config.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\config.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\next.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\lib\start-server.js
+    at <unknown> (C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\api\ai\chat\route.js:1:40196)
+    at Object.<anonymous> (C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\api\ai\chat\route.js:1:40241) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array],
+  page: '/api/ai/chat'
+}
+ ✓ Compiled /_error in 480ms (979 modules)
+ POST /api/ai/chat 500 in 1283ms
+ POST /api/ai/chat 500 in 1283ms
+ ⨯ Error: Cannot find module './331.js'
+Require stack:
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\webpack-runtime.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\pages\_document.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\require.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\load-components.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\utils.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\swc\options.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\swc\index.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\next-config-ts\transpile-config.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\config.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\next.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\lib\start-server.js
+    at <unknown> (C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\api\ai\chat\route.js:1:40196)
+    at Object.<anonymous> (C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\api\ai\chat\route.js:1:40241) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array],
+  page: '/api/ai/chat'
+}
+ ⨯ Error: Cannot find module './331.js'
+Require stack:
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\webpack-runtime.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\pages\_document.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\require.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\load-components.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\utils.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\swc\options.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\swc\index.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\next-config-ts\transpile-config.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\config.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\next.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\lib\start-server.js
+    at <unknown> (C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\api\ai\chat\route.js:1:40196)
+    at Object.<anonymous> (C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\api\ai\chat\route.js:1:40241) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array],
+  page: '/api/ai/chat'
+}
+ POST /api/ai/chat 500 in 307ms
+ POST /api/ai/chat 500 in 308ms
+ ⨯ Error: Cannot find module './331.js'
+Require stack:
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\webpack-runtime.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\pages\_document.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\require.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\load-components.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\utils.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\swc\options.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\swc\index.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\next-config-ts\transpile-config.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\config.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\next.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\lib\start-server.js
+    at <unknown> (C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\api\ai\chat\route.js:1:40196)
+    at Object.<anonymous> (C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\api\ai\chat\route.js:1:40241) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array],
+  page: '/api/ai/chat'
+}
+ POST /api/ai/chat 500 in 270ms
+ ⨯ Error: Cannot find module './331.js'
+Require stack:
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\webpack-runtime.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\pages\_document.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\require.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\load-components.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\utils.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\swc\options.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\swc\index.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\next-config-ts\transpile-config.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\config.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\next.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\lib\start-server.js
+    at <unknown> (C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\api\ai\chat\route.js:1:40196)
+    at Object.<anonymous> (C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\api\ai\chat\route.js:1:40241) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array],
+  page: '/api/ai/chat'
+}
+ POST /api/ai/chat 500 in 263ms
+ ⨯ Error: Cannot find module './331.js'
+Require stack:
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\webpack-runtime.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\pages\_document.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\require.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\load-components.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\utils.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\swc\options.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\swc\index.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\next-config-ts\transpile-config.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\config.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\next.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\lib\start-server.js
+    at <unknown> (C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\api\ai\chat\route.js:1:40196)
+    at Object.<anonymous> (C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\api\ai\chat\route.js:1:40241) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array],
+  page: '/api/ai/chat'
+}
+ POST /api/ai/chat 500 in 263ms
+ ⨯ Error: Cannot find module './331.js'
+Require stack:
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\webpack-runtime.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\pages\_document.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\require.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\load-components.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\utils.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\swc\options.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\swc\index.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\next-config-ts\transpile-config.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\config.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\next.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\lib\start-server.js
+    at <unknown> (C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\api\ai\chat\route.js:1:40196)
+    at Object.<anonymous> (C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\api\ai\chat\route.js:1:40241) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array],
+  page: '/api/ai/chat'
+}
+ POST /api/ai/chat 500 in 250ms
+ ⨯ Error: Cannot find module './331.js'
+Require stack:
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\webpack-runtime.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\pages\_document.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\require.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\load-components.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\utils.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\swc\options.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\swc\index.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\build\next-config-ts\transpile-config.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\config.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\next.js
+- C:\Users\Calvin\Documents\My Project\Hackathon 2\node_modules\next\dist\server\lib\start-server.js
+    at <unknown> (C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\api\ai\chat\route.js:1:40196)
+    at Object.<anonymous> (C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\api\ai\chat\route.js:1:40241) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array],
+  page: '/api/ai/chat'
+}
+ POST /api/ai/chat 500 in 247ms
+[?25h

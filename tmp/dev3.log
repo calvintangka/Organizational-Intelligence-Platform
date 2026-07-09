@@ -1,0 +1,86 @@
+
+> organizational-intelligence-hackathon@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.19
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.1.7:3000
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1778ms
+ ○ Compiling / ...
+(node:44684) Warning: Failed to load the ES module: C:\Users\Calvin\Documents\My Project\Hackathon 2\tailwind.config.ts. Make sure to set "type": "module" in the nearest package.json file or use the .mjs extension.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ Compiled / in 4.1s (626 modules)
+ GET / 200 in 4407ms
+ GET / 200 in 44ms
+ GET / 200 in 46ms
+ ✓ Compiled /api/ai/chat in 439ms (646 modules)
+ GET / 200 in 201ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 6156ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 15054ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 5529ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 8368ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 4654ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 5883ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 27830ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 5424ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 4650ms
+ ✓ Compiled in 293ms (613 modules)
+ ✓ Compiled in 349ms (613 modules)
+[?25h

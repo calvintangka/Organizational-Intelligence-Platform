@@ -1,0 +1,132 @@
+
+> organizational-intelligence-hackathon@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.19
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.1.7:3000
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1978ms
+ ○ Compiling / ...
+(node:18820) Warning: Failed to load the ES module: C:\Users\Calvin\Documents\My Project\Hackathon 2\tailwind.config.ts. Make sure to set "type": "module" in the nearest package.json file or use the .mjs extension.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ Compiled / in 5.1s (626 modules)
+ GET / 200 in 5656ms
+ GET / 200 in 56ms
+ GET / 200 in 53ms
+ ○ Compiling /api/ai/chat ...
+ ✓ Compiled /api/ai/chat in 528ms (646 modules)
+ GET / 200 in 238ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 8027ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 15515ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 4823ms
+ POST /api/ai/chat 200 in 30003ms
+[ai-proxy] LM Studio proxy failed {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  message: 'AI request timed out after 30000ms'
+}
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 3918ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 4724ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 4569ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 4410ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 5280ms
+ GET / 200 in 189ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 10538ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 23559ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 4353ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 4895ms
+ ✓ Compiled in 1332ms (627 modules)
+ ✓ Compiled in 636ms (627 modules)
+ ✓ Compiled in 992ms (627 modules)
+ ✓ Compiled in 738ms (627 modules)
+ ✓ Compiled in 593ms (627 modules)
+ ✓ Compiled in 1844ms (273 modules)
+ ✓ Compiled in 622ms (613 modules)
+ ✓ Compiled in 612ms (615 modules)
+ ✓ Compiled in 944ms (629 modules)
+ ✓ Compiled in 723ms (629 modules)
+ ✓ Compiled in 917ms (629 modules)
+ ✓ Compiled in 910ms (629 modules)
+ ✓ Compiled in 202ms (274 modules)
+ ✓ Compiled in 1044ms (629 modules)
+ ✓ Compiled in 796ms (629 modules)
+ ✓ Compiled in 562ms (629 modules)
+ ✓ Compiled in 302ms (629 modules)
+ ✓ Compiled in 344ms (629 modules)
+ ✓ Compiled in 764ms (629 modules)

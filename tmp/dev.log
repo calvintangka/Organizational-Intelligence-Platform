@@ -1,0 +1,642 @@
+
+> organizational-intelligence-hackathon@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.19
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.1.7:3000
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 2.5s
+ ○ Compiling / ...
+ ✓ Compiled / in 745ms (612 modules)
+ GET / 200 in 1086ms
+ GET / 200 in 64ms
+ GET / 200 in 45ms
+ GET / 200 in 47ms
+ GET / 200 in 47ms
+ GET / 200 in 47ms
+ GET / 200 in 46ms
+ GET / 200 in 54ms
+(node:30220) Warning: Failed to load the ES module: C:\Users\Calvin\Documents\My Project\Hackathon 2\tailwind.config.ts. Make sure to set "type": "module" in the nearest package.json file or use the .mjs extension.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ○ Compiling /api/ai/chat ...
+ ✓ Compiled /api/ai/chat in 1943ms (646 modules)
+ ⨯ SyntaxError: Unexpected end of JSON input
+    at JSON.parse (<anonymous>) {
+  page: '/'
+}
+ ✓ Compiled /_error in 952ms (979 modules)
+ GET / 500 in 1506ms
+ GET / 200 in 141ms
+ GET / 200 in 35ms
+ GET / 200 in 35ms
+ POST /api/ai/chat 200 in 3912ms
+ POST /api/ai/chat 200 in 3913ms
+ GET / 200 in 252ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ GET / 200 in 60ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 4328ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 10502ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 4699ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 7694ms
+ GET / 200 in 47ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 13550ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 16534ms
+ POST /api/ai/chat 200 in 2259ms
+ POST /api/ai/chat 200 in 2261ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ GET / 200 in 51ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 5492ms
+ POST /api/ai/chat 200 in 10065ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ GET / 200 in 49ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 5044ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 11729ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 5155ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 9082ms
+ GET / 200 in 50ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 4598ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 11727ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 4478ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 8740ms
+ GET / 200 in 57ms
+ GET / 200 in 50ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 12288ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 14489ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 4592ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 7617ms
+ GET / 200 in 51ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 5148ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 13289ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 5705ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 7910ms
+ GET / 200 in 53ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 6031ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 10738ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 4579ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 9500ms
+ GET / 200 in 50ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 4817ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 12004ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 4711ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 7202ms
+ GET / 200 in 54ms
+ GET / 200 in 55ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 5701ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 10527ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 6458ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 7555ms
+ GET / 200 in 51ms
+ GET / 200 in 55ms
+ GET / 200 in 57ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 7527ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 10584ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 4768ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 7788ms
+ GET / 200 in 52ms
+ GET / 200 in 46ms
+ GET / 200 in 61ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 3819ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 5068ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 5362ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 5741ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 5200ms
+ GET / 200 in 54ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 3970ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 5472ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 11595ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 5134ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 5446ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 799ms
+[ai-proxy] LM Studio proxy succeeded {
+  endpoint: 'http://127.0.0.1:1234/v1/chat/completions',
+  model: 'google/gemma-4-e4b',
+  timeoutMs: 30000,
+  status: 200
+}
+ POST /api/ai/chat 200 in 662ms
+ ✓ Compiled in 3.8s (878 modules)
+ ✓ Compiled in 708ms (878 modules)
+ ✓ Compiled in 646ms (878 modules)
+ ✓ Compiled in 553ms (878 modules)
+ ✓ Compiled in 840ms (878 modules)
+ ✓ Compiled in 588ms (864 modules)
+ ✓ Compiled in 267ms (864 modules)
+ ✓ Compiled in 1082ms (878 modules)
+ ✓ Compiled in 808ms (878 modules)
+ ✓ Compiled in 617ms (878 modules)
+ ✓ Compiled in 553ms (878 modules)
+ ✓ Compiled in 1009ms (878 modules)
+ ✓ Compiled in 713ms (878 modules)
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 693ms (869 modules)
+ ⨯ Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\vendor-chunks\next.js'
+    at <unknown> (C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\_not-found\page.js:227:47)
+    at Object.<anonymous> (C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\_not-found\page.js:230:3) {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\vendor-chunks\\next.js'
+}
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 505ms (965 modules)
+ GET / 500 in 2181ms
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\page.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\app\\page.js',
+  page: '/'
+}
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\pages\_document.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\pages\\_document.js'
+}
+ GET / 500 in 79ms
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\page.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\app\\page.js',
+  page: '/'
+}
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\pages\_document.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\pages\\_document.js'
+}
+ GET / 500 in 68ms
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\page.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\app\\page.js',
+  page: '/'
+}
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\pages\_document.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\pages\\_document.js'
+}
+ GET / 500 in 72ms
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\page.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\app\\page.js',
+  page: '/'
+}
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\pages\_document.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\pages\\_document.js'
+}
+ GET / 500 in 71ms
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\page.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\app\\page.js',
+  page: '/'
+}
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\pages\_document.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\pages\\_document.js'
+}
+ GET / 500 in 57ms
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\page.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\app\\page.js',
+  page: '/'
+}
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\pages\_document.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\pages\\_document.js'
+}
+ GET / 500 in 75ms
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\page.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\app\\page.js',
+  page: '/'
+}
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\pages\_document.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\pages\\_document.js'
+}
+ GET / 500 in 71ms
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\page.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\app\\page.js',
+  page: '/'
+}
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\pages\_document.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\pages\\_document.js'
+}
+ GET / 500 in 106ms
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\page.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\app\\page.js',
+  page: '/'
+}
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\pages\_document.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\pages\\_document.js'
+}
+ GET / 500 in 67ms
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\page.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\app\\page.js',
+  page: '/'
+}
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\pages\_document.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\pages\\_document.js'
+}
+ GET / 500 in 59ms
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\page.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\app\\page.js',
+  page: '/'
+}
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\pages\_document.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\pages\\_document.js'
+}
+ GET / 500 in 77ms
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\app\page.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\app\\page.js',
+  page: '/'
+}
+ ⨯ [Error: ENOENT: no such file or directory, open 'C:\Users\Calvin\Documents\My Project\Hackathon 2\.next\server\pages\_document.js'] {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2\\.next\\server\\pages\\_document.js'
+}
+ GET / 500 in 96ms
+ ✓ Compiled in 1662ms (878 modules)
+[?25h
