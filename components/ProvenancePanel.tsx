@@ -10,8 +10,26 @@ interface ProvenancePanelProps {
   fallbackTechnicalDetails?: string;
 }
 
-function responseGroundingCopy(response?: SuggestedResponse | null): { title: string; body: string } | null {
+function responseGroundingCopy(
+  response?: SuggestedResponse | null,
+  lessonMatch?: ReturnType<typeof findMatchingLesson> | null
+): { title: string; body: string } | null {
   if (!response) return null;
+
+  if (
+    response.draftMode === "lesson_grounded" &&
+    (lessonMatch || response.groundingLabel) &&
+    (response.source === "ai_advisory" || !!response.fallbackNotice)
+  ) {
+    return {
+      title: response.fallbackNotice
+        ? `Validated lesson used: ${response.groundingLabel ?? lessonMatch?.lesson.title ?? lessonMatch?.lesson.rootCause ?? "matched lesson"}`
+        : `AI draft grounded in validated lesson: ${response.groundingLabel ?? lessonMatch?.lesson.title ?? lessonMatch?.lesson.rootCause ?? "matched lesson"}`,
+      body: response.fallbackNotice
+        ? "OIP kept the matched lesson's validated customer response because the AI assistant could not be reached. Human review remains required before sending or learning."
+        : "Gemma adapted the matched lesson's approved customer response to this customer's wording. Human review remains required before sending or learning."
+    };
+  }
 
   if (response.fallbackNotice) {
     return {
@@ -24,14 +42,6 @@ function responseGroundingCopy(response?: SuggestedResponse | null): { title: st
   }
 
   if (response.source !== "ai_advisory") return null;
-
-  if (response.draftMode === "lesson_grounded") {
-    return {
-      title: `AI draft grounded in validated lesson: ${response.groundingLabel ?? "matched lesson"}`,
-      body:
-        "Gemma adapted the matched lesson's approved customer response to this customer's wording. Human review remains required before sending or learning."
-    };
-  }
 
   if (response.draftMode === "memory_grounded") {
     return {
@@ -54,7 +64,7 @@ function responseGroundingCopy(response?: SuggestedResponse | null): { title: st
 
 export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized = false, response, fallbackTechnicalDetails }: ProvenancePanelProps) {
   const lessonMatch = topMatch && ticket ? findMatchingLesson(ticket, topMatch.item) : null;
-  const groundingCopy = responseGroundingCopy(response);
+  const groundingCopy = responseGroundingCopy(response, lessonMatch);
 
   if (groundingCopy) {
     return (

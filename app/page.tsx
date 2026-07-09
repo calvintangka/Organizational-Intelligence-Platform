@@ -30,7 +30,6 @@ import {
 import { generateReflection } from "@/lib/reflection";
 import {
   createCanonicalProblem,
-  findCanonicalProblem,
   getCustomerResponseTemplate,
   identifyCanonicalProblem,
   mergeIntoCanonicalProblem,
@@ -363,6 +362,11 @@ function moveMatchToFront(matches: KnowledgeMatch[], matchId?: string): Knowledg
     ...matches.filter((match) => match.item.id === matchId),
     ...matches.filter((match) => match.item.id !== matchId)
   ];
+}
+
+function stripRejectedMatch(matches: KnowledgeMatch[], matchId?: string): KnowledgeMatch[] {
+  if (!matchId) return matches;
+  return matches.filter((match) => match.item.id !== matchId);
 }
 
 function understandingToAnalysis(und: ReturnType<typeof understandForProfile>): AIAnalysis {
@@ -1546,13 +1550,14 @@ export default function Home() {
     const firstError = results.find((result) => !result.ok)?.error;
     const anySucceeded = results.some((result) => result.diagnostics?.proxySucceeded === true);
     const anyFailed = results.some((result) => result.diagnostics?.proxySucceeded === false);
+    const normalizedFallbackReason = firstDiagnostics?.fallbackReason ?? fallbackReason ?? firstError;
 
     return {
-      ...buildDefaultDiagnostics(fallbackReason ?? firstError),
+      ...buildDefaultDiagnostics(normalizedFallbackReason),
       ...firstDiagnostics,
       attempts: firstDiagnostics?.attempts,
       proxySucceeded: anySucceeded ? true : anyFailed ? false : firstDiagnostics?.proxySucceeded,
-      fallbackReason: fallbackReason ?? firstDiagnostics?.fallbackReason ?? firstError
+      fallbackReason: normalizedFallbackReason
     };
   }
 
@@ -1560,14 +1565,55 @@ export default function Home() {
     return "AI assistant unavailable — showing standard template instead.";
   }
 
+  function summarizeFallbackReason(reason?: string, providerLabel?: string): string {
+    const raw = reason?.trim();
+    if (!raw) return "AI advisory unavailable.";
+    if (/^(AI assistant unavailable|Still unavailable|AI advisory is disabled|AMD Cloud placeholder)/i.test(raw)) {
+      return raw;
+    }
+    if (/\bfailed:\b/i.test(raw) && raw.length <= 180 && !/[<>]/.test(raw)) {
+      return raw;
+    }
+
+    const normalizedProvider = providerLabel?.replace(/^AI Chain \((.+)\)$/i, "$1") ?? "AI provider";
+    const lower = raw.toLowerCase();
+    const status = raw.match(/\bHTTP\s+(\d{3})\b/i)?.[1] ?? raw.match(/\bstatus(?: code)?\s*:?\s*(\d{3})\b/i)?.[1];
+
+    if (normalizedProvider.includes("Remote Gemma") && (lower.includes("ngrok") || lower.includes("<html") || lower.includes("<!doctype"))) {
+      return "Remote Gemma failed: ngrok endpoint offline.";
+    }
+
+    if (lower.includes("<html") || lower.includes("<!doctype")) {
+      return `${normalizedProvider} failed: ${status ? `HTTP ${status} returned an HTML error page.` : "received an HTML error page."}`;
+    }
+
+    const plain = raw
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/\s+/g, " ")
+      .trim();
+    const truncated = plain.length > 180 ? `${plain.slice(0, 177)}...` : plain;
+
+    if (!providerLabel || truncated === raw) return truncated;
+    return `${normalizedProvider} failed: ${truncated}`;
+  }
+
   function buildFallbackTechnicalDetails(fallbackReason?: string, diagnostics?: AIDiagnostics): string {
     const proxyPath = diagnostics?.proxyPath ?? aiAdapter.config.proxyPath;
     const baseUrl = diagnostics?.serverBaseUrl ?? "server-configured";
-    const reason = fallbackReason ?? diagnostics?.fallbackReason ?? "AI advisory unavailable.";
+    const reason = summarizeFallbackReason(
+      diagnostics?.fallbackReason ?? fallbackReason,
+      diagnostics?.provider ?? aiAdapter.provider.label
+    );
     const proxyStatus = diagnostics?.proxySucceeded === true ? "succeeded" : diagnostics?.proxySucceeded === false ? "failed" : "unknown";
     const attempts = diagnostics?.attempts ?? [];
     const attemptSummary = attempts.length > 0
-      ? `\nChain attempts:\n${attempts.map((attempt) => `- ${attempt.label} [${attempt.status}]${attempt.reason ? `: ${attempt.reason}` : ""}`).join("\n")}`
+      ? `\nChain attempts:\n${attempts.map((attempt) => `- ${attempt.label} [${attempt.status}]${attempt.reason ? `: ${summarizeFallbackReason(attempt.reason, attempt.provider)}` : ""}`).join("\n")}`
       : "";
     return `Reason: ${reason}\nProxy: ${proxyPath}\nServer base URL: ${baseUrl}\nProxy status: ${proxyStatus}\nMode: ${diagnostics?.mode ?? aiAdapter.config.mode}${attemptSummary}`;
   }
@@ -1821,7 +1867,11 @@ export default function Home() {
     const availabilityMessage =
       analysisResult.ok || canonicalResult.ok
         ? undefined
-        : analysisResult.error || canonicalResult.error || defaultAvailabilityMessage();
+        : summarizeFallbackReason(
+            analysisResult.error || canonicalResult.error || defaultAvailabilityMessage(),
+            analysisResult.providerLabel || canonicalResult.providerLabel || aiAdapter.provider.label
+          );
+    const diagnostics = coalesceDiagnostics([analysisResult, canonicalResult], availabilityMessage);
 
     const advisory = buildAIAdvisory({
       ticketId: ticket.id,
@@ -1831,8 +1881,8 @@ export default function Home() {
       deterministicLabel: canonicalProblem.title,
       analysisSuggestion: analysisResult.ok ? analysisResult.data : undefined,
       canonicalSuggestion: canonicalResult.ok ? canonicalResult.data : undefined,
-      availabilityMessage,
-      diagnostics: coalesceDiagnostics([analysisResult, canonicalResult], availabilityMessage)
+      availabilityMessage: diagnostics.fallbackReason,
+      diagnostics
     });
 
     recordAIResults([analysisResult, canonicalResult], advisory.status, advisory.agreementPct);
@@ -1936,6 +1986,15 @@ export default function Home() {
 
     const [draftResult, enrichmentResult] = await Promise.all([draftRequest, enrichmentRequest]);
 
+    const diagnostics = coalesceDiagnostics(
+      [draftResult, enrichmentResult],
+      draftResult.ok || enrichmentResult.ok
+        ? undefined
+        : summarizeFallbackReason(
+            draftResult.error || enrichmentResult.error || defaultAvailabilityMessage(),
+            draftResult.providerLabel || enrichmentResult.providerLabel || aiAdapter.provider.label
+          )
+    );
     const nextAdvisory = buildAIAdvisory({
       ticketId: ticket.id,
       providerMode: aiAdapter.config.mode,
@@ -1949,11 +2008,8 @@ export default function Home() {
       availabilityMessage:
         draftResult.ok || enrichmentResult.ok
           ? baseAdvisory?.availabilityMessage
-          : draftResult.error || enrichmentResult.error || defaultAvailabilityMessage(),
-      diagnostics: coalesceDiagnostics(
-        [draftResult, enrichmentResult],
-        draftResult.ok || enrichmentResult.ok ? undefined : draftResult.error || enrichmentResult.error
-      )
+          : diagnostics.fallbackReason,
+      diagnostics
     });
 
     recordAIResults([draftResult, enrichmentResult], nextAdvisory.status, nextAdvisory.agreementPct);
@@ -2049,6 +2105,8 @@ export default function Home() {
 
   async function analyzeTicket(ticket: Ticket) {
     setErrorMessage("");
+    setDiscriminationReasoning(null);
+    setDiscriminatedMatchTitle(null);
     const source = ticket.id.startsWith("ticket-custom") ? "manual-demo-input" : "seed-ticket";
     const relevance = assessBusinessRelevanceForProfile(`${ticket.subject} ${ticket.description}`, organizationProfile);
     setBusinessRelevance(relevance);
@@ -2125,7 +2183,12 @@ export default function Home() {
       items,
       canonicalProblem.title
     );
-    const topMatch = matches.length > 0 ? matches[0] : null;
+    const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(und, m.item) || !!findMatchingLesson(selectedTicket ?? makeCustomTicket(analysis.summary, analysis.ticketId), m.item));
+    const selectedMatchInfo =
+      compatibleMatches.length > 0
+        ? selectPreferredMatch(selectedTicket ?? makeCustomTicket(analysis.summary, analysis.ticketId), compatibleMatches)
+        : null;
+    const topMatch = selectedMatchInfo?.match ?? (matches.length > 0 ? matches[0] : null);
     const newReasoning = buildReasoning(und, topMatch);
     const newConfidence = buildConfidence(und, topMatch);
 
@@ -2146,7 +2209,7 @@ export default function Home() {
       createLogEntry(`Confidence level: ${newConfidence.level} (${newConfidence.score}/100)`, `Basis: ${newConfidence.basis.join("; ")}`)
     ];
 
-    setSimilarKnowledge(matches);
+    setSimilarKnowledge(topMatch ? moveMatchToFront(matches, topMatch.item.id) : matches);
     setReasoning(newReasoning);
     setConfidence(newConfidence);
     addLogEntries(logEntries);
@@ -2176,6 +2239,11 @@ export default function Home() {
     const effectiveTopMatch = topMatch
       ? await requestMatchDiscrimination(ticket, topMatch, und, lessonMatch ?? undefined)
       : null;
+    const resolvedMatches = effectiveTopMatch
+      ? moveMatchToFront(lessonAwareMatches, effectiveTopMatch.item.id)
+      : topMatch
+      ? stripRejectedMatch(lessonAwareMatches, topMatch.item.id)
+      : lessonAwareMatches;
 
     const draft = draftResponse(ticket, und, effectiveTopMatch, organizationProfile, knowledgeItems.length === 0);
     const aiDraft = await requestDraftAdvisory(ticket, und, canonicalProblem.title, effectiveTopMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", aiAdvisory);
@@ -2196,6 +2264,7 @@ export default function Home() {
 
     setAiAdvisory(aiDraft.advisory);
     setLastDraftUsedAI(aiDraft.usedAIDraft);
+    setSimilarKnowledge(resolvedMatches);
     setSuggestedResponse(response);
     setReviewedResponse(response.source === "no_template" ? "" : response.draftResponse);
     setSelectedTicket({ ...ticket, status: "drafted" });
@@ -2204,6 +2273,25 @@ export default function Home() {
 
   function updateReviewedResponse(value: string) {
     setReviewedResponse(value);
+  }
+
+  function resolveDraftSourceMatch(): KnowledgeMatch | null {
+    const groundedKnowledgeId = suggestedResponse?.basedOnKnowledgeIds[0];
+    if (groundedKnowledgeId) {
+      const exactMatch = similarKnowledge.find((match) => match.item.id === groundedKnowledgeId);
+      if (exactMatch) return exactMatch;
+
+      const groundedItem = knowledgeItems.find((item) => item.id === groundedKnowledgeId);
+      if (groundedItem) {
+        return {
+          item: groundedItem,
+          matchScore: similarKnowledge[0]?.item.id === groundedKnowledgeId ? similarKnowledge[0].matchScore : 80,
+          matchReason: "Derived from the rendered draft source."
+        };
+      }
+    }
+
+    return similarKnowledge[0] ?? null;
   }
 
   function approveResponse() {
@@ -2217,8 +2305,22 @@ export default function Home() {
     }
 
     const und = toUnderstanding(aiAnalysis);
-    const existingMatch = findCanonicalProblem(und, knowledgeItems, organizationProfile);
-    const reflection = generateReflection(und, reviewedResponse, existingMatch);
+    const draftedMatch = resolveDraftSourceMatch();
+    const existingMatch = draftedMatch
+      ? {
+          item: draftedMatch.item,
+          similarity: draftedMatch.matchScore,
+          reason: draftedMatch.matchReason
+        }
+      : null;
+    const matchedLesson =
+      draftedMatch && suggestedResponse?.draftMode === "lesson_grounded"
+        ? findMatchingLesson(selectedTicket, draftedMatch.item)?.lesson ?? null
+        : null;
+    const reflection = generateReflection(und, reviewedResponse, existingMatch, {
+      draftMode: suggestedResponse?.draftMode,
+      matchedLesson
+    });
     setReflectionDecision(reflection);
 
     // Update ticket record with resolution
@@ -2383,18 +2485,17 @@ export default function Home() {
       const target = knowledgeItems.find((i) => i.id === reflectionDecision.existingItemId);
       if (target) {
         const base = withCanonicalProblemDefaults(target);
-        // A lesson teaches a distinct root cause and lives only in lessons[]; it must
-        // never overwrite the knowledge item's generic customerResponseTemplate, and it
-        // does not represent a change to the generic template, so no version is recorded.
-        // Only a reviewer directly rewriting the generic response (no lesson attached)
-        // is a genuine template edit that bumps the version history.
-        const isLessonAddition = !!lessonDraft;
+        // Lesson-grounded drafts and explicit lesson edits both live in lessons[] and
+        // must never overwrite the parent knowledge item's generic customer template.
+        // Only a direct edit to the generic template path creates a new version.
+        const isLessonGroundedDraft = suggestedResponse?.draftMode === "lesson_grounded";
+        const updatesGenericTemplate = !isLessonGroundedDraft && !lessonDraft;
         const newVersionNum = (base.knowledgeVersions?.length ?? 0) + 1;
         const candidate = createCandidate({
           action: "create_version",
           sourceTicketIds: [selectedTicket.id],
           solution: und.coreProblem,
-          customerResponseTemplate: isLessonAddition ? (base.customerResponseTemplate ?? base.approvedAnswer) : reviewedResponse,
+          customerResponseTemplate: updatesGenericTemplate ? reviewedResponse : (base.customerResponseTemplate ?? base.approvedAnswer),
           internalGuidance: base.internalGuidance ?? und.summary,
           canonicalProblemTitle: base.canonicalProblemTitle ?? base.title,
           category: base.category,
@@ -2404,9 +2505,9 @@ export default function Home() {
         });
         let evolved: KnowledgeItem = {
           ...base,
-          ...(isLessonAddition
-            ? {}
-            : { customerResponseTemplate: reviewedResponse, approvedAnswer: reviewedResponse }),
+          ...(updatesGenericTemplate
+            ? { customerResponseTemplate: reviewedResponse, approvedAnswer: reviewedResponse }
+            : {}),
           exampleTickets: [
             ...(base.exampleTickets ?? []),
             {
@@ -2417,9 +2518,8 @@ export default function Home() {
               resolutionMode: "human" as const
             }
           ],
-          knowledgeVersions: isLessonAddition
-            ? base.knowledgeVersions ?? []
-            : [
+          knowledgeVersions: updatesGenericTemplate
+            ? [
                 ...(base.knowledgeVersions ?? []),
                 {
                   versionId: `${base.canonicalProblemId}-v${newVersionNum}`,
@@ -2429,7 +2529,8 @@ export default function Home() {
                   sourceTicketId: selectedTicket.id,
                   summary: `v${newVersionNum}: Updated customer response template`
                 }
-              ],
+              ]
+            : base.knowledgeVersions ?? [],
           timesSeen: (base.timesSeen ?? 0) + 1,
           humanReviewCount: (base.humanReviewCount ?? 0) + 1,
           lastUpdated: now,
@@ -2441,7 +2542,7 @@ export default function Home() {
         setSessionCreatedIds((prev) => new Set([...prev, committedItem.id]));
         setLastApprovedSourceTicketId(selectedTicket.id);
         setLastSavedKnowledgeId(committedItem.id);
-        if (!isLessonAddition) {
+        if (updatesGenericTemplate) {
           setOrgMetrics((prev) => ({
             ...prev,
             knowledgeVersions: (prev.knowledgeVersions ?? 0) + 1,
@@ -2451,17 +2552,20 @@ export default function Home() {
         updateMetrics({
           humanApprovedResponses: 1,
           canonicalProblemsTouched: 1,
-          ...(isLessonAddition ? {} : { knowledgeVersionsCreated: 1 })
+          ...(updatesGenericTemplate ? { knowledgeVersionsCreated: 1 } : {})
         });
-        const versionLogEntries = isLessonAddition
+        const versionLogEntries = updatesGenericTemplate
           ? [
-              createLogEntry("Knowledge candidate validated", `Candidate ${candidate.id} approved by Prototype Knowledge Validator`),
-              createLogEntry("Reflection confirmed: lesson added", `"${base.canonicalProblemTitle}" gains a new lesson (generic template unchanged)`)
-            ]
-          : [
               createLogEntry("Knowledge candidate validated", `Candidate ${candidate.id} approved by Prototype Knowledge Validator`),
               createLogEntry("Reflection confirmed: knowledge evolved", `"${base.canonicalProblemTitle}" → v${newVersionNum}`),
               createLogEntry("New version recorded", reflectionDecision.versionReason ?? "Improved response approach")
+            ]
+          : [
+              createLogEntry("Knowledge candidate validated", `Candidate ${candidate.id} approved by Prototype Knowledge Validator`),
+              createLogEntry(
+                "Reflection confirmed: lesson-backed draft preserved",
+                `"${base.canonicalProblemTitle}" kept its generic template while lesson-grounded knowledge was confirmed`
+              )
             ];
         if (lessonDraft) versionLogEntries.push(createLogEntry("Lesson authored", `Root cause: ${lessonDraft.rootCause} · Signals: ${lessonDraft.signals.join(", ")}`));
         addLogEntries(versionLogEntries);
@@ -2883,7 +2987,7 @@ export default function Home() {
       // steps read similarKnowledge[0] (see TicketWorkspace.tsx) — without
       // this, they kept showing the rejected match while the draft correctly
       // treated the ticket as unmatched, producing a contradictory UI state.
-      setSimilarKnowledge((prev) => prev.filter((m) => m.item.id !== topMatch.item.id));
+      setSimilarKnowledge((prev) => stripRejectedMatch(prev, topMatch.item.id));
     }
     const draft = draftResponse(ticket, enrichedUnderstanding, effectiveTopMatch, organizationProfile, knowledgeItems.length === 0);
     const aiDraft = await requestDraftAdvisory(ticket, enrichedUnderstanding, canonicalProblem.title, effectiveTopMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", advisory);

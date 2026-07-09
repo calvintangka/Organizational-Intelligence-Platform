@@ -1,4 +1,4 @@
-﻿import type { ReflectionDecision } from "@/types";
+import type { DraftGroundingMode, Lesson, ReflectionDecision } from "@/types";
 import type { Understanding } from "@/types/oip";
 import type { CanonicalProblemMatch } from "@/lib/canonicalProblemEngine";
 
@@ -29,7 +29,11 @@ function wordOverlapPct(a: string, b: string): number {
 export function generateReflection(
   und: Understanding,
   reviewedResponse: string,
-  existingMatch: CanonicalProblemMatch | null
+  existingMatch: CanonicalProblemMatch | null,
+  groundingSource?: {
+    draftMode?: DraftGroundingMode;
+    matchedLesson?: Lesson | null;
+  }
 ): ReflectionDecision {
   if (und.category === "Uncategorized" && !existingMatch) {
     return {
@@ -55,7 +59,10 @@ export function generateReflection(
   const item = existingMatch.item;
   const similarity = existingMatch.similarity;
   const itemTitle = item.canonicalProblemTitle ?? item.title;
-  const existingTemplate = item.customerResponseTemplate ?? item.approvedAnswer ?? "";
+  const existingTemplate =
+    groundingSource?.draftMode === "lesson_grounded" && groundingSource.matchedLesson?.customerResponse
+      ? groundingSource.matchedLesson.customerResponse
+      : item.customerResponseTemplate ?? item.approvedAnswer ?? "";
   const responseOverlap = wordOverlapPct(reviewedResponse, existingTemplate);
 
   if (similarity >= 80) {

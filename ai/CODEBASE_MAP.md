@@ -38,7 +38,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `components/AIAnalysisPanel.tsx` - Structured AI analysis and canonical suggestions.
 - `components/HumanReviewEditor.tsx` - Editable customer-response review gate.
 - `components/ReflectionPanel.tsx` - Create/merge/version/trust-update explanation and commit inputs.
-- `components/ProvenancePanel.tsx` - Provenance, matched-lesson, validation, and version-history display.
+- `components/ProvenancePanel.tsx` - Provenance, matched-lesson, validation, version-history display, and lesson-aware fallback explanation when AI is unavailable.
 - `components/ReasoningPanel.tsx` - Deterministic reasoning and uncertainty display.
 - `components/RelevanceGuardrailPanel.tsx` - Business-relevance decision display.
 - `components/SimilarKnowledgeList.tsx` - Retrieved memory candidates.
@@ -123,9 +123,9 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `requestAnalysisAdvisory()` - AI analysis and canonical suggestion wrapper.
 - `requestMatchDiscrimination()` - AI same-problem vs distinct-problem check. Fails open (keeps the original match) when the AI call itself fails; only rejects on a genuine successful "distinct" judgment. Its rejection only affects the draft's match unless `processTicketPipeline()` also syncs `similarKnowledge` (see above).
 - `requestDraftAdvisory()` - Grounded AI draft wrapper plus deterministic fallback.
-- `generateSuggestedResponse()` - Single-ticket draft generation stage.
-- `approveResponse()` - Human approval gate before reflection.
-- `confirmReflection()` - Create/merge/version/trust-update commit coordinator.
+- `generateSuggestedResponse()` - Single-ticket draft generation stage. After discrimination, it now reorders or strips `similarKnowledge` so the manual-flow Organizational Memory / Provenance panels reflect the same effective match that grounded the rendered draft.
+- `approveResponse()` - Human approval gate before reflection. Resolves reflection from the actual rendered draft source (`suggestedResponse.basedOnKnowledgeIds` / `similarKnowledge`) instead of recomputing a fresh canonical match.
+- `confirmReflection()` - Create/merge/version/trust-update commit coordinator. Lesson-grounded commits no longer overwrite the parent generic template or create a new knowledge version unless the reviewer actually edited the generic template path.
 - `applyResolution()` - Reuse outcome recorder and trust-update committer.
 - `analyzeUploadedQueries()` - Bulk analysis entrypoint.
 - `commitBulkCluster()` - Bulk cluster validation and commit path.
@@ -176,7 +176,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 ### `lib/reflection.ts`
 
-- `generateReflection()` - Create-new vs merge vs version vs trust-only decision logic.
+- `generateReflection()` - Create-new vs merge vs version vs trust-only decision logic. Accepts the draft grounding source so lesson-grounded responses are compared against the matched lesson's `customerResponse`, not the parent knowledge item's generic template.
 
 ### `lib/orgMemory.ts`
 
