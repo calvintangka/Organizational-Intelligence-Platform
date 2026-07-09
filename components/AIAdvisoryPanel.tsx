@@ -90,6 +90,22 @@ export function AIAdvisoryPanel({ advisory }: AIAdvisoryPanelProps) {
         />
       </div>
 
+      {advisory.diagnostics.attempts?.length ? (
+        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Chain attempts</p>
+          <ul className="mt-2 space-y-2 text-sm leading-6 text-slate-700">
+            {advisory.diagnostics.attempts.map((attempt) => (
+              <li key={`${attempt.label}-${attempt.status}`} className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-white px-3 py-2">
+                <span className="font-semibold text-slate-800">{attempt.label}</span>
+                <span className="text-right text-slate-600">
+                  {attempt.status}{attempt.reason ? ` - ${attempt.reason}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {advisory.analysisSuggestion ? (
         <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">AI understanding</p>

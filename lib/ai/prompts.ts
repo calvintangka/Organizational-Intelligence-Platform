@@ -293,6 +293,15 @@ export function buildDraftCustomerResponsePrompt(input: DraftCustomerResponseInp
 }
 
 export function buildMatchDiscriminationPrompt(input: MatchDiscriminationInput): PromptBundle {
+  const lessonBlock = input.matchedLesson
+    ? [
+        "",
+        "Validated Lesson Candidate from Memory:",
+        `  Title: ${input.matchedLesson.title ?? "Untitled lesson"}`,
+        `  Root Cause: ${input.matchedLesson.rootCause}`,
+        `  Signals: ${input.matchedLesson.signals.join(", ") || "none"}`
+      ].join("\n")
+    : "";
   return {
     system: [
       advisorSystemPrompt,
@@ -307,8 +316,9 @@ export function buildMatchDiscriminationPrompt(input: MatchDiscriminationInput):
       "Candidate Canonical Problem from Memory:",
       `  Title: ${input.matchedCanonicalTitle}`,
       `  Problem Summary: ${input.matchedProblemSummary}`,
+      lessonBlock,
       "",
-      "Question: Does the customer's ticket describe the SAME underlying problem as the canonical problem above, or a DISTINCT problem?",
+      `Question: Does the customer's ticket describe the SAME underlying problem as the ${input.matchedLesson ? "validated lesson candidate above" : "canonical problem above"}, or a DISTINCT problem?`,
       "",
       "Consider:",
       "- Same: The customer has the exact issue the canonical problem describes.",

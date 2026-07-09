@@ -13,6 +13,31 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-09] Pre-discrimination lesson search for Login lesson reuse
+**Layer:** coding
+**Task/Prompt:** Fix live browser verification failure where Putri Lestari's new-laptop/saved-browser-password ticket rendered the generic Login fallback instead of the validated switched-laptop/browser-saved-password lesson.
+**Files changed:** `app/page.tsx`, `lib/drafting.ts`, `lib/ai/adapter.ts`, `ai/CURRENT_STATUS.md`, `ai/CHANGELOG.md`
+**What changed:**
+- Added deterministic pre-discrimination lesson search in `app/page.tsx`. After canonical/category classification, compatible memory items with lessons are searched directly and a strong lesson hit is promoted into the `KnowledgeMatch[]` pool before no-match/cold-start routing.
+- Hardened `findMatchingLesson()` in `lib/drafting.ts` with token-overlap signal matching so semantically equivalent wording such as "never remembered the password" can match lesson signals like "never remembered password" without relying on exact substring matches only.
+- Strong `lesson_grounded` drafts now keep the validated lesson template as the customer-facing response instead of replacing it with an AI rewrite, preserving `Hi {{customerName}},` and `{{ticketId}}` rendering.
+- Sanitized AI chain failure summaries in `lib/ai/adapter.ts` so provider attempts show short plain-text messages such as "Remote Gemma failed: ngrok endpoint offline." instead of raw HTML response bodies.
+**Boundaries touched:** Boundary 1 and Boundary 2 were preserved. The new search only promotes already-validated lesson memory, and AI remains advisory; it no longer replaces strong validated lesson templates.
+**Verification:** `cmd /c npm run build`; `cmd /c npx tsc --noEmit`; browser verification on `http://127.0.0.1:3000` with a validated `Login Issue` lesson. Putri matched the switched-laptop/browser-saved-password lesson in the reuse path and rendered `Hi Putri Lestari`; Stephanie matched the same lesson in the main New Ticket path and the actual review textarea rendered `Hi Stephanie Gunawan,` plus `Your ticket reference is MT-20260709-0002.` WHY THIS RESPONSE named the matched lesson and all four signals.
+**Open items:** The in-app browser profile started empty, so the browser verification first created a validated lesson through the app UI before running Putri/Stephanie.
+
+## [2026-07-09] Lesson-aware reuse discrimination and chain-attempt diagnostics
+**Layer:** coding
+**Task/Prompt:** Fix two connected high-severity bugs in the Maesa Tech / OIP prototype: valid lesson matches were being cold-started away from reusable memory, and AI fallback diagnostics only surfaced the final failure instead of the full provider chain.
+**Files changed:** `app/page.tsx`, `lib/ai/adapter.ts`, `lib/ai/deterministic.ts`, `lib/ai/prompts.ts`, `lib/ai/types.ts`, `lib/canonicalProblemEngine.ts`, `lib/knowledgePacks.ts`, `types/ai.ts`, `types/index.ts`, `components/AIAdvisoryPanel.tsx`, `ai/CURRENT_STATUS.md`, `ai/CODEBASE_MAP.md`, `ai/ARCHITECTURE.md`
+**What changed:**
+- `requestMatchDiscrimination()` now carries validated lesson context into the AI prompt, bypasses broad discrimination for strong lesson-backed matches, and keeps reusable lesson hits from being rejected as distinct problems when the lesson evidence is already strong.
+- `lib/canonicalProblemEngine.ts`, `lib/knowledgePacks.ts`, and `app/page.tsx` now normalize reusable lesson responses before storage/commit so stale customer-specific greetings cannot leak across customers during deterministic reuse.
+- `lib/ai/adapter.ts`, `lib/ai/deterministic.ts`, `types/ai.ts`, `types/index.ts`, and `components/AIAdvisoryPanel.tsx` now preserve and display per-tier AI chain attempts, including skipped tiers, so the UI can show the full LM Studio → Remote Gemma → Claude path instead of only the final error.
+**Boundaries touched:** Boundary 1 and Boundary 2 were preserved. The reuse fix remains on the deterministic/template side, and the diagnostics change only expands observability of already-existing AI fallbacks.
+**Verification:** `cmd /c npm run build`; `cmd /c npx tsc --noEmit`
+**Open items:** Live browser verification of the exact Grace/Putri reproduction path is still useful if we want to confirm the behavior in the running UI, but the code path and typecheck are clean.
+
 ## [2026-07-09] Lesson-reuse placeholder rendering and legacy lesson-template repair
 **Layer:** coding
 **Task/Prompt:** Fix a high-severity lesson-reuse bug where Derek Huang's ticket matched a Grace Adeyemi lesson, AI drafting was unavailable, and the deterministic fallback reused Grace's stored greeting instead of substituting Derek's name.

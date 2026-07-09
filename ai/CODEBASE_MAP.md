@@ -34,7 +34,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 ## Supporting Components
 
-- `components/AIAdvisoryPanel.tsx` - AI diagnostics, agreement, and fallback display.
+- `components/AIAdvisoryPanel.tsx` - AI diagnostics, agreement, fallback display, and per-tier chain-attempt history.
 - `components/AIAnalysisPanel.tsx` - Structured AI analysis and canonical suggestions.
 - `components/HumanReviewEditor.tsx` - Editable customer-response review gate.
 - `components/ReflectionPanel.tsx` - Create/merge/version/trust-update explanation and commit inputs.
@@ -72,7 +72,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 - `lib/analyzer.ts` - Business relevance, category/intent understanding, reasoning summaries, confidence summaries, and classifier-category helpers.
 - `lib/domainClassifier.ts` - Business-domain classification before knowledge lookup.
-- `lib/canonicalProblemEngine.ts` - Canonical-problem identity, templates, internal guidance, workflows, merges, versions, and canonical defaults.
+- `lib/canonicalProblemEngine.ts` - Canonical-problem identity, templates, internal guidance, workflows, merges, versions, canonical defaults, and reusable lesson-template normalization.
 - `lib/memory.ts` - Retrieval ranking over existing knowledge items.
 - `lib/drafting.ts` - Deterministic response drafting, category safety, lesson matching, and tone shaping.
 - `lib/reflection.ts` - Post-approval reflection decision engine.
@@ -93,11 +93,11 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 ### AI layer
 
-- `lib/ai/adapter.ts` - Three-tier chain provider: LM Studio → Claude API → deterministic fallback. Selects chain or disabled mode from env config.
+- `lib/ai/adapter.ts` - Three-tier chain provider: LM Studio → Claude API → deterministic fallback. Selects chain or disabled mode from env config and records per-tier attempt history in diagnostics.
 - `lib/ai/claudeApi.ts` - Claude API provider implementation, session call counter/cap, JSON extraction, and typed response mapping. Uses `/api/ai/claude` proxy.
-- `lib/ai/deterministic.ts` - Advisory agreement scoring, AI draft eligibility checks, and fallback status logic.
+- `lib/ai/deterministic.ts` - Advisory agreement scoring, AI draft eligibility checks, fallback status logic, and diagnostics passthrough.
 - `lib/ai/lmStudio.ts` - LM Studio provider implementation, timeout handling, JSON extraction, and typed response mapping.
-- `lib/ai/prompts.ts` - Prompt builders for analysis, canonical suggestion, pattern naming, knowledge enrichment, draft generation, and match discrimination. Provider-agnostic — shared by both LM Studio and Claude API.
+- `lib/ai/prompts.ts` - Prompt builders for analysis, canonical suggestion, pattern naming, knowledge enrichment, draft generation, and match discrimination. Provider-agnostic — shared by both LM Studio and Claude API, including validated-lesson context for discrimination.
 - `lib/ai/provider.ts` - Provider re-export surface.
 - `lib/ai/types.ts` - Provider contracts and request/response types.
 
@@ -107,7 +107,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `types/oip.ts` - `Observation`, `Understanding`, `ReasoningSummary`, `Confidence`, `BusinessRelevance`, `BusinessDomainClassification`, `IntelligenceLogEntry`.
 - `types/knowledge.ts` - `KnowledgeItem`, `Lesson`, `KnowledgeCandidate`, `ValidationRecord`, `MemoryChangeRecord`, `ReflectionDecision`, `TrustEvaluation`, `KnowledgeMatch`.
 - `types/knowledgePack.ts` - `KnowledgePack`, `PackLesson`, preview, and editable pack-candidate draft contracts.
-- `types/ai.ts` - `AIAnalysis`, `AIAdvisory`, `SuggestedResponse`, `DraftGroundingMode`, diagnostics and advisory suggestion types.
+- `types/ai.ts` - `AIAnalysis`, `AIAdvisory`, `AIChainAttempt`, `SuggestedResponse`, `DraftGroundingMode`, diagnostics and advisory suggestion types.
 - `types/bulkUpload.ts` - `BulkUploadEntry`, `BulkAnalyzedQuery`, `BulkCluster`, `BulkAnalysisResult`, parse/mapping contracts.
 - `types/metrics.ts` - `Metrics`, `OrgMetrics`.
 - `types/patterns.ts` - Pattern types.

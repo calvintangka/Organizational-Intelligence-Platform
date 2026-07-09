@@ -97,16 +97,90 @@ export interface LessonMatchResult {
   score: number;
 }
 
+const LESSON_SIGNAL_STOPWORDS = new Set([
+  "about",
+  "again",
+  "always",
+  "before",
+  "because",
+  "been",
+  "being",
+  "can",
+  "cannot",
+  "could",
+  "does",
+  "doesn",
+  "don",
+  "from",
+  "have",
+  "included",
+  "into",
+  "just",
+  "like",
+  "need",
+  "needs",
+  "never",
+  "not",
+  "now",
+  "only",
+  "please",
+  "that",
+  "the",
+  "their",
+  "them",
+  "then",
+  "this",
+  "used",
+  "using",
+  "was",
+  "were",
+  "what",
+  "when",
+  "with",
+  "your"
+]);
+
+function normalizeLessonSignalToken(token: string): string {
+  const lower = token.toLowerCase();
+  if (lower === "remembered" || lower === "remembering") return "remember";
+  if (lower === "passwords") return "password";
+  if (lower === "logins") return "login";
+  if (lower === "credentials") return "credential";
+  return lower;
+}
+
+function tokenizeLessonSignal(value: string): string[] {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .split(/\s+/)
+    .map(normalizeLessonSignalToken)
+    .filter((token) => token.length > 2 && !LESSON_SIGNAL_STOPWORDS.has(token));
+}
+
+function signalMatchesTicket(signal: string, ticketText: string, ticketTokens: Set<string>): boolean {
+  const normalizedSignal = signal.trim().toLowerCase();
+  if (!normalizedSignal) return false;
+  if (ticketText.includes(normalizedSignal)) return true;
+
+  const signalTokens = tokenizeLessonSignal(normalizedSignal);
+  if (signalTokens.length === 0) return false;
+  const overlap = signalTokens.filter((token) => ticketTokens.has(token)).length;
+  const requiredOverlap = signalTokens.length <= 2 ? signalTokens.length : Math.max(2, Math.ceil(signalTokens.length * 0.6));
+  return overlap >= requiredOverlap;
+}
+
 export function findMatchingLesson(ticket: Ticket, item: KnowledgeItem): LessonMatchResult | null {
   if (!item.lessons || item.lessons.length === 0) return null;
   const ticketText = `${ticket.subject} ${ticket.description}`.toLowerCase();
+  const ticketTokens = new Set(tokenizeLessonSignal(ticketText));
   let best: LessonMatchResult | null = null;
   for (const lesson of item.lessons) {
     const signals = lesson.signals
       .flatMap((signal) => signal.split(","))
       .map((signal) => signal.trim())
       .filter(Boolean);
-    const matchedSignals = signals.filter((s) => ticketText.includes(s.toLowerCase()));
+    const matchedSignals = signals.filter((signal) => signalMatchesTicket(signal, ticketText, ticketTokens));
     if (matchedSignals.length > 0 && (!best || matchedSignals.length > best.score)) {
       best = { lesson, matchedSignals, score: matchedSignals.length };
     }

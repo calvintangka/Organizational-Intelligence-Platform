@@ -15,6 +15,7 @@ export type {
   AIProviderMode,
   AIAdvisoryStatus,
   AIDiagnostics,
+  AIChainAttempt,
   AIAnalysisSuggestion,
   AICanonicalProblemSuggestion,
   AIPatternSuggestion,

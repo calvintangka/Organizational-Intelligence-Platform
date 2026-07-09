@@ -43,7 +43,7 @@ The primary ticket flow starts in `processTicketPipeline()` in `app/page.tsx`. T
    `buildReasoning()` and `buildConfidence()` in `lib/analyzer.ts` convert the deterministic analysis and top memory match into UI-ready explanations.
 
 9. Match discrimination
-   `requestMatchDiscrimination()` in `app/page.tsx` optionally asks the LM Studio provider whether the best memory match is actually the same problem or a distinct one. A medium/high-confidence rejection forces the flow back to no-match behavior.
+   `requestMatchDiscrimination()` in `app/page.tsx` optionally asks the LM Studio provider whether the best memory match is actually the same problem or a distinct one. A medium/high-confidence rejection forces the flow back to no-match behavior, but a validated lesson-backed match can now bypass broad discrimination when its lesson score is strong enough, so reusable lessons do not get cold-started away from a proven match.
 
 10. Draft generation
    `draftResponse()` in `lib/drafting.ts` produces the deterministic response candidate. Reusable lesson/customer templates are normalized through `lib/canonicalProblemEngine.ts` before rendering, so stored lesson greetings and ticket-reference lines can be converted into `{{customerName}}` / `{{ticketId}}` form before deterministic reuse. `requestDraftAdvisory()` in `app/page.tsx` may layer an AI advisory draft on top, but the deterministic draft always remains the fallback and grounding source.
@@ -143,6 +143,7 @@ The core types live in `types/knowledge.ts`, `types/ai.ts`, `types/bulkUpload.ts
 - `SuggestedResponse`: the customer-facing draft plus its source, grounding mode, fallback notice, and linked knowledge IDs
 - `DraftGroundingMode`: `lesson_grounded`, `memory_grounded`, or `cold_start`
 - `AIAdvisory`: diagnostics and structured AI suggestions
+- `AIChainAttempt`: per-tier chain attempt metadata surfaced in diagnostics
 
 ### Bulk upload types
 

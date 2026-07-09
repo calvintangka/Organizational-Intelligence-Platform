@@ -80,6 +80,12 @@ export interface MatchDiscriminationInput {
   matchedCanonicalTitle: string;
   /** Core problem statement of the matched item — NOT the solution or template */
   matchedProblemSummary: string;
+  matchedLesson?: {
+    title?: string;
+    rootCause: string;
+    signals: string[];
+    customerResponse?: string;
+  };
   deterministicUnderstanding: Understanding;
 }
 

@@ -21,6 +21,7 @@ import { classifyBusinessDomain } from "@/lib/domainClassifier";
 import { analyzeBulkEntries, prepareBulkClusterCommit } from "@/lib/bulkUpload";
 import { retrieveMemory } from "@/lib/memory";
 import { draftResponse, findMatchingLesson, isCompatibleForDrafting } from "@/lib/drafting";
+import type { LessonMatchResult } from "@/lib/drafting";
 import {
   buildKnowledgeItemFromPackCandidate,
   buildPackCandidateContent,
@@ -33,7 +34,7 @@ import {
   getCustomerResponseTemplate,
   identifyCanonicalProblem,
   mergeIntoCanonicalProblem,
-  normalizeReusableResponseTemplate,
+  normalizeReusableLessonTemplate,
   upsertCanonicalProblem,
   withCanonicalProblemDefaults
 } from "@/lib/canonicalProblemEngine";
@@ -224,6 +225,13 @@ const steps = [
   "Metrics"
 ];
 
+const STRONG_LESSON_MATCH_THRESHOLD = 2;
+
+interface MatchWithLesson {
+  match: KnowledgeMatch;
+  lessonMatch: LessonMatchResult | null;
+}
+
 function createInitialMetrics(): Metrics {
   return { ...defaultMetrics };
 }
@@ -245,6 +253,116 @@ function makeCustomTicket(description: string, ticketId?: string): Ticket {
     status: "new",
     createdAt: new Date().toISOString()
   };
+}
+
+function isStrongLessonMatch(lessonMatch: LessonMatchResult | null | undefined): lessonMatch is LessonMatchResult {
+  return !!lessonMatch && lessonMatch.score >= STRONG_LESSON_MATCH_THRESHOLD;
+}
+
+function buildDiscriminationLessonPayload(lessonMatch: LessonMatchResult) {
+  return {
+    title: lessonMatch.lesson.title,
+    rootCause: lessonMatch.lesson.rootCause,
+    signals: lessonMatch.matchedSignals,
+    customerResponse: lessonMatch.lesson.customerResponse
+  };
+}
+
+function selectPreferredMatch(ticket: Ticket, matches: KnowledgeMatch[]): MatchWithLesson | null {
+  if (matches.length === 0) return null;
+
+  const annotated = matches.map((match) => ({
+    match,
+    lessonMatch: findMatchingLesson(ticket, match.item)
+  }));
+  const lessonBacked = annotated.filter((entry) => isStrongLessonMatch(entry.lessonMatch));
+  const pool = lessonBacked.length > 0 ? lessonBacked : annotated;
+  const topScore = Math.max(...pool.map((entry) => entry.match.matchScore));
+  const relevantCluster = pool.filter((entry) => entry.match.matchScore >= topScore - 10);
+
+  return relevantCluster.reduce((best, current) => {
+    const bestTrust = best.match.item.trustScore ?? 0;
+    const currentTrust = current.match.item.trustScore ?? 0;
+    if (currentTrust !== bestTrust) return currentTrust > bestTrust ? current : best;
+
+    const bestLessonScore = best.lessonMatch?.score ?? 0;
+    const currentLessonScore = current.lessonMatch?.score ?? 0;
+    if (currentLessonScore !== bestLessonScore) return currentLessonScore > bestLessonScore ? current : best;
+
+    if (current.match.matchScore !== best.match.matchScore) return current.match.matchScore > best.match.matchScore ? current : best;
+    return current;
+  }, relevantCluster[0]);
+}
+
+function normalizeLessonSearchText(value: string): string[] {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length > 2);
+}
+
+function isLessonSearchCandidate(
+  understanding: Understanding,
+  item: KnowledgeItem,
+  canonicalProblemTitle: string
+): boolean {
+  if (!item.lessons?.length) return false;
+  if (!isCompatibleForDrafting(understanding, item)) return false;
+
+  const targetTokens = new Set(normalizeLessonSearchText(`${canonicalProblemTitle} ${understanding.category}`));
+  const itemTokens = normalizeLessonSearchText(
+    `${item.canonicalProblemTitle ?? ""} ${item.title} ${item.category} ${item.tags.join(" ")}`
+  );
+  return itemTokens.some((token) => targetTokens.has(token));
+}
+
+function withPreDiscriminationLessonMatches(
+  ticket: Ticket,
+  understanding: Understanding,
+  matches: KnowledgeMatch[],
+  items: KnowledgeItem[],
+  canonicalProblemTitle: string
+): KnowledgeMatch[] {
+  const lessonMatches = items
+    .filter((item) => isLessonSearchCandidate(understanding, item, canonicalProblemTitle))
+    .map((item) => ({ item, lessonMatch: findMatchingLesson(ticket, item) }))
+    .filter((entry): entry is { item: KnowledgeItem; lessonMatch: LessonMatchResult } => isStrongLessonMatch(entry.lessonMatch));
+
+  if (lessonMatches.length === 0) return matches;
+
+  const best = lessonMatches.reduce((winner, current) => {
+    if (current.lessonMatch.score !== winner.lessonMatch.score) {
+      return current.lessonMatch.score > winner.lessonMatch.score ? current : winner;
+    }
+    const currentTrust = current.item.trustScore ?? 0;
+    const winnerTrust = winner.item.trustScore ?? 0;
+    return currentTrust > winnerTrust ? current : winner;
+  }, lessonMatches[0]);
+
+  const existing = matches.find((match) => match.item.id === best.item.id);
+  const lessonLabel = best.lessonMatch.lesson.title ?? best.lessonMatch.lesson.rootCause;
+  const lessonBackedMatch: KnowledgeMatch = {
+    item: best.item,
+    matchScore: Math.max(existing?.matchScore ?? 0, 95),
+    matchReason: `Validated lesson match - "${lessonLabel}" matched before AI discrimination via signals: ${best.lessonMatch.matchedSignals.join(", ")}.`,
+    matchedTags: existing?.matchedTags ?? [],
+    matchedKeywords: best.lessonMatch.matchedSignals.slice(0, 4),
+    matchedCategory: best.item.category
+  };
+
+  return moveMatchToFront(
+    [lessonBackedMatch, ...matches.filter((match) => match.item.id !== best.item.id)],
+    best.item.id
+  );
+}
+
+function moveMatchToFront(matches: KnowledgeMatch[], matchId?: string): KnowledgeMatch[] {
+  if (!matchId) return matches;
+  return [
+    ...matches.filter((match) => match.item.id === matchId),
+    ...matches.filter((match) => match.item.id !== matchId)
+  ];
 }
 
 function understandingToAnalysis(und: ReturnType<typeof understandForProfile>): AIAnalysis {
@@ -1409,7 +1527,17 @@ export default function Home() {
       proxyPath: aiAdapter.config.proxyPath,
       endpointUsed: aiAdapter.config.proxyPath,
       proxySucceeded: aiAdapter.config.mode === "disabled" ? false : undefined,
-      fallbackReason
+      fallbackReason,
+      attempts: aiAdapter.config.mode === "disabled"
+        ? [
+            {
+              label: "AI disabled",
+              provider: aiAdapter.provider.label,
+              status: "skipped",
+              reason: "AI is disabled in configuration."
+            }
+          ]
+        : undefined
     };
   }
 
@@ -1422,6 +1550,7 @@ export default function Home() {
     return {
       ...buildDefaultDiagnostics(fallbackReason ?? firstError),
       ...firstDiagnostics,
+      attempts: firstDiagnostics?.attempts,
       proxySucceeded: anySucceeded ? true : anyFailed ? false : firstDiagnostics?.proxySucceeded,
       fallbackReason: fallbackReason ?? firstDiagnostics?.fallbackReason ?? firstError
     };
@@ -1436,7 +1565,11 @@ export default function Home() {
     const baseUrl = diagnostics?.serverBaseUrl ?? "server-configured";
     const reason = fallbackReason ?? diagnostics?.fallbackReason ?? "AI advisory unavailable.";
     const proxyStatus = diagnostics?.proxySucceeded === true ? "succeeded" : diagnostics?.proxySucceeded === false ? "failed" : "unknown";
-    return `Reason: ${reason}\nProxy: ${proxyPath}\nServer base URL: ${baseUrl}\nProxy status: ${proxyStatus}\nMode: ${diagnostics?.mode ?? aiAdapter.config.mode}`;
+    const attempts = diagnostics?.attempts ?? [];
+    const attemptSummary = attempts.length > 0
+      ? `\nChain attempts:\n${attempts.map((attempt) => `- ${attempt.label} [${attempt.status}]${attempt.reason ? `: ${attempt.reason}` : ""}`).join("\n")}`
+      : "";
+    return `Reason: ${reason}\nProxy: ${proxyPath}\nServer base URL: ${baseUrl}\nProxy status: ${proxyStatus}\nMode: ${diagnostics?.mode ?? aiAdapter.config.mode}${attemptSummary}`;
   }
 
   function validateEmailRecoveryDraft(draft: string): string | null {
@@ -1581,14 +1714,39 @@ export default function Home() {
   async function requestMatchDiscrimination(
     ticket: Ticket,
     topMatch: KnowledgeMatch,
-    deterministicUnderstanding: ReturnType<typeof understandForProfile>
+    deterministicUnderstanding: ReturnType<typeof understandForProfile>,
+    matchedLesson?: LessonMatchResult | null
   ): Promise<KnowledgeMatch | null> {
+    const validatedLessonMatch: LessonMatchResult | null =
+      matchedLesson && isStrongLessonMatch(matchedLesson) ? matchedLesson : null;
+    const validatedLessonLabel = validatedLessonMatch
+      ? validatedLessonMatch.lesson.title ?? validatedLessonMatch.lesson.rootCause ?? "validated lesson"
+      : null;
+    const validationPayload = validatedLessonMatch ? buildDiscriminationLessonPayload(validatedLessonMatch) : undefined;
+
+    if (validatedLessonMatch && validatedLessonLabel) {
+      setDiscriminationReasoning(null);
+      setDiscriminatedMatchTitle(null);
+      addLogEntries([
+        createLogEntry(
+          "Lesson match accepted without broad discrimination",
+          `"${validatedLessonLabel}" is a strong validated lesson match for this ticket`
+        )
+      ]);
+      return topMatch;
+    }
+
     if (aiAdapter.config.mode === "disabled") return topMatch;
 
     const result = await aiAdapter.provider.discriminateMatch({
       ticket,
-      matchedCanonicalTitle: topMatch.item.canonicalProblemTitle ?? topMatch.item.title,
-      matchedProblemSummary: topMatch.item.problemSummary ?? topMatch.item.problem,
+      matchedCanonicalTitle: validatedLessonLabel
+        ? validatedLessonLabel ?? topMatch.item.canonicalProblemTitle ?? topMatch.item.title
+        : topMatch.item.canonicalProblemTitle ?? topMatch.item.title,
+      matchedProblemSummary: validationPayload
+        ? validationPayload.rootCause
+        : topMatch.item.problemSummary ?? topMatch.item.problem,
+      matchedLesson: validationPayload,
       deterministicUnderstanding
     });
 
@@ -1597,7 +1755,9 @@ export default function Home() {
     if (result.ok && result.data) {
       const { isDistinctFromMatch, confidence, reasoning } = result.data;
       if (isDistinctFromMatch && confidence !== "low") {
-        const matchTitle = topMatch.item.canonicalProblemTitle ?? topMatch.item.title;
+        const matchTitle = validatedLessonLabel
+          ? validatedLessonLabel ?? topMatch.item.canonicalProblemTitle ?? topMatch.item.title
+          : topMatch.item.canonicalProblemTitle ?? topMatch.item.title;
         setDiscriminationReasoning(reasoning);
         setDiscriminatedMatchTitle(matchTitle);
         addLogEntries([
@@ -1615,7 +1775,7 @@ export default function Home() {
       addLogEntries([
         createLogEntry(
           "LLM discrimination: match confirmed",
-          `"${topMatch.item.canonicalProblemTitle ?? topMatch.item.title}" confirmed as same problem (${confidence} confidence)`
+          `"${validatedLessonLabel ?? topMatch.item.canonicalProblemTitle ?? topMatch.item.title}" confirmed as same problem (${confidence} confidence)`
         )
       ]);
     }
@@ -1708,7 +1868,7 @@ export default function Home() {
     const groundingContent =
       draftMode === "lesson_grounded"
         ? lessonMatch
-          ? normalizeReusableResponseTemplate(lessonMatch.lesson.customerResponse)
+          ? normalizeReusableLessonTemplate(lessonMatch.lesson.customerResponse)
           : deterministicDraft
         : draftMode === "memory_grounded"
         ? deterministicDraft
@@ -1748,7 +1908,7 @@ export default function Home() {
         ? {
             rootCause: lessonMatch.lesson.rootCause,
             solution: lessonMatch.lesson.solution,
-            customerResponse: normalizeReusableResponseTemplate(lessonMatch.lesson.customerResponse),
+            customerResponse: normalizeReusableLessonTemplate(lessonMatch.lesson.customerResponse),
             matchedSignals: lessonMatch.matchedSignals,
             doNotPromise: lessonMatch.lesson.doNotPromise
           }
@@ -1797,6 +1957,14 @@ export default function Home() {
     });
 
     recordAIResults([draftResult, enrichmentResult], nextAdvisory.status, nextAdvisory.agreementPct);
+
+    if (draftMode === "lesson_grounded") {
+      return {
+        advisory: nextAdvisory,
+        response: fallbackResponse,
+        usedAIDraft: false
+      };
+    }
 
     const draftSafetyContext: DraftSafetyContext = {
       draftMode,
@@ -1949,7 +2117,14 @@ export default function Home() {
   function findSimilarKnowledge(analysis: AIAnalysis, items: KnowledgeItem[] = knowledgeItems) {
     setErrorMessage("");
     const und = toUnderstanding(analysis);
-    const matches = retrieveMemory(und, items, sessionCreatedIds);
+    const canonicalProblem = identifyCanonicalProblem(und, organizationProfile);
+    const matches = withPreDiscriminationLessonMatches(
+      selectedTicket ?? makeCustomTicket(analysis.summary, analysis.ticketId),
+      und,
+      retrieveMemory(und, items, sessionCreatedIds),
+      items,
+      canonicalProblem.title
+    );
     const topMatch = matches.length > 0 ? matches[0] : null;
     const newReasoning = buildReasoning(und, topMatch);
     const newConfidence = buildConfidence(und, topMatch);
@@ -1988,18 +2163,22 @@ export default function Home() {
   async function generateSuggestedResponse(ticket: Ticket, analysis: AIAnalysis, matches: KnowledgeMatch[]) {
     setErrorMessage("");
     const und = toUnderstanding(analysis);
-    const rawTopMatch = matches.length > 0 ? matches[0] : null;
+    const canonicalProblem = identifyCanonicalProblem(und, organizationProfile);
+    const lessonAwareMatches = withPreDiscriminationLessonMatches(ticket, und, matches, knowledgeItems, canonicalProblem.title);
+    const compatibleMatches = lessonAwareMatches.filter((m) => isCompatibleForDrafting(und, m.item) || !!findMatchingLesson(ticket, m.item));
+    const selectedMatchInfo = compatibleMatches.length > 0 ? selectPreferredMatch(ticket, compatibleMatches) : null;
+    const topMatch = selectedMatchInfo?.match ?? null;
+    const lessonMatch = selectedMatchInfo?.lessonMatch ?? null;
 
     // LLM discrimination: confirm the top match describes the same problem, not a distinct one
     setDiscriminationReasoning(null);
     setDiscriminatedMatchTitle(null);
-    const topMatch = rawTopMatch
-      ? await requestMatchDiscrimination(ticket, rawTopMatch, und)
+    const effectiveTopMatch = topMatch
+      ? await requestMatchDiscrimination(ticket, topMatch, und, lessonMatch ?? undefined)
       : null;
 
-    const draft = draftResponse(ticket, und, topMatch, organizationProfile, knowledgeItems.length === 0);
-    const canonicalProblem = identifyCanonicalProblem(und, organizationProfile);
-    const aiDraft = await requestDraftAdvisory(ticket, und, canonicalProblem.title, topMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", aiAdvisory);
+    const draft = draftResponse(ticket, und, effectiveTopMatch, organizationProfile, knowledgeItems.length === 0);
+    const aiDraft = await requestDraftAdvisory(ticket, und, canonicalProblem.title, effectiveTopMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", aiAdvisory);
     const response = aiDraft.response;
 
     addLogEntries([
@@ -2075,7 +2254,7 @@ export default function Home() {
 
   function applyLessonToItem(item: KnowledgeItem, lessonDraft: LessonDraft, ticketId: string, now: string): KnowledgeItem {
     const existingLessons = item.lessons ?? [];
-    const normalizedCustomerResponse = normalizeReusableResponseTemplate(lessonDraft.customerResponse);
+    const normalizedCustomerResponse = normalizeReusableLessonTemplate(lessonDraft.customerResponse);
 
     if (lessonDraft.mode === "new") {
       const lesson: Lesson = {
@@ -2412,16 +2591,25 @@ export default function Home() {
       category: canonicalProblem.category
     });
     const enrichedUnderstanding = applyAdvisoryExtractedFields(und, advisory);
-    const matches = retrieveMemory(enrichedUnderstanding, knowledgeItems, sessionCreatedIds);
+    const matches = withPreDiscriminationLessonMatches(
+      second,
+      enrichedUnderstanding,
+      retrieveMemory(enrichedUnderstanding, knowledgeItems, sessionCreatedIds),
+      knowledgeItems,
+      canonicalProblem.title
+    );
 
     // Among the strongly-relevant matches, the organization reaches for its
     // MOST TRUSTED knowledge — that is what enables auto-resolution over time.
     // Category-incompatible items are excluded before the trust-based selection so
     // a high-trust Activation item cannot drive a Login ticket's reuse response.
     const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(enrichedUnderstanding, m.item) || !!findMatchingLesson(second, m.item));
+    const selectedMatchInfo = compatibleMatches.length > 0 ? selectPreferredMatch(second, compatibleMatches) : null;
+    const reusedMatch = selectedMatchInfo?.match ?? null;
+    const reusedLessonMatch = selectedMatchInfo?.lessonMatch ?? null;
 
     // Cold Start path: no matches or no compatible matches → route to human review
-    if (matches.length === 0 || compatibleMatches.length === 0) {
+    if (matches.length === 0 || !reusedMatch) {
       const coldStartDraft = draftResponse(second, enrichedUnderstanding, null, organizationProfile, knowledgeItems.length === 0);
       const secondAnalysis = understandingToAnalysis(enrichedUnderstanding);
       setSecondTicket({ ...second, status: "analyzed" });
@@ -2445,18 +2633,13 @@ export default function Home() {
       setCurrentStep(8);
       return;
     }
-    const topScore = compatibleMatches[0].matchScore;
-    const relevantCluster = compatibleMatches.filter((m) => m.matchScore >= topScore - 10);
-    const reusedMatch = relevantCluster.reduce(
-      (best, m) => ((m.item.trustScore ?? 0) > (best.item.trustScore ?? 0) ? m : best),
-      relevantCluster[0]
-    );
-
     const trust = evaluateTrust(reusedMatch.item, organizationProfile, validationRecords);
     // LLM discrimination on the reuse candidate — prevents false-positive memory reuse
     setDiscriminationReasoning(null);
     setDiscriminatedMatchTitle(null);
-    const effectiveReuseMatch = await requestMatchDiscrimination(second, reusedMatch, enrichedUnderstanding);
+    const effectiveReuseMatch = reusedLessonMatch && isStrongLessonMatch(reusedLessonMatch)
+      ? reusedMatch
+      : await requestMatchDiscrimination(second, reusedMatch, enrichedUnderstanding, reusedLessonMatch ?? undefined);
 
     // If discrimination says this is a distinct problem, treat as cold-start (no match)
     if (!effectiveReuseMatch) {
@@ -2497,7 +2680,7 @@ export default function Home() {
     setSecondTicket({ ...second, status: "analyzed" });
     setAiAnalysis(secondAnalysis);
     setAiAdvisory(aiDraft.advisory ?? advisory);
-    setSimilarKnowledge(matches);
+    setSimilarKnowledge(moveMatchToFront(matches, effectiveReuseMatch.item.id));
     setReusedKnowledgeSourceTicketId(effectiveReuseMatch.item.sourceTicketId);
     setReuseMatchId(effectiveReuseMatch.item.id);
     setReuseDecision(effectiveReuseDecision);
@@ -2646,13 +2829,21 @@ export default function Home() {
     setCurrentStep(2);
 
     // Phase 2: Memory retrieval
-    const matches = retrieveMemory(enrichedUnderstanding, knowledgeItems, sessionCreatedIds);
-    const topMatch = matches.length > 0 ? matches[0] : null;
+    const matches = withPreDiscriminationLessonMatches(
+      ticket,
+      enrichedUnderstanding,
+      retrieveMemory(enrichedUnderstanding, knowledgeItems, sessionCreatedIds),
+      knowledgeItems,
+      canonicalProblem.title
+    );
+    const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(enrichedUnderstanding, m.item) || !!findMatchingLesson(ticket, m.item));
+    const selectedMatchInfo = compatibleMatches.length > 0 ? selectPreferredMatch(ticket, compatibleMatches) : null;
+    const topMatch = selectedMatchInfo?.match ?? null;
+    const lessonMatchForRecord = selectedMatchInfo?.lessonMatch ?? null;
     const newReasoning = buildReasoning(enrichedUnderstanding, topMatch);
     const newConfidence = buildConfidence(enrichedUnderstanding, topMatch);
     const topTrust = topMatch ? evaluateTrust(topMatch.item, organizationProfile, validationRecords) : null;
 
-    const lessonMatchForRecord = topMatch ? findMatchingLesson(ticket, topMatch.item) : null;
     record = {
       ...record,
       memoryMatch: {
@@ -2664,7 +2855,7 @@ export default function Home() {
     setActiveTicketRecord(record);
     setTicketRecords((prev) => upsertTicketRecord(prev, record));
 
-    setSimilarKnowledge(matches);
+    setSimilarKnowledge(topMatch ? moveMatchToFront(matches, topMatch.item.id) : []);
     setReasoning(newReasoning);
     setConfidence(newConfidence);
     addLogEntries([
@@ -2684,7 +2875,7 @@ export default function Home() {
     setDiscriminationReasoning(null);
     setDiscriminatedMatchTitle(null);
     const effectiveTopMatch = topMatch
-      ? await requestMatchDiscrimination(ticket, topMatch, und)
+      ? await requestMatchDiscrimination(ticket, topMatch, und, lessonMatchForRecord ?? undefined)
       : null;
     if (topMatch && !effectiveTopMatch) {
       // Discrimination rejected the retrieval match as a distinct problem.

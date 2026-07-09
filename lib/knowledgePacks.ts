@@ -11,7 +11,7 @@ import type {
   Understanding
 } from "@/types";
 import { isRecognizedClassifierCategory } from "@/lib/analyzer";
-import { createCanonicalProblem, normalizeReusableResponseTemplate } from "@/lib/canonicalProblemEngine";
+import { createCanonicalProblem, normalizeReusableLessonTemplate } from "@/lib/canonicalProblemEngine";
 
 function assertString(value: unknown, label: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -128,7 +128,7 @@ export function buildPackLessons(pack: KnowledgePack, createdAt: string): Lesson
     title: lesson.title,
     rootCause: lesson.rootCause,
     solution: lesson.solution,
-    customerResponse: normalizeReusableResponseTemplate(lesson.customerResponse),
+    customerResponse: normalizeReusableLessonTemplate(lesson.customerResponse),
     signals: [...lesson.signals],
     whenToEscalate: lesson.whenToEscalate,
     doNotPromise: [...lesson.doNotPromise],
@@ -192,7 +192,7 @@ export function buildKnowledgeItemFromPackCandidate(
 ): KnowledgeItem {
   const normalizedLessons = draft.lessons.map((lesson) => ({
     ...lesson,
-    customerResponse: normalizeReusableResponseTemplate(lesson.customerResponse)
+    customerResponse: normalizeReusableLessonTemplate(lesson.customerResponse)
   }));
   const sourceLabel = candidate.proposedContent.importMetadata?.sourceLabel ?? candidate.sourceTicketIds[0] ?? "knowledge_pack:unknown";
   const signalTags = normalizedLessons

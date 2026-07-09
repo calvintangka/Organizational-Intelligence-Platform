@@ -117,7 +117,8 @@ export function buildAIAdvisory(input: {
       serverBaseUrl: input.diagnostics?.serverBaseUrl,
       endpointUsed: input.diagnostics?.endpointUsed,
       proxySucceeded: input.diagnostics?.proxySucceeded,
-      fallbackReason: input.diagnostics?.fallbackReason ?? input.availabilityMessage
+      fallbackReason: input.diagnostics?.fallbackReason ?? input.availabilityMessage,
+      attempts: input.diagnostics?.attempts
     },
     deterministicLabel: input.deterministicLabel,
     aiLabel,

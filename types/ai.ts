@@ -40,6 +40,13 @@ export interface MatchDiscriminationResult {
 export type AIProviderMode = "disabled" | "lmstudio" | "claude" | "amd";
 export type AIAdvisoryStatus = "verified" | "advisory_only" | "needs_human_review" | "unavailable" | "disabled";
 
+export interface AIChainAttempt {
+  label: string;
+  provider: string;
+  status: "succeeded" | "failed" | "skipped";
+  reason?: string;
+}
+
 export interface AIDiagnostics {
   mode: AIProviderMode;
   provider: string;
@@ -49,6 +56,7 @@ export interface AIDiagnostics {
   endpointUsed?: string;
   proxySucceeded?: boolean;
   fallbackReason?: string;
+  attempts?: AIChainAttempt[];
 }
 
 export interface AIAnalysisSuggestion {
