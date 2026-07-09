@@ -141,7 +141,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 ### `lib/analyzer.ts`
 
 - `assessBusinessRelevanceForProfile()` - Business-scope guardrail.
-- `understandForProfile()` - Category, intent, urgency, tags, and detected signals. Deterministic sender-name extraction (`extractSenderNameFromSignature()`) recognizes multi-line sign-offs ("Regards,\nSarah"), self-introductions ("this is X" / "my name is X" / "I'm X"), and same-line sign-offs ("Best, X") — feeds `understanding.extractedFields.senderName`, which the deterministic draft's `{{greetingLine}}` rendering (`lib/canonicalProblemEngine.ts`) already consumes on every branch.
+- `understandForProfile()` - Category, intent, urgency, tags, and detected signals. It now adds category-specific intent evidence, applies explicit Login-contradiction penalties (for tickets that say sign-in/password still work), and falls back to `Uncategorized` instead of silently breaking category ties by `CATEGORY_RULES` order. Deterministic sender-name extraction (`extractSenderNameFromSignature()`) recognizes multi-line sign-offs ("Regards,\nSarah"), self-introductions ("this is X" / "my name is X" / "I'm X"), and same-line sign-offs ("Best, X") — feeds `understanding.extractedFields.senderName`, which the deterministic draft's `{{greetingLine}}` rendering (`lib/canonicalProblemEngine.ts`) already consumes on every branch.
 - `observe()` - Raw ticket observation.
 - `buildReasoning()` - Human-readable explanation of classification and memory reuse.
 - `buildConfidence()` - Confidence score and basis/uncertainty summary.
@@ -163,8 +163,9 @@ Use this file to find the minimum source needed for a task. It is written for co
 ### `lib/drafting.ts`
 
 - `draftResponse()` - Deterministic draft generator. Uses the shared template renderer and appends the ticket reference only when the rendered lesson/memory draft does not already include the current ticket id.
-- `findMatchingLesson()` - Lesson-grounded override lookup.
+- `findMatchingLesson()` - Lesson-grounded override lookup. Now preserves negation tokens, blocks polarity mismatches like `remember my password` vs `never remembered password`, and skips contradicted login-failure lessons before scoring signals.
 - `isCompatibleForDrafting()` - Category-safety gate for draft reuse.
+- `ticketContradictsLesson()` - Deterministic contradiction helper used by lesson matching and the page-level discrimination gate to stop explicit opposite-intent tickets from bypassing into validated lesson reuse.
 - Lesson-level `doNotPromise` guardrails reach AI lesson-grounded prompts through `requestDraftAdvisory()`.
 
 ### `lib/trustEngine.ts`

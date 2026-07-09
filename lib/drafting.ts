@@ -97,6 +97,17 @@ export interface LessonMatchResult {
   score: number;
 }
 
+const LESSON_NEGATION_TOKENS = new Set([
+  "no",
+  "not",
+  "never",
+  "cannot",
+  "cant",
+  "dont",
+  "wont",
+  "without"
+]);
+
 const LESSON_SIGNAL_STOPWORDS = new Set([
   "about",
   "again",
@@ -106,11 +117,9 @@ const LESSON_SIGNAL_STOPWORDS = new Set([
   "been",
   "being",
   "can",
-  "cannot",
   "could",
   "does",
   "doesn",
-  "don",
   "from",
   "have",
   "included",
@@ -119,8 +128,6 @@ const LESSON_SIGNAL_STOPWORDS = new Set([
   "like",
   "need",
   "needs",
-  "never",
-  "not",
   "now",
   "only",
   "please",
@@ -140,6 +147,15 @@ const LESSON_SIGNAL_STOPWORDS = new Set([
   "your"
 ]);
 
+const EXPLICIT_LOGIN_CONTRADICTION_PATTERNS: RegExp[] = [
+  /\bi can sign in(?: to my account)?(?: normally)?\b/,
+  /\bi can access my account\b/,
+  /\bi remember my password\b/,
+  /\bpassword is working\b/,
+  /\bnot a login issue\b/,
+  /\bsign in normally\b/
+];
+
 function normalizeLessonSignalToken(token: string): string {
   const lower = token.toLowerCase();
   if (lower === "remembered" || lower === "remembering") return "remember";
@@ -149,22 +165,75 @@ function normalizeLessonSignalToken(token: string): string {
   return lower;
 }
 
-function tokenizeLessonSignal(value: string): string[] {
+function normalizeLessonSignalText(value: string): string {
   return value
     .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, " ")
+    .replace(/can't/g, "cannot")
+    .replace(/cant/g, "cannot")
+    .replace(/don't/g, "do not")
+    .replace(/dont/g, "do not")
+    .replace(/won't/g, "will not")
+    .replace(/wont/g, "will not")
+    .replace(/[^a-z0-9\s-]/g, " ");
+}
+
+function tokenizeLessonSignal(value: string): string[] {
+  return normalizeLessonSignalText(value)
     .split(/\s+/)
     .map(normalizeLessonSignalToken)
-    .filter((token) => token.length > 2 && !LESSON_SIGNAL_STOPWORDS.has(token));
+    .filter((token) => (token.length > 2 || LESSON_NEGATION_TOKENS.has(token)) && !LESSON_SIGNAL_STOPWORDS.has(token));
+}
+
+function hasNegation(tokens: Iterable<string>): boolean {
+  for (const token of tokens) {
+    if (LESSON_NEGATION_TOKENS.has(token)) return true;
+  }
+  return false;
+}
+
+function hasRememberPasswordConcept(tokens: Iterable<string>): boolean {
+  const tokenSet = new Set(tokens);
+  return tokenSet.has("remember") && tokenSet.has("password");
+}
+
+function ticketHasExplicitLoginContradiction(ticketText: string): boolean {
+  return EXPLICIT_LOGIN_CONTRADICTION_PATTERNS.some((pattern) => pattern.test(ticketText));
+}
+
+function signalPolarityContradictsTicket(signalTokens: string[], ticketTokens: Set<string>): boolean {
+  if (!hasRememberPasswordConcept(signalTokens) || !hasRememberPasswordConcept(ticketTokens)) return false;
+  return hasNegation(signalTokens) !== hasNegation(ticketTokens);
+}
+
+function lessonRequiresLoginFailure(lesson: Lesson): boolean {
+  const lessonText = normalizeLessonSignalText(
+    `${lesson.title ?? ""} ${lesson.rootCause} ${lesson.solution} ${lesson.signals.join(" ")}`
+  );
+  return [
+    "login",
+    "sign in",
+    "password",
+    "credential",
+    "reset",
+    "locked out",
+    "account locked",
+    "authentication"
+  ].some((signal) => lessonText.includes(signal));
+}
+
+export function ticketContradictsLesson(ticket: Ticket, lesson: Lesson): boolean {
+  const ticketText = normalizeLessonSignalText(`${ticket.subject} ${ticket.description}`);
+  return lessonRequiresLoginFailure(lesson) && ticketHasExplicitLoginContradiction(ticketText);
 }
 
 function signalMatchesTicket(signal: string, ticketText: string, ticketTokens: Set<string>): boolean {
-  const normalizedSignal = signal.trim().toLowerCase();
+  const normalizedSignal = normalizeLessonSignalText(signal).trim();
   if (!normalizedSignal) return false;
   if (ticketText.includes(normalizedSignal)) return true;
 
   const signalTokens = tokenizeLessonSignal(normalizedSignal);
   if (signalTokens.length === 0) return false;
+  if (signalPolarityContradictsTicket(signalTokens, ticketTokens)) return false;
   const overlap = signalTokens.filter((token) => ticketTokens.has(token)).length;
   const requiredOverlap = signalTokens.length <= 2 ? signalTokens.length : Math.max(2, Math.ceil(signalTokens.length * 0.6));
   return overlap >= requiredOverlap;
@@ -172,10 +241,11 @@ function signalMatchesTicket(signal: string, ticketText: string, ticketTokens: S
 
 export function findMatchingLesson(ticket: Ticket, item: KnowledgeItem): LessonMatchResult | null {
   if (!item.lessons || item.lessons.length === 0) return null;
-  const ticketText = `${ticket.subject} ${ticket.description}`.toLowerCase();
+  const ticketText = normalizeLessonSignalText(`${ticket.subject} ${ticket.description}`).trim();
   const ticketTokens = new Set(tokenizeLessonSignal(ticketText));
   let best: LessonMatchResult | null = null;
   for (const lesson of item.lessons) {
+    if (ticketContradictsLesson(ticket, lesson)) continue;
     const signals = lesson.signals
       .flatMap((signal) => signal.split(","))
       .map((signal) => signal.trim())
@@ -238,7 +308,7 @@ export function draftResponse(
   const basedOnKnowledgeIds: string[] = [];
 
   const lessonSignalMatch = topMatch ? findMatchingLesson(ticket, topMatch.item) : null;
-  const compatibleMatch = topMatch && (isCompatibleForDrafting(understanding, topMatch.item) || lessonSignalMatch) ? topMatch : null;
+  const compatibleMatch = topMatch && isCompatibleForDrafting(understanding, topMatch.item) ? topMatch : null;
   const rejectedForCategory =
     topMatch && !compatibleMatch
       ? `Top match "${topMatch.item.title}" (${topMatch.item.category}) rejected - category incompatible with "${understanding.category}" ticket. Using correct template instead.`

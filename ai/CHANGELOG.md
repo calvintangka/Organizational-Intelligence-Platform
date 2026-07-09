@@ -13,6 +13,19 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-09] Prevent contradicted lesson matches from overriding intent
+**Layer:** coding
+**Task/Prompt:** Fix BUG-006 where strong lesson matching was too permissive and could override explicit negated intent, causing Adrian Santoso's billing-address ticket to reuse a Login password-reset lesson.
+**Files changed:** `lib/analyzer.ts`, `lib/drafting.ts`, `app/page.tsx`, `ai/CHANGELOG.md`, `ai/CURRENT_STATUS.md`, `ai/CODEBASE_MAP.md`
+**What changed:**
+- Hardened `lib/analyzer.ts` `understandForProfile()` so category ties no longer silently fall to earlier array order. Categories now use intent-evidence scoring, explicit Login contradiction penalties, and an `Uncategorized` fallback when ties remain ambiguous.
+- Made `lib/drafting.ts` lesson matching negation-aware. Negation terms are preserved, contradiction helpers now reject polarity mismatches like `I remember my password` vs `never remembered password`, and `ticketContradictsLesson()` blocks login-failure lessons when the ticket explicitly says sign-in works normally.
+- Removed category-bypass OR gates from the live pipeline. `app/page.tsx` and `lib/drafting.ts` now treat `isCompatibleForDrafting(...)` as a hard precondition, so lesson signals can only choose a lesson inside a compatible knowledge item instead of reviving an incompatible parent match.
+- Tightened the strong-lesson bypass in `requestMatchDiscrimination()`: strong lessons still skip broad discrimination when clean, but contradiction-marked tickets now continue into discrimination instead of treating lesson strength as permission to ignore explicit opposite intent.
+**Boundaries touched:** Boundary 1 and Boundary 2 were preserved. The fix only narrows deterministic/validated lesson reuse and contradiction handling; it does not change AI authority, persistence schema, or memory-write governance.
+**Verification:** `cmd /c npm run build`; `cmd /c npx tsc --noEmit` (after build regenerated `.next/types`). Targeted `npx tsx` probes confirmed Adrian now classifies as `Billing` with no Login lesson match, while Putri/Stephanie/nameless positives still produce lesson-grounded Login drafts. Manual browser verification on `http://localhost:3001` confirmed: Putri rendered `Hi Putri Lestari,`; Stephanie and a missing-name positive stayed lesson-grounded on `Login Issue`; Adrian classified as `Billing`, produced `No matching knowledge found` for Billing, and showed no validated Login lesson in WHY THIS RESPONSE.
+**Open items:** The BUG-006 investigation report was not present anywhere under `ai/` in this workspace, so verification was based on the attachment plus direct code inspection. The persisted browser memory on `localhost:3001` still labels the evolved switched-laptop lesson as `Forgot password`, but the live browser path now matches the corrected laptop/autofill signals and no longer lets contradictory Billing intent route into Login reuse.
+
 ## [2026-07-09] Pre-discrimination lesson search for Login lesson reuse
 **Layer:** coding
 **Task/Prompt:** Fix live browser verification failure where Putri Lestari's new-laptop/saved-browser-password ticket rendered the generic Login fallback instead of the validated switched-laptop/browser-saved-password lesson.

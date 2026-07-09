@@ -489,6 +489,46 @@ const CATEGORY_WEIGHTS: Record<string, Array<[string, number]>> = {
   ]
 };
 
+const CATEGORY_INTENT_PATTERNS: Record<string, Array<[string | RegExp, number]>> = {
+  Login: [
+    [/\bforgot password\b/, 5],
+    [/\breset password\b/, 5],
+    [/\binvalid credentials\b/, 6],
+    [/\bincorrect password\b/, 5],
+    [/\bkeeps rejecting my password\b/, 6],
+    [/\bpassword is correct but\b/, 6],
+    [/\blocked out\b/, 6],
+    [/\baccount locked\b/, 6],
+    [/\bunable to sign in\b/, 6],
+    [/\bunable to log in\b/, 6],
+    [/\bcannot sign in\b/, 6],
+    [/\bcant sign in\b/, 6],
+    [/\bcannot log in\b/, 6],
+    [/\bcant log in\b/, 6]
+  ],
+  Billing: [
+    [/\bbilling address\b/, 7],
+    [/\binvoice address\b/, 7],
+    [/\bupdate billing address\b/, 7],
+    [/\bupdate the billing address\b/, 7],
+    [/\bfuture invoices\b/, 6],
+    [/\bshown on future invoices\b/, 6],
+    [/\bcompany address\b/, 4],
+    [/\bprevious company address\b/, 5],
+    [/\binvoice still shows\b/, 5],
+    [/\bbilling invoice\b/, 4]
+  ]
+};
+
+const LOGIN_CONTRADICTION_PATTERNS: RegExp[] = [
+  /\bi can sign in(?: to my account)?(?: normally)?\b/,
+  /\bi can access my account\b/,
+  /\bi remember my password\b/,
+  /\bpassword is working\b/,
+  /\bnot a login issue\b/,
+  /\bsign in normally\b/
+];
+
 const URGENCY_HIGH_WORDS = ["urgent", "immediately", "asap", "today", "blocked", "emergency", "critical", "right now", "cannot wait", "important"];
 const URGENCY_LOW_WORDS = ["whenever", "not urgent", "no rush", "at some point", "eventually", "low priority"];
 
@@ -521,6 +561,18 @@ const CORE_PROBLEM_MAP: Record<string, string> = {
 const UNCATEGORIZED_CATEGORY = "Uncategorized";
 const UNCATEGORIZED_INTENT = "Unknown - requires human classification";
 const UNCATEGORIZED_REASONING = "No existing category matched this query with sufficient confidence. Human review will classify this issue and teach the system.";
+
+function scoreIntentEvidence(category: string, fullText: string): number {
+  const patterns = CATEGORY_INTENT_PATTERNS[category] ?? [];
+  return patterns.reduce((total, [pattern, weight]) => {
+    const matched = typeof pattern === "string" ? fullText.includes(pattern) : pattern.test(fullText);
+    return matched ? total + weight : total;
+  }, 0);
+}
+
+function hasExplicitLoginContradiction(fullText: string): boolean {
+  return LOGIN_CONTRADICTION_PATTERNS.some((pattern) => pattern.test(fullText));
+}
 
 export function observe(ticket: Ticket, source: "manual-demo-input" | "seed-ticket"): Observation {
   return {
@@ -557,8 +609,8 @@ export function understandForProfile(ticket: Ticket, profile: OrganizationProfil
   let explicitCategoryMatched = false;
 
   const rules = CATEGORY_RULES.filter((rule) => categoryAllowedByProfile(rule, profile));
-
-  for (const rule of rules) {
+  const loginContradiction = hasExplicitLoginContradiction(fullText);
+  const rankedCategories = rules.map((rule) => {
     let score = 0;
     const weights = CATEGORY_WEIGHTS[rule.category];
     if (weights) {
@@ -570,14 +622,51 @@ export function understandForProfile(ticket: Ticket, profile: OrganizationProfil
         if (fullText.includes(keyword)) score++;
       }
     }
-    if (score > bestScore) {
-      bestScore = score;
-      bestCategory = rule.category;
-      detectedCategoryTags = rule.tags;
+
+    const intentEvidence = scoreIntentEvidence(rule.category, fullText);
+    const contradictionPenalty = loginContradiction && rule.category === "Login" ? 6 : 0;
+    const effectiveScore = score + intentEvidence - contradictionPenalty;
+    return {
+      rule,
+      score,
+      intentEvidence,
+      contradictionPenalty,
+      effectiveScore
+    };
+  });
+
+  rankedCategories.sort((left, right) => {
+    if (right.effectiveScore !== left.effectiveScore) return right.effectiveScore - left.effectiveScore;
+    if (right.intentEvidence !== left.intentEvidence) return right.intentEvidence - left.intentEvidence;
+    return right.score - left.score;
+  });
+
+  const rankedBest = rankedCategories[0];
+  if (rankedBest) {
+    bestScore = rankedBest.effectiveScore;
+    bestCategory = rankedBest.rule.category;
+    detectedCategoryTags = rankedBest.rule.tags;
+  }
+
+  const tiedBest = rankedBest
+    ? rankedCategories.filter((entry) => entry.effectiveScore === rankedBest.effectiveScore)
+    : [];
+
+  if (tiedBest.length > 1) {
+    const highestIntentEvidence = Math.max(...tiedBest.map((entry) => entry.intentEvidence));
+    const bestIntentMatches = tiedBest.filter((entry) => entry.intentEvidence === highestIntentEvidence);
+    if (highestIntentEvidence > 0 && bestIntentMatches.length === 1) {
+      bestCategory = bestIntentMatches[0].rule.category;
+      detectedCategoryTags = bestIntentMatches[0].rule.tags;
+      bestScore = bestIntentMatches[0].effectiveScore;
+    } else {
+      bestCategory = UNCATEGORIZED_CATEGORY;
+      detectedCategoryTags = [];
+      bestScore = 0;
     }
   }
 
-  if (bestScore === 0 && ticket.category && ticket.category !== "General") {
+  if (bestScore <= 0 && ticket.category && ticket.category !== "General") {
     const rule = rules.find((candidate) => candidate.category.toLowerCase() === ticket.category.toLowerCase());
     if (rule) {
       bestCategory = rule.category;
@@ -586,7 +675,7 @@ export function understandForProfile(ticket: Ticket, profile: OrganizationProfil
     }
   }
 
-  if (bestScore === 0 && !explicitCategoryMatched) {
+  if (bestScore <= 0 && !explicitCategoryMatched) {
     bestCategory = UNCATEGORIZED_CATEGORY;
     detectedCategoryTags = [];
   }

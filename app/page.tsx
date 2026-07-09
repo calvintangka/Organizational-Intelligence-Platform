@@ -20,7 +20,7 @@ import { assessBusinessRelevanceForProfile, observe, understandForProfile, build
 import { classifyBusinessDomain } from "@/lib/domainClassifier";
 import { analyzeBulkEntries, prepareBulkClusterCommit } from "@/lib/bulkUpload";
 import { retrieveMemory } from "@/lib/memory";
-import { draftResponse, findMatchingLesson, isCompatibleForDrafting } from "@/lib/drafting";
+import { draftResponse, findMatchingLesson, isCompatibleForDrafting, ticketContradictsLesson } from "@/lib/drafting";
 import type { LessonMatchResult } from "@/lib/drafting";
 import {
   buildKnowledgeItemFromPackCandidate,
@@ -1770,7 +1770,12 @@ export default function Home() {
       : null;
     const validationPayload = validatedLessonMatch ? buildDiscriminationLessonPayload(validatedLessonMatch) : undefined;
 
-    if (validatedLessonMatch && validatedLessonLabel) {
+    const contradictedValidatedLesson =
+      validatedLessonMatch && ticketContradictsLesson(ticket, validatedLessonMatch.lesson)
+        ? validatedLessonMatch
+        : null;
+
+    if (validatedLessonMatch && validatedLessonLabel && !contradictedValidatedLesson) {
       setDiscriminationReasoning(null);
       setDiscriminatedMatchTitle(null);
       addLogEntries([
@@ -1780,6 +1785,15 @@ export default function Home() {
         )
       ]);
       return topMatch;
+    }
+
+    if (contradictedValidatedLesson && validatedLessonLabel) {
+      addLogEntries([
+        createLogEntry(
+          "Strong lesson match requires discrimination",
+          `"${validatedLessonLabel}" matched strongly, but the ticket contains contradiction signals so AI discrimination still runs`
+        )
+      ]);
     }
 
     if (aiAdapter.config.mode === "disabled") return topMatch;
@@ -2183,12 +2197,12 @@ export default function Home() {
       items,
       canonicalProblem.title
     );
-    const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(und, m.item) || !!findMatchingLesson(selectedTicket ?? makeCustomTicket(analysis.summary, analysis.ticketId), m.item));
+    const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(und, m.item));
     const selectedMatchInfo =
       compatibleMatches.length > 0
         ? selectPreferredMatch(selectedTicket ?? makeCustomTicket(analysis.summary, analysis.ticketId), compatibleMatches)
         : null;
-    const topMatch = selectedMatchInfo?.match ?? (matches.length > 0 ? matches[0] : null);
+    const topMatch = selectedMatchInfo?.match ?? (compatibleMatches.length > 0 ? compatibleMatches[0] : null);
     const newReasoning = buildReasoning(und, topMatch);
     const newConfidence = buildConfidence(und, topMatch);
 
@@ -2228,7 +2242,7 @@ export default function Home() {
     const und = toUnderstanding(analysis);
     const canonicalProblem = identifyCanonicalProblem(und, organizationProfile);
     const lessonAwareMatches = withPreDiscriminationLessonMatches(ticket, und, matches, knowledgeItems, canonicalProblem.title);
-    const compatibleMatches = lessonAwareMatches.filter((m) => isCompatibleForDrafting(und, m.item) || !!findMatchingLesson(ticket, m.item));
+    const compatibleMatches = lessonAwareMatches.filter((m) => isCompatibleForDrafting(und, m.item));
     const selectedMatchInfo = compatibleMatches.length > 0 ? selectPreferredMatch(ticket, compatibleMatches) : null;
     const topMatch = selectedMatchInfo?.match ?? null;
     const lessonMatch = selectedMatchInfo?.lessonMatch ?? null;
@@ -2707,7 +2721,7 @@ export default function Home() {
     // MOST TRUSTED knowledge — that is what enables auto-resolution over time.
     // Category-incompatible items are excluded before the trust-based selection so
     // a high-trust Activation item cannot drive a Login ticket's reuse response.
-    const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(enrichedUnderstanding, m.item) || !!findMatchingLesson(second, m.item));
+    const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(enrichedUnderstanding, m.item));
     const selectedMatchInfo = compatibleMatches.length > 0 ? selectPreferredMatch(second, compatibleMatches) : null;
     const reusedMatch = selectedMatchInfo?.match ?? null;
     const reusedLessonMatch = selectedMatchInfo?.lessonMatch ?? null;
@@ -2741,7 +2755,10 @@ export default function Home() {
     // LLM discrimination on the reuse candidate — prevents false-positive memory reuse
     setDiscriminationReasoning(null);
     setDiscriminatedMatchTitle(null);
-    const effectiveReuseMatch = reusedLessonMatch && isStrongLessonMatch(reusedLessonMatch)
+    const effectiveReuseMatch =
+      reusedLessonMatch &&
+      isStrongLessonMatch(reusedLessonMatch) &&
+      !ticketContradictsLesson(second, reusedLessonMatch.lesson)
       ? reusedMatch
       : await requestMatchDiscrimination(second, reusedMatch, enrichedUnderstanding, reusedLessonMatch ?? undefined);
 
@@ -2940,7 +2957,7 @@ export default function Home() {
       knowledgeItems,
       canonicalProblem.title
     );
-    const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(enrichedUnderstanding, m.item) || !!findMatchingLesson(ticket, m.item));
+    const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(enrichedUnderstanding, m.item));
     const selectedMatchInfo = compatibleMatches.length > 0 ? selectPreferredMatch(ticket, compatibleMatches) : null;
     const topMatch = selectedMatchInfo?.match ?? null;
     const lessonMatchForRecord = selectedMatchInfo?.lessonMatch ?? null;
