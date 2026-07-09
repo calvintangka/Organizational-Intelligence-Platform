@@ -9,7 +9,12 @@ import type {
 } from "@/types";
 import { seedKnowledge } from "@/data/seedKnowledge";
 import { withLearningDefaults } from "@/lib/trustEngine";
-import { withCanonicalProblemDefaults, dedupeCanonicalProblems, repairCorruptedCustomerTemplates } from "@/lib/canonicalProblemEngine";
+import {
+  withCanonicalProblemDefaults,
+  dedupeCanonicalProblems,
+  repairCorruptedCustomerTemplates,
+  repairLegacyLessonResponseTemplates
+} from "@/lib/canonicalProblemEngine";
 import { clearTicketRecords } from "@/lib/ticketRecords";
 
 /**
@@ -75,8 +80,11 @@ export function loadKnowledge(): KnowledgeItem[] {
     const deduped = dedupeCanonicalProblems(normalized);
     // Self-heal: restore any generic customerResponseTemplate that a fixed bug had
     // overwritten with a lesson's specific response (see repairCorruptedCustomerTemplates).
-    const { items: repaired, repairedCount } = repairCorruptedCustomerTemplates(deduped);
-    if (deduped.length !== normalized.length || repairedCount > 0) {
+    const { items: repairedTemplates, repairedCount: repairedTemplateCount } = repairCorruptedCustomerTemplates(deduped);
+    // Self-heal legacy lesson customerResponse values that stored a specific
+    // customer greeting or hard-coded ticket reference instead of reusable placeholders.
+    const { items: repaired, repairedCount: repairedLessonCount } = repairLegacyLessonResponseTemplates(repairedTemplates);
+    if (deduped.length !== normalized.length || repairedTemplateCount > 0 || repairedLessonCount > 0) {
       saveKnowledge(repaired);
     }
     return repaired;

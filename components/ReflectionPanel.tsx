@@ -268,7 +268,7 @@ export function ReflectionPanel({ decision, onConfirm, existingLessons = [], rev
 
             <div>
               <label className={`text-xs font-bold uppercase tracking-wide ${textFaint}`}>Customer Response</label>
-              <p className={`mt-0.5 text-xs ${textFaint}`}>Use {"{{customerName}}"} and {"{{organizationName}}"} as placeholders</p>
+              <p className={`mt-0.5 text-xs ${textFaint}`}>Use {"{{customerName}}"}, {"{{ticketId}}"}, and {"{{organizationName}}"} as placeholders</p>
               <textarea value={customerResponse} onChange={(e) => setCustomerResponse(e.target.value)} placeholder="The customer-facing response template for this lesson" rows={4} className={`mt-1 w-full resize-none rounded-xl border px-3 py-2 text-sm ${inputBg}`} />
             </div>
 

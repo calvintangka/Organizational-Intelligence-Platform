@@ -1,8 +1,10 @@
 # Current Status
 
-This file is the fastest accurate snapshot of the prototype as of 2026-07-08.
+This file is the fastest accurate snapshot of the prototype as of 2026-07-09.
 
 ## What Changed Most Recently
+
+Fixed a high-severity lesson-reuse bug where deterministic fallback could leak the previous customer's greeting and ticket reference from a stored lesson response. The confirmed root cause was not AI availability and not lesson matching itself: reusable lesson rendering only substituted `{{greetingLine}}`, `{{customerName}}`, and `{{organizationName}}`, so a legacy lesson body that literally began `Hi Grace Adeyemi,` rendered that exact text for Derek Huang when AI drafting was unavailable. `lib/canonicalProblemEngine.ts` now normalizes legacy lesson greetings and literal ticket-reference lines into reusable placeholder form, renders `{{ticketId}}` deterministically alongside the existing placeholders, and `lib/drafting.ts` now appends the ticket reference only when the rendered draft does not already include the current one. `app/page.tsx`, `lib/knowledgePacks.ts`, and `lib/orgMemory.ts` also normalize lesson templates at reflection/import/load boundaries so new lessons stay reusable and existing stored lessons self-heal on load without touching unrelated top-level knowledge templates. Manual Derek/Grace regression probing confirmed `Hi Derek Huang,` and the correct current ticket id, with `Hi there,` as the missing-name fallback and no duplicate ticket reference line. See the 2026-07-09 entry in CHANGELOG.md.
 
 Fixed a contradictory match-state UI bug and a missing-name gap in the deterministic draft, found during a live test where both AI tiers failed on a ticket. (1) `processTicketPipeline()` (`app/page.tsx`) computed the Organizational Memory panel's match (`similarKnowledge`, set once from raw retrieval) separately from the match that actually drives the draft (`effectiveTopMatch`, adjusted by LLM discrimination which can reject a candidate as "distinct"). When discrimination rejected a match, the panel kept showing it while the draft correctly said "no matching knowledge found" — a genuine desync between two state values, not a stale-data or AI-failure-messaging bug (both of those hypotheses were checked and refuted). `setSimilarKnowledge` now drops a discrimination-rejected match so both displays agree. (2) The deterministic greeting-rendering plumbing was already correctly wired to use `understanding.extractedFields.senderName` — the actual gap was upstream: `lib/analyzer.ts`'s sender-name extractor only recognized a sign-off word alone on its own line ("Regards,\nSarah"), missing self-introductions ("This is Grace Adeyemi writing in") and same-line sign-offs ("Best, Grace Adeyemi") that a separate, better extractor (used only on the Cases-resume path) already handled. Extended `lib/analyzer.ts` with the same patterns so fresh tickets get the same extraction quality as resumed ones — the AI-draft path's F-2 personalization was untouched and still works. LM Studio's chain order was also verified live: for the reproduction ticket, LM Studio was genuinely attempted first and timed out, then Remote Gemma (unconfigured, 404), then Claude (missing key, 503) — the chain was not skipping tiers. See the 2026-07-09 entry in CHANGELOG.md.
 
@@ -19,6 +21,9 @@ Three-tier AI fallback chain implemented: LM Studio (local Gemma) → Claude API
 
 - Lessons as first-class learning objects
   `KnowledgeItem.lessons` is live, lessons can be authored during reflection or imported from a starter pack, and `findMatchingLesson()` can drive lesson-grounded drafts.
+
+- Lesson templates are now reusable across customers
+  Lesson `customerResponse` values support deterministic `{{customerName}}` and `{{ticketId}}` substitution, legacy lesson greetings/ticket references are normalized on load, and deterministic reuse no longer leaks another customer's name when AI drafting is unavailable.
 
 - Starter Knowledge Pack intake
   The Knowledge page can preview `.json` packs, warn on unknown classifier categories, import a pack as a pending `KnowledgeCandidate`, and validate it into memory through the existing governed commit path.

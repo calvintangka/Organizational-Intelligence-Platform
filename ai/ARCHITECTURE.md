@@ -46,7 +46,7 @@ The primary ticket flow starts in `processTicketPipeline()` in `app/page.tsx`. T
    `requestMatchDiscrimination()` in `app/page.tsx` optionally asks the LM Studio provider whether the best memory match is actually the same problem or a distinct one. A medium/high-confidence rejection forces the flow back to no-match behavior.
 
 10. Draft generation
-   `draftResponse()` in `lib/drafting.ts` produces the deterministic response candidate. `requestDraftAdvisory()` in `app/page.tsx` may layer an AI advisory draft on top, but the deterministic draft always remains the fallback and grounding source.
+   `draftResponse()` in `lib/drafting.ts` produces the deterministic response candidate. Reusable lesson/customer templates are normalized through `lib/canonicalProblemEngine.ts` before rendering, so stored lesson greetings and ticket-reference lines can be converted into `{{customerName}}` / `{{ticketId}}` form before deterministic reuse. `requestDraftAdvisory()` in `app/page.tsx` may layer an AI advisory draft on top, but the deterministic draft always remains the fallback and grounding source.
 
 11. Human review
    `approveResponse()` in `app/page.tsx` is the gate from drafted text to approved response. This step creates the reflection decision but does not yet write to organizational memory.
@@ -114,6 +114,8 @@ Canonical-problem mutation logic lives in `lib/canonicalProblemEngine.ts`:
 - `withCanonicalProblemDefaults()`
 
 Lessons are first-class learning objects stored on `KnowledgeItem.lessons`. `findMatchingLesson()` in `lib/drafting.ts` can override the generic template path with a lesson-grounded response. `confirmReflection()` can also attach or improve lessons during memory commit.
+
+Because lessons are meant to be reusable across many customers, lesson `customerResponse` content is now normalized at reflection/import/load time before deterministic rendering. Legacy greetings such as `Hi Grace Adeyemi,` and stored literal ticket-reference lines are repaired into placeholder-friendly form without changing the lesson's root-cause or solution metadata.
 
 Starter packs extend, rather than replace, that lesson model. Imported lessons use the same `Lesson` shape with extra optional fields such as `title`, `whenToEscalate`, and `doNotPromise`, so lesson-grounded drafting and later human edits still operate on one shared knowledge structure.
 
@@ -201,7 +203,7 @@ Persistence is intentionally simple and entirely client-side. `lib/orgMemory.ts`
 - intelligence log
 - emerging patterns
 
-There is no database, backend write API, authentication boundary, or multi-user concurrency model. `loadKnowledge()` normalizes and deduplicates stored knowledge through `withLearningDefaults()` and `withCanonicalProblemDefaults()` before the app hydrates.
+There is no database, backend write API, authentication boundary, or multi-user concurrency model. `loadKnowledge()` normalizes and deduplicates stored knowledge through `withLearningDefaults()` and `withCanonicalProblemDefaults()` before the app hydrates, then runs narrow self-heal migrations for corrupted top-level templates and legacy lesson-specific greetings/ticket references.
 
 ## UI View Structure
 

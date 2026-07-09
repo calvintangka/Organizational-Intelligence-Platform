@@ -155,12 +155,14 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `mergeIntoCanonicalProblem()` - Evidence merge path.
 - `upsertCanonicalProblem()` - Canonical upsert used during validated commit.
 - `withCanonicalProblemDefaults()` - Normalization and default fields.
+- `normalizeReusableResponseTemplate()` / `renderResponseTemplate()` - Shared reusable-template normalization and rendering. Repairs legacy lesson greetings like `Hi Grace Adeyemi,`, converts literal ticket references into `{{ticketId}}`, and renders `{{customerName}}`, `{{ticketId}}`, `{{organizationName}}`, and `{{greetingLine}}`.
 - `getCustomerResponseTemplate()` and `renderCustomerResponse()` - Deterministic customer template rendering.
 - `repairCorruptedCustomerTemplates()` - Self-heal for knowledge items whose generic `customerResponseTemplate` was previously overwritten by a lesson's `customerResponse` (fixed `create_version` bug); called from `lib/orgMemory.ts` `loadKnowledge()`.
+- `repairLegacyLessonResponseTemplates()` - Self-heal for stored lesson `customerResponse` values that captured customer-specific greetings or literal ticket references instead of reusable placeholders; called from `lib/orgMemory.ts` `loadKnowledge()`.
 
 ### `lib/drafting.ts`
 
-- `draftResponse()` - Deterministic draft generator.
+- `draftResponse()` - Deterministic draft generator. Uses the shared template renderer and appends the ticket reference only when the rendered lesson/memory draft does not already include the current ticket id.
 - `findMatchingLesson()` - Lesson-grounded override lookup.
 - `isCompatibleForDrafting()` - Category-safety gate for draft reuse.
 - Lesson-level `doNotPromise` guardrails reach AI lesson-grounded prompts through `requestDraftAdvisory()`.
@@ -178,7 +180,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 ### `lib/orgMemory.ts`
 
-- `loadKnowledge()` / `saveKnowledge()` - Knowledge persistence. `loadKnowledge()` also runs `repairCorruptedCustomerTemplates()` on every load as a one-time self-heal migration for lesson-corrupted generic templates.
+- `loadKnowledge()` / `saveKnowledge()` - Knowledge persistence. `loadKnowledge()` also runs `repairCorruptedCustomerTemplates()` and `repairLegacyLessonResponseTemplates()` on every load as self-heal migrations for corrupted generic templates and legacy lesson-specific greetings/ticket references.
 - `loadKnowledgeCandidates()` / `saveKnowledgeCandidates()` - Candidate persistence.
 - `loadValidationRecords()` / `saveValidationRecords()` - Validation-history persistence.
 - `loadMemoryChangeRecords()` / `saveMemoryChangeRecords()` - Memory-change audit persistence.
@@ -198,10 +200,10 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 - `parseKnowledgePack()` / `parseKnowledgePackText()` - Runtime validation and preview preparation for pack JSON.
 - `getKnowledgePackCategoryWarning()` - Preview warning when the pack category is not recognized by the classifier.
-- `buildPackLessons()` - Converts pack lessons into shared `Lesson` records.
+- `buildPackLessons()` - Converts pack lessons into shared `Lesson` records and normalizes reusable lesson placeholders before they enter memory.
 - `buildPackCandidateContent()` - Shapes the import payload stored on a proposed `KnowledgeCandidate`.
 - `candidateToPackDraft()` - Rehydrates an editable draft for review in the Knowledge view.
-- `buildKnowledgeItemFromPackCandidate()` - Converts an approved pack candidate into the final `KnowledgeItem` payload used by the shared commit path.
+- `buildKnowledgeItemFromPackCandidate()` - Converts an approved pack candidate into the final `KnowledgeItem` payload used by the shared commit path, normalizing edited lesson response templates before commit.
 
 ### `lib/ai/*`
 

@@ -237,6 +237,92 @@ function makeSlug(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+const GENERIC_GREETING_ADDRESSEES = new Set([
+  "there",
+  "team",
+  "support",
+  "support team",
+  "customer",
+  "everyone",
+  "all"
+]);
+
+const LEGACY_TICKET_REFERENCE_PATTERNS = [
+  /Your ticket reference is\s+MT-\d{8}-\d{4}\./gi,
+  /Ticket reference:\s*MT-\d{8}-\d{4}/gi
+];
+
+function normalizeGreetingWord(value: string): "Hi" | "Hello" | "Dear" {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "dear") return "Dear";
+  if (normalized === "hello") return "Hello";
+  return "Hi";
+}
+
+function looksLikeSpecificCustomerName(value: string): boolean {
+  const candidate = value.trim();
+  if (!candidate || candidate.includes("{{")) return false;
+
+  const lowered = candidate.toLowerCase();
+  if (GENERIC_GREETING_ADDRESSEES.has(lowered)) return false;
+
+  const tokens = candidate.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0 || tokens.length > 4) return false;
+
+  return tokens.every((token) => /^[A-Z][A-Za-z.'-]*$/.test(token));
+}
+
+export function normalizeReusableResponseTemplate(template: string): string {
+  if (!template.trim()) return template;
+
+  const lines = template.replace(/\r\n/g, "\n").split("\n");
+  const firstLine = lines[0]?.trim() ?? "";
+  const greetingMatch = firstLine.match(/^(Hi|Hello|Dear)\s+([^,\n]+),\s*$/i);
+
+  if (greetingMatch && looksLikeSpecificCustomerName(greetingMatch[2])) {
+    lines[0] = `${normalizeGreetingWord(greetingMatch[1])} {{customerName}},`;
+  }
+
+  let normalized = lines.join("\n");
+  for (const pattern of LEGACY_TICKET_REFERENCE_PATTERNS) {
+    normalized = normalized.replace(pattern, (match) =>
+      match.toLowerCase().startsWith("your ticket reference is")
+        ? "Your ticket reference is {{ticketId}}."
+        : "Ticket reference: {{ticketId}}"
+    );
+  }
+
+  return normalized;
+}
+
+export function templateIncludesTicketReference(template: string): boolean {
+  const normalized = normalizeReusableResponseTemplate(template);
+  return normalized.includes("{{ticketId}}") || /MT-\d{8}-\d{4}/.test(normalized);
+}
+
+export function renderResponseTemplate(
+  template: string,
+  context: {
+    greetingLine: string;
+    customerName: string;
+    organizationName: string;
+    ticketId?: string;
+  }
+): string {
+  const ticketId = context.ticketId?.trim() ?? "";
+  let rendered = normalizeReusableResponseTemplate(template)
+    .replaceAll("{{greetingLine}}", context.greetingLine)
+    .replaceAll("{{customerName}}", context.customerName)
+    .replaceAll("{{organizationName}}", context.organizationName)
+    .replaceAll("{{ticketId}}", ticketId);
+
+  if (!ticketId) {
+    rendered = rendered.replace(/^[ \t]*(?:Your ticket reference is|Ticket reference:)\s*\.?\s*$/gim, "");
+  }
+
+  return rendered.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 export function resolveCustomerAddressingName(ticket: Ticket, understanding?: Understanding): string | null {
   const extractedName = understanding?.extractedFields.senderName?.trim();
   if (extractedName) return extractedName;
@@ -273,10 +359,12 @@ export function renderCustomerTemplateForTicket(
   understanding?: Understanding
 ): string {
   const resolvedName = resolveCustomerAddressingName(ticket, understanding);
-  return template
-    .replaceAll("{{greetingLine}}", buildGreetingLine(ticket, profile, understanding))
-    .replaceAll("{{customerName}}", resolvedName ?? "there")
-    .replaceAll("{{organizationName}}", profile.name);
+  return renderResponseTemplate(template, {
+    greetingLine: buildGreetingLine(ticket, profile, understanding),
+    customerName: resolvedName ?? "there",
+    organizationName: profile.name,
+    ticketId: ticket.ticketId
+  });
 }
 
 function toneIntro(profile: OrganizationProfile): string {
@@ -1217,5 +1305,46 @@ export function repairCorruptedCustomerTemplates(
       lastUpdated: at
     };
   });
+  return { items: result, repairedCount };
+}
+
+export function repairLegacyLessonResponseTemplates(items: KnowledgeItem[]): { items: KnowledgeItem[]; repairedCount: number } {
+  let repairedCount = 0;
+
+  const result = items.map((raw, index) => {
+    const item = withCanonicalProblemDefaults(raw);
+    if (!item.lessons || item.lessons.length === 0) return item;
+
+    let itemChanged = false;
+    const repairedLessons = item.lessons.map((lesson) => {
+      const normalizedResponse = normalizeReusableResponseTemplate(lesson.customerResponse);
+      if (normalizedResponse === lesson.customerResponse) return lesson;
+      repairedCount++;
+      itemChanged = true;
+      return {
+        ...lesson,
+        customerResponse: normalizedResponse
+      };
+    });
+
+    if (!itemChanged) return item;
+
+    const at = new Date().toISOString();
+    return {
+      ...item,
+      lessons: repairedLessons,
+      learningHistory: [
+        ...(item.learningHistory ?? []),
+        {
+          id: `${item.canonicalProblemId ?? item.id}-history-lesson-template-repair-${index}-${Date.now()}`,
+          event: "Data integrity fix: reusable lesson templates normalized",
+          detail: "Legacy lesson customer-response templates were normalized to reusable placeholders before deterministic rendering. Customer-specific greetings and stored ticket references were converted to placeholder form without changing the lesson's solution or routing guidance.",
+          createdAt: at
+        }
+      ],
+      lastUpdated: at
+    };
+  });
+
   return { items: result, repairedCount };
 }

@@ -33,6 +33,7 @@ import {
   getCustomerResponseTemplate,
   identifyCanonicalProblem,
   mergeIntoCanonicalProblem,
+  normalizeReusableResponseTemplate,
   upsertCanonicalProblem,
   withCanonicalProblemDefaults
 } from "@/lib/canonicalProblemEngine";
@@ -1706,7 +1707,9 @@ export default function Home() {
         : "no organizational knowledge";
     const groundingContent =
       draftMode === "lesson_grounded"
-        ? lessonMatch?.lesson.customerResponse ?? deterministicDraft
+        ? lessonMatch
+          ? normalizeReusableResponseTemplate(lessonMatch.lesson.customerResponse)
+          : deterministicDraft
         : draftMode === "memory_grounded"
         ? deterministicDraft
         : "";
@@ -1745,7 +1748,7 @@ export default function Home() {
         ? {
             rootCause: lessonMatch.lesson.rootCause,
             solution: lessonMatch.lesson.solution,
-            customerResponse: lessonMatch.lesson.customerResponse,
+            customerResponse: normalizeReusableResponseTemplate(lessonMatch.lesson.customerResponse),
             matchedSignals: lessonMatch.matchedSignals,
             doNotPromise: lessonMatch.lesson.doNotPromise
           }
@@ -2072,13 +2075,14 @@ export default function Home() {
 
   function applyLessonToItem(item: KnowledgeItem, lessonDraft: LessonDraft, ticketId: string, now: string): KnowledgeItem {
     const existingLessons = item.lessons ?? [];
+    const normalizedCustomerResponse = normalizeReusableResponseTemplate(lessonDraft.customerResponse);
 
     if (lessonDraft.mode === "new") {
       const lesson: Lesson = {
         id: `lesson-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         rootCause: lessonDraft.rootCause,
         solution: lessonDraft.solution,
-        customerResponse: lessonDraft.customerResponse,
+        customerResponse: normalizedCustomerResponse,
         signals: lessonDraft.signals,
         createdAt: now,
         sourceTicketId: ticketId
@@ -2091,7 +2095,7 @@ export default function Home() {
         ...item,
         lessons: existingLessons.map(l =>
           l.id === lessonDraft.existingLessonId
-            ? { ...l, rootCause: lessonDraft.rootCause, solution: lessonDraft.solution, customerResponse: lessonDraft.customerResponse, signals: lessonDraft.signals }
+            ? { ...l, rootCause: lessonDraft.rootCause, solution: lessonDraft.solution, customerResponse: normalizedCustomerResponse, signals: lessonDraft.signals }
             : l
         )
       };

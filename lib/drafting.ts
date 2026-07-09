@@ -142,6 +142,11 @@ function applyProfileTone(draft: string, ticket: Ticket, profile: OrganizationPr
   return `${tonePrefix(profile, ticket, understanding)} ${withoutLegacyGreeting}${closing}`;
 }
 
+function appendTicketReferenceIfNeeded(draft: string, ticketId: string | undefined): string {
+  if (!ticketId || draft.includes(ticketId)) return draft;
+  return `${draft}\n\nYour ticket reference is ${ticketId}.`;
+}
+
 export function draftResponse(
   ticket: Ticket,
   understanding: Understanding,
@@ -154,9 +159,7 @@ export function draftResponse(
   let draft = profileTemplate.includes("{{customerName}}") || profileTemplate.includes("{{greetingLine}}")
     ? renderCustomerTemplateForTicket(profileTemplate, ticket, profile, understanding)
     : applyProfileTone(templateFn(ticket), ticket, profile, understanding);
-  if (ticket.ticketId && !draft.includes(ticket.ticketId)) {
-    draft += `\n\nYour ticket reference is ${ticket.ticketId}.`;
-  }
+  draft = appendTicketReferenceIfNeeded(draft, ticket.ticketId);
   let confidenceNote: string;
   const basedOnKnowledgeIds: string[] = [];
 
@@ -171,7 +174,7 @@ export function draftResponse(
 
   if (lessonMatch && compatibleMatch) {
     draft = renderLessonResponse(lessonMatch.lesson, ticket, profile, understanding);
-    if (ticket.ticketId) draft += `\n\nYour ticket reference is ${ticket.ticketId}.`;
+    draft = appendTicketReferenceIfNeeded(draft, ticket.ticketId);
     const lessonLabel = lessonMatch.lesson.title ?? lessonMatch.lesson.rootCause;
     confidenceNote = `Lesson-informed draft: "${lessonLabel}" (matched signals: ${lessonMatch.matchedSignals.join(", ")}). Root cause: ${lessonMatch.lesson.rootCause}. Solution: ${lessonMatch.lesson.solution}. Human review is still required unless trust allows auto-resolution.`;
     basedOnKnowledgeIds.push(compatibleMatch.item.id);
@@ -189,12 +192,12 @@ export function draftResponse(
 
   if (compatibleMatch && compatibleMatch.matchScore >= 55) {
     draft = renderCustomerResponse(compatibleMatch.item, ticket, profile, understanding);
-    if (ticket.ticketId) draft += `\n\nYour ticket reference is ${ticket.ticketId}.`;
+    draft = appendTicketReferenceIfNeeded(draft, ticket.ticketId);
     confidenceNote = `Medium-high confidence (canonical problem match ${compatibleMatch.matchScore}%). This draft uses the customer-facing response template, not internal agent guidance. Human review is still required unless trust allows auto-resolution.`;
     basedOnKnowledgeIds.push(compatibleMatch.item.id);
   } else if (compatibleMatch && compatibleMatch.matchScore > 0) {
     draft = renderCustomerResponse(compatibleMatch.item, ticket, profile, understanding);
-    if (ticket.ticketId) draft += `\n\nYour ticket reference is ${ticket.ticketId}.`;
+    draft = appendTicketReferenceIfNeeded(draft, ticket.ticketId);
     confidenceNote = `Low-medium confidence (partial canonical problem match ${compatibleMatch.matchScore}%). The customer-facing template is used, but human review is required.`;
     basedOnKnowledgeIds.push(compatibleMatch.item.id);
   } else if (rejectedForCategory) {

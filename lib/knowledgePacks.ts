@@ -11,7 +11,7 @@ import type {
   Understanding
 } from "@/types";
 import { isRecognizedClassifierCategory } from "@/lib/analyzer";
-import { createCanonicalProblem } from "@/lib/canonicalProblemEngine";
+import { createCanonicalProblem, normalizeReusableResponseTemplate } from "@/lib/canonicalProblemEngine";
 
 function assertString(value: unknown, label: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -128,7 +128,7 @@ export function buildPackLessons(pack: KnowledgePack, createdAt: string): Lesson
     title: lesson.title,
     rootCause: lesson.rootCause,
     solution: lesson.solution,
-    customerResponse: lesson.customerResponse,
+    customerResponse: normalizeReusableResponseTemplate(lesson.customerResponse),
     signals: [...lesson.signals],
     whenToEscalate: lesson.whenToEscalate,
     doNotPromise: [...lesson.doNotPromise],
@@ -190,8 +190,12 @@ export function buildKnowledgeItemFromPackCandidate(
   organizationProfile: OrganizationProfile,
   createdAt: string
 ): KnowledgeItem {
+  const normalizedLessons = draft.lessons.map((lesson) => ({
+    ...lesson,
+    customerResponse: normalizeReusableResponseTemplate(lesson.customerResponse)
+  }));
   const sourceLabel = candidate.proposedContent.importMetadata?.sourceLabel ?? candidate.sourceTicketIds[0] ?? "knowledge_pack:unknown";
-  const signalTags = draft.lessons
+  const signalTags = normalizedLessons
     .flatMap((lesson) => lesson.signals)
     .flatMap((signal) => signal.toLowerCase().split(/[^a-z0-9]+/))
     .filter((token) => token.length > 2);
@@ -205,7 +209,7 @@ export function buildKnowledgeItemFromPackCandidate(
       category: draft.category,
       description: draft.problemSummary
     },
-    lessons: draft.lessons.map((lesson) => ({
+    lessons: normalizedLessons.map((lesson) => ({
       title: lesson.rootCause,
       rootCause: lesson.rootCause,
       solution: lesson.solution,
@@ -268,7 +272,7 @@ export function buildKnowledgeItemFromPackCandidate(
     internalGuidance: draft.internalGuidance,
     customerResponseTemplate: draft.customerResponseTemplate,
     approvedAnswer: draft.customerResponseTemplate,
-    lessons: draft.lessons,
+    lessons: normalizedLessons,
     exampleTickets: [
       {
         ticketId: sourceLabel,
@@ -292,7 +296,7 @@ export function buildKnowledgeItemFromPackCandidate(
       {
         id: `${created.canonicalProblemId}-history-pack-import`,
         event: "Starter knowledge pack validated",
-        detail: `${candidate.proposedContent.importMetadata?.packName ?? draft.canonicalProblemTitle} imported with ${draft.lessons.length} approved lessons.`,
+        detail: `${candidate.proposedContent.importMetadata?.packName ?? draft.canonicalProblemTitle} imported with ${normalizedLessons.length} approved lessons.`,
         createdAt
       }
     ]
