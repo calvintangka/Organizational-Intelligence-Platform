@@ -6,6 +6,7 @@ import {
   identifyCanonicalProblem,
   withCanonicalProblemDefaults
 } from "@/lib/canonicalProblemEngine";
+import { findMatchingLesson } from "@/lib/drafting";
 import type {
   BulkAnalyzedQuery,
   BulkAnalysisProgress,
@@ -103,6 +104,18 @@ function scoreFieldName(key: string, hints: string[]): number {
   return score;
 }
 
+/**
+ * True when `key` is unambiguously a query/subject-shaped field (exact hint
+ * match, e.g. "subject", "message", "query"). Such a field must never be
+ * accepted as the resolution field — doing so is what let a raw subject line
+ * flow into a knowledge item's customer response as if it were a real answer.
+ * This is enforced here (not just in the suggestion heuristic) so it holds
+ * even for a caller-supplied mapping that bypasses field auto-suggestion.
+ */
+function isMessageShapedField(key: string): boolean {
+  return key !== "__subject_body__" && scoreFieldName(key, MESSAGE_FIELD_HINTS) >= 5;
+}
+
 function collectFieldOptions(rows: ParsedObjectRow[]): BulkUploadFieldOption[] {
   const keys = Array.from(new Set(rows.flatMap((row) => Object.keys(row))));
   const options = keys.map((key) => ({
@@ -149,10 +162,12 @@ function suggestField(
 
 function buildMappingRequest(rows: ParsedObjectRow[]): BulkUploadMappingRequest {
   const fieldOptions = collectFieldOptions(rows);
+  const resolutionFieldOptions = fieldOptions.filter((option) => !isMessageShapedField(option.key));
   const message = suggestField(fieldOptions, MESSAGE_FIELD_HINTS, true);
-  const resolution = suggestField(fieldOptions, RESOLUTION_FIELD_HINTS);
+  const resolution = suggestField(resolutionFieldOptions, RESOLUTION_FIELD_HINTS);
   return {
     fieldOptions,
+    resolutionFieldOptions,
     suggestedMessageField: message.key,
     suggestedResolutionField: resolution.key
   };
@@ -173,9 +188,16 @@ function extractEntriesFromObjectRows(
   const mappingRequest = buildMappingRequest(rows);
   const fieldOptions = mappingRequest.fieldOptions;
   const messageSuggestion = suggestField(fieldOptions, MESSAGE_FIELD_HINTS, true);
-  const resolutionSuggestion = suggestField(fieldOptions, RESOLUTION_FIELD_HINTS);
+  const resolutionSuggestion = suggestField(mappingRequest.resolutionFieldOptions, RESOLUTION_FIELD_HINTS);
   const messageField = mapping?.messageField ?? mappingRequest.suggestedMessageField;
-  const resolutionField = mapping?.resolutionField ?? mappingRequest.suggestedResolutionField;
+  const rawResolutionField = mapping?.resolutionField ?? mappingRequest.suggestedResolutionField;
+  // A field that is itself query/subject-shaped (or is literally the same
+  // column as the message field) can never be a legitimate resolution source
+  // — treat it as "no resolution field" rather than let it flow through.
+  const resolutionField =
+    rawResolutionField && rawResolutionField !== messageField && !isMessageShapedField(rawResolutionField)
+      ? rawResolutionField
+      : undefined;
 
   const needsMapping =
     !mapping &&
@@ -523,6 +545,13 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
   let analysisMode: BulkAnalysisMode = aiAdapter.config.mode === "disabled" ? "deterministic" : "ai_assisted";
   let usedAIAssistance = false;
   let fallbackUsed = false;
+  // Bug fix: the "Clustered via X" badge must reflect whichever tier actually
+  // returned a successful response, not the AI adapter's static chain-level
+  // label (which always names every tier, e.g. "AI Chain (LM Studio → Remote
+  // Gemma → Claude API)" — a string that always contains "Claude" regardless
+  // of whether Claude ever ran or succeeded). Track the most recent genuinely
+  // successful call's own providerLabel instead.
+  let actualProviderLabel: string | undefined;
   // F-3: track AI call attempts so a single bad response no longer flips the
   // mode to "deterministic_fallback". A majority-failure threshold is applied
   // at the end of the loop.
@@ -560,6 +589,7 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
       });
       if (result.ok && result.data) {
         usedAIAssistance = true;
+        actualProviderLabel = result.providerLabel ?? actualProviderLabel;
         if (result.data.isDistinctFromMatch && result.data.confidence !== "low") {
           reasoningParts.push(`AI rejected the existing-memory match: ${result.data.reasoning}`);
           existingMatch = null;
@@ -597,8 +627,10 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
     }
   }
 
-  const providerLabel = aiAdapter.provider.label;
-  const unclustered = createUnclusteredBucket(providerLabel, analysisMode);
+  // Placeholder for the unclustered bucket; the real value (actual succeeding
+  // tier if any AI call succeeded, else the static chain label for display in
+  // non-"ai_assisted" contexts) is only known after the loop below runs.
+  const unclustered = createUnclusteredBucket(aiAdapter.provider.label, analysisMode);
   const clusterMap = new Map<string, BulkAnalyzedQuery[]>();
 
   for (const query of analyzedQueries) {
@@ -630,9 +662,16 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
       ? withCanonicalProblemDefaults(representative.existingMatch.item)
       : null;
     const providedResolutions = items.map((item) => item.entry.resolution ?? "").filter((value) => value.trim().length > 0);
+    // When the source file supplied no real resolutions, ground the proposed
+    // response in the matched knowledge item's own content instead of leaving
+    // it blank or synthesizing something new: prefer a lesson whose signals
+    // match this cluster's representative ticket (reuses the same
+    // lesson-matching logic single-ticket drafting already relies on), and
+    // only fall back to the item's generic template when no lesson matches.
+    const matchedLesson = existingKnowledge ? findMatchingLesson(representative.ticket, existingKnowledge) : null;
     const proposedTemplate = providedResolutions.length > 0
       ? summarizeResolution(providedResolutions)
-      : existingKnowledge?.customerResponseTemplate ?? "";
+      : matchedLesson?.lesson.customerResponse ?? existingKnowledge?.customerResponseTemplate ?? "";
     const proposedAction =
       existingKnowledge && proposedTemplate
         ? overlapRatio(proposedTemplate, existingKnowledge.customerResponseTemplate ?? existingKnowledge.approvedAnswer) < 0.65
@@ -657,6 +696,7 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
       aiCallAttempts += 1;
       if (advisory.ok && advisory.data) {
         usedAIAssistance = true;
+        actualProviderLabel = advisory.providerLabel ?? actualProviderLabel;
         if (advisory.data.rationale?.trim()) {
           reasoning = advisory.data.rationale.trim();
         }
@@ -694,7 +734,9 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
       confidence: averageConfidence(items),
       reasoning,
       analysisMode,
-      providerLabel
+      // Placeholder; the real value is only known once every AI call in this
+      // function has run (see the final pass below via applyMode/applyLabel).
+      providerLabel: aiAdapter.provider.label
     });
   }
 
@@ -715,7 +757,13 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
     analysisMode = "deterministic";
   }
 
-  const applyMode = (cluster: BulkCluster): BulkCluster => ({ ...cluster, analysisMode });
+  // The label shown to the user must name the tier that actually produced a
+  // successful response, never the adapter's static "names every tier" chain
+  // label (see actualProviderLabel comment above). Falls back to the static
+  // label only when no AI call ever succeeded, purely for diagnostic/disabled
+  // display contexts that don't branch on tier-specific substrings.
+  const providerLabel = actualProviderLabel ?? aiAdapter.provider.label;
+  const applyMode = (cluster: BulkCluster): BulkCluster => ({ ...cluster, analysisMode, providerLabel });
   updateProgress(onProgress, entries.length, entries.length, "Analysis complete");
 
   return {

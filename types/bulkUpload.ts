@@ -23,6 +23,10 @@ export interface BulkUploadFieldOption {
 
 export interface BulkUploadMappingRequest {
   fieldOptions: BulkUploadFieldOption[];
+  /** fieldOptions minus any field that is unambiguously query/subject-shaped
+   * (e.g. "subject", "message"). A subject-line field must never be offered
+   * as a resolution candidate, since it is never a real customer response. */
+  resolutionFieldOptions: BulkUploadFieldOption[];
   suggestedMessageField?: string;
   suggestedResolutionField?: string;
 }

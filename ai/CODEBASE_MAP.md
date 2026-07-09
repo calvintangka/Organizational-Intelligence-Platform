@@ -189,8 +189,8 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 ### `lib/bulkUpload.ts`
 
-- `parseBulkUploadFile()` - Multi-format bulk file parser.
-- `analyzeBulkEntries()` - Bulk deterministic/AI-assisted analysis loop.
+- `parseBulkUploadFile()` - Multi-format bulk file parser. Rejects a resolution-field mapping that is itself query/subject-shaped or identical to the message field (`isMessageShapedField()`), so a subject/message column can never populate `entry.resolution`.
+- `analyzeBulkEntries()` - Bulk deterministic/AI-assisted analysis loop. `providerLabel` on the result and every cluster reflects whichever tier's call actually returned `ok: true` (tracked via `actualProviderLabel`), never the AI adapter's static chain-level label. When a cluster has no real resolutions, the proposed response is grounded via `findMatchingLesson()` (from `lib/drafting.ts`) against the matched knowledge item before falling back to its generic `customerResponseTemplate`.
 - `prepareBulkClusterCommit()` - Validated bulk cluster to memory-mutation draft.
 - `getBulkUploadLimit()` - Batch cap.
 

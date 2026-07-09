@@ -1,16 +1,16 @@
 # Graph Report - Hackathon 2  (2026-07-09)
 
 ## Corpus Check
-- 263 files · ~994,426 words
+- 208 files · ~628,827 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 6195 nodes · 8839 edges · 381 communities (325 shown, 56 thin omitted)
+- 5893 nodes · 8180 edges · 371 communities (317 shown, 54 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 13 edges (avg confidence: 0.55)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `d22703da`
+- Built from commit: `4d5f8eac`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -203,9 +203,11 @@
 - [[_COMMUNITY_3. API Categories|3. API Categories]]
 - [[_COMMUNITY_API Architecture|API Architecture]]
 - [[_COMMUNITY_Derived From|Derived From]]
+- [[_COMMUNITY_MemoryNetworkOverlay.tsx|MemoryNetworkOverlay.tsx]]
 - [[_COMMUNITY_Derived From|Derived From]]
 - [[_COMMUNITY_Documentation|Documentation]]
 - [[_COMMUNITY_11. Private Beta Experiments|11. Private Beta Experiments]]
+- [[_COMMUNITY_17. Security Evolution|17. Security Evolution]]
 - [[_COMMUNITY_Derived From|Derived From]]
 - [[_COMMUNITY_7. Agent Collaboration Patterns|7. Agent Collaboration Patterns]]
 - [[_COMMUNITY_3. Organizational Entropy The Cost of Forgetting|3. Organizational Entropy: The Cost of Forgetting]]
@@ -231,6 +233,8 @@
 - [[_COMMUNITY_5. Primary Workflows|5. Primary Workflows]]
 - [[_COMMUNITY_Roadmap Alignment|Roadmap Alignment]]
 - [[_COMMUNITY_13. Internal Layering|13. Internal Layering]]
+- [[_COMMUNITY_5. Core Positioning Pillars|5. Core Positioning Pillars]]
+- [[_COMMUNITY_12. Caching Strategy|12. Caching Strategy]]
 - [[_COMMUNITY_Implementation|Implementation]]
 - [[_COMMUNITY_Derived From|Derived From]]
 - [[_COMMUNITY_3. Agent Architecture Philosophy|3. Agent Architecture Philosophy]]
@@ -264,6 +268,8 @@
 - [[_COMMUNITY_Knowledge Discovery Workflow|Knowledge Discovery Workflow]]
 - [[_COMMUNITY_Organizational Learning Workflow|Organizational Learning Workflow]]
 - [[_COMMUNITY_Governance|Governance]]
+- [[_COMMUNITY_3. Information Temperature Model|3. Information Temperature Model]]
+- [[_COMMUNITY_13. Category Narrative|13. Category Narrative]]
 - [[_COMMUNITY_Derived From|Derived From]]
 - [[_COMMUNITY_9. Information Flow|9. Information Flow]]
 - [[_COMMUNITY_8. Agent Communication Principles|8. Agent Communication Principles]]
@@ -280,6 +286,7 @@
 - [[_COMMUNITY_13. MVP Knowledge Model|13. MVP Knowledge Model]]
 - [[_COMMUNITY_15. Cognitive Execution|15. Cognitive Execution]]
 - [[_COMMUNITY_Derived From|Derived From]]
+- [[_COMMUNITY_Operations Manager|Operations Manager]]
 - [[_COMMUNITY_Resolve a Customer Issue|Resolve a Customer Issue]]
 - [[_COMMUNITY_AI Assistance|AI Assistance]]
 - [[_COMMUNITY_Knowledge Capture|Knowledge Capture]]
@@ -364,65 +371,48 @@
 - [[_COMMUNITY_postcss.config.mjs|postcss.config.mjs]]
 - [[_COMMUNITY_tailwind.config.ts|tailwind.config.ts]]
 - [[_COMMUNITY_wait|wait]]
-- [[_COMMUNITY_clickByContains|clickByContains]]
 - [[_COMMUNITY_Load-Bearing Functions|Load-Bearing Functions]]
-- [[_COMMUNITY_snapFull|snapFull]]
 - [[_COMMUNITY_E2E Audit Report — Maesa Tech  OIP Prototype|E2E Audit Report — Maesa Tech / OIP Prototype]]
 - [[_COMMUNITY_Change Log|Change Log]]
-- [[_COMMUNITY_audit.js|audit.js]]
-- [[_COMMUNITY_multi4.mjs|multi4.mjs]]
 - [[_COMMUNITY_OIP Prototype Architecture|OIP Prototype Architecture]]
-- [[_COMMUNITY_multi3.mjs|multi3.mjs]]
-- [[_COMMUNITY_multi6.mjs|multi6.mjs]]
-- [[_COMMUNITY_pass2.js|pass2.js]]
-- [[_COMMUNITY_A_full2.mjs|A_full2.mjs]]
 - [[_COMMUNITY_Decisions|Decisions]]
-- [[_COMMUNITY_A_full.mjs|A_full.mjs]]
 - [[_COMMUNITY_OIP Prototype Boundaries|OIP Prototype Boundaries]]
-- [[_COMMUNITY_A_batch.mjs|A_batch.mjs]]
-- [[_COMMUNITY_verify_fixes.mjs|verify_fixes.mjs]]
 - [[_COMMUNITY_Coding Workflow|Coding Workflow]]
 - [[_COMMUNITY_route.ts|route.ts]]
-- [[_COMMUNITY_regression.mjs|regression.mjs]]
 - [[_COMMUNITY_Brain Workflow|Brain Workflow]]
 - [[_COMMUNITY_Current Status|Current Status]]
 - [[_COMMUNITY_route.ts|route.ts]]
-- [[_COMMUNITY_kill-watcher.js|kill-watcher.js]]
 - [[_COMMUNITY_AI Agent Workflow|AI Agent Workflow]]
 - [[_COMMUNITY_Prompt Library|Prompt Library]]
-- [[_COMMUNITY_package.json|package.json]]
-- [[_COMMUNITY_probe.js|probe.js]]
-- [[_COMMUNITY_mock-lm.js|mock-lm.js]]
-- [[_COMMUNITY_{ chromium }|{ chromium }]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `wait()` - 135 edges
-2. `clickByContains()` - 112 edges
-3. `Product Requirements` - 87 edges
-4. `Product Philosophy` - 81 edges
-5. `Product Strategy` - 80 edges
-6. `Indonesia Market Research` - 78 edges
-7. `Technology Research` - 76 edges
-8. `Experiments` - 76 edges
-9. `Competitor Research` - 75 edges
-10. `MVP Features` - 74 edges
+1. `Product Requirements` - 87 edges
+2. `Product Philosophy` - 81 edges
+3. `Product Strategy` - 80 edges
+4. `Indonesia Market Research` - 78 edges
+5. `Technology Research` - 76 edges
+6. `Experiments` - 76 edges
+7. `Competitor Research` - 75 edges
+8. `MVP Features` - 74 edges
+9. `Research Backlog` - 72 edges
+10. `AI Research` - 71 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `DraftSafetyContext` --references--> `DraftGroundingMode`  [EXTRACTED]
   app/page.tsx → types/ai.ts
+- `Home()` --indirect_call--> `seedOrganizationalKnowledge()`  [INFERRED]
+  app/page.tsx → lib/orgMemory.ts
+- `Home()` --indirect_call--> `seedOrgMetrics()`  [INFERRED]
+  app/page.tsx → lib/orgMemory.ts
+- `Props` --references--> `KnowledgeItem`  [EXTRACTED]
+  components/MemoryNetworkOverlay.tsx → types/knowledge.ts
 - `OrganizationProfilePanelProps` --references--> `OrganizationProfile`  [EXTRACTED]
   components/OrganizationProfilePanel.tsx → types/organization.ts
-- `SimilarKnowledgeListProps` --references--> `KnowledgeMatch`  [EXTRACTED]
-  components/SimilarKnowledgeList.tsx → types/knowledge.ts
-- `OrganizationViewProps` --references--> `OrganizationProfile`  [EXTRACTED]
-  components/views/OrganizationView.tsx → types/organization.ts
-- `Home()` --calls--> `initialsFor()`  [EXTRACTED]
-  app/page.tsx → lib/organizationProfile.ts
 
 ## Import Cycles
 - None detected.
 
-## Communities (381 total, 56 thin omitted)
+## Communities (371 total, 54 thin omitted)
 
 ### Community 0 - "README.md"
 Cohesion: 0.10
@@ -458,7 +448,7 @@ Nodes (74): 10. Sustainable Differentiation, 11. Indonesia Competitive Landscape
 
 ### Community 8 - "lmStudio.ts"
 Cohesion: 0.05
-Nodes (67): DemoScenarioSelectorProps, TicketCardProps, createAIAdapter(), createChainProvider(), createDisabledProvider(), callClaudeCompletion(), ClaudeCallOptions, createClaudeAPIProvider() (+59 more)
+Nodes (70): DemoScenarioSelectorProps, ProvenancePanelProps, TicketCardProps, createAIAdapter(), createChainProvider(), createDisabledProvider(), callClaudeCompletion(), ClaudeCallOptions (+62 more)
 
 ### Community 9 - "Research Backlog"
 Cohesion: 0.03
@@ -498,15 +488,15 @@ Nodes (59): 10. MVP Success Metrics, 11. Metric Governance, 12. Repository Integ
 
 ### Community 18 - "page.tsx"
 Cohesion: 0.07
-Nodes (45): ACTIVATION_ALLOWED_TOPIC_TERMS, ACTIVATION_FORBIDDEN_DRAFT_TERMS, ACTIVATION_REQUIRED_DRAFT_TERMS, aiAdapter, applyAdvisoryExtractedFields(), createInitialMetrics(), DraftSafetyContext, EMAIL_RECOVERY_FORBIDDEN_DRAFT_TERMS (+37 more)
+Nodes (43): ACTIVATION_ALLOWED_TOPIC_TERMS, ACTIVATION_FORBIDDEN_DRAFT_TERMS, ACTIVATION_REQUIRED_DRAFT_TERMS, aiAdapter, applyAdvisoryExtractedFields(), DraftSafetyContext, EMAIL_RECOVERY_FORBIDDEN_DRAFT_TERMS, EMAIL_RECOVERY_VALIDATION_TERMS (+35 more)
 
 ### Community 19 - "Workflow Design"
 Cohesion: 0.04
 Nodes (56): 10. Human Review Boundaries, 11. Governance Throughout Workflows, 12. Knowledge Lifecycle Integration, 13. Workflow Success Measures, 14. Workflow Evolution, 15. Repository Integration, 16. Traceability Matrix, 17. Limitations (+48 more)
 
 ### Community 20 - "index.ts"
-Cohesion: 0.04
-Nodes (74): ACTION_COLORS, ACTION_LABELS, LESSON_MODE_LABELS, ReflectionPanel(), ReflectionPanelProps, TRUST_IMPACT_COLORS, TRUST_IMPACT_LABELS, analysisModeLabel() (+66 more)
+Cohesion: 0.05
+Nodes (65): AIAdvisoryPanelProps, statusCopy, ACTION_COLORS, ACTION_LABELS, LESSON_MODE_LABELS, ReflectionPanel(), ReflectionPanelProps, TRUST_IMPACT_COLORS (+57 more)
 
 ### Community 21 - "Feature Catalog"
 Cohesion: 0.04
@@ -525,8 +515,8 @@ Cohesion: 0.06
 Nodes (46): IntelligenceLogPanelProps, CONFIDENCE_BAR, CONFIDENCE_COLORS, ReasoningPanelProps, RelevanceGuardrailPanelProps, statusCopy, assessBusinessRelevance(), assessBusinessRelevanceForProfile() (+38 more)
 
 ### Community 25 - "TicketWorkspace.tsx"
-Cohesion: 0.07
-Nodes (35): AIAdvisoryPanelProps, statusCopy, AIAnalysisPanelProps, HumanReviewEditor(), HumanReviewEditorProps, ProvenancePanel(), ProvenancePanelProps, responseGroundingCopy() (+27 more)
+Cohesion: 0.14
+Nodes (16): HumanReviewEditor(), HumanReviewEditorProps, ProvenancePanel(), responseGroundingCopy(), providerTag(), sourceLabel(), SuggestedResponsePanel(), SuggestedResponsePanelProps (+8 more)
 
 ### Community 26 - "User Journeys"
 Cohesion: 0.04
@@ -597,8 +587,8 @@ Cohesion: 0.05
 Nodes (41): 10. Capability Gate to Product-Market Fit Phase, 11. Deliverables, 12. Risks, 13. Exit Criteria, 14. Relationship to Product-Market Fit, 15. Traceability Matrix, 16. What This Document Does NOT Define, 17. Closing (+33 more)
 
 ### Community 43 - "Sidebar.tsx"
-Cohesion: 0.06
-Nodes (18): EmergingPatternsPanelProps, ActiveView, NAV_ITEMS, Sidebar(), SidebarProps, labels, MetricsDashboardProps, CaseLookupViewProps (+10 more)
+Cohesion: 0.10
+Nodes (13): EmergingPatternsPanelProps, labels, MetricsDashboardProps, CATEGORY_COLORS, DashboardView(), DashboardViewProps, HomeView(), HomeViewProps (+5 more)
 
 ### Community 44 - "Global Memory Network"
 Cohesion: 0.05
@@ -629,8 +619,8 @@ Cohesion: 0.05
 Nodes (38): 10. Strategic Growth Metrics, 11. Growth Risks, 12. Long-Term Vision, 13. Traceability Matrix, 14. What This Document Does NOT Define, 15. Closing, 1. Executive Summary, 2. Growth Philosophy (+30 more)
 
 ### Community 51 - "KnowledgeItem"
-Cohesion: 0.07
-Nodes (31): KnowledgeBaseListProps, KnowledgeItemCard(), KnowledgeItemCardProps, Edge, InspectorPanel(), MemoryNetworkOverlay(), NodePos, Props (+23 more)
+Cohesion: 0.11
+Nodes (24): KnowledgeBaseListProps, KnowledgeItemCard(), KnowledgeItemCardProps, SimilarKnowledgeListProps, DecisionBadge(), MaturityBadge(), TrustMeter(), BulkClusterCommitDraft (+16 more)
 
 ### Community 52 - "Design Partners"
 Cohesion: 0.05
@@ -669,8 +659,8 @@ Cohesion: 0.06
 Nodes (36): 10. Infrastructure Readiness Experiments, 11. Strategic Importance, 12. Capability Gate, 13. Risks, 14. Deliverables, 15. Relationship to Global Memory Network, 16. Traceability Matrix, 17. What This Document Does NOT Define (+28 more)
 
 ### Community 61 - "canonicalProblemEngine.ts"
-Cohesion: 0.06
-Nodes (64): analyzeBulkEntries(), averageConfidence(), buildBulkTicket(), buildMappingRequest(), collectFieldOptions(), createUnclusteredBucket(), deriveConfidence(), detectFormat() (+56 more)
+Cohesion: 0.09
+Nodes (45): mergeClusterEvidence(), prepareBulkClusterCommit(), buildGreetingLine(), buildTemplate(), CANONICAL_RULES, CanonicalProblemIdentity, CanonicalProblemMatch, completeness() (+37 more)
 
 ### Community 62 - "Organizational Intelligence"
 Cohesion: 0.06
@@ -701,8 +691,8 @@ Cohesion: 0.07
 Nodes (29): 10. Regional Trust and Compliance, 11. Partner-Led Regional Expansion, 12. Regional GTM Motion, 13. Customer Success Readiness, 14. SEA Expansion Metrics, 15. Capability Gate, 16. Risks, 17. Deliverables (+21 more)
 
 ### Community 69 - "bulkUpload.ts"
-Cohesion: 0.13
-Nodes (22): CaseDetailView(), CaseDetailViewProps, CaseLookupView(), FILTER_CHIPS, formatDate(), statusBadge(), CaseFilterChip, computeEditDistance() (+14 more)
+Cohesion: 0.07
+Nodes (28): ActiveView, NAV_ITEMS, Sidebar(), SidebarProps, CaseDetailView(), CaseDetailViewProps, CaseLookupView(), CaseLookupViewProps (+20 more)
 
 ### Community 70 - "Roadmap Philosophy"
 Cohesion: 0.07
@@ -729,8 +719,8 @@ Cohesion: 0.08
 Nodes (25): 10. Provenance Model, 11. Event Model, 12. Information Flow, 13. Cross-Cutting Information, 14. Data Anti-Patterns, 15. Reference Information Model, 16. Traceability Matrix, 17. Data Governance Tiers (+17 more)
 
 ### Community 76 - "organizationProfile.ts"
-Cohesion: 0.11
-Nodes (25): ACCENT_SWATCHES, AccentPicker(), OrganizationProfilePanelProps, tones, buildNewProfile(), INDUSTRIES, OrganizationView(), OrganizationViewProps (+17 more)
+Cohesion: 0.10
+Nodes (28): createInitialMetrics(), Home(), ACCENT_SWATCHES, AccentPicker(), OrganizationProfilePanelProps, tones, buildNewProfile(), INDUSTRIES (+20 more)
 
 ### Community 77 - "MemoryNetworkOverlay.tsx"
 Cohesion: 0.25
@@ -769,8 +759,8 @@ Cohesion: 0.11
 Nodes (19): 10. MVP Cognitive Scope, 11. MVP Information Scope, 12. MVP Integrations, 14. MVP Metrics, 15. MVP Risks, 16. What Makes This MVP Different, 18. Traceability Matrix, 19. What This Document Does Not Define (+11 more)
 
 ### Community 86 - "demoState.ts"
-Cohesion: 0.27
-Nodes (7): seedKnowledge, seedAnalyses, seedSuggestedResponses, seedTickets, getStaticDemoData(), findSeedKnowledgeMatches, staticDemoMetrics
+Cohesion: 0.16
+Nodes (11): AIAnalysisPanelProps, seedKnowledge, seedAnalyses, seedSuggestedResponses, seedTickets, getStaticDemoData(), findSeedKnowledgeMatches, findSimilarKnowledge() (+3 more)
 
 ### Community 87 - "5. Agent Catalog"
 Cohesion: 0.11
@@ -813,8 +803,8 @@ Cohesion: 0.13
 Nodes (15): 10. What This Folder Does NOT Define, 11. Closing, 1. Executive Summary, 2. Why Roadmaps Exist, 3. Relationship to the Repository, 4. Roadmap Philosophy, 5. Roadmap Structure, 6. Capability Progression (+7 more)
 
 ### Community 97 - "patternDiscovery.ts"
-Cohesion: 0.08
-Nodes (25): findings, note(), out, resetOrg(), findings, goTickets(), resetOrg(), start (+17 more)
+Cohesion: 0.09
+Nodes (41): analysisModeLabel(), BulkUploadWorkspace(), BulkUploadWorkspaceProps, clusterBadgeTone(), LocalCluster, analyzeBulkEntries(), AnalyzeBulkEntriesInput, averageConfidence() (+33 more)
 
 ### Community 98 - "5. MVP Principles"
 Cohesion: 0.14
@@ -1161,8 +1151,8 @@ Cohesion: 0.29
 Nodes (7): 8. Failure Workflows, Authority is unclear, Conflicting Evidence, Context is insufficient, Governance blocks an action, Knowledge is stale, Low Confidence
 
 ### Community 185 - "11. Event APIs"
-Cohesion: 0.04
-Nodes (47): 11. Event APIs, 13. API Governance, Commands, Communication Pattern Matrix, Deprecation Policy, Event Communication Diagram, Events, Governance Rules (+39 more)
+Cohesion: 0.29
+Nodes (7): 11. Event APIs, Commands, Communication Pattern Matrix, Event Communication Diagram, Events, Notifications, Queries
 
 ### Community 186 - "3. API Categories"
 Cohesion: 0.29
@@ -1176,6 +1166,10 @@ Nodes (7): API Architecture, Derived From, Primary Architecture Documents, Prima
 Cohesion: 0.29
 Nodes (7): Derived From, Primary Architecture Documents, Primary Canon Documents, Primary Implementation Documents, Primary Question, Purpose, Storage Architecture
 
+### Community 189 - "MemoryNetworkOverlay.tsx"
+Cohesion: 0.17
+Nodes (6): Edge, InspectorPanel(), MemoryNetworkOverlay(), NodePos, Props, trustColor()
+
 ### Community 190 - "Derived From"
 Cohesion: 0.29
 Nodes (7): Derived From, Primary Architecture Documents, Primary Canon Documents, Primary Implementation Documents, Primary Question, Purpose, Security Architecture
@@ -1187,6 +1181,10 @@ Nodes (7): Documentation, Documentation Dependency Rules, Layer 1 — Canon, Lay
 ### Community 192 - "11. Private Beta Experiments"
 Cohesion: 0.29
 Nodes (7): 11. Private Beta Experiments, Category Language Experiment, Historical Ticket Candidate Experiment, Memory Reuse Simulation, Onboarding Friction Experiment, Reviewer Trust Experiment, Willingness-to-Pay Signal Experiment
+
+### Community 193 - "17. Security Evolution"
+Cohesion: 0.29
+Nodes (7): 17. Security Evolution, Evolution Principle, New AI Providers, New Deployment Environments, New Integrations, New Regulations, New Threats
 
 ### Community 194 - "Derived From"
 Cohesion: 0.29
@@ -1287,6 +1285,14 @@ Nodes (6): 17. Future Expansion, Phase 1 (Current MVP), Phase 2, Phase 3, Phase 
 ### Community 218 - "13. Internal Layering"
 Cohesion: 0.33
 Nodes (6): 13. Internal Layering, Application, Dependency Rules, Domain, Infrastructure, Presentation
+
+### Community 219 - "5. Core Positioning Pillars"
+Cohesion: 0.29
+Nodes (7): 5. Core Positioning Pillars, Governed Intelligence, Human-AI Collaboration, Institutional Memory, Knowledge Compounding, Organizational Learning, Trustworthy AI
+
+### Community 220 - "12. Caching Strategy"
+Cohesion: 0.33
+Nodes (6): 12. Caching Strategy, Cache Invalidation, Configuration Cache, Operational Cache, Reasoning Cache, Retrieval Cache
 
 ### Community 221 - "Implementation"
 Cohesion: 0.33
@@ -1420,6 +1426,14 @@ Nodes (5): Governance, Learning Outcome, Organizational Learning Workflow, Purpo
 Cohesion: 0.40
 Nodes (5): Auditability, Governance, Lifecycle, Ownership, Permissions
 
+### Community 254 - "3. Information Temperature Model"
+Cohesion: 0.33
+Nodes (6): 3. Information Temperature Model, Cold Information, Hot Information, Information Temperature Diagram, Permanent Organizational Memory, Warm Information
+
+### Community 255 - "13. Category Narrative"
+Cohesion: 0.40
+Nodes (5): 13. Category Narrative, What Changes Make This Category Possible Now?, Why Has This Category Not Emerged Before?, Why Is Now the Right Time?, Why Will Organizations Need It Over the Next Decade?
+
 ### Community 256 - "Derived From"
 Cohesion: 0.40
 Nodes (5): Derived From, Primary Architecture Documents, Primary Canon Documents, Primary Implementation Documents, Primary Strategy Documents
@@ -1461,8 +1475,8 @@ Cohesion: 0.50
 Nodes (4): Frustrations, Goals, Support Agent, Value Created
 
 ### Community 266 - "Knowledge Administrator"
-Cohesion: 0.50
-Nodes (4): Frustrations, Goals, Knowledge Administrator, Value Created
+Cohesion: 0.40
+Nodes (5): 15-Second Version, 30-Second Version, 3-Minute Version, 60-Second Version, 9. Elevator Pitch Variations
 
 ### Community 267 - "14. Capability 11 — Governance, Permission and Trust"
 Cohesion: 0.50
@@ -1483,6 +1497,10 @@ Nodes (4): 15. Cognitive Execution, Agent-to-Software Mapping, Cognitive Executi
 ### Community 271 - "Derived From"
 Cohesion: 0.50
 Nodes (4): Derived From, Primary Architecture Documents, Primary Canon Documents, Primary Implementation Scope
+
+### Community 272 - "Operations Manager"
+Cohesion: 0.50
+Nodes (4): Frustrations, Goals, Operations Manager, Value Created
 
 ### Community 273 - "Resolve a Customer Issue"
 Cohesion: 0.50
@@ -1601,20 +1619,12 @@ Cohesion: 0.67
 Nodes (3): Derived From, Primary Repository Sources, Primary Supporting Documents
 
 ### Community 357 - "wait"
-Cohesion: 0.09
-Nodes (34): wait(), bulkJSON, clickByRegex(), consoleLog, fillReflectionForm(), findings, goCases(), goDashboard() (+26 more)
-
-### Community 359 - "clickByContains"
-Cohesion: 0.12
-Nodes (23): clickButton(), findings, goCases(), goDashboard(), goHome(), goKnowledge(), goOrg(), goSettings() (+15 more)
+Cohesion: 0.50
+Nodes (4): 13. API Governance, Deprecation Policy, Governance Rules, Review Process
 
 ### Community 360 - "Load-Bearing Functions"
 Cohesion: 0.08
 Nodes (24): AI layer, App Layer, `app/page.tsx`, Core Libraries, `lib/ai/*`, `lib/analyzer.ts`, `lib/bulkUpload.ts`, `lib/canonicalProblemEngine.ts` (+16 more)
-
-### Community 361 - "snapFull"
-Cohesion: 0.08
-Nodes (22): goTickets(), snap(), snapFull(), snap(), snap(), snap(), snap(), snap() (+14 more)
 
 ### Community 362 - "E2E Audit Report — Maesa Tech / OIP Prototype"
 Cohesion: 0.08
@@ -1624,53 +1634,17 @@ Nodes (23): Appendix: How this audit was run, BLOCKER, E2E Audit Report — Maes
 Cohesion: 0.08
 Nodes (23): [2026-07-03] AI governance infrastructure refresh, [2026-07-03] Audit remediation F-01-F-07 (retroactive entry), [2026-07-03] Bulk upload with cluster validation (retroactive entry), [2026-07-03] Deterministic classifier granularity and 2FA split (retroactive entry), [2026-07-03] Full-screen memory network (retroactive entry), [2026-07-03] Gemma grounded drafts and LM Studio proxy (retroactive entry), [2026-07-03] Initial AI agent docs setup (retroactive entry), [2026-07-03] Intent-aware templates and editable review editor (retroactive entry) (+15 more)
 
-### Community 364 - "audit.js"
-Cohesion: 0.14
-Nodes (14): { chromium }, consoleErrors, fs, log(), main(), navTo(), OUT_DIR, pageErrors (+6 more)
-
-### Community 365 - "multi4.mjs"
-Cohesion: 0.12
-Nodes (16): clickByRegex(), consoleLog, findings, goCases(), goDashboard(), goHome(), goKnowledge(), goOrg() (+8 more)
-
 ### Community 366 - "OIP Prototype Architecture"
 Cohesion: 0.11
 Nodes (17): AI and draft types, AI Layer and LM Studio Proxy, Bulk Upload Pipeline, Bulk upload types, Data Model, Intentional Simplifications vs. the Full OIP Blueprint, Knowledge and Learning Lifecycle, Knowledge and validation types (+9 more)
-
-### Community 367 - "multi3.mjs"
-Cohesion: 0.12
-Nodes (15): consoleLog, findings, goCases(), goDashboard(), goHome(), goKnowledge(), goOrg(), goSettings() (+7 more)
-
-### Community 368 - "multi6.mjs"
-Cohesion: 0.12
-Nodes (13): bulkJSON, consoleLog, errorLogs, findings, goCases(), goHome(), goKnowledge(), goTickets() (+5 more)
-
-### Community 369 - "pass2.js"
-Cohesion: 0.17
-Nodes (13): { chromium }, consoleErrors, fs, log(), main(), navTo(), OUT_DIR, pageErrors (+5 more)
-
-### Community 370 - "A_full2.mjs"
-Cohesion: 0.14
-Nodes (12): clickByRegex(), consoleLog, findings, goCases(), goDashboard(), goHome(), goKnowledge(), goSettings() (+4 more)
 
 ### Community 371 - "Decisions"
 Cohesion: 0.15
 Nodes (12): ADR-001 — Organizational memory writes use candidate -> validation -> memory-change records, ADR-002 — Automation requires both trust and validation, ADR-003 — The LLM is a bounded advisor, not a validator, ADR-004 — Drafts use three explicit grounding modes with labels, ADR-005 — Bulk upload uses cluster-level human validation, ADR-006 — Lessons are first-class organizational learning objects, ADR-007 — Uncategorized tickets require human-named canonical problems, ADR-008 — Every LLM call must have a deterministic fallback (+4 more)
 
-### Community 372 - "A_full.mjs"
-Cohesion: 0.18
-Nodes (10): findings, goCases(), goDashboard(), goKnowledge(), goSettings(), goTickets(), resetOrg(), submitTicket() (+2 more)
-
 ### Community 373 - "OIP Prototype Boundaries"
 Cohesion: 0.18
 Nodes (10): 1. No AI-generated customer text may reach a resolved state without human review., 2. No write to Organizational Memory may occur outside the validated pipeline., 3. Confidence does not equal validation., 4. Cold-start honesty is mandatory., 5. No forced weak matches., 6. The pipeline may not silently stall., 7. History is append-only and lineage must be preserved., 8. Reset and other danger actions require confirmation and live only in the Danger Zone. (+2 more)
-
-### Community 374 - "A_batch.mjs"
-Cohesion: 0.22
-Nodes (7): clickByRegex(), consoleLog, findings, goTickets(), resetOrg(), submitAndWaitFor(), waitForButton()
-
-### Community 375 - "verify_fixes.mjs"
-Cohesion: 0.20
-Nodes (9): bulkJSON, findings, goCases(), goKnowledge(), goTickets(), resetOrg(), submit(), tmpFile (+1 more)
 
 ### Community 376 - "Coding Workflow"
 Cohesion: 0.20
@@ -1679,10 +1653,6 @@ Nodes (9): Coding Workflow, File-Reading Discipline, Mandatory Closing Steps, Ma
 ### Community 377 - "route.ts"
 Cohesion: 0.39
 Nodes (8): buildDiagnosticHeaders(), ChatMessage, ChatRequestBody, isValidMessages(), POST(), readBaseUrl(), readModel(), readTimeoutMs()
-
-### Community 378 - "regression.mjs"
-Cohesion: 0.25
-Nodes (7): getLocalStorage(), findings, goOrg(), goTickets(), resetOrg(), submit(), waitForButton()
 
 ### Community 379 - "Brain Workflow"
 Cohesion: 0.25
@@ -1696,10 +1666,6 @@ Nodes (7): Build / Runtime Snapshot, Current Status, Environment Notes, Known Op
 Cohesion: 0.39
 Nodes (7): buildDiagnosticHeaders(), ChatMessage, ChatRequestBody, isValidMessages(), POST(), readApiKey(), readTimeoutMs()
 
-### Community 382 - "kill-watcher.js"
-Cohesion: 0.25
-Nodes (7): { execSync }, FLAG, fs, interval, OUT_DIR, path, start
-
 ### Community 383 - "AI Agent Workflow"
 Cohesion: 0.33
 Nodes (5): AI Agent Workflow, Before Making Any Change, Example Workflow, Maintaining This Documentation, Rules For AI Agents
@@ -1708,30 +1674,22 @@ Nodes (5): AI Agent Workflow, Before Making Any Change, Example Workflow, Mainta
 Cohesion: 0.33
 Nodes (5): Prompt Library, Prompt Patterns That Worked Here, Recommendation For Future Sessions, Recoverable Precedents, Repository Scan Result
 
-### Community 385 - "package.json"
-Cohesion: 0.40
-Nodes (4): name, private, type, version
-
-### Community 386 - "probe.js"
-Cohesion: 0.40
-Nodes (4): { chromium }, fs, OUT_DIR, path
-
 ## Knowledge Gaps
-- **4754 isolated node(s):** `ChatMessage`, `ChatRequestBody`, `ChatMessage`, `ChatRequestBody`, `ChatMessage` (+4749 more)
+- **4666 isolated node(s):** `ChatMessage`, `ChatRequestBody`, `ChatMessage`, `ChatRequestBody`, `ChatMessage` (+4661 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **56 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **54 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Product Principles` connect `Product Principles` to `README.md`, `10. Principle 8 — Learning Over Deflection`, `11. Principle 9 — Support Is the First Proving Ground, Not the Final Category`, `12. Principle 10 — The System Must Earn Trust Over Time`, `13. Principle 11 — Measure Organizational Intelligence, Not Just Activity`, `14. Principle 12 — Build for the Human Who Comes Next`, `15. Principle 13 — Capture Knowledge in the Flow of Work`, `16. Principle 14 — Validate Before Trusting`, `17. Principle 15 — Every Intake Becomes a Knowledge Candidate First`, `18. Principle 16 — Preserve Provenance from Intake to Memory`, `19. Principle 17 — Organizational Memory Contains Only Validated Knowledge`, `20. Principle 18 — AI Advises but Does Not Govern`, `21. Principle 19 — Organizational Learning Is Continuous`, `3. Principle 1 — Memory Before Automation`, `4. Principle 2 — Human Expertise Is the Source of Trust`, `5. Principle 3 — Visible Uncertainty`, `6. Principle 4 — Provenance Is Non-Negotiable`, `7. Principle 5 — Knowledge Has a Lifecycle`, `8. Principle 6 — Every Meaningful Interaction Should Improve the System`, `9. Principle 7 — Reduce Organizational Entropy`, `22. Decision Framework`?**
-  _High betweenness centrality (0.055) - this node is a cross-community bridge._
-- **Why does `Product Vision` connect `Product Vision` to `README.md`, `Success at Different Stages`, `8. What We Are NOT Building`, `12. Guiding Principles`, `10. Long-Term Vision`, `The Evolution of Support`, `3. The Real Problem`, `6. Product Philosophy`, `9. Target Users`?**
-  _High betweenness centrality (0.038) - this node is a cross-community bridge._
-- **Why does `AI Research` connect `AI Research` to `README.md`, `Derived From`?**
-  _High betweenness centrality (0.033) - this node is a cross-community bridge._
+- **Why does `Implementation Architecture` connect `Implementation Architecture` to `README.md`, `21. Observability`, `16. Workflow Orchestration`, `22. Extensibility`, `6. Implementation Layers`, `15. Cognitive Execution`, `Derived From`, `3. Architectural Philosophy`, `17. Event Architecture`, `13. Internal Layering`, `19. Scalability Strategy`, `20. Reliability`?**
+  _High betweenness centrality (0.064) - this node is a cross-community bridge._
+- **Why does `Personas` connect `Personas` to `README.md`, `AI Reviewer / Knowledge Reviewer`, `Customer Experience Leader`, `Customer Support Agent`, `Customer Support Manager`, `Customer Support Team Lead`, `Derived From`, `Knowledge Manager`?**
+  _High betweenness centrality (0.043) - this node is a cross-community bridge._
+- **Why does `Technology Decisions` connect `Technology Decisions` to `README.md`, `ADR-001: Overall Architectural Style`, `ADR-002: Application Architecture`, `ADR-003: Backend Framework`, `ADR-004: Frontend`, `ADR-005: Programming Languages`, `ADR-006: Primary Database`, `ADR-007: Vector Storage`, `ADR-008: Knowledge Search`, `ADR-009: LLM Provider`, `ADR-010: Background Processing`, `ADR-011: Event Processing`, `ADR-012: Authentication`, `ADR-013: File Storage`, `ADR-014: Deployment`, `ADR-015: Observability`, `ADR-016: Configuration`, `ADR-017: AI Prompt Management`, `ADR-018: Knowledge Versioning`?**
+  _High betweenness centrality (0.040) - this node is a cross-community bridge._
 - **What connects `ChatMessage`, `ChatRequestBody`, `ChatMessage` to the rest of the system?**
-  _4754 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _4666 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `README.md` be split into smaller, more focused modules?**
   _Cohesion score 0.09773755656108597 - nodes in this community are weakly interconnected._
 - **Should `Product Requirements` be split into smaller, more focused modules?**

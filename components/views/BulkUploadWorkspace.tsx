@@ -338,7 +338,7 @@ export function BulkUploadWorkspace({
                     className={`w-full rounded-xl border px-3 py-2 ${darkMode ? "border-[#2d3f52] bg-[#0f172a] text-slate-200" : "border-slate-200 bg-white text-slate-800"}`}
                   >
                     <option value="">No resolution field</option>
-                    {parseResult.mappingRequest.fieldOptions.map((option) => (
+                    {parseResult.mappingRequest.resolutionFieldOptions.map((option) => (
                       <option key={option.key} value={option.key}>
                         {option.label}
                       </option>

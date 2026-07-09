@@ -155,8 +155,8 @@
     "semantic_hash": ""
   },
   "components/views/BulkUploadWorkspace.tsx": {
-    "mtime": 1783445533.8953407,
-    "ast_hash": "be00cca64806f0c940242cbedf318913",
+    "mtime": 1783572350.7473533,
+    "ast_hash": "91781b3e655a59a7ddbbedeb96277dc0",
     "semantic_hash": ""
   },
   "components/views/DashboardView.tsx": {
@@ -245,8 +245,8 @@
     "semantic_hash": ""
   },
   "lib/bulkUpload.ts": {
-    "mtime": 1783393432.838998,
-    "ast_hash": "3337a011b413111cdf4e56d278afad1e",
+    "mtime": 1783572383.2856162,
+    "ast_hash": "9f3701907c5edc9d5f856c4da56dc4e1",
     "semantic_hash": ""
   },
   "lib/canonicalProblemEngine.ts": {
@@ -360,8 +360,8 @@
     "semantic_hash": ""
   },
   "types/bulkUpload.ts": {
-    "mtime": 1782974014.0710847,
-    "ast_hash": "2688455d6082598cac7c8c7a3a8738f6",
+    "mtime": 1783572332.9830227,
+    "ast_hash": "28ed691a862c14369f46218eb59efc7f",
     "semantic_hash": ""
   },
   "types/index.ts": {
