@@ -1158,3 +1158,64 @@ export function upsertCanonicalProblem(items: KnowledgeItem[], incoming: Knowled
   next[index] = mergeCanonicalProblemItems(items[index], normalized);
   return next;
 }
+
+/* ---------------- Data-integrity repair: generic template vs. lesson content ---------------- */
+
+function overlapWords(text: string): Set<string> {
+  return new Set((text.toLowerCase().match(/\b\w{4,}\b/g) ?? []));
+}
+
+/** True if `template` is largely the same text as `lessonResponse` (word overlap heuristic). */
+function templateMatchesLessonResponse(template: string, lessonResponse: string): boolean {
+  const a = overlapWords(template);
+  const b = overlapWords(lessonResponse);
+  if (a.size === 0 || b.size === 0) return false;
+  let shared = 0;
+  for (const word of a) if (b.has(word)) shared++;
+  return shared / Math.min(a.size, b.size) >= 0.7;
+}
+
+/**
+ * One-time self-heal for knowledge items affected by a fixed bug where validating a
+ * new lesson on an existing canonical problem (the `create_version` reflection path)
+ * overwrote the item's generic `customerResponseTemplate` with that lesson's specific
+ * `customerResponse`. Detects items with 2+ lessons whose top-level template is really
+ * just one lesson's response wearing the generic slot, and restores a genuinely generic
+ * category baseline. Lessons and knowledgeVersions are left untouched (append-only); a
+ * learningHistory note records the correction instead of silently rewriting the past.
+ */
+export function repairCorruptedCustomerTemplates(
+  items: KnowledgeItem[],
+  profile: OrganizationProfile = defaultOrganizationProfile
+): { items: KnowledgeItem[]; repairedCount: number } {
+  let repairedCount = 0;
+  const result = items.map((raw) => {
+    const item = withCanonicalProblemDefaults(raw);
+    if (!item.lessons || item.lessons.length < 2 || !item.customerResponseTemplate) return item;
+
+    const clobberedBy = item.lessons.find((lesson) =>
+      templateMatchesLessonResponse(item.customerResponseTemplate!, lesson.customerResponse)
+    );
+    if (!clobberedBy) return item;
+    repairedCount++;
+
+    const genericTemplate = getCustomerResponseTemplate(item.category, profile);
+    const at = new Date().toISOString();
+    return {
+      ...item,
+      customerResponseTemplate: genericTemplate,
+      approvedAnswer: genericTemplate,
+      learningHistory: [
+        ...(item.learningHistory ?? []),
+        {
+          id: `${item.canonicalProblemId ?? item.id}-history-repair-${Date.now()}`,
+          event: "Data integrity fix: generic template restored",
+          detail: `The generic customer response template had been overwritten by lesson-specific content (root cause: "${clobberedBy.rootCause}") due to a bug where teaching a lesson during knowledge evolution overwrote the shared template. Restored to a genuinely generic baseline for "${item.canonicalProblemTitle ?? item.title}". All lessons, including their individual customer responses, are unchanged.`,
+          createdAt: at
+        }
+      ],
+      lastUpdated: at
+    };
+  });
+  return { items: result, repairedCount };
+}

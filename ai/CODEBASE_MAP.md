@@ -156,6 +156,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `upsertCanonicalProblem()` - Canonical upsert used during validated commit.
 - `withCanonicalProblemDefaults()` - Normalization and default fields.
 - `getCustomerResponseTemplate()` and `renderCustomerResponse()` - Deterministic customer template rendering.
+- `repairCorruptedCustomerTemplates()` - Self-heal for knowledge items whose generic `customerResponseTemplate` was previously overwritten by a lesson's `customerResponse` (fixed `create_version` bug); called from `lib/orgMemory.ts` `loadKnowledge()`.
 
 ### `lib/drafting.ts`
 
@@ -177,7 +178,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 ### `lib/orgMemory.ts`
 
-- `loadKnowledge()` / `saveKnowledge()` - Knowledge persistence.
+- `loadKnowledge()` / `saveKnowledge()` - Knowledge persistence. `loadKnowledge()` also runs `repairCorruptedCustomerTemplates()` on every load as a one-time self-heal migration for lesson-corrupted generic templates.
 - `loadKnowledgeCandidates()` / `saveKnowledgeCandidates()` - Candidate persistence.
 - `loadValidationRecords()` / `saveValidationRecords()` - Validation-history persistence.
 - `loadMemoryChangeRecords()` / `saveMemoryChangeRecords()` - Memory-change audit persistence.

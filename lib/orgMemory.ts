@@ -9,7 +9,7 @@ import type {
 } from "@/types";
 import { seedKnowledge } from "@/data/seedKnowledge";
 import { withLearningDefaults } from "@/lib/trustEngine";
-import { withCanonicalProblemDefaults, dedupeCanonicalProblems } from "@/lib/canonicalProblemEngine";
+import { withCanonicalProblemDefaults, dedupeCanonicalProblems, repairCorruptedCustomerTemplates } from "@/lib/canonicalProblemEngine";
 import { clearTicketRecords } from "@/lib/ticketRecords";
 
 /**
@@ -73,10 +73,13 @@ export function loadKnowledge(): KnowledgeItem[] {
     // Migration: collapse any duplicate canonical problems left over from earlier
     // testing or pre-canonical localStorage, and persist the cleaned memory.
     const deduped = dedupeCanonicalProblems(normalized);
-    if (deduped.length !== normalized.length) {
-      saveKnowledge(deduped);
+    // Self-heal: restore any generic customerResponseTemplate that a fixed bug had
+    // overwritten with a lesson's specific response (see repairCorruptedCustomerTemplates).
+    const { items: repaired, repairedCount } = repairCorruptedCustomerTemplates(deduped);
+    if (deduped.length !== normalized.length || repairedCount > 0) {
+      saveKnowledge(repaired);
     }
-    return deduped;
+    return repaired;
   }
   return seedOrganizationalKnowledge();
 }

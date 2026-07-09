@@ -2200,12 +2200,18 @@ export default function Home() {
       const target = knowledgeItems.find((i) => i.id === reflectionDecision.existingItemId);
       if (target) {
         const base = withCanonicalProblemDefaults(target);
+        // A lesson teaches a distinct root cause and lives only in lessons[]; it must
+        // never overwrite the knowledge item's generic customerResponseTemplate, and it
+        // does not represent a change to the generic template, so no version is recorded.
+        // Only a reviewer directly rewriting the generic response (no lesson attached)
+        // is a genuine template edit that bumps the version history.
+        const isLessonAddition = !!lessonDraft;
         const newVersionNum = (base.knowledgeVersions?.length ?? 0) + 1;
         const candidate = createCandidate({
           action: "create_version",
           sourceTicketIds: [selectedTicket.id],
           solution: und.coreProblem,
-          customerResponseTemplate: reviewedResponse,
+          customerResponseTemplate: isLessonAddition ? (base.customerResponseTemplate ?? base.approvedAnswer) : reviewedResponse,
           internalGuidance: base.internalGuidance ?? und.summary,
           canonicalProblemTitle: base.canonicalProblemTitle ?? base.title,
           category: base.category,
@@ -2215,8 +2221,9 @@ export default function Home() {
         });
         let evolved: KnowledgeItem = {
           ...base,
-          customerResponseTemplate: reviewedResponse,
-          approvedAnswer: reviewedResponse,
+          ...(isLessonAddition
+            ? {}
+            : { customerResponseTemplate: reviewedResponse, approvedAnswer: reviewedResponse }),
           exampleTickets: [
             ...(base.exampleTickets ?? []),
             {
@@ -2227,17 +2234,19 @@ export default function Home() {
               resolutionMode: "human" as const
             }
           ],
-          knowledgeVersions: [
-            ...(base.knowledgeVersions ?? []),
-            {
-              versionId: `${base.canonicalProblemId}-v${newVersionNum}`,
-              version: newVersionNum,
-              createdAt: now,
-              changeReason: reflectionDecision.versionReason ?? "Human review introduced an improved response",
-              sourceTicketId: selectedTicket.id,
-              summary: `v${newVersionNum}: Updated customer response template`
-            }
-          ],
+          knowledgeVersions: isLessonAddition
+            ? base.knowledgeVersions ?? []
+            : [
+                ...(base.knowledgeVersions ?? []),
+                {
+                  versionId: `${base.canonicalProblemId}-v${newVersionNum}`,
+                  version: newVersionNum,
+                  createdAt: now,
+                  changeReason: reflectionDecision.versionReason ?? "Human review introduced an improved response",
+                  sourceTicketId: selectedTicket.id,
+                  summary: `v${newVersionNum}: Updated customer response template`
+                }
+              ],
           timesSeen: (base.timesSeen ?? 0) + 1,
           humanReviewCount: (base.humanReviewCount ?? 0) + 1,
           lastUpdated: now,
@@ -2249,17 +2258,28 @@ export default function Home() {
         setSessionCreatedIds((prev) => new Set([...prev, committedItem.id]));
         setLastApprovedSourceTicketId(selectedTicket.id);
         setLastSavedKnowledgeId(committedItem.id);
-        setOrgMetrics((prev) => ({
-          ...prev,
-          knowledgeVersions: (prev.knowledgeVersions ?? 0) + 1,
-          lastUpdatedAt: now
-        }));
-        updateMetrics({ humanApprovedResponses: 1, canonicalProblemsTouched: 1, knowledgeVersionsCreated: 1 });
-        const versionLogEntries = [
-          createLogEntry("Knowledge candidate validated", `Candidate ${candidate.id} approved by Prototype Knowledge Validator`),
-          createLogEntry("Reflection confirmed: knowledge evolved", `"${base.canonicalProblemTitle}" → v${newVersionNum}`),
-          createLogEntry("New version recorded", reflectionDecision.versionReason ?? "Improved response approach")
-        ];
+        if (!isLessonAddition) {
+          setOrgMetrics((prev) => ({
+            ...prev,
+            knowledgeVersions: (prev.knowledgeVersions ?? 0) + 1,
+            lastUpdatedAt: now
+          }));
+        }
+        updateMetrics({
+          humanApprovedResponses: 1,
+          canonicalProblemsTouched: 1,
+          ...(isLessonAddition ? {} : { knowledgeVersionsCreated: 1 })
+        });
+        const versionLogEntries = isLessonAddition
+          ? [
+              createLogEntry("Knowledge candidate validated", `Candidate ${candidate.id} approved by Prototype Knowledge Validator`),
+              createLogEntry("Reflection confirmed: lesson added", `"${base.canonicalProblemTitle}" gains a new lesson (generic template unchanged)`)
+            ]
+          : [
+              createLogEntry("Knowledge candidate validated", `Candidate ${candidate.id} approved by Prototype Knowledge Validator`),
+              createLogEntry("Reflection confirmed: knowledge evolved", `"${base.canonicalProblemTitle}" → v${newVersionNum}`),
+              createLogEntry("New version recorded", reflectionDecision.versionReason ?? "Improved response approach")
+            ];
         if (lessonDraft) versionLogEntries.push(createLogEntry("Lesson authored", `Root cause: ${lessonDraft.rootCause} · Signals: ${lessonDraft.signals.join(", ")}`));
         addLogEntries(versionLogEntries);
       }
