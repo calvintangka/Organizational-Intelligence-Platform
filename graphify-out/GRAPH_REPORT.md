@@ -1,16 +1,16 @@
 # Graph Report - Hackathon 2  (2026-07-09)
 
 ## Corpus Check
-- 208 files · ~628,827 words
+- 208 files · ~630,341 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 5893 nodes · 8180 edges · 371 communities (317 shown, 54 thin omitted)
+- 5895 nodes · 8182 edges · 369 communities (315 shown, 54 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 13 edges (avg confidence: 0.55)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `4d5f8eac`
+- Built from commit: `44325ea2`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -203,7 +203,6 @@
 - [[_COMMUNITY_3. API Categories|3. API Categories]]
 - [[_COMMUNITY_API Architecture|API Architecture]]
 - [[_COMMUNITY_Derived From|Derived From]]
-- [[_COMMUNITY_MemoryNetworkOverlay.tsx|MemoryNetworkOverlay.tsx]]
 - [[_COMMUNITY_Derived From|Derived From]]
 - [[_COMMUNITY_Documentation|Documentation]]
 - [[_COMMUNITY_11. Private Beta Experiments|11. Private Beta Experiments]]
@@ -286,7 +285,6 @@
 - [[_COMMUNITY_13. MVP Knowledge Model|13. MVP Knowledge Model]]
 - [[_COMMUNITY_15. Cognitive Execution|15. Cognitive Execution]]
 - [[_COMMUNITY_Derived From|Derived From]]
-- [[_COMMUNITY_Operations Manager|Operations Manager]]
 - [[_COMMUNITY_Resolve a Customer Issue|Resolve a Customer Issue]]
 - [[_COMMUNITY_AI Assistance|AI Assistance]]
 - [[_COMMUNITY_Knowledge Capture|Knowledge Capture]]
@@ -412,7 +410,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (371 total, 54 thin omitted)
+## Communities (369 total, 54 thin omitted)
 
 ### Community 0 - "README.md"
 Cohesion: 0.10
@@ -448,7 +446,7 @@ Nodes (74): 10. Sustainable Differentiation, 11. Indonesia Competitive Landscape
 
 ### Community 8 - "lmStudio.ts"
 Cohesion: 0.05
-Nodes (70): DemoScenarioSelectorProps, ProvenancePanelProps, TicketCardProps, createAIAdapter(), createChainProvider(), createDisabledProvider(), callClaudeCompletion(), ClaudeCallOptions (+62 more)
+Nodes (69): DemoScenarioSelectorProps, TicketCardProps, TicketWorkspaceProps, createAIAdapter(), createChainProvider(), createDisabledProvider(), callClaudeCompletion(), ClaudeCallOptions (+61 more)
 
 ### Community 9 - "Research Backlog"
 Cohesion: 0.03
@@ -487,16 +485,16 @@ Cohesion: 0.03
 Nodes (59): 10. MVP Success Metrics, 11. Metric Governance, 12. Repository Integration, 13. Traceability Matrix, 14. Anti-Patterns, 15. Limitations, 16. Closing, 1. Executive Summary (+51 more)
 
 ### Community 18 - "page.tsx"
-Cohesion: 0.07
-Nodes (43): ACTIVATION_ALLOWED_TOPIC_TERMS, ACTIVATION_FORBIDDEN_DRAFT_TERMS, ACTIVATION_REQUIRED_DRAFT_TERMS, aiAdapter, applyAdvisoryExtractedFields(), DraftSafetyContext, EMAIL_RECOVERY_FORBIDDEN_DRAFT_TERMS, EMAIL_RECOVERY_VALIDATION_TERMS (+35 more)
+Cohesion: 0.05
+Nodes (66): ACTIVATION_ALLOWED_TOPIC_TERMS, ACTIVATION_FORBIDDEN_DRAFT_TERMS, ACTIVATION_REQUIRED_DRAFT_TERMS, aiAdapter, applyAdvisoryExtractedFields(), DraftSafetyContext, EMAIL_RECOVERY_FORBIDDEN_DRAFT_TERMS, EMAIL_RECOVERY_VALIDATION_TERMS (+58 more)
 
 ### Community 19 - "Workflow Design"
 Cohesion: 0.04
 Nodes (56): 10. Human Review Boundaries, 11. Governance Throughout Workflows, 12. Knowledge Lifecycle Integration, 13. Workflow Success Measures, 14. Workflow Evolution, 15. Repository Integration, 16. Traceability Matrix, 17. Limitations (+48 more)
 
 ### Community 20 - "index.ts"
-Cohesion: 0.05
-Nodes (65): AIAdvisoryPanelProps, statusCopy, ACTION_COLORS, ACTION_LABELS, LESSON_MODE_LABELS, ReflectionPanel(), ReflectionPanelProps, TRUST_IMPACT_COLORS (+57 more)
+Cohesion: 0.07
+Nodes (30): Edge, InspectorPanel(), MemoryNetworkOverlay(), NodePos, Props, trustColor(), bundledPackPreviews, KnowledgeView() (+22 more)
 
 ### Community 21 - "Feature Catalog"
 Cohesion: 0.04
@@ -511,12 +509,12 @@ Cohesion: 0.04
 Nodes (52): 10. Pain Point Analysis, 11. Success Definition by Persona, 12. Persona Evolution, 13. Repository Integration, 14. Traceability Matrix, 15. Limitations, 16. Closing, 1. Executive Summary (+44 more)
 
 ### Community 24 - "analyzer.ts"
-Cohesion: 0.06
-Nodes (46): IntelligenceLogPanelProps, CONFIDENCE_BAR, CONFIDENCE_COLORS, ReasoningPanelProps, RelevanceGuardrailPanelProps, statusCopy, assessBusinessRelevance(), assessBusinessRelevanceForProfile() (+38 more)
+Cohesion: 0.05
+Nodes (48): IntelligenceLogPanelProps, CONFIDENCE_BAR, CONFIDENCE_COLORS, ReasoningPanelProps, RelevanceGuardrailPanelProps, statusCopy, assessBusinessRelevance(), assessBusinessRelevanceForProfile() (+40 more)
 
 ### Community 25 - "TicketWorkspace.tsx"
-Cohesion: 0.14
-Nodes (16): HumanReviewEditor(), HumanReviewEditorProps, ProvenancePanel(), responseGroundingCopy(), providerTag(), sourceLabel(), SuggestedResponsePanel(), SuggestedResponsePanelProps (+8 more)
+Cohesion: 0.06
+Nodes (40): AIAdvisoryPanelProps, statusCopy, HumanReviewEditor(), HumanReviewEditorProps, ProvenancePanel(), ProvenancePanelProps, responseGroundingCopy(), ACTION_COLORS (+32 more)
 
 ### Community 26 - "User Journeys"
 Cohesion: 0.04
@@ -587,8 +585,8 @@ Cohesion: 0.05
 Nodes (41): 10. Capability Gate to Product-Market Fit Phase, 11. Deliverables, 12. Risks, 13. Exit Criteria, 14. Relationship to Product-Market Fit, 15. Traceability Matrix, 16. What This Document Does NOT Define, 17. Closing (+33 more)
 
 ### Community 43 - "Sidebar.tsx"
-Cohesion: 0.10
-Nodes (13): EmergingPatternsPanelProps, labels, MetricsDashboardProps, CATEGORY_COLORS, DashboardView(), DashboardViewProps, HomeView(), HomeViewProps (+5 more)
+Cohesion: 0.06
+Nodes (17): EmergingPatternsPanelProps, ActiveView, NAV_ITEMS, Sidebar(), SidebarProps, labels, MetricsDashboardProps, CATEGORY_COLORS (+9 more)
 
 ### Community 44 - "Global Memory Network"
 Cohesion: 0.05
@@ -620,7 +618,7 @@ Nodes (38): 10. Strategic Growth Metrics, 11. Growth Risks, 12. Long-Term Vision
 
 ### Community 51 - "KnowledgeItem"
 Cohesion: 0.11
-Nodes (24): KnowledgeBaseListProps, KnowledgeItemCard(), KnowledgeItemCardProps, SimilarKnowledgeListProps, DecisionBadge(), MaturityBadge(), TrustMeter(), BulkClusterCommitDraft (+16 more)
+Nodes (25): KnowledgeBaseListProps, KnowledgeItemCard(), KnowledgeItemCardProps, SimilarKnowledgeListProps, DecisionBadge(), MaturityBadge(), TrustMeter(), clampTrust() (+17 more)
 
 ### Community 52 - "Design Partners"
 Cohesion: 0.05
@@ -659,8 +657,8 @@ Cohesion: 0.06
 Nodes (36): 10. Infrastructure Readiness Experiments, 11. Strategic Importance, 12. Capability Gate, 13. Risks, 14. Deliverables, 15. Relationship to Global Memory Network, 16. Traceability Matrix, 17. What This Document Does NOT Define (+28 more)
 
 ### Community 61 - "canonicalProblemEngine.ts"
-Cohesion: 0.09
-Nodes (45): mergeClusterEvidence(), prepareBulkClusterCommit(), buildGreetingLine(), buildTemplate(), CANONICAL_RULES, CanonicalProblemIdentity, CanonicalProblemMatch, completeness() (+37 more)
+Cohesion: 0.11
+Nodes (36): mergeClusterEvidence(), prepareBulkClusterCommit(), buildTemplate(), CANONICAL_RULES, CanonicalProblemIdentity, CanonicalProblemMatch, completeness(), createCanonicalProblem() (+28 more)
 
 ### Community 62 - "Organizational Intelligence"
 Cohesion: 0.06
@@ -691,8 +689,8 @@ Cohesion: 0.07
 Nodes (29): 10. Regional Trust and Compliance, 11. Partner-Led Regional Expansion, 12. Regional GTM Motion, 13. Customer Success Readiness, 14. SEA Expansion Metrics, 15. Capability Gate, 16. Risks, 17. Deliverables (+21 more)
 
 ### Community 69 - "bulkUpload.ts"
-Cohesion: 0.07
-Nodes (28): ActiveView, NAV_ITEMS, Sidebar(), SidebarProps, CaseDetailView(), CaseDetailViewProps, CaseLookupView(), CaseLookupViewProps (+20 more)
+Cohesion: 0.50
+Nodes (4): Frustrations, Goals, Knowledge Administrator, Value Created
 
 ### Community 70 - "Roadmap Philosophy"
 Cohesion: 0.07
@@ -720,7 +718,7 @@ Nodes (25): 10. Provenance Model, 11. Event Model, 12. Information Flow, 13. Cro
 
 ### Community 76 - "organizationProfile.ts"
 Cohesion: 0.10
-Nodes (28): createInitialMetrics(), Home(), ACCENT_SWATCHES, AccentPicker(), OrganizationProfilePanelProps, tones, buildNewProfile(), INDUSTRIES (+20 more)
+Nodes (27): createInitialMetrics(), Home(), ACCENT_SWATCHES, AccentPicker(), OrganizationProfilePanelProps, tones, buildNewProfile(), INDUSTRIES (+19 more)
 
 ### Community 77 - "MemoryNetworkOverlay.tsx"
 Cohesion: 0.25
@@ -803,8 +801,8 @@ Cohesion: 0.13
 Nodes (15): 10. What This Folder Does NOT Define, 11. Closing, 1. Executive Summary, 2. Why Roadmaps Exist, 3. Relationship to the Repository, 4. Roadmap Philosophy, 5. Roadmap Structure, 6. Capability Progression (+7 more)
 
 ### Community 97 - "patternDiscovery.ts"
-Cohesion: 0.09
-Nodes (41): analysisModeLabel(), BulkUploadWorkspace(), BulkUploadWorkspaceProps, clusterBadgeTone(), LocalCluster, analyzeBulkEntries(), AnalyzeBulkEntriesInput, averageConfidence() (+33 more)
+Cohesion: 0.06
+Nodes (68): analysisModeLabel(), BulkUploadWorkspace(), BulkUploadWorkspaceProps, clusterBadgeTone(), LocalCluster, AIAdapter, analyzeBulkEntries(), AnalyzeBulkEntriesInput (+60 more)
 
 ### Community 98 - "5. MVP Principles"
 Cohesion: 0.14
@@ -1166,10 +1164,6 @@ Nodes (7): API Architecture, Derived From, Primary Architecture Documents, Prima
 Cohesion: 0.29
 Nodes (7): Derived From, Primary Architecture Documents, Primary Canon Documents, Primary Implementation Documents, Primary Question, Purpose, Storage Architecture
 
-### Community 189 - "MemoryNetworkOverlay.tsx"
-Cohesion: 0.17
-Nodes (6): Edge, InspectorPanel(), MemoryNetworkOverlay(), NodePos, Props, trustColor()
-
 ### Community 190 - "Derived From"
 Cohesion: 0.29
 Nodes (7): Derived From, Primary Architecture Documents, Primary Canon Documents, Primary Implementation Documents, Primary Question, Purpose, Security Architecture
@@ -1498,10 +1492,6 @@ Nodes (4): 15. Cognitive Execution, Agent-to-Software Mapping, Cognitive Executi
 Cohesion: 0.50
 Nodes (4): Derived From, Primary Architecture Documents, Primary Canon Documents, Primary Implementation Scope
 
-### Community 272 - "Operations Manager"
-Cohesion: 0.50
-Nodes (4): Frustrations, Goals, Operations Manager, Value Created
-
 ### Community 273 - "Resolve a Customer Issue"
 Cohesion: 0.50
 Nodes (4): Journey Summary, Resolve a Customer Issue, Stage Explanation, Success Criteria
@@ -1632,7 +1622,7 @@ Nodes (23): Appendix: How this audit was run, BLOCKER, E2E Audit Report — Maes
 
 ### Community 363 - "Change Log"
 Cohesion: 0.08
-Nodes (23): [2026-07-03] AI governance infrastructure refresh, [2026-07-03] Audit remediation F-01-F-07 (retroactive entry), [2026-07-03] Bulk upload with cluster validation (retroactive entry), [2026-07-03] Deterministic classifier granularity and 2FA split (retroactive entry), [2026-07-03] Full-screen memory network (retroactive entry), [2026-07-03] Gemma grounded drafts and LM Studio proxy (retroactive entry), [2026-07-03] Initial AI agent docs setup (retroactive entry), [2026-07-03] Intent-aware templates and editable review editor (retroactive entry) (+15 more)
+Nodes (24): [2026-07-03] AI governance infrastructure refresh, [2026-07-03] Audit remediation F-01-F-07 (retroactive entry), [2026-07-03] Bulk upload with cluster validation (retroactive entry), [2026-07-03] Deterministic classifier granularity and 2FA split (retroactive entry), [2026-07-03] Full-screen memory network (retroactive entry), [2026-07-03] Gemma grounded drafts and LM Studio proxy (retroactive entry), [2026-07-03] Initial AI agent docs setup (retroactive entry), [2026-07-03] Intent-aware templates and editable review editor (retroactive entry) (+16 more)
 
 ### Community 366 - "OIP Prototype Architecture"
 Cohesion: 0.11
@@ -1675,7 +1665,7 @@ Cohesion: 0.33
 Nodes (5): Prompt Library, Prompt Patterns That Worked Here, Recommendation For Future Sessions, Recoverable Precedents, Repository Scan Result
 
 ## Knowledge Gaps
-- **4666 isolated node(s):** `ChatMessage`, `ChatRequestBody`, `ChatMessage`, `ChatRequestBody`, `ChatMessage` (+4661 more)
+- **4668 isolated node(s):** `ChatMessage`, `ChatRequestBody`, `ChatMessage`, `ChatRequestBody`, `ChatMessage` (+4663 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **54 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -1684,14 +1674,14 @@ _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `Implementation Architecture` connect `Implementation Architecture` to `README.md`, `21. Observability`, `16. Workflow Orchestration`, `22. Extensibility`, `6. Implementation Layers`, `15. Cognitive Execution`, `Derived From`, `3. Architectural Philosophy`, `17. Event Architecture`, `13. Internal Layering`, `19. Scalability Strategy`, `20. Reliability`?**
   _High betweenness centrality (0.064) - this node is a cross-community bridge._
+- **Why does `Product Strategy` connect `Product Strategy` to `README.md`, `Derived From`?**
+  _High betweenness centrality (0.044) - this node is a cross-community bridge._
 - **Why does `Personas` connect `Personas` to `README.md`, `AI Reviewer / Knowledge Reviewer`, `Customer Experience Leader`, `Customer Support Agent`, `Customer Support Manager`, `Customer Support Team Lead`, `Derived From`, `Knowledge Manager`?**
   _High betweenness centrality (0.043) - this node is a cross-community bridge._
-- **Why does `Technology Decisions` connect `Technology Decisions` to `README.md`, `ADR-001: Overall Architectural Style`, `ADR-002: Application Architecture`, `ADR-003: Backend Framework`, `ADR-004: Frontend`, `ADR-005: Programming Languages`, `ADR-006: Primary Database`, `ADR-007: Vector Storage`, `ADR-008: Knowledge Search`, `ADR-009: LLM Provider`, `ADR-010: Background Processing`, `ADR-011: Event Processing`, `ADR-012: Authentication`, `ADR-013: File Storage`, `ADR-014: Deployment`, `ADR-015: Observability`, `ADR-016: Configuration`, `ADR-017: AI Prompt Management`, `ADR-018: Knowledge Versioning`?**
-  _High betweenness centrality (0.040) - this node is a cross-community bridge._
 - **What connects `ChatMessage`, `ChatRequestBody`, `ChatMessage` to the rest of the system?**
-  _4666 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _4668 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `README.md` be split into smaller, more focused modules?**
-  _Cohesion score 0.09773755656108597 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.09812623274161736 - nodes in this community are weakly interconnected._
 - **Should `Product Requirements` be split into smaller, more focused modules?**
   _Cohesion score 0.023255813953488372 - nodes in this community are weakly interconnected._
 - **Should `Product Philosophy` be split into smaller, more focused modules?**

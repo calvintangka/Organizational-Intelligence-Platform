@@ -26,7 +26,8 @@
       "Read(//c/Program Files \\\\\\(x86\\\\\\)/Microsoft/EdgeWebView/Application/**)",
       "Bash(where node *)",
       "Bash(npm install *)",
-      "Bash(node tmp/audit/token_usage.mjs)"
+      "Bash(node tmp/audit/token_usage.mjs)",
+      "Bash(git push *)"
     ]
   }
 }

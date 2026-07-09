@@ -2682,6 +2682,14 @@ export default function Home() {
     const effectiveTopMatch = topMatch
       ? await requestMatchDiscrimination(ticket, topMatch, und)
       : null;
+    if (topMatch && !effectiveTopMatch) {
+      // Discrimination rejected the retrieval match as a distinct problem.
+      // The Organizational Memory panel and pipeline "memory found"/"trust"
+      // steps read similarKnowledge[0] (see TicketWorkspace.tsx) — without
+      // this, they kept showing the rejected match while the draft correctly
+      // treated the ticket as unmatched, producing a contradictory UI state.
+      setSimilarKnowledge((prev) => prev.filter((m) => m.item.id !== topMatch.item.id));
+    }
     const draft = draftResponse(ticket, enrichedUnderstanding, effectiveTopMatch, organizationProfile, knowledgeItems.length === 0);
     const aiDraft = await requestDraftAdvisory(ticket, enrichedUnderstanding, canonicalProblem.title, effectiveTopMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", advisory);
     const response = aiDraft.response;

@@ -118,10 +118,10 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 ### `app/page.tsx`
 
-- `processTicketPipeline()` - End-to-end single-ticket orchestration.
+- `processTicketPipeline()` - End-to-end single-ticket orchestration. After `requestMatchDiscrimination()` runs, a rejected match is removed from `similarKnowledge` state too, so the Organizational Memory panel (`TicketWorkspace.tsx`, reads `similarKnowledge[0]`) never shows a match the draft treated as rejected.
 - `processSecondTicket()` - Reuse / auto-resolution pipeline.
 - `requestAnalysisAdvisory()` - AI analysis and canonical suggestion wrapper.
-- `requestMatchDiscrimination()` - AI same-problem vs distinct-problem check.
+- `requestMatchDiscrimination()` - AI same-problem vs distinct-problem check. Fails open (keeps the original match) when the AI call itself fails; only rejects on a genuine successful "distinct" judgment. Its rejection only affects the draft's match unless `processTicketPipeline()` also syncs `similarKnowledge` (see above).
 - `requestDraftAdvisory()` - Grounded AI draft wrapper plus deterministic fallback.
 - `generateSuggestedResponse()` - Single-ticket draft generation stage.
 - `approveResponse()` - Human approval gate before reflection.
@@ -141,7 +141,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 ### `lib/analyzer.ts`
 
 - `assessBusinessRelevanceForProfile()` - Business-scope guardrail.
-- `understandForProfile()` - Category, intent, urgency, tags, and detected signals.
+- `understandForProfile()` - Category, intent, urgency, tags, and detected signals. Deterministic sender-name extraction (`extractSenderNameFromSignature()`) recognizes multi-line sign-offs ("Regards,\nSarah"), self-introductions ("this is X" / "my name is X" / "I'm X"), and same-line sign-offs ("Best, X") — feeds `understanding.extractedFields.senderName`, which the deterministic draft's `{{greetingLine}}` rendering (`lib/canonicalProblemEngine.ts`) already consumes on every branch.
 - `observe()` - Raw ticket observation.
 - `buildReasoning()` - Human-readable explanation of classification and memory reuse.
 - `buildConfidence()` - Confidence score and basis/uncertainty summary.

@@ -115,6 +115,22 @@ function emptyExtractedTicketFields(): ExtractedTicketFields {
   };
 }
 
+// Self-introduction patterns ("This is Grace Adeyemi", "my name is Sarah",
+// "I'm Sarah Johnson") — mirrors the equivalent patterns in
+// `extractSenderNameForResume` (app/page.tsx) so a fresh ticket gets the same
+// quality of deterministic name extraction as a resumed one.
+const SELF_INTRODUCTION_PATTERNS: RegExp[] = [
+  /\bmy name is\s+([A-Z][A-Za-z .'-]{1,80}?)(?:\s+from|\.|,|\n|$)/,
+  /\bthis is\s+([A-Z][A-Za-z .'-]{1,80}?)(?:\s+from|\.|,|\n|writing|calling|\n|$)/i,
+  /\bI'?m\s+([A-Z][A-Za-z .'-]{1,80}?)(?:\s+from|\.|,|\n|$)/
+];
+
+// Closing salutation, name on the same line ("Best, Grace Adeyemi",
+// "Regards, Sarah") — a single-paragraph message has no line break between
+// the sign-off word and the name, unlike the multi-line case below.
+const SAME_LINE_SIGNOFF_PATTERN =
+  /\b(?:best regards|kind regards|warm regards|many thanks|regards|sincerely|thanks|thank you|best)[,!]?\s+([A-Z][A-Za-z .'-]{1,80}?)(?:\.|,|\n|$)/;
+
 function extractSenderNameFromSignature(text: string): string | null {
   const lines = text
     .split(/\r?\n/)
@@ -129,6 +145,20 @@ function extractSenderNameFromSignature(text: string): string | null {
         return nextLine;
       }
     }
+  }
+
+  for (const pattern of SELF_INTRODUCTION_PATTERNS) {
+    const match = text.match(pattern);
+    const candidate = match?.[1]?.trim();
+    if (candidate && candidate.length >= 3 && !/@/.test(candidate)) {
+      return candidate;
+    }
+  }
+
+  const sameLineMatch = text.match(SAME_LINE_SIGNOFF_PATTERN);
+  const sameLineCandidate = sameLineMatch?.[1]?.trim();
+  if (sameLineCandidate && sameLineCandidate.length >= 3 && !/@/.test(sameLineCandidate)) {
+    return sameLineCandidate;
   }
 
   return null;
