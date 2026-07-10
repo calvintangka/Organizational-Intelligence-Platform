@@ -138,7 +138,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `discardTicket()` - Marks the active ticket as discarded, preserves the record, and resets the workspace. No knowledge artifacts created.
 - `retryAIDraft()` - Re-runs only the draft advisory call for the current ticket when AI fallback occurred.
 - `confirmAndResetOrganization()` and `resetOrganization()` - Protected danger-zone reset path.
-- Initial hydration/save effects - Load the selected org profile first, run the one-time legacy migration, then await org-owned persistence reads before setting `hydrated`; save effects pass the active org id and catch Promise rejections. Switching pauses saves, persists the old org, reloads every org-owned collection, and guards rapid/late async completions.
+- Initial hydration/save effects - Load the selected org profile first, run the one-time legacy migration, then await org-owned persistence reads before setting `hydrated`; save effects pass the active org id and catch Promise rejections. `selectOrganization(id, availableOrganizations?)` pauses saves, conditionally persists the old org only when hydrated at switch start, reloads every org-owned collection, and guards rapid/late async completions. Add/delete handlers pass the computed list and route active deletion through this same load sequence.
 
 ### `lib/analyzer.ts`
 

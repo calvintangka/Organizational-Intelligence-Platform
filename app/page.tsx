@@ -76,7 +76,6 @@ import {
 import {
   loadOrganizationProfile,
   saveOrganizationProfile,
-  resetOrganizationProfile,
   loadOrganizationList,
   saveOrganizationList,
   syncProfileIntoList,
@@ -1530,13 +1529,11 @@ export default function Home() {
   /** Reset Organization — wipes persisted memory and reseeds defaults. */
   function resetOrganization() {
     clearOrganization(organizationProfile.id);
-    const resetProfile = resetOrganizationProfile();
-    setOrganizationProfile(resetProfile);
-    setKnowledgeItems(seedOrganizationalKnowledge().map((item) => ({ ...item, organizationId: resetProfile.id })));
+    setKnowledgeItems(seedOrganizationalKnowledge().map((item) => ({ ...item, organizationId: organizationProfile.id })));
     setKnowledgeCandidates([]);
     setValidationRecords([]);
     setMemoryChangeRecords([]);
-    setOrgMetrics(seedOrgMetrics(resetProfile.id));
+    setOrgMetrics(seedOrgMetrics(organizationProfile.id));
     setIntelligenceLog([]);
     setEmergingPatterns(seedEmergingPatterns());
     setTicketRecords([]);
@@ -1563,19 +1560,22 @@ export default function Home() {
     addLogEntries([createLogEntry("Organization profile updated", `Representing ${profile.name} (${profile.industry})`)]);
   }
 
-  async function selectOrganization(id: string) {
-    const found = organizationList.find((org) => org.id === id);
+  async function selectOrganization(id: string, availableOrganizations: OrganizationProfile[] = organizationList) {
+    const found = availableOrganizations.find((org) => org.id === id);
     if (!found || found.id === organizationProfile.id) return;
     const generation = ++organizationSwitchGeneration.current;
+    const wasHydrated = hydrated;
     setHydrated(false);
     setErrorMessage("");
     resetWorkflowState();
     try {
       // Finish the current organization's writes before any new organization can
       // become active. The old id is passed explicitly to every adapter.
-      await persistOrganizationState(organizationProfile.id);
+      if (wasHydrated) {
+        await persistOrganizationState(organizationProfile.id);
+      }
       await saveOrganizationProfile(organizationProfile);
-      await saveOrganizationList(organizationList);
+      await saveOrganizationList(availableOrganizations);
       const loaded = await loadOrganizationState(found.id);
       if (generation !== organizationSwitchGeneration.current) return;
       setOrganizationProfile(found);
@@ -1602,18 +1602,17 @@ export default function Home() {
     const nextList = syncProfileIntoList(organizationList, profile);
     setOrganizationList(nextList);
     if (profile.id === organizationProfile.id) return;
-    await selectOrganization(profile.id);
+    await selectOrganization(profile.id, nextList);
   }
 
-  function deleteOrganization(id: string) {
-    setOrganizationList((list) => {
-      if (list.length <= 1) return list;
-      const next = list.filter((org) => org.id !== id);
-      if (id === organizationProfile.id && next.length > 0) {
-        setOrganizationProfile(next[0]);
-      }
-      return next;
-    });
+  async function deleteOrganization(id: string) {
+    if (organizationList.length <= 1) return;
+    const nextList = organizationList.filter((org) => org.id !== id);
+    if (nextList.length === organizationList.length) return;
+    setOrganizationList(nextList);
+    if (id === organizationProfile.id) {
+      await selectOrganization(nextList[0].id, nextList);
+    }
   }
 
   function createRelevanceLogEntries(relevance: BusinessRelevance): IntelligenceLogEntry[] {

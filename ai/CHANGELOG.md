@@ -13,6 +13,19 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-10] Fix TODO-002 organization lifecycle regressions
+**Layer:** coding
+**Task/Prompt:** Fix reset, delete, add, and hydration regressions in organization isolation without changing keys, migration, or the validated write pipeline.
+**Files changed:** `app/page.tsx`, `ai/CHANGELOG.md`, `ai/CURRENT_STATUS.md`, `ai/CODEBASE_MAP.md`
+**What changed:**
+- Reset now clears and reseeds only the active organization while preserving its profile and confirmation gate.
+- Active-organization deletion now clears only the deleted scope and reloads the fallback organization before re-enabling persistence.
+- New organization creation now switches through the same guarded scoped-load path using the computed organization list.
+- Switch pre-save now runs only when hydration was true at switch start, preventing defaults from overwriting state after a failed hydration.
+**Boundaries touched:** Boundary 2, Boundary 7, and Boundary 8 preserved; no memory write path or confirmation gate changed.
+**Verification:** `cmd /c npx tsc --noEmit` and `cmd /c npm run build` passed. Live browser verified active FastDrop reset stayed FastDrop and showed clean scoped memory, and new organization creation switched to `Isolation Test Org` with seed-default behavior. Active-Maesa deletion and corrupted-key recovery were not completed because the in-app browser hit CDP input/page-load timeouts.
+**Open items:** Repeat active deletion and corrupted scoped-key recovery in a stable browser session.
+
 ## [2026-07-10] Isolate organizational state by organization
 **Layer:** coding
 **Task/Prompt:** Implement TODO-002 / Phase 2 of Finding A-005: Organization Isolation.
