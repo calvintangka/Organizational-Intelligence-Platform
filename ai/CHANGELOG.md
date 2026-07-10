@@ -13,6 +13,18 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-10] Isolate organizational state by organization
+**Layer:** coding
+**Task/Prompt:** Implement TODO-002 / Phase 2 of Finding A-005: Organization Isolation.
+**Files changed:** `lib/orgMemory.ts`, `lib/ticketRecords.ts`, `app/page.tsx`, `ai/CHANGELOG.md`, `ai/CURRENT_STATUS.md`, `ai/CODEBASE_MAP.md`, `ai/ARCHITECTURE.md`
+**What changed:**
+- Added versioned organization-scoped localStorage keys for all organization-owned state and ticket counters.
+- Added a durable, copy-only migration from legacy global v2 keys to the active workspace organization; legacy keys remain untouched.
+- Made switching persist the old organization, reload all selected-organization state, and guard against stale async loads.
+**Boundaries touched:** Boundary 2, Boundary 7, and Boundary 8 were preserved.
+**Verification:** `cmd /c npx tsc --noEmit`; `cmd /c npm run build`; live browser check confirmed FastDrop starts without Maesa validated memory, switching back restores Maesa Login Issue state, and reload preserves Maesa state. `graphify update .` failed in the Windows uv trampoline. Raw localStorage inspection and the new FastDrop ticket scenario were not performed.
+**Open items:** Complete the remaining ticket submission/revalidation and raw-key checks in a browser surface that exposes localStorage inspection.
+
 ## [2026-07-10] Prepare persistence for future organization scoping
 **Layer:** coding
 **Task/Prompt:** Implement Phase 1 of Finding A-005: prepare OIP persistence for future organization-scoped shared storage without changing current localStorage behavior.

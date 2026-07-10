@@ -83,7 +83,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 ### Persistence and profile state
 
-- `lib/orgMemory.ts` - Async-compatible localStorage load/save helpers for knowledge, candidates, validations, memory changes, metrics, log, and patterns. Accepts org ids at the adapter boundary while intentionally keeping the current `v2` keys in Phase 1 of A-005.
+- `lib/orgMemory.ts` - Versioned organization-scoped localStorage load/save helpers for knowledge, candidates, validations, memory changes, metrics, log, and patterns. Owns the copy-only legacy v2 migration marker and active-organization migration.
 - `lib/organizationProfile.ts` - Async-compatible profile load/save helpers, normalization, and keyword-bank generation.
 - `lib/ticketRecords.ts` - Async-compatible ticket-record load/save helpers plus synchronous ticket-id counters and case-record utilities.
 - `lib/metrics.ts` - Metric defaults.
@@ -138,7 +138,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `discardTicket()` - Marks the active ticket as discarded, preserves the record, and resets the workspace. No knowledge artifacts created.
 - `retryAIDraft()` - Re-runs only the draft advisory call for the current ticket when AI fallback occurred.
 - `confirmAndResetOrganization()` and `resetOrganization()` - Protected danger-zone reset path.
-- Initial hydration/save effects - Load the selected org profile first, then await org-owned persistence reads before setting `hydrated`; fire-and-forget saves now catch Promise rejections so async adapter failures do not become silent unhandled rejections.
+- Initial hydration/save effects - Load the selected org profile first, run the one-time legacy migration, then await org-owned persistence reads before setting `hydrated`; save effects pass the active org id and catch Promise rejections. Switching pauses saves, persists the old org, reloads every org-owned collection, and guards rapid/late async completions.
 
 ### `lib/analyzer.ts`
 
@@ -190,7 +190,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `loadOrgMetrics()` / `saveOrgMetrics()` - Async-compatible organization metrics persistence.
 - `loadOrgLog()` / `saveOrgLog()` - Async-compatible intelligence-log persistence.
 - `loadEmergingPatterns()` / `saveEmergingPatterns()` - Async-compatible pattern persistence.
-- `clearOrganization()` - Destructive reset.
+- `clearOrganization(organizationId)` - Destructive reset scoped to one organization.
 
 ### `lib/bulkUpload.ts`
 

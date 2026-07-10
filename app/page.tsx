@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sidebar } from "@/components/maesa/Sidebar";
 import type { ActiveView } from "@/components/maesa/Sidebar";
 import { HomeView } from "@/components/views/HomeView";
@@ -71,6 +71,7 @@ import {
   saveValidationRecords,
   loadMemoryChangeRecords,
   saveMemoryChangeRecords,
+  migrateLegacyOrganizationStorage,
 } from "@/lib/orgMemory";
 import {
   loadOrganizationProfile,
@@ -88,7 +89,6 @@ import {
   upsertTicketRecord,
   loadTicketRecords,
   saveTicketRecords,
-  clearTicketRecords,
   computeEditDistance,
 } from "@/lib/ticketRecords";
 import { CaseLookupView } from "@/components/views/CaseLookupView";
@@ -588,6 +588,7 @@ export default function Home() {
   const [darkMode, setDarkMode] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRetryingDraft, setIsRetryingDraft] = useState(false);
+  const organizationSwitchGeneration = useRef(0);
 
   /* ---------- Persistence: load on mount, save on change ---------- */
 
@@ -598,6 +599,7 @@ export default function Home() {
       try {
         const loadedProfile = await loadOrganizationProfile();
         const orgId = loadedProfile.id;
+        migrateLegacyOrganizationStorage(orgId);
         const [
           loadedOrganizationList,
           loadedKnowledge,
@@ -654,6 +656,42 @@ export default function Home() {
     void operation.catch((error) => {
       reportPersistenceError(scope, error);
     });
+  }
+
+  async function persistOrganizationState(orgId: string): Promise<void> {
+    await Promise.all([
+      saveKnowledge(orgId, knowledgeItems),
+      saveKnowledgeCandidates(orgId, knowledgeCandidates),
+      saveValidationRecords(orgId, validationRecords),
+      saveMemoryChangeRecords(orgId, memoryChangeRecords),
+      saveOrgMetrics(orgId, orgMetrics),
+      saveOrgLog(orgId, intelligenceLog),
+      saveEmergingPatterns(orgId, emergingPatterns),
+      saveTicketRecords(orgId, ticketRecords)
+    ]);
+  }
+
+  async function loadOrganizationState(orgId: string) {
+    const [knowledge, candidates, validations, changes, loadedMetrics, log, patterns, tickets] = await Promise.all([
+      loadKnowledge(orgId),
+      loadKnowledgeCandidates(orgId),
+      loadValidationRecords(orgId),
+      loadMemoryChangeRecords(orgId),
+      loadOrgMetrics(orgId),
+      loadOrgLog(orgId),
+      loadEmergingPatterns(orgId),
+      loadTicketRecords(orgId)
+    ]);
+    return {
+      knowledge,
+      candidates,
+      validations,
+      changes,
+      metrics: { ...loadedMetrics, organizationId: loadedMetrics.organizationId ?? orgId },
+      log,
+      patterns,
+      tickets
+    };
   }
 
   useEffect(() => {
@@ -1491,7 +1529,7 @@ export default function Home() {
 
   /** Reset Organization — wipes persisted memory and reseeds defaults. */
   function resetOrganization() {
-    clearOrganization();
+    clearOrganization(organizationProfile.id);
     const resetProfile = resetOrganizationProfile();
     setOrganizationProfile(resetProfile);
     setKnowledgeItems(seedOrganizationalKnowledge().map((item) => ({ ...item, organizationId: resetProfile.id })));
@@ -1525,23 +1563,46 @@ export default function Home() {
     addLogEntries([createLogEntry("Organization profile updated", `Representing ${profile.name} (${profile.industry})`)]);
   }
 
-  function selectOrganization(id: string) {
+  async function selectOrganization(id: string) {
     const found = organizationList.find((org) => org.id === id);
     if (!found || found.id === organizationProfile.id) return;
-    setOrganizationProfile(found);
-    setBusinessRelevance(null);
-    setAiAdvisory(null);
+    const generation = ++organizationSwitchGeneration.current;
+    setHydrated(false);
     setErrorMessage("");
-    addLogEntries([createLogEntry("Organization switched", `Now representing ${found.name} (${found.industry})`)]);
+    resetWorkflowState();
+    try {
+      // Finish the current organization's writes before any new organization can
+      // become active. The old id is passed explicitly to every adapter.
+      await persistOrganizationState(organizationProfile.id);
+      await saveOrganizationProfile(organizationProfile);
+      await saveOrganizationList(organizationList);
+      const loaded = await loadOrganizationState(found.id);
+      if (generation !== organizationSwitchGeneration.current) return;
+      setOrganizationProfile(found);
+      setOrganizationList((list) => syncProfileIntoList(list, found));
+      setKnowledgeItems(loaded.knowledge);
+      setKnowledgeCandidates(loaded.candidates);
+      setValidationRecords(loaded.validations);
+      setMemoryChangeRecords(loaded.changes);
+      setOrgMetrics(loaded.metrics);
+      setIntelligenceLog(loaded.log);
+      setEmergingPatterns(loaded.patterns);
+      setTicketRecords(loaded.tickets);
+      setBusinessRelevance(null);
+      setAiAdvisory(null);
+      setHydrated(true);
+    } catch (error) {
+      if (generation !== organizationSwitchGeneration.current) return;
+      console.error("Failed to switch organization.", error);
+      setErrorMessage("Failed to load the selected organization. The organization switch was not completed.");
+    }
   }
 
-  function addOrganization(profile: OrganizationProfile) {
-    setOrganizationList((list) => syncProfileIntoList(list, profile));
-    setOrganizationProfile(profile);
-    setBusinessRelevance(null);
-    setAiAdvisory(null);
-    setErrorMessage("");
-    addLogEntries([createLogEntry("Organization created", `${profile.name} (${profile.industry})`)]);
+  async function addOrganization(profile: OrganizationProfile) {
+    const nextList = syncProfileIntoList(organizationList, profile);
+    setOrganizationList(nextList);
+    if (profile.id === organizationProfile.id) return;
+    await selectOrganization(profile.id);
   }
 
   function deleteOrganization(id: string) {

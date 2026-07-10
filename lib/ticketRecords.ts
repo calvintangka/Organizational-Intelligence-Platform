@@ -1,6 +1,7 @@
 import type { OrganizationProfile, TicketRecord, TicketRecordStatus } from "@/types";
 
 const STORAGE_VERSION = "v2";
+const ISOLATED_STORAGE_VERSION = "v1";
 const TICKET_RECORDS_KEY = `oip.ticketRecords.${STORAGE_VERSION}`;
 const TICKET_COUNTER_KEY = `oip.ticketCounter.${STORAGE_VERSION}`;
 
@@ -20,8 +21,10 @@ function write(key: string, value: unknown): void {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
 
-function resolveStorageKey(baseKey: string, _organizationId?: string): string {
-  return baseKey;
+function resolveStorageKey(baseKey: string, organizationId?: string): string {
+  if (!organizationId) return baseKey;
+  const resource = baseKey.replace(/^oip\./, "").replace(`.${STORAGE_VERSION}`, "");
+  return `oip.organization.${encodeURIComponent(organizationId)}.${resource}.${ISOLATED_STORAGE_VERSION}`;
 }
 
 function orgPrefix(profile: OrganizationProfile): string {
@@ -43,22 +46,25 @@ function todayStamp(): string {
   return `${y}${m}${day}`;
 }
 
-function loadCounters(): Record<string, number> {
-  return read<Record<string, number>>(TICKET_COUNTER_KEY) ?? {};
+function loadCounters(organizationId?: string): Record<string, number> {
+  const scoped = read<number>(resolveStorageKey(TICKET_COUNTER_KEY, organizationId));
+  if (organizationId && typeof scoped === "number") return { [organizationId]: scoped };
+  return read<Record<string, number>>(resolveStorageKey(TICKET_COUNTER_KEY, organizationId)) ?? {};
 }
 
-function saveCounters(counters: Record<string, number>): void {
-  write(TICKET_COUNTER_KEY, counters);
+function saveCounters(counters: Record<string, number>, organizationId?: string): void {
+  if (organizationId) write(resolveStorageKey(TICKET_COUNTER_KEY, organizationId), counters[organizationId] ?? 0);
+  else write(TICKET_COUNTER_KEY, counters);
 }
 
 export function generateTicketId(profile: OrganizationProfile): string {
   const prefix = orgPrefix(profile);
   const date = todayStamp();
-  const counters = loadCounters();
+  const counters = loadCounters(profile.id);
   const counterKey = `${profile.id}`;
   const next = (counters[counterKey] ?? 0) + 1;
   counters[counterKey] = next;
-  saveCounters(counters);
+  saveCounters(counters, profile.id);
   return `${prefix}-${date}-${String(next).padStart(4, "0")}`;
 }
 
@@ -113,11 +119,11 @@ export async function saveTicketRecords(
   write(resolveStorageKey(TICKET_RECORDS_KEY, organizationId), records);
 }
 
-export function clearTicketRecords(): void {
+export function clearTicketRecords(organizationId?: string): void {
   if (!hasStorage()) return;
   try {
-    window.localStorage.removeItem(TICKET_RECORDS_KEY);
-    window.localStorage.removeItem(TICKET_COUNTER_KEY);
+    window.localStorage.removeItem(resolveStorageKey(TICKET_RECORDS_KEY, organizationId));
+    window.localStorage.removeItem(resolveStorageKey(TICKET_COUNTER_KEY, organizationId));
   } catch {
     /* ignore */
   }

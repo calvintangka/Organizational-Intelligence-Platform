@@ -26,6 +26,8 @@ import { clearTicketRecords } from "@/lib/ticketRecords";
  */
 
 const STORAGE_VERSION = "v2";
+const ISOLATED_STORAGE_VERSION = "v1";
+export const ORGANIZATION_ISOLATION_MIGRATION_KEY = "oip.organizationIsolationMigration.v1";
 const KNOWLEDGE_KEY = `oip.knowledge.${STORAGE_VERSION}`;
 const ORG_METRICS_KEY = `oip.orgMetrics.${STORAGE_VERSION}`;
 const LOG_KEY = `oip.intelligenceLog.${STORAGE_VERSION}`;
@@ -55,8 +57,67 @@ function write(key: string, value: unknown): void {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
 
-function resolveStorageKey(baseKey: string, _organizationId?: string): string {
-  return baseKey;
+function resolveStorageKey(baseKey: string, organizationId?: string): string {
+  if (!organizationId) return baseKey;
+  const resource = baseKey.replace(/^oip\./, "").replace(`.${STORAGE_VERSION}`, "");
+  return `oip.organization.${encodeURIComponent(organizationId)}.${resource}.${ISOLATED_STORAGE_VERSION}`;
+}
+
+function hasKey(key: string): boolean {
+  return hasStorage() && window.localStorage.getItem(key) !== null;
+}
+
+function copyIfMissing<T>(legacyKey: string, scopedKey: string, transform: (value: T) => T): void {
+  if (!hasKey(legacyKey) || hasKey(scopedKey)) return;
+  const value = read<T>(legacyKey);
+  if (value !== null) write(scopedKey, transform(value));
+}
+
+/**
+ * Copy the pre-isolation v2 workspace into the active organization exactly once.
+ * Legacy keys are deliberately read-only here and remain in localStorage.
+ */
+export function migrateLegacyOrganizationStorage(organizationId: string): void {
+  if (!hasStorage() || !organizationId || hasKey(ORGANIZATION_ISOLATION_MIGRATION_KEY)) return;
+
+  copyIfMissing<KnowledgeItem[]>(KNOWLEDGE_KEY, resolveStorageKey(KNOWLEDGE_KEY, organizationId), (items) =>
+    items.map((item) => ({ ...item, organizationId }))
+  );
+  copyIfMissing<KnowledgeCandidate[]>(CANDIDATES_KEY, resolveStorageKey(CANDIDATES_KEY, organizationId), (items) =>
+    items.map((item) => ({ ...item, organizationId }))
+  );
+  copyIfMissing<ValidationRecord[]>(VALIDATION_RECORDS_KEY, resolveStorageKey(VALIDATION_RECORDS_KEY, organizationId), (items) =>
+    items.map((item) => ({ ...item, organizationId }))
+  );
+  copyIfMissing<MemoryChangeRecord[]>(MEMORY_CHANGES_KEY, resolveStorageKey(MEMORY_CHANGES_KEY, organizationId), (items) =>
+    items.map((item) => ({ ...item, organizationId }))
+  );
+  copyIfMissing<OrgMetrics>(ORG_METRICS_KEY, resolveStorageKey(ORG_METRICS_KEY, organizationId), (metrics) => ({
+    ...metrics,
+    organizationId
+  }));
+  copyIfMissing<IntelligenceLogEntry[]>(LOG_KEY, resolveStorageKey(LOG_KEY, organizationId), (entries) => entries);
+  copyIfMissing<EmergingPattern[]>(PATTERNS_KEY, resolveStorageKey(PATTERNS_KEY, organizationId), (patterns) =>
+    patterns.map((pattern) => ({ ...pattern, organizationId }))
+  );
+
+  const legacyTickets = read<Array<{ orgId?: string }>>("oip.ticketRecords.v2");
+  const scopedTicketsKey = `oip.organization.${encodeURIComponent(organizationId)}.ticketRecords.${ISOLATED_STORAGE_VERSION}`;
+  if (legacyTickets !== null && !hasKey(scopedTicketsKey)) {
+    write(scopedTicketsKey, legacyTickets.map((record) => ({ ...record, orgId: organizationId })));
+  }
+  const legacyCounters = read<Record<string, number>>("oip.ticketCounter.v2");
+  const scopedCounterKey = `oip.organization.${encodeURIComponent(organizationId)}.ticketCounter.${ISOLATED_STORAGE_VERSION}`;
+  if (legacyCounters !== null && !hasKey(scopedCounterKey)) {
+    write(scopedCounterKey, legacyCounters[organizationId] ?? 0);
+  }
+
+  write(ORGANIZATION_ISOLATION_MIGRATION_KEY, {
+    version: ISOLATED_STORAGE_VERSION,
+    sourceVersion: STORAGE_VERSION,
+    organizationId,
+    completedAt: new Date().toISOString()
+  });
 }
 
 /* ---------------------------- Knowledge ---------------------------- */
@@ -89,7 +150,7 @@ export async function loadKnowledge(organizationId?: string): Promise<KnowledgeI
     }
     return repaired;
   }
-  return seedOrganizationalKnowledge();
+  return seedOrganizationalKnowledge().map((item) => ({ ...item, organizationId }));
 }
 
 export async function saveKnowledge(organizationId: string | undefined, items: KnowledgeItem[]): Promise<void> {
@@ -215,17 +276,12 @@ export async function saveEmergingPatterns(
 /* ---------------------------- Reset ---------------------------- */
 
 /** Wipe persisted organizational memory and reseed fresh defaults. */
-export function clearOrganization(): void {
+export function clearOrganization(organizationId?: string): void {
   if (!hasStorage()) return;
   try {
-    window.localStorage.removeItem(KNOWLEDGE_KEY);
-    window.localStorage.removeItem(ORG_METRICS_KEY);
-    window.localStorage.removeItem(LOG_KEY);
-    window.localStorage.removeItem(PATTERNS_KEY);
-    window.localStorage.removeItem(CANDIDATES_KEY);
-    window.localStorage.removeItem(VALIDATION_RECORDS_KEY);
-    window.localStorage.removeItem(MEMORY_CHANGES_KEY);
-    clearTicketRecords();
+    const keys = [KNOWLEDGE_KEY, ORG_METRICS_KEY, LOG_KEY, PATTERNS_KEY, CANDIDATES_KEY, VALIDATION_RECORDS_KEY, MEMORY_CHANGES_KEY];
+    keys.forEach((key) => window.localStorage.removeItem(resolveStorageKey(key, organizationId)));
+    clearTicketRecords(organizationId);
   } catch {
     /* ignore */
   }

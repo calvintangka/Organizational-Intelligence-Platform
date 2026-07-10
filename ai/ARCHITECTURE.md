@@ -194,7 +194,7 @@ The route defaults to:
 
 ## Persistence
 
-Persistence is intentionally simple and entirely client-side. `lib/orgMemory.ts` stores the prototype state in `window.localStorage`, including:
+Persistence is intentionally simple and entirely client-side. `lib/orgMemory.ts` stores the prototype state in `window.localStorage` under organization-scoped, versioned keys (`oip.organization.<encoded-org-id>.<resource>.v1`), including:
 
 - knowledge items
 - knowledge candidates
@@ -203,6 +203,8 @@ Persistence is intentionally simple and entirely client-side. `lib/orgMemory.ts`
 - organization metrics
 - intelligence log
 - emerging patterns
+
+The first load performs a durable, copy-only migration from legacy global `oip.*.v2` keys to the organization that owns the active workspace. Legacy keys are never deleted or rewritten. Migration is guarded by `oip.organizationIsolationMigration.v1`, and existing scoped keys are not overwritten. `app/page.tsx` pauses persistence during organization switches, saves the previous organization explicitly, reloads all organization-owned collections for the selected id, and ignores late loads from superseded switches.
 
 There is no database, backend write API, authentication boundary, or multi-user concurrency model. `loadKnowledge()` normalizes and deduplicates stored knowledge through `withLearningDefaults()` and `withCanonicalProblemDefaults()` before the app hydrates, then runs narrow self-heal migrations for corrupted top-level templates and legacy lesson-specific greetings/ticket references.
 
@@ -233,7 +235,7 @@ The code intentionally simplifies the broader OIP vision documented elsewhere in
   The only effective reviewer role in code is the prototype's built-in `knowledge_validator` flow. There are no distinct human personas, permissions, or approval queues.
 
 - Client-side persistence, not production storage
-  `localStorage` is the only persistence layer. There is no server-side audit store, tenant isolation, or durable shared backend.
+  `localStorage` is the only persistence layer. Organization-level key isolation exists for the prototype, but there is no server-side audit store, authentication boundary, or durable shared backend.
 
 - Simplified trust model
   Trust is a bounded numeric score in `lib/trustEngine.ts`, driven by reuse outcomes and gated by validation. It is not a probabilistic or policy-engine-driven confidence system.
