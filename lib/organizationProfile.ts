@@ -71,24 +71,16 @@ export function normalizeOrganizationProfile(profile: OrganizationProfile): Orga
   };
 }
 
-export function loadOrganizationProfile(): OrganizationProfile {
+function readOrganizationProfileFromStorage(): OrganizationProfile {
   if (!hasStorage()) return defaultOrganizationProfile;
-  try {
-    const raw = window.localStorage.getItem(ORGANIZATION_PROFILE_KEY);
-    if (!raw) return defaultOrganizationProfile;
-    return normalizeOrganizationProfile(JSON.parse(raw) as OrganizationProfile);
-  } catch {
-    return defaultOrganizationProfile;
-  }
+  const raw = window.localStorage.getItem(ORGANIZATION_PROFILE_KEY);
+  if (!raw) return defaultOrganizationProfile;
+  return normalizeOrganizationProfile(JSON.parse(raw) as OrganizationProfile);
 }
 
-export function saveOrganizationProfile(profile: OrganizationProfile): void {
+export async function saveOrganizationProfile(profile: OrganizationProfile): Promise<void> {
   if (!hasStorage()) return;
-  try {
-    window.localStorage.setItem(ORGANIZATION_PROFILE_KEY, JSON.stringify(normalizeOrganizationProfile(profile)));
-  } catch {
-    /* ignore localStorage errors in the prototype */
-  }
+  window.localStorage.setItem(ORGANIZATION_PROFILE_KEY, JSON.stringify(normalizeOrganizationProfile(profile)));
 }
 
 export function resetOrganizationProfile(): OrganizationProfile {
@@ -111,27 +103,23 @@ export function findSeedOrganizationProfile(profileId: string): OrganizationProf
  * ORGANIZATION_PROFILE_KEY so the learning engine is unaffected, while the full switchable list
  * lives here. Seeds the built-in profiles on first run.
  */
-export function loadOrganizationList(): OrganizationProfile[] {
-  const seeded = seedOrganizationProfiles.map(normalizeOrganizationProfile);
-  if (!hasStorage()) return seeded;
-  try {
-    const raw = window.localStorage.getItem(ORGANIZATION_LIST_KEY);
-    if (!raw) return seeded;
-    const parsed = JSON.parse(raw) as OrganizationProfile[];
-    if (!Array.isArray(parsed) || parsed.length === 0) return seeded;
-    return parsed.map(normalizeOrganizationProfile);
-  } catch {
-    return seeded;
-  }
+export async function loadOrganizationProfile(): Promise<OrganizationProfile> {
+  return readOrganizationProfileFromStorage();
 }
 
-export function saveOrganizationList(list: OrganizationProfile[]): void {
+export async function loadOrganizationList(): Promise<OrganizationProfile[]> {
+  const seeded = seedOrganizationProfiles.map(normalizeOrganizationProfile);
+  if (!hasStorage()) return seeded;
+  const raw = window.localStorage.getItem(ORGANIZATION_LIST_KEY);
+  if (!raw) return seeded;
+  const parsed = JSON.parse(raw) as OrganizationProfile[];
+  if (!Array.isArray(parsed) || parsed.length === 0) return seeded;
+  return parsed.map(normalizeOrganizationProfile);
+}
+
+export async function saveOrganizationList(list: OrganizationProfile[]): Promise<void> {
   if (!hasStorage()) return;
-  try {
-    window.localStorage.setItem(ORGANIZATION_LIST_KEY, JSON.stringify(list.map(normalizeOrganizationProfile)));
-  } catch {
-    /* ignore localStorage errors in the prototype */
-  }
+  window.localStorage.setItem(ORGANIZATION_LIST_KEY, JSON.stringify(list.map(normalizeOrganizationProfile)));
 }
 
 /** Merge the currently-selected profile into the list so edits to it stay reflected in the switcher. */

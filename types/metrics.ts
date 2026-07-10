@@ -46,4 +46,5 @@ export interface OrgMetrics {
   aiAgreementSamples?: number;
   aiAgreementTotal?: number;
   humanAcceptedAISuggestions?: number;
+  organizationId?: string;
 }

@@ -540,7 +540,7 @@ export default function Home() {
   const [organizationProfile, setOrganizationProfile] = useState<OrganizationProfile>(defaultOrganizationProfile);
   const [organizationList, setOrganizationList] = useState<OrganizationProfile[]>(seedOrganizationProfiles);
   const [metrics, setMetrics] = useState<Metrics>(createInitialMetrics);
-  const [orgMetrics, setOrgMetrics] = useState<OrgMetrics>(seedOrgMetrics);
+  const [orgMetrics, setOrgMetrics] = useState<OrgMetrics>(() => seedOrgMetrics(defaultOrganizationProfile.id));
   const [hydrated, setHydrated] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [lastApprovedSourceTicketId, setLastApprovedSourceTicketId] = useState<string | null>(null);
@@ -592,59 +592,108 @@ export default function Home() {
   /* ---------- Persistence: load on mount, save on change ---------- */
 
   useEffect(() => {
-    const loadedProfile = loadOrganizationProfile();
-    setOrganizationProfile(loadedProfile);
-    setOrganizationList(syncProfileIntoList(loadOrganizationList(), loadedProfile));
-    setKnowledgeItems(loadKnowledge());
-    setKnowledgeCandidates(loadKnowledgeCandidates());
-    setValidationRecords(loadValidationRecords());
-    setMemoryChangeRecords(loadMemoryChangeRecords());
-    setOrgMetrics(loadOrgMetrics());
-    setIntelligenceLog(loadOrgLog());
-    setEmergingPatterns(loadEmergingPatterns());
-    setTicketRecords(loadTicketRecords());
-    setDarkMode(window.localStorage.getItem("maesa-theme") === "dark");
-    setHydrated(true);
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const loadedProfile = await loadOrganizationProfile();
+        const orgId = loadedProfile.id;
+        const [
+          loadedOrganizationList,
+          loadedKnowledge,
+          loadedCandidates,
+          loadedValidationRecords,
+          loadedMemoryChangeRecords,
+          loadedOrgMetrics,
+          loadedIntelligenceLog,
+          loadedPatterns,
+          loadedTicketRecords
+        ] = await Promise.all([
+          loadOrganizationList(),
+          loadKnowledge(orgId),
+          loadKnowledgeCandidates(orgId),
+          loadValidationRecords(orgId),
+          loadMemoryChangeRecords(orgId),
+          loadOrgMetrics(orgId),
+          loadOrgLog(orgId),
+          loadEmergingPatterns(orgId),
+          loadTicketRecords(orgId)
+        ]);
+
+        if (cancelled) return;
+
+        setOrganizationProfile(loadedProfile);
+        setOrganizationList(syncProfileIntoList(loadedOrganizationList, loadedProfile));
+        setKnowledgeItems(loadedKnowledge);
+        setKnowledgeCandidates(loadedCandidates);
+        setValidationRecords(loadedValidationRecords);
+        setMemoryChangeRecords(loadedMemoryChangeRecords);
+        setOrgMetrics({ ...loadedOrgMetrics, organizationId: loadedOrgMetrics.organizationId ?? orgId });
+        setIntelligenceLog(loadedIntelligenceLog);
+        setEmergingPatterns(loadedPatterns);
+        setTicketRecords(loadedTicketRecords);
+        setDarkMode(window.localStorage.getItem("maesa-theme") === "dark");
+        setHydrated(true);
+      } catch (error) {
+        if (cancelled) return;
+        console.error("Failed to hydrate persistence state.", error);
+        setErrorMessage("Failed to load persisted organization data. Hydration was left incomplete to avoid overwriting existing browser storage.");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  useEffect(() => {
-    if (hydrated) saveKnowledge(knowledgeItems);
-  }, [knowledgeItems, hydrated]);
+  function reportPersistenceError(scope: string, error: unknown) {
+    console.error(`Persistence ${scope} failed.`, error);
+  }
+
+  function queuePersistenceSave(scope: string, operation: Promise<void>) {
+    void operation.catch((error) => {
+      reportPersistenceError(scope, error);
+    });
+  }
 
   useEffect(() => {
-    if (hydrated) saveKnowledgeCandidates(knowledgeCandidates);
-  }, [knowledgeCandidates, hydrated]);
+    if (hydrated) queuePersistenceSave("saveKnowledge", saveKnowledge(organizationProfile.id, knowledgeItems));
+  }, [knowledgeItems, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) saveValidationRecords(validationRecords);
-  }, [validationRecords, hydrated]);
+    if (hydrated) queuePersistenceSave("saveKnowledgeCandidates", saveKnowledgeCandidates(organizationProfile.id, knowledgeCandidates));
+  }, [knowledgeCandidates, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) saveMemoryChangeRecords(memoryChangeRecords);
-  }, [memoryChangeRecords, hydrated]);
+    if (hydrated) queuePersistenceSave("saveValidationRecords", saveValidationRecords(organizationProfile.id, validationRecords));
+  }, [validationRecords, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) saveOrgMetrics(orgMetrics);
-  }, [orgMetrics, hydrated]);
+    if (hydrated) queuePersistenceSave("saveMemoryChangeRecords", saveMemoryChangeRecords(organizationProfile.id, memoryChangeRecords));
+  }, [memoryChangeRecords, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) saveOrgLog(intelligenceLog);
-  }, [intelligenceLog, hydrated]);
+    if (hydrated) queuePersistenceSave("saveOrgMetrics", saveOrgMetrics(organizationProfile.id, orgMetrics));
+  }, [orgMetrics, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) saveEmergingPatterns(emergingPatterns);
-  }, [emergingPatterns, hydrated]);
+    if (hydrated) queuePersistenceSave("saveOrgLog", saveOrgLog(organizationProfile.id, intelligenceLog));
+  }, [intelligenceLog, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) saveTicketRecords(ticketRecords);
-  }, [ticketRecords, hydrated]);
+    if (hydrated) queuePersistenceSave("saveEmergingPatterns", saveEmergingPatterns(organizationProfile.id, emergingPatterns));
+  }, [emergingPatterns, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) saveOrganizationProfile(organizationProfile);
+    if (hydrated) queuePersistenceSave("saveTicketRecords", saveTicketRecords(organizationProfile.id, ticketRecords));
+  }, [ticketRecords, organizationProfile.id, hydrated]);
+
+  useEffect(() => {
+    if (hydrated) queuePersistenceSave("saveOrganizationProfile", saveOrganizationProfile(organizationProfile));
   }, [organizationProfile, hydrated]);
 
   useEffect(() => {
-    if (hydrated) saveOrganizationList(organizationList);
+    if (hydrated) queuePersistenceSave("saveOrganizationList", saveOrganizationList(organizationList));
   }, [organizationList, hydrated]);
 
   useEffect(() => {
@@ -729,6 +778,18 @@ export default function Home() {
     return item ? JSON.parse(JSON.stringify(item)) as KnowledgeItem : null;
   }
 
+  function stampKnowledgeItemOrganization(item: KnowledgeItem): KnowledgeItem {
+    return { ...item, organizationId: item.organizationId ?? organizationProfile.id };
+  }
+
+  function stampKnowledgeItemSnapshotOrganization(item: KnowledgeItem | null): KnowledgeItem | null {
+    return item ? stampKnowledgeItemOrganization(snapshotKnowledgeItem(item)!) : null;
+  }
+
+  function stampPatternOrganization(pattern: EmergingPattern): EmergingPattern {
+    return { ...pattern, organizationId: pattern.organizationId ?? organizationProfile.id };
+  }
+
   function latestVersionId(item: KnowledgeItem): string | undefined {
     const versions = item.knowledgeVersions ?? [];
     return versions.length > 0 ? versions[versions.length - 1].versionId : undefined;
@@ -775,27 +836,33 @@ export default function Home() {
     memoryChange: MemoryChangeRecord;
   } {
     const timestamp = new Date().toISOString();
+    const organizationId = candidate.organizationId ?? organizationProfile.id;
+    const stampedAfterState = stampKnowledgeItemOrganization(afterState);
     const validation: ValidationRecord = {
       id: makeRecordId("validation"),
+      organizationId,
       candidateId: candidate.id,
-      knowledgeId: afterState.id,
-      knowledgeVersionId: latestVersionId(afterState),
+      knowledgeId: stampedAfterState.id,
+      knowledgeVersionId: latestVersionId(stampedAfterState),
       decision: "approved",
       actor: "Prototype Knowledge Validator",
       roleExercised: "knowledge_validator",
       rationale,
       timestamp
     };
-    const validatedCandidate: KnowledgeCandidate = { ...candidate, status: "validated" };
-    const validatedItem = withValidationMetadata(afterState, validatedCandidate, validation);
+    const validatedCandidate: KnowledgeCandidate = { ...candidate, organizationId, status: "validated" };
+    const validatedItem = stampKnowledgeItemOrganization(
+      withValidationMetadata(stampedAfterState, validatedCandidate, validation)
+    );
     const memoryChange: MemoryChangeRecord = {
       id: makeRecordId("memory-change"),
+      organizationId,
       knowledgeId: validatedItem.id,
       candidateId: validatedCandidate.id,
       validationRecordId: validation.id,
       changeType: validatedCandidate.proposedAction,
-      beforeState: snapshotKnowledgeItem(beforeState),
-      afterState: snapshotKnowledgeItem(validatedItem)!,
+      beforeState: stampKnowledgeItemSnapshotOrganization(beforeState),
+      afterState: stampKnowledgeItemSnapshotOrganization(validatedItem)!,
       timestamp
     };
 
@@ -843,6 +910,7 @@ export default function Home() {
   }): KnowledgeCandidate {
     return {
       id: makeRecordId("candidate"),
+      organizationId: organizationProfile.id,
       sourceTicketIds: input.sourceTicketIds,
       proposedAction: input.action,
       proposedContent: {
@@ -1091,7 +1159,7 @@ export default function Home() {
 
     const result = detectEmergingPattern(ticket, und, emergingPatterns);
     if (!result) return;
-    let pattern = result.pattern;
+    let pattern = stampPatternOrganization(result.pattern);
     if (aiAdapter.config.mode !== "disabled") {
       const patternResult = await aiAdapter.provider.suggestPatternName({
         ticket,
@@ -1118,8 +1186,12 @@ export default function Home() {
         createLogEntry("Pattern details", `Category: ${result.pattern.category} · Tags: ${result.pattern.tags.join(", ")}`)
       ]);
     } else {
-      setEmergingPatterns((prev) => upsertEmergingPattern(prev, ticket, und, pattern));
-      const updated = upsertEmergingPattern(emergingPatterns, ticket, und, pattern);
+      setEmergingPatterns((prev) =>
+        upsertEmergingPattern(prev, ticket, und, pattern).map((entry) => stampPatternOrganization(entry))
+      );
+      const updated = upsertEmergingPattern(emergingPatterns, ticket, und, pattern).map((entry) =>
+        stampPatternOrganization(entry)
+      );
       const updatedPattern = updated.find((p) => p.id === pattern.id);
       const statusChanged = updatedPattern && updatedPattern.status !== pattern.status;
       const entries = [
@@ -1149,7 +1221,7 @@ export default function Home() {
     const pattern = emergingPatterns.find((p) => p.id === patternId);
     if (!pattern) return;
 
-    const newKnowledge = promotePatternToCanonicalProblem(pattern);
+    const newKnowledge = stampKnowledgeItemOrganization(promotePatternToCanonicalProblem(pattern));
     const candidate = createCandidate({
       action: "create_new",
       sourceTicketIds: pattern.exampleTickets.map((example) => example.ticketId),
@@ -1420,12 +1492,13 @@ export default function Home() {
   /** Reset Organization — wipes persisted memory and reseeds defaults. */
   function resetOrganization() {
     clearOrganization();
-    setOrganizationProfile(resetOrganizationProfile());
-    setKnowledgeItems(seedOrganizationalKnowledge());
+    const resetProfile = resetOrganizationProfile();
+    setOrganizationProfile(resetProfile);
+    setKnowledgeItems(seedOrganizationalKnowledge().map((item) => ({ ...item, organizationId: resetProfile.id })));
     setKnowledgeCandidates([]);
     setValidationRecords([]);
     setMemoryChangeRecords([]);
-    setOrgMetrics(seedOrgMetrics());
+    setOrgMetrics(seedOrgMetrics(resetProfile.id));
     setIntelligenceLog([]);
     setEmergingPatterns(seedEmergingPatterns());
     setTicketRecords([]);

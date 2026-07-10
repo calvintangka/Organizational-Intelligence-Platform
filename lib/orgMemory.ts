@@ -45,22 +45,18 @@ function todayKey(): string {
 
 function read<T>(key: string): T | null {
   if (!hasStorage()) return null;
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return null;
-    return JSON.parse(raw) as T;
-  } catch {
-    return null;
-  }
+  const raw = window.localStorage.getItem(key);
+  if (!raw) return null;
+  return JSON.parse(raw) as T;
 }
 
 function write(key: string, value: unknown): void {
   if (!hasStorage()) return;
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    /* ignore quota / serialization errors in the prototype */
-  }
+  window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+function resolveStorageKey(baseKey: string, _organizationId?: string): string {
+  return baseKey;
 }
 
 /* ---------------------------- Knowledge ---------------------------- */
@@ -71,8 +67,8 @@ export function seedOrganizationalKnowledge(): KnowledgeItem[] {
   );
 }
 
-export function loadKnowledge(): KnowledgeItem[] {
-  const stored = read<KnowledgeItem[]>(KNOWLEDGE_KEY);
+export async function loadKnowledge(organizationId?: string): Promise<KnowledgeItem[]> {
+  const stored = read<KnowledgeItem[]>(resolveStorageKey(KNOWLEDGE_KEY, organizationId));
   if (stored && Array.isArray(stored) && stored.length > 0) {
     const normalized = stored.map((item) => withCanonicalProblemDefaults(withLearningDefaults(item)));
     // Migration: collapse any duplicate canonical problems left over from earlier
@@ -85,49 +81,62 @@ export function loadKnowledge(): KnowledgeItem[] {
     // customer greeting or hard-coded ticket reference instead of reusable placeholders.
     const { items: repaired, repairedCount: repairedLessonCount } = repairLegacyLessonResponseTemplates(repairedTemplates);
     if (deduped.length !== normalized.length || repairedTemplateCount > 0 || repairedLessonCount > 0) {
-      saveKnowledge(repaired);
+      try {
+        await saveKnowledge(organizationId, repaired);
+      } catch {
+        /* keep load behavior intact even if a self-heal writeback fails */
+      }
     }
     return repaired;
   }
   return seedOrganizationalKnowledge();
 }
 
-export function saveKnowledge(items: KnowledgeItem[]): void {
-  write(KNOWLEDGE_KEY, items);
+export async function saveKnowledge(organizationId: string | undefined, items: KnowledgeItem[]): Promise<void> {
+  write(resolveStorageKey(KNOWLEDGE_KEY, organizationId), items);
 }
 
 /* ---------------------- Validation and memory change history ---------------------- */
 
-export function loadKnowledgeCandidates(): KnowledgeCandidate[] {
-  const stored = read<KnowledgeCandidate[]>(CANDIDATES_KEY);
+export async function loadKnowledgeCandidates(organizationId?: string): Promise<KnowledgeCandidate[]> {
+  const stored = read<KnowledgeCandidate[]>(resolveStorageKey(CANDIDATES_KEY, organizationId));
   return stored && Array.isArray(stored) ? stored : [];
 }
 
-export function saveKnowledgeCandidates(candidates: KnowledgeCandidate[]): void {
-  write(CANDIDATES_KEY, candidates);
+export async function saveKnowledgeCandidates(
+  organizationId: string | undefined,
+  candidates: KnowledgeCandidate[]
+): Promise<void> {
+  write(resolveStorageKey(CANDIDATES_KEY, organizationId), candidates);
 }
 
-export function loadValidationRecords(): ValidationRecord[] {
-  const stored = read<ValidationRecord[]>(VALIDATION_RECORDS_KEY);
+export async function loadValidationRecords(organizationId?: string): Promise<ValidationRecord[]> {
+  const stored = read<ValidationRecord[]>(resolveStorageKey(VALIDATION_RECORDS_KEY, organizationId));
   return stored && Array.isArray(stored) ? stored : [];
 }
 
-export function saveValidationRecords(records: ValidationRecord[]): void {
-  write(VALIDATION_RECORDS_KEY, records);
+export async function saveValidationRecords(
+  organizationId: string | undefined,
+  records: ValidationRecord[]
+): Promise<void> {
+  write(resolveStorageKey(VALIDATION_RECORDS_KEY, organizationId), records);
 }
 
-export function loadMemoryChangeRecords(): MemoryChangeRecord[] {
-  const stored = read<MemoryChangeRecord[]>(MEMORY_CHANGES_KEY);
+export async function loadMemoryChangeRecords(organizationId?: string): Promise<MemoryChangeRecord[]> {
+  const stored = read<MemoryChangeRecord[]>(resolveStorageKey(MEMORY_CHANGES_KEY, organizationId));
   return stored && Array.isArray(stored) ? stored : [];
 }
 
-export function saveMemoryChangeRecords(records: MemoryChangeRecord[]): void {
-  write(MEMORY_CHANGES_KEY, records);
+export async function saveMemoryChangeRecords(
+  organizationId: string | undefined,
+  records: MemoryChangeRecord[]
+): Promise<void> {
+  write(resolveStorageKey(MEMORY_CHANGES_KEY, organizationId), records);
 }
 
 /* ---------------------------- Org metrics ---------------------------- */
 
-export function seedOrgMetrics(): OrgMetrics {
+export function seedOrgMetrics(organizationId?: string): OrgMetrics {
   return {
     lifetimeTickets: 0,
     knowledgeReused: 0,
@@ -147,13 +156,14 @@ export function seedOrgMetrics(): OrgMetrics {
     aiFallbacks: 0,
     aiAgreementSamples: 0,
     aiAgreementTotal: 0,
-    humanAcceptedAISuggestions: 0
+    humanAcceptedAISuggestions: 0,
+    organizationId
   };
 }
 
-export function loadOrgMetrics(): OrgMetrics {
-  const stored = read<OrgMetrics>(ORG_METRICS_KEY);
-  if (!stored) return seedOrgMetrics();
+export async function loadOrgMetrics(organizationId?: string): Promise<OrgMetrics> {
+  const stored = read<OrgMetrics>(resolveStorageKey(ORG_METRICS_KEY, organizationId));
+  if (!stored) return seedOrgMetrics(organizationId);
 
   // Roll over the "today" growth counter if the stored date is stale.
   if (stored.memoryGrowthDate !== todayKey()) {
@@ -162,21 +172,24 @@ export function loadOrgMetrics(): OrgMetrics {
   return stored;
 }
 
-export function saveOrgMetrics(metrics: OrgMetrics): void {
-  write(ORG_METRICS_KEY, metrics);
+export async function saveOrgMetrics(organizationId: string | undefined, metrics: OrgMetrics): Promise<void> {
+  write(resolveStorageKey(ORG_METRICS_KEY, organizationId), metrics);
 }
 
 /* ---------------------------- Intelligence log ---------------------------- */
 
-export function loadOrgLog(): IntelligenceLogEntry[] {
-  const stored = read<IntelligenceLogEntry[]>(LOG_KEY);
+export async function loadOrgLog(organizationId?: string): Promise<IntelligenceLogEntry[]> {
+  const stored = read<IntelligenceLogEntry[]>(resolveStorageKey(LOG_KEY, organizationId));
   return stored && Array.isArray(stored) ? stored : [];
 }
 
-export function saveOrgLog(entries: IntelligenceLogEntry[]): void {
+export async function saveOrgLog(
+  organizationId: string | undefined,
+  entries: IntelligenceLogEntry[]
+): Promise<void> {
   // Keep only the most recent entries to bound storage size.
   const trimmed = entries.slice(-MAX_LOG_ENTRIES);
-  write(LOG_KEY, trimmed);
+  write(resolveStorageKey(LOG_KEY, organizationId), trimmed);
 }
 
 /* ---------------------- Emerging Patterns ---------------------- */
@@ -185,15 +198,18 @@ export function seedEmergingPatterns(): EmergingPattern[] {
   return [];
 }
 
-export function loadEmergingPatterns(): EmergingPattern[] {
-  const stored = read<EmergingPattern[]>(PATTERNS_KEY);
+export async function loadEmergingPatterns(organizationId?: string): Promise<EmergingPattern[]> {
+  const stored = read<EmergingPattern[]>(resolveStorageKey(PATTERNS_KEY, organizationId));
   return stored && Array.isArray(stored) && stored.length > 0
     ? stored
     : seedEmergingPatterns();
 }
 
-export function saveEmergingPatterns(patterns: EmergingPattern[]): void {
-  write(PATTERNS_KEY, patterns);
+export async function saveEmergingPatterns(
+  organizationId: string | undefined,
+  patterns: EmergingPattern[]
+): Promise<void> {
+  write(resolveStorageKey(PATTERNS_KEY, organizationId), patterns);
 }
 
 /* ---------------------------- Reset ---------------------------- */

@@ -40,6 +40,7 @@ export interface KnowledgeCandidateContent {
 
 export interface KnowledgeCandidate {
   id: string;
+  organizationId?: string;
   sourceTicketIds: string[];
   proposedAction: ReflectionAction;
   proposedContent: KnowledgeCandidateContent;
@@ -51,6 +52,7 @@ export interface KnowledgeCandidate {
 
 export interface ValidationRecord {
   id: string;
+  organizationId?: string;
   candidateId: string;
   knowledgeId?: string;
   knowledgeVersionId?: string;
@@ -63,6 +65,7 @@ export interface ValidationRecord {
 
 export interface MemoryChangeRecord {
   id: string;
+  organizationId?: string;
   knowledgeId: string;
   candidateId: string;
   validationRecordId: string;
@@ -143,6 +146,7 @@ export interface ReflectionCommitInput {
 
 export interface KnowledgeItem {
   id: string;
+  organizationId?: string;
   title: string;
   problem: string;
   approvedAnswer: string;

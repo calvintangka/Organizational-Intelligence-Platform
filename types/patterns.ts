@@ -7,6 +7,7 @@ export interface EmergingPatternExample {
 
 export interface EmergingPattern {
   id: string;
+  organizationId?: string;
   title: string;
   summary: string;
   category: string;

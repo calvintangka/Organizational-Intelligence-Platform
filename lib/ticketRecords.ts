@@ -10,22 +10,18 @@ function hasStorage(): boolean {
 
 function read<T>(key: string): T | null {
   if (!hasStorage()) return null;
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return null;
-    return JSON.parse(raw) as T;
-  } catch {
-    return null;
-  }
+  const raw = window.localStorage.getItem(key);
+  if (!raw) return null;
+  return JSON.parse(raw) as T;
 }
 
 function write(key: string, value: unknown): void {
   if (!hasStorage()) return;
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    /* ignore quota errors in prototype */
-  }
+  window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+function resolveStorageKey(baseKey: string, _organizationId?: string): string {
+  return baseKey;
 }
 
 function orgPrefix(profile: OrganizationProfile): string {
@@ -105,13 +101,16 @@ export function updateTicketRecordStatus(
   return { ...record, status };
 }
 
-export function loadTicketRecords(): TicketRecord[] {
-  const stored = read<TicketRecord[]>(TICKET_RECORDS_KEY);
+export async function loadTicketRecords(organizationId?: string): Promise<TicketRecord[]> {
+  const stored = read<TicketRecord[]>(resolveStorageKey(TICKET_RECORDS_KEY, organizationId));
   return stored && Array.isArray(stored) ? stored : [];
 }
 
-export function saveTicketRecords(records: TicketRecord[]): void {
-  write(TICKET_RECORDS_KEY, records);
+export async function saveTicketRecords(
+  organizationId: string | undefined,
+  records: TicketRecord[]
+): Promise<void> {
+  write(resolveStorageKey(TICKET_RECORDS_KEY, organizationId), records);
 }
 
 export function clearTicketRecords(): void {

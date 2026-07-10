@@ -18,7 +18,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 - `app/layout.tsx` - Root HTML shell and metadata.
 - `app/globals.css` - Global styling and design tokens used by the prototype UI.
-- `app/page.tsx` - Main client orchestrator; owns pipeline state, persistence wiring, view selection, and all write-path coordination.
+- `app/page.tsx` - Main client orchestrator; owns pipeline state, profile-first hydration, async persistence wiring, view selection, and all write-path coordination.
 - `app/api/ai/chat/route.ts` - LM Studio proxy route with request validation, timeout, and diagnostic headers.
 - `app/api/ai/claude/route.ts` - Claude API proxy route; translates OpenAI-format requests to Anthropic Messages API, returns OpenAI-compatible responses. Reads `ANTHROPIC_API_KEY` from env (server-side only). Returns 503 if key is missing.
 
@@ -83,8 +83,9 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 ### Persistence and profile state
 
-- `lib/orgMemory.ts` - localStorage load/save helpers for knowledge, candidates, validations, memory changes, metrics, log, and patterns.
-- `lib/organizationProfile.ts` - Profile load/save helpers, normalization, and keyword-bank generation.
+- `lib/orgMemory.ts` - Async-compatible localStorage load/save helpers for knowledge, candidates, validations, memory changes, metrics, log, and patterns. Accepts org ids at the adapter boundary while intentionally keeping the current `v2` keys in Phase 1 of A-005.
+- `lib/organizationProfile.ts` - Async-compatible profile load/save helpers, normalization, and keyword-bank generation.
+- `lib/ticketRecords.ts` - Async-compatible ticket-record load/save helpers plus synchronous ticket-id counters and case-record utilities.
 - `lib/metrics.ts` - Metric defaults.
 - `lib/intelligenceLog.ts` - Event-log helpers.
 - `lib/demoState.ts` - Demo data helpers.
@@ -105,12 +106,12 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 - `types/ticket.ts` - `Ticket`, `TicketStatus`, `TicketRecordStatus` (includes `discarded`).
 - `types/oip.ts` - `Observation`, `Understanding`, `ReasoningSummary`, `Confidence`, `BusinessRelevance`, `BusinessDomainClassification`, `IntelligenceLogEntry`.
-- `types/knowledge.ts` - `KnowledgeItem`, `Lesson`, `KnowledgeCandidate`, `ValidationRecord`, `MemoryChangeRecord`, `ReflectionDecision`, `TrustEvaluation`, `KnowledgeMatch`.
+- `types/knowledge.ts` - `KnowledgeItem`, `Lesson`, `KnowledgeCandidate`, `ValidationRecord`, `MemoryChangeRecord`, `ReflectionDecision`, `TrustEvaluation`, `KnowledgeMatch`. Org-owned records now carry optional `organizationId`.
 - `types/knowledgePack.ts` - `KnowledgePack`, `PackLesson`, preview, and editable pack-candidate draft contracts.
 - `types/ai.ts` - `AIAnalysis`, `AIAdvisory`, `AIChainAttempt`, `SuggestedResponse`, `DraftGroundingMode`, diagnostics and advisory suggestion types.
 - `types/bulkUpload.ts` - `BulkUploadEntry`, `BulkAnalyzedQuery`, `BulkCluster`, `BulkAnalysisResult`, parse/mapping contracts.
-- `types/metrics.ts` - `Metrics`, `OrgMetrics`.
-- `types/patterns.ts` - Pattern types.
+- `types/metrics.ts` - `Metrics`, `OrgMetrics` (including optional `organizationId`).
+- `types/patterns.ts` - Pattern types, including org-owned `EmergingPattern.organizationId`.
 - `types/organization.ts` - `OrganizationProfile`, `CustomerTone`.
 - `types/index.ts` - Re-export barrel.
 
@@ -137,6 +138,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `discardTicket()` - Marks the active ticket as discarded, preserves the record, and resets the workspace. No knowledge artifacts created.
 - `retryAIDraft()` - Re-runs only the draft advisory call for the current ticket when AI fallback occurred.
 - `confirmAndResetOrganization()` and `resetOrganization()` - Protected danger-zone reset path.
+- Initial hydration/save effects - Load the selected org profile first, then await org-owned persistence reads before setting `hydrated`; fire-and-forget saves now catch Promise rejections so async adapter failures do not become silent unhandled rejections.
 
 ### `lib/analyzer.ts`
 
@@ -181,13 +183,13 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 ### `lib/orgMemory.ts`
 
-- `loadKnowledge()` / `saveKnowledge()` - Knowledge persistence. `loadKnowledge()` also runs `repairCorruptedCustomerTemplates()` and `repairLegacyLessonResponseTemplates()` on every load as self-heal migrations for corrupted generic templates and legacy lesson-specific greetings/ticket references.
-- `loadKnowledgeCandidates()` / `saveKnowledgeCandidates()` - Candidate persistence.
-- `loadValidationRecords()` / `saveValidationRecords()` - Validation-history persistence.
-- `loadMemoryChangeRecords()` / `saveMemoryChangeRecords()` - Memory-change audit persistence.
-- `loadOrgMetrics()` / `saveOrgMetrics()` - Organization metrics.
-- `loadOrgLog()` / `saveOrgLog()` - Intelligence log.
-- `loadEmergingPatterns()` / `saveEmergingPatterns()` - Pattern persistence.
+- `loadKnowledge()` / `saveKnowledge()` - Async-compatible knowledge persistence. `loadKnowledge()` still runs `repairCorruptedCustomerTemplates()` and `repairLegacyLessonResponseTemplates()` on every load as self-heal migrations for corrupted generic templates and legacy lesson-specific greetings/ticket references.
+- `loadKnowledgeCandidates()` / `saveKnowledgeCandidates()` - Async-compatible candidate persistence.
+- `loadValidationRecords()` / `saveValidationRecords()` - Async-compatible validation-history persistence.
+- `loadMemoryChangeRecords()` / `saveMemoryChangeRecords()` - Async-compatible memory-change audit persistence.
+- `loadOrgMetrics()` / `saveOrgMetrics()` - Async-compatible organization metrics persistence.
+- `loadOrgLog()` / `saveOrgLog()` - Async-compatible intelligence-log persistence.
+- `loadEmergingPatterns()` / `saveEmergingPatterns()` - Async-compatible pattern persistence.
 - `clearOrganization()` - Destructive reset.
 
 ### `lib/bulkUpload.ts`

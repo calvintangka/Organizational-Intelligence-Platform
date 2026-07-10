@@ -13,6 +13,19 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-10] Prepare persistence for future organization scoping
+**Layer:** coding
+**Task/Prompt:** Implement Phase 1 of Finding A-005: prepare OIP persistence for future organization-scoped shared storage without changing current localStorage behavior.
+**Files changed:** `types/knowledge.ts`, `types/metrics.ts`, `types/patterns.ts`, `lib/orgMemory.ts`, `lib/organizationProfile.ts`, `lib/ticketRecords.ts`, `app/page.tsx`, `ai/CHANGELOG.md`, `ai/CURRENT_STATUS.md`, `ai/CODEBASE_MAP.md`
+**What changed:**
+- Added optional `organizationId` ownership to `KnowledgeItem`, `KnowledgeCandidate`, `ValidationRecord`, `MemoryChangeRecord`, `EmergingPattern`, and `OrgMetrics`.
+- Converted the persistence adapters in `lib/orgMemory.ts`, `lib/organizationProfile.ts`, and `lib/ticketRecords.ts` to async-compatible signatures, threaded optional org-id parameters through the org-owned load/save surfaces, and intentionally kept every existing `v2`/`v1` localStorage key unchanged for this phase.
+- Reworked `app/page.tsx` hydration to load the selected organization profile first, then await all org-owned state loads with that profile id before setting `hydrated`. Load failures now leave hydration incomplete so seeded defaults do not overwrite existing browser storage.
+- Wrapped all fire-and-forget save effects in explicit Promise rejection handling, and stamped new candidates, validation records, memory change records, promoted/new knowledge items, reset seed metrics, and new/updated emerging patterns with the active `organizationProfile.id`.
+**Boundaries touched:** Boundary 2 and Boundary 8 were preserved. Memory writes still flow only through the governed candidate -> validation -> memory-change path, and no organization-switching or destructive-reset semantics were widened in this phase.
+**Verification:** `cmd /c npm run build`; `cmd /c npx tsc --noEmit` (rerun after build regenerated `.next/types`); code search confirmed no `v3` key usage in the modified persistence files; in-app browser smoke test on `http://localhost:3001` confirmed the existing Maesa Tech browser state still hydrated, a lesson-grounded Login reuse ticket still submitted and matched `Login Issue`, and the flow still reached Human Review plus Reflection (`trust update only`) without persistence/hydration regressions.
+**Open items:** Direct browser-side inspection of serialized `organizationId` fields was not possible through the available read-only browser evaluation surface because `window.localStorage` was unavailable there; the new stamping was therefore verified by the live write-path code (`createCandidate()` / `applyValidatedMemoryChange()`) plus build/typecheck rather than by reading raw browser storage after a commit. Phase 2 organization isolation and key partitioning remain intentionally deferred.
+
 ## [2026-07-09] Prevent contradicted lesson matches from overriding intent
 **Layer:** coding
 **Task/Prompt:** Fix BUG-006 where strong lesson matching was too permissive and could override explicit negated intent, causing Adrian Santoso's billing-address ticket to reuse a Login password-reset lesson.

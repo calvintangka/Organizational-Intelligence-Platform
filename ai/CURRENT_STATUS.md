@@ -1,8 +1,10 @@
 # Current Status
 
-This file is the fastest accurate snapshot of the prototype as of 2026-07-09.
+This file is the fastest accurate snapshot of the prototype as of 2026-07-10.
 
 ## What Changed Most Recently
+
+Prepared Phase 1 of A-005 without changing the live storage schema. `types/knowledge.ts`, `types/metrics.ts`, and `types/patterns.ts` now carry optional `organizationId` ownership on the org-owned records that will need later isolation. `lib/orgMemory.ts`, `lib/organizationProfile.ts`, and `lib/ticketRecords.ts` now expose async-compatible load/save functions so a later database adapter can replace localStorage without reshaping the page-level call sites. `app/page.tsx` now hydrates by loading the organization profile first, then awaiting all organization-owned state with that profile id before setting `hydrated`, and it catches load failures so seeded defaults do not silently overwrite existing browser data. Save effects now catch async persistence failures explicitly, and new candidates, validation records, memory change records, promoted/new knowledge items, org metrics seeds, and new/updated emerging patterns are stamped with the active organization id. Existing localStorage keys remain unchanged (`oip.*.v2` / `oip.organization*.v1`), organization switching behavior is unchanged, and the next phase still owns real isolation.
 
 Fixed BUG-006 where strong lesson matching could override explicit opposite intent and route a Billing request into Login reuse. `lib/analyzer.ts` no longer lets tied category scores fall through by array order: it now adds domain-specific intent evidence, penalizes Login when the ticket explicitly says sign-in/password are working, and falls back to `Uncategorized` instead of forcing a weak match. `lib/drafting.ts` now keeps negation tokens during lesson-signal matching, rejects polarity contradictions such as `remember my password` vs `never remembered password`, and exports `ticketContradictsLesson()` so contradicted login-failure lessons are blocked before drafting. `app/page.tsx` now treats category compatibility as a hard gate in every affected retrieval/drafting path and only bypasses broad discrimination for strong lesson matches when no contradiction markers are present. Browser verification on `http://localhost:3001` confirmed Adrian Santoso now classifies as Billing with no matched Login lesson, while Putri/Stephanie/missing-name positives still stay lesson-grounded and render the correct greeting line behavior.
 
@@ -91,7 +93,7 @@ Three-tier AI fallback chain implemented: LM Studio (local Gemma) → Claude API
   Reuse can route to human review or deterministic auto-resolution depending on validation state, trust score, category safety, and draft source.
 
 - Organization-scoped prototype state
-  Knowledge, candidates, validation records, memory changes, metrics, patterns, and org profile state persist in localStorage.
+  Knowledge, candidates, validation records, memory changes, metrics, patterns, and org profile state persist in localStorage. The persistence adapters are now async-compatible and accept org ids at the call boundary, but they still intentionally write to the existing `v2`/`v1` keys in this phase.
 
 - Lesson-specific AI guardrails
   When an AI draft is grounded in a lesson, any lesson-level `doNotPromise` entries are appended to the no-unvalidated-commitments rule before the model drafts the customer response.
@@ -121,6 +123,7 @@ Three-tier AI fallback chain implemented: LM Studio (local Gemma) → Claude API
 - Run the F-04 live regression test with Gemma enabled.
 - Calibrate AI timeout behavior under real Gemma latency rather than the current fixed 30000 ms assumption.
 - Add automated regression coverage; the repo still relies on manual verification and build checks.
+- Phase 2 of A-005 still needs to isolate storage by organization during load/save and on organization switch; this phase only prepared the signatures, hydration order, and record ownership fields.
 - Move beyond client-side persistence when the prototype leaves the demo environment.
 
 ## What Is Intentionally Simplified
