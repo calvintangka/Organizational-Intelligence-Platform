@@ -13,6 +13,19 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-11] Prevent quota failure during organization migration
+**Layer:** coding
+**Task/Prompt:** Fix BUG-009: organization-isolation migration exceeds localStorage quota on startup.
+**Files changed:** `lib/orgMemory.ts`, `lib/ticketRecords.ts`, `app/page.tsx`, `ai/CHANGELOG.md`, `ai/CURRENT_STATUS.md`
+**What changed:**
+- Replaced the single all-or-nothing migration marker with per-organization, per-resource states (`copied`, `fallback`, or `absent`) and guarded migration writes against storage quota failures.
+- Migrates smaller critical resources first, bounds copied intelligence-log history, and never duplicates the full `memoryChanges` snapshot payload.
+- Keeps complete legacy memory-change history readable as a fallback and stores only a bounded recent scoped tail when space permits; ticket history also falls back to its untouched legacy key if its scoped copy does not fit.
+- Added a readable global storage-migration notice so quota pressure does not become a startup error overlay.
+**Boundaries touched:** Boundary 2 and Boundary 8 preserved. Legacy v2 keys are read-only, no history is deleted, and migration is not marked complete while a resource remains on fallback.
+**Verification:** `cmd /c npx tsc --noEmit`; `cmd /c npm run build`; local browser startup and Maesa organization load showed the storage notice with no console errors or `QuotaExceededError` overlay.
+**Open items:** The current browser profile did not contain mature Maesa records, so mature-history visual comparison and raw legacy-key inspection remain unverified in that profile. `graphify update .` remains blocked by the Windows uv trampoline.
+
 ## [2026-07-10] Fix TODO-002 organization lifecycle regressions
 **Layer:** coding
 **Task/Prompt:** Fix reset, delete, add, and hydration regressions in organization isolation without changing keys, migration, or the validated write pipeline.

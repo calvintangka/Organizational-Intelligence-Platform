@@ -4,6 +4,7 @@ const STORAGE_VERSION = "v2";
 const ISOLATED_STORAGE_VERSION = "v1";
 const TICKET_RECORDS_KEY = `oip.ticketRecords.${STORAGE_VERSION}`;
 const TICKET_COUNTER_KEY = `oip.ticketCounter.${STORAGE_VERSION}`;
+const MIGRATION_KEY = "oip.organizationIsolationMigration.v1";
 
 function hasStorage(): boolean {
   return typeof window !== "undefined" && !!window.localStorage;
@@ -14,6 +15,20 @@ function read<T>(key: string): T | null {
   const raw = window.localStorage.getItem(key);
   if (!raw) return null;
   return JSON.parse(raw) as T;
+}
+
+function hasLegacyTicketFallback(organizationId?: string): boolean {
+  if (!organizationId || !hasStorage()) return false;
+  try {
+    const raw = window.localStorage.getItem(MIGRATION_KEY);
+    if (!raw) return false;
+    const state = JSON.parse(raw) as {
+      organizations?: Record<string, { resources?: { tickets?: { status?: string } } }>;
+    };
+    return state.organizations?.[organizationId]?.resources?.tickets?.status === "fallback";
+  } catch {
+    return false;
+  }
 }
 
 function write(key: string, value: unknown): void {
@@ -108,8 +123,12 @@ export function updateTicketRecordStatus(
 }
 
 export async function loadTicketRecords(organizationId?: string): Promise<TicketRecord[]> {
-  const stored = read<TicketRecord[]>(resolveStorageKey(TICKET_RECORDS_KEY, organizationId));
-  return stored && Array.isArray(stored) ? stored : [];
+  const scoped = read<TicketRecord[]>(resolveStorageKey(TICKET_RECORDS_KEY, organizationId));
+  const stored = scoped ?? (hasLegacyTicketFallback(organizationId) ? read<TicketRecord[]>(TICKET_RECORDS_KEY) : null);
+  const records = stored && Array.isArray(stored) ? stored : [];
+  return organizationId && scoped === null && hasLegacyTicketFallback(organizationId)
+    ? records.map((record) => ({ ...record, orgId: organizationId }))
+    : records;
 }
 
 export async function saveTicketRecords(

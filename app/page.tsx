@@ -542,6 +542,7 @@ export default function Home() {
   const [orgMetrics, setOrgMetrics] = useState<OrgMetrics>(() => seedOrgMetrics(defaultOrganizationProfile.id));
   const [hydrated, setHydrated] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [migrationWarning, setMigrationWarning] = useState("");
   const [lastApprovedSourceTicketId, setLastApprovedSourceTicketId] = useState<string | null>(null);
   const [reusedKnowledgeSourceTicketId, setReusedKnowledgeSourceTicketId] = useState<string | null>(null);
 
@@ -598,7 +599,8 @@ export default function Home() {
       try {
         const loadedProfile = await loadOrganizationProfile();
         const orgId = loadedProfile.id;
-        migrateLegacyOrganizationStorage(orgId);
+        const migration = migrateLegacyOrganizationStorage(orgId);
+        setMigrationWarning(migration.warnings.join(" "));
         const [
           loadedOrganizationList,
           loadedKnowledge,
@@ -3223,6 +3225,12 @@ export default function Home() {
             </div>
           </div>
         </header>
+
+        {migrationWarning && (
+          <div className={`mx-4 mb-3 rounded-xl border px-4 py-3 text-sm md:mx-6 ${darkMode ? "border-amber-700/50 bg-amber-900/20 text-amber-200" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+            <strong>Storage migration notice:</strong> {migrationWarning}
+          </div>
+        )}
 
         {/* View content */}
         <main className={`flex-1 overflow-y-auto ${darkMode ? "bg-[#0b1220]" : "bg-[#F3F6FA]"}`}>

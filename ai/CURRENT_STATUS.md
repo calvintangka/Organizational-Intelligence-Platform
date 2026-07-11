@@ -1,8 +1,12 @@
 # Current Status
 
-This file is the fastest accurate snapshot of the prototype as of 2026-07-10.
+This file is the fastest accurate snapshot of the prototype as of 2026-07-11.
 
 ## What Changed Most Recently
+
+Fixed BUG-009: organization-isolation migration no longer crashes startup when a mature `oip.memoryChanges.v2` payload cannot fit beside the new scoped keys. `lib/orgMemory.ts` now records migration state per organization and resource, copies smaller critical datasets first, bounds copied intelligence-log history, and treats memory-change snapshots as a preserved legacy fallback with an optional bounded scoped tail. Ticket records use the same fallback principle when their full copy does not fit. Quota failures are caught inside the migration write path, failed resources are not retried as full copies on later reloads, and `app/page.tsx` surfaces a readable storage notice. Legacy v2 keys remain untouched and migration has no completion timestamp while any resource remains on fallback.
+
+`npx tsc --noEmit` and `npm run build` pass. Local browser startup on the existing profile loaded without a `QuotaExceededError` or console error and showed the fallback notice while switching to Maesa. The current browser profile had no mature Maesa records to compare visually, and raw localStorage inspection was not performed.
 
 Fixed four TODO-002 lifecycle gaps in `app/page.tsx`: reset preserves the active organization profile and reseeds using its id; deleting the active organization clears only that scope and reloads the fallback through the guarded switch path; adding an organization passes the computed list so the new organization actually loads; and switching captures the initial `hydrated` state so failed hydration cannot save defaults into the previous organization. Storage keys, migration behavior, generation guarding, and the validated candidate → validation → memory-change pipeline are unchanged.
 

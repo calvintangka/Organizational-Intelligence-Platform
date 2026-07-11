@@ -36,6 +36,43 @@ const CANDIDATES_KEY = `oip.knowledgeCandidates.${STORAGE_VERSION}`;
 const VALIDATION_RECORDS_KEY = `oip.validationRecords.${STORAGE_VERSION}`;
 const MEMORY_CHANGES_KEY = `oip.memoryChanges.${STORAGE_VERSION}`;
 const MAX_LOG_ENTRIES = 80;
+const MAX_SCOPED_MEMORY_CHANGE_RECORDS = 12;
+
+export type OrganizationMigrationResource =
+  | "knowledge"
+  | "candidates"
+  | "validationRecords"
+  | "memoryChanges"
+  | "metrics"
+  | "patterns"
+  | "intelligenceLog"
+  | "tickets"
+  | "ticketCounter";
+
+type MigrationResourceStatus = "copied" | "fallback" | "absent";
+
+interface MigrationResourceState {
+  status: MigrationResourceStatus;
+  reason?: string;
+  updatedAt: string;
+}
+
+interface OrganizationMigrationState {
+  version: string;
+  sourceVersion: string;
+  organizations: Record<string, {
+    resources: Partial<Record<OrganizationMigrationResource, MigrationResourceState>>;
+    completedAt?: string;
+  }>;
+}
+
+export interface OrganizationMigrationResult {
+  organizationId: string;
+  resources: Partial<Record<OrganizationMigrationResource, MigrationResourceStatus>>;
+  warnings: string[];
+}
+
+const runtimeLegacyFallbacks = new Map<string, Set<OrganizationMigrationResource>>();
 
 function hasStorage(): boolean {
   return typeof window !== "undefined" && !!window.localStorage;
@@ -57,6 +94,25 @@ function write(key: string, value: unknown): void {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
 
+function tryWrite(key: string, value: unknown): boolean {
+  if (!hasStorage()) return false;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (error) {
+    if (isQuotaExceededError(error)) return false;
+    throw error;
+  }
+}
+
+function isQuotaExceededError(error: unknown): boolean {
+  const candidate = error as { name?: string; code?: number; message?: string } | null;
+  return candidate?.name === "QuotaExceededError"
+    || candidate?.code === 22
+    || candidate?.code === 1014
+    || candidate?.message?.toLowerCase().includes("quota") === true;
+}
+
 function resolveStorageKey(baseKey: string, organizationId?: string): string {
   if (!organizationId) return baseKey;
   const resource = baseKey.replace(/^oip\./, "").replace(`.${STORAGE_VERSION}`, "");
@@ -67,57 +123,173 @@ function hasKey(key: string): boolean {
   return hasStorage() && window.localStorage.getItem(key) !== null;
 }
 
-function copyIfMissing<T>(legacyKey: string, scopedKey: string, transform: (value: T) => T): void {
-  if (!hasKey(legacyKey) || hasKey(scopedKey)) return;
-  const value = read<T>(legacyKey);
-  if (value !== null) write(scopedKey, transform(value));
+function readMigrationState(): OrganizationMigrationState {
+  const stored = read<Partial<OrganizationMigrationState> & { organizationId?: string }>(ORGANIZATION_ISOLATION_MIGRATION_KEY);
+  if (stored?.organizations) return stored as OrganizationMigrationState;
+
+  // Accept the old single-organization marker written by the first Phase 2
+  // implementation and enrich it on the next safe migration pass.
+  if (stored?.organizationId) {
+    return {
+      version: ISOLATED_STORAGE_VERSION,
+      sourceVersion: STORAGE_VERSION,
+      organizations: { [stored.organizationId]: { resources: {} } }
+    };
+  }
+
+  return { version: ISOLATED_STORAGE_VERSION, sourceVersion: STORAGE_VERSION, organizations: {} };
+}
+
+function rememberRuntimeFallback(organizationId: string, resource: OrganizationMigrationResource): void {
+  const resources = runtimeLegacyFallbacks.get(organizationId) ?? new Set<OrganizationMigrationResource>();
+  resources.add(resource);
+  runtimeLegacyFallbacks.set(organizationId, resources);
+}
+
+function hasLegacyFallback(organizationId: string, resource: OrganizationMigrationResource): boolean {
+  if (runtimeLegacyFallbacks.get(organizationId)?.has(resource)) return true;
+  const state = readMigrationState();
+  return state.organizations[organizationId]?.resources[resource]?.status === "fallback";
+}
+
+function markResource(
+  organizationId: string,
+  resource: OrganizationMigrationResource,
+  status: MigrationResourceStatus,
+  reason?: string
+): MigrationResourceState {
+  if (status === "fallback") rememberRuntimeFallback(organizationId, resource);
+  return { status, reason, updatedAt: new Date().toISOString() };
+}
+
+function copyIfMissing<T, U = T>(
+  organizationId: string,
+  resource: OrganizationMigrationResource,
+  legacyKey: string,
+  scopedKey: string,
+  transform: (value: T) => U,
+  warnings: string[]
+): MigrationResourceState {
+  if (hasKey(scopedKey)) return markResource(organizationId, resource, "copied");
+  if (!hasKey(legacyKey)) return markResource(organizationId, resource, "absent");
+
+  try {
+    const value = read<T>(legacyKey);
+    if (value === null) return markResource(organizationId, resource, "absent");
+    if (tryWrite(scopedKey, transform(value))) return markResource(organizationId, resource, "copied");
+  } catch (error) {
+    if (!isQuotaExceededError(error)) throw error;
+  }
+
+  const label = resource === "memoryChanges" ? "memory change history" : resource;
+  rememberRuntimeFallback(organizationId, resource);
+  warnings.push(`Could not copy ${label} into organization storage because browser storage is full. Existing data remains available from legacy storage.`);
+  return markResource(organizationId, resource, "fallback", "legacy fallback retained after storage quota");
+}
+
+function resourceStatus(
+  organizationId: string,
+  resource: OrganizationMigrationResource,
+  state: OrganizationMigrationState
+): MigrationResourceState | undefined {
+  return state.organizations[organizationId]?.resources[resource];
+}
+
+function saveMigrationState(state: OrganizationMigrationState): boolean {
+  try {
+    return tryWrite(ORGANIZATION_ISOLATION_MIGRATION_KEY, state);
+  } catch {
+    return false;
+  }
+}
+
+function readOrganizationResource<T>(
+  organizationId: string | undefined,
+  resource: OrganizationMigrationResource,
+  legacyKey: string,
+  scopedKey: string
+): T | null {
+  const scoped = read<T>(scopedKey);
+  if (scoped !== null) return scoped;
+  if (organizationId && hasLegacyFallback(organizationId, resource)) return read<T>(legacyKey);
+  return null;
 }
 
 /**
- * Copy the pre-isolation v2 workspace into the active organization exactly once.
- * Legacy keys are deliberately read-only here and remain in localStorage.
+ * Migrate the pre-isolation v2 workspace into the active organization by
+ * resource. Legacy keys are deliberately read-only here and remain in
+ * localStorage when a scoped copy does not fit.
  */
-export function migrateLegacyOrganizationStorage(organizationId: string): void {
-  if (!hasStorage() || !organizationId || hasKey(ORGANIZATION_ISOLATION_MIGRATION_KEY)) return;
+export function migrateLegacyOrganizationStorage(organizationId: string): OrganizationMigrationResult {
+  const result: OrganizationMigrationResult = { organizationId, resources: {}, warnings: [] };
+  if (!hasStorage() || !organizationId) return result;
 
-  copyIfMissing<KnowledgeItem[]>(KNOWLEDGE_KEY, resolveStorageKey(KNOWLEDGE_KEY, organizationId), (items) =>
-    items.map((item) => ({ ...item, organizationId }))
-  );
-  copyIfMissing<KnowledgeCandidate[]>(CANDIDATES_KEY, resolveStorageKey(CANDIDATES_KEY, organizationId), (items) =>
-    items.map((item) => ({ ...item, organizationId }))
-  );
-  copyIfMissing<ValidationRecord[]>(VALIDATION_RECORDS_KEY, resolveStorageKey(VALIDATION_RECORDS_KEY, organizationId), (items) =>
-    items.map((item) => ({ ...item, organizationId }))
-  );
-  copyIfMissing<MemoryChangeRecord[]>(MEMORY_CHANGES_KEY, resolveStorageKey(MEMORY_CHANGES_KEY, organizationId), (items) =>
-    items.map((item) => ({ ...item, organizationId }))
-  );
-  copyIfMissing<OrgMetrics>(ORG_METRICS_KEY, resolveStorageKey(ORG_METRICS_KEY, organizationId), (metrics) => ({
-    ...metrics,
-    organizationId
-  }));
-  copyIfMissing<IntelligenceLogEntry[]>(LOG_KEY, resolveStorageKey(LOG_KEY, organizationId), (entries) => entries);
-  copyIfMissing<EmergingPattern[]>(PATTERNS_KEY, resolveStorageKey(PATTERNS_KEY, organizationId), (patterns) =>
-    patterns.map((pattern) => ({ ...pattern, organizationId }))
-  );
+  let state: OrganizationMigrationState = { version: ISOLATED_STORAGE_VERSION, sourceVersion: STORAGE_VERSION, organizations: {} };
+  let organizationState: OrganizationMigrationState["organizations"][string] = { resources: {} };
 
-  const legacyTickets = read<Array<{ orgId?: string }>>("oip.ticketRecords.v2");
-  const scopedTicketsKey = `oip.organization.${encodeURIComponent(organizationId)}.ticketRecords.${ISOLATED_STORAGE_VERSION}`;
-  if (legacyTickets !== null && !hasKey(scopedTicketsKey)) {
-    write(scopedTicketsKey, legacyTickets.map((record) => ({ ...record, orgId: organizationId })));
+  const migrate = <T, U = T>(
+    resource: OrganizationMigrationResource,
+    legacyKey: string,
+    transform: (value: T) => U
+  ) => {
+    const existing = resourceStatus(organizationId, resource, state);
+    const scopedKey = resolveStorageKey(legacyKey, organizationId);
+    const next = existing ?? copyIfMissing(organizationId, resource, legacyKey, scopedKey, transform, result.warnings);
+    if (existing?.status === "fallback") {
+      result.warnings.push(`Using preserved legacy ${resource} because the organization-scoped copy did not fit in browser storage.`);
+    }
+    organizationState.resources[resource] = next;
+    result.resources[resource] = next.status;
+  };
+
+  try {
+    state = readMigrationState();
+    organizationState = state.organizations[organizationId] ?? { resources: {} };
+    state.organizations[organizationId] = organizationState;
+
+    // Small, critical state is copied first. Each resource gets its own durable
+    // result so a later reload never retries a known failing copy.
+    migrate<KnowledgeItem[]>("knowledge", KNOWLEDGE_KEY, (items) => items.map((item) => ({ ...item, organizationId })));
+    migrate<KnowledgeCandidate[]>("candidates", CANDIDATES_KEY, (items) => items.map((item) => ({ ...item, organizationId })));
+    migrate<ValidationRecord[]>("validationRecords", VALIDATION_RECORDS_KEY, (items) => items.map((item) => ({ ...item, organizationId })));
+    migrate<OrgMetrics>("metrics", ORG_METRICS_KEY, (metrics) => ({ ...metrics, organizationId }));
+    migrate<EmergingPattern[]>("patterns", PATTERNS_KEY, (patterns) => patterns.map((pattern) => ({ ...pattern, organizationId })));
+    migrate<Array<{ orgId?: string }>>("tickets", "oip.ticketRecords.v2", (records) => records.map((record) => ({ ...record, orgId: organizationId })));
+    migrate<Record<string, number>, number>("ticketCounter", "oip.ticketCounter.v2", (counters) => counters[organizationId] ?? 0);
+    migrate<IntelligenceLogEntry[]>("intelligenceLog", LOG_KEY, (entries) => entries.slice(-MAX_LOG_ENTRIES));
+
+    // Do not duplicate large before/after snapshots. The legacy key remains
+    // the authoritative history until a future database-backed migration.
+    const memoryStatus = resourceStatus(organizationId, "memoryChanges", state);
+    const legacyMemoryExists = hasKey(MEMORY_CHANGES_KEY);
+    const memoryState = memoryStatus ?? markResource(
+      organizationId,
+      "memoryChanges",
+      legacyMemoryExists ? "fallback" : "absent",
+      legacyMemoryExists ? "legacy fallback retained to avoid duplicating snapshots" : undefined
+    );
+    if (memoryState.status === "fallback") {
+      result.warnings.push("Memory change history is still being read from preserved legacy storage because its snapshots are too large to duplicate safely.");
+    }
+    organizationState.resources.memoryChanges = memoryState;
+    result.resources.memoryChanges = memoryState.status;
+
+    const allResources = Object.values(organizationState.resources);
+    if (allResources.length === 9 && allResources.every((resource) => resource.status === "copied" || resource.status === "absent")) {
+      organizationState.completedAt ??= new Date().toISOString();
+    } else {
+      delete organizationState.completedAt;
+    }
+    if (!saveMigrationState(state)) {
+      result.warnings.push("Migration progress could not be saved because browser storage is full. Existing legacy data was left untouched, and failed large-resource copies will not be retried as full copies.");
+    }
+  } catch (error) {
+    console.error("Organization storage migration was left partial.", error);
+    result.warnings.push("Some organization data could not be copied, but startup will continue using preserved legacy storage where available.");
+    saveMigrationState(state);
   }
-  const legacyCounters = read<Record<string, number>>("oip.ticketCounter.v2");
-  const scopedCounterKey = `oip.organization.${encodeURIComponent(organizationId)}.ticketCounter.${ISOLATED_STORAGE_VERSION}`;
-  if (legacyCounters !== null && !hasKey(scopedCounterKey)) {
-    write(scopedCounterKey, legacyCounters[organizationId] ?? 0);
-  }
 
-  write(ORGANIZATION_ISOLATION_MIGRATION_KEY, {
-    version: ISOLATED_STORAGE_VERSION,
-    sourceVersion: STORAGE_VERSION,
-    organizationId,
-    completedAt: new Date().toISOString()
-  });
+  return result;
 }
 
 /* ---------------------------- Knowledge ---------------------------- */
@@ -129,9 +301,9 @@ export function seedOrganizationalKnowledge(): KnowledgeItem[] {
 }
 
 export async function loadKnowledge(organizationId?: string): Promise<KnowledgeItem[]> {
-  const stored = read<KnowledgeItem[]>(resolveStorageKey(KNOWLEDGE_KEY, organizationId));
+  const stored = readOrganizationResource<KnowledgeItem[]>(organizationId, "knowledge", KNOWLEDGE_KEY, resolveStorageKey(KNOWLEDGE_KEY, organizationId));
   if (stored && Array.isArray(stored) && stored.length > 0) {
-    const normalized = stored.map((item) => withCanonicalProblemDefaults(withLearningDefaults(item)));
+    const normalized = stored.map((item) => withCanonicalProblemDefaults(withLearningDefaults({ ...item, organizationId: item.organizationId ?? organizationId })));
     // Migration: collapse any duplicate canonical problems left over from earlier
     // testing or pre-canonical localStorage, and persist the cleaned memory.
     const deduped = dedupeCanonicalProblems(normalized);
@@ -160,8 +332,8 @@ export async function saveKnowledge(organizationId: string | undefined, items: K
 /* ---------------------- Validation and memory change history ---------------------- */
 
 export async function loadKnowledgeCandidates(organizationId?: string): Promise<KnowledgeCandidate[]> {
-  const stored = read<KnowledgeCandidate[]>(resolveStorageKey(CANDIDATES_KEY, organizationId));
-  return stored && Array.isArray(stored) ? stored : [];
+  const stored = readOrganizationResource<KnowledgeCandidate[]>(organizationId, "candidates", CANDIDATES_KEY, resolveStorageKey(CANDIDATES_KEY, organizationId));
+  return stored && Array.isArray(stored) ? stored.map((candidate) => ({ ...candidate, organizationId: candidate.organizationId ?? organizationId })) : [];
 }
 
 export async function saveKnowledgeCandidates(
@@ -172,8 +344,8 @@ export async function saveKnowledgeCandidates(
 }
 
 export async function loadValidationRecords(organizationId?: string): Promise<ValidationRecord[]> {
-  const stored = read<ValidationRecord[]>(resolveStorageKey(VALIDATION_RECORDS_KEY, organizationId));
-  return stored && Array.isArray(stored) ? stored : [];
+  const stored = readOrganizationResource<ValidationRecord[]>(organizationId, "validationRecords", VALIDATION_RECORDS_KEY, resolveStorageKey(VALIDATION_RECORDS_KEY, organizationId));
+  return stored && Array.isArray(stored) ? stored.map((record) => ({ ...record, organizationId: record.organizationId ?? organizationId })) : [];
 }
 
 export async function saveValidationRecords(
@@ -184,14 +356,27 @@ export async function saveValidationRecords(
 }
 
 export async function loadMemoryChangeRecords(organizationId?: string): Promise<MemoryChangeRecord[]> {
-  const stored = read<MemoryChangeRecord[]>(resolveStorageKey(MEMORY_CHANGES_KEY, organizationId));
-  return stored && Array.isArray(stored) ? stored : [];
+  const scoped = read<MemoryChangeRecord[]>(resolveStorageKey(MEMORY_CHANGES_KEY, organizationId));
+  const legacy = organizationId && hasLegacyFallback(organizationId, "memoryChanges")
+    ? read<MemoryChangeRecord[]>(MEMORY_CHANGES_KEY)
+    : null;
+  const merged = [...(legacy ?? []), ...(scoped ?? [])];
+  const byId = new Map(merged.map((record) => [record.id, record]));
+  return Array.from(byId.values()).map((record) => ({ ...record, organizationId: record.organizationId ?? organizationId }));
 }
 
 export async function saveMemoryChangeRecords(
   organizationId: string | undefined,
   records: MemoryChangeRecord[]
 ): Promise<void> {
+  if (organizationId && hasLegacyFallback(organizationId, "memoryChanges")) {
+    // Preserve the complete legacy history and only keep a small scoped tail
+    // for new writes. This avoids repeatedly attempting the known-too-large
+    // full snapshot while keeping recent changes durable when space permits.
+    const bounded = records.slice(-MAX_SCOPED_MEMORY_CHANGE_RECORDS);
+    tryWrite(resolveStorageKey(MEMORY_CHANGES_KEY, organizationId), bounded);
+    return;
+  }
   write(resolveStorageKey(MEMORY_CHANGES_KEY, organizationId), records);
 }
 
@@ -223,14 +408,15 @@ export function seedOrgMetrics(organizationId?: string): OrgMetrics {
 }
 
 export async function loadOrgMetrics(organizationId?: string): Promise<OrgMetrics> {
-  const stored = read<OrgMetrics>(resolveStorageKey(ORG_METRICS_KEY, organizationId));
+  const stored = readOrganizationResource<OrgMetrics>(organizationId, "metrics", ORG_METRICS_KEY, resolveStorageKey(ORG_METRICS_KEY, organizationId));
   if (!stored) return seedOrgMetrics(organizationId);
+  const owned = { ...stored, organizationId: stored.organizationId ?? organizationId };
 
   // Roll over the "today" growth counter if the stored date is stale.
-  if (stored.memoryGrowthDate !== todayKey()) {
-    return { ...stored, memoryGrowthToday: 0, memoryGrowthDate: todayKey() };
+  if (owned.memoryGrowthDate !== todayKey()) {
+    return { ...owned, memoryGrowthToday: 0, memoryGrowthDate: todayKey() };
   }
-  return stored;
+  return owned;
 }
 
 export async function saveOrgMetrics(organizationId: string | undefined, metrics: OrgMetrics): Promise<void> {
@@ -240,7 +426,7 @@ export async function saveOrgMetrics(organizationId: string | undefined, metrics
 /* ---------------------------- Intelligence log ---------------------------- */
 
 export async function loadOrgLog(organizationId?: string): Promise<IntelligenceLogEntry[]> {
-  const stored = read<IntelligenceLogEntry[]>(resolveStorageKey(LOG_KEY, organizationId));
+  const stored = readOrganizationResource<IntelligenceLogEntry[]>(organizationId, "intelligenceLog", LOG_KEY, resolveStorageKey(LOG_KEY, organizationId));
   return stored && Array.isArray(stored) ? stored : [];
 }
 
@@ -260,9 +446,9 @@ export function seedEmergingPatterns(): EmergingPattern[] {
 }
 
 export async function loadEmergingPatterns(organizationId?: string): Promise<EmergingPattern[]> {
-  const stored = read<EmergingPattern[]>(resolveStorageKey(PATTERNS_KEY, organizationId));
+  const stored = readOrganizationResource<EmergingPattern[]>(organizationId, "patterns", PATTERNS_KEY, resolveStorageKey(PATTERNS_KEY, organizationId));
   return stored && Array.isArray(stored) && stored.length > 0
-    ? stored
+    ? stored.map((pattern) => ({ ...pattern, organizationId: pattern.organizationId ?? organizationId }))
     : seedEmergingPatterns();
 }
 
