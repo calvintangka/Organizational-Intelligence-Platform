@@ -796,11 +796,19 @@ function inferIntent(category: string, detectedSignals: string[], fullText: stri
   const hasPasswordRecoverySignal =
     fullText.includes("password") &&
     ["forgot", "forgotten", "reset", "changed"].some((term) => fullText.includes(term));
+  const hasCredentialUnavailableSignal =
+    /\bnew\s+(?:laptop|computer|device)\b/.test(fullText) ||
+    /\b(?:saved|stored)\s+password\b[^.!?\n]{0,80}\b(?:did not|didnt|does not|doesnt|failed to)\s+(?:transfer|carry|move|sync)\b/.test(fullText) ||
+    /\b(?:never|do not|dont|did not|didnt)\s+(?:memorize|remember|know)\s+(?:the\s+)?password\b/.test(fullText) ||
+    /\bforgot(?:ten)?\s+(?:my\s+)?password\b/.test(fullText);
 
   switch (category) {
     case "Login":
       if (hasEmailRecoverySignal) {
         return "email_recovery";
+      }
+      if (hasCredentialUnavailableSignal) {
+        return "credentials_unavailable";
       }
       if (hasPasswordRecoverySignal || hasSignal("forgot password") || hasSignal("reset password")) {
         return "credentials_rejected";

@@ -26,6 +26,19 @@
 **Verification:** `cmd /c npx tsc --noEmit`; `cmd /c npm run build`; local browser startup and Maesa organization load showed the storage notice with no console errors or `QuotaExceededError` overlay.
 **Open items:** The current browser profile did not contain mature Maesa records, so mature-history visual comparison and raw legacy-key inspection remain unverified in that profile. `graphify update .` remains blocked by the Windows uv trampoline.
 
+## [2026-07-11] Require root-cause compatibility for template reuse
+**Layer:** coding
+**Task/Prompt:** Fix BUG-010: a generic KnowledgeItem template was reused despite a root-cause mismatch.
+**Files changed:** `lib/drafting.ts`, `lib/analyzer.ts`, `app/page.tsx`, `ai/CHANGELOG.md`, `ai/CURRENT_STATUS.md`, `ai/CODEBASE_MAP.md`
+**What changed:**
+- Added root-cause family authorization after category compatibility. Credential-unavailable tickets cannot reuse credential-mismatch templates merely because both are Login issues.
+- Ambiguous root-cause evidence, conflicting families, and explicit Login contradictions now reject template reuse and produce an honest `no_template` Human Review path.
+- Strong, non-contradicted validated lesson matches remain the narrow authorization exception, preserving laptop/autofill lesson reuse without broadening paraphrase retrieval.
+- Applied the authorization gate before selection, discrimination, deterministic rendering, AI grounding, and AI-unavailable fallback across the main, manual, resume, and reuse paths.
+**Boundaries touched:** Boundary 1, Boundary 2, and Boundary 5 preserved. Category compatibility, negation/contradiction handling, human review, validated lesson reuse, and BUG-008’s conservative paraphrase behavior remain intact; persistence and organization isolation were not changed.
+**Verification:** Targeted module probe passed for Kevin/Pramana mismatch rejection, genuine credential-mismatch reuse, FastDrop and Maesa laptop lessons, Adrian/Felix-style billing contradiction, and same-category locked-vs-credential mismatch. `cmd /c npm run build` and sequential `cmd /c npx tsc --noEmit` passed. The available browser profile had no mature Pramana/Maesa knowledge to run the full visual scenarios.
+**Open items:** `graphify update .` remains blocked by the Windows uv trampoline. Live mature-data visual regression requires a browser profile containing those organization records.
+
 ## [2026-07-10] Fix TODO-002 organization lifecycle regressions
 **Layer:** coding
 **Task/Prompt:** Fix reset, delete, add, and hydration regressions in organization isolation without changing keys, migration, or the validated write pipeline.

@@ -301,12 +301,13 @@ function normalizeLessonSearchText(value: string): string[] {
 }
 
 function isLessonSearchCandidate(
+  ticket: Ticket,
   understanding: Understanding,
   item: KnowledgeItem,
   canonicalProblemTitle: string
 ): boolean {
   if (!item.lessons?.length) return false;
-  if (!isCompatibleForDrafting(understanding, item)) return false;
+  if (!isCompatibleForDrafting(understanding, item, ticket)) return false;
 
   const targetTokens = new Set(normalizeLessonSearchText(`${canonicalProblemTitle} ${understanding.category}`));
   const itemTokens = normalizeLessonSearchText(
@@ -323,7 +324,7 @@ function withPreDiscriminationLessonMatches(
   canonicalProblemTitle: string
 ): KnowledgeMatch[] {
   const lessonMatches = items
-    .filter((item) => isLessonSearchCandidate(understanding, item, canonicalProblemTitle))
+    .filter((item) => isLessonSearchCandidate(ticket, understanding, item, canonicalProblemTitle))
     .map((item) => ({ item, lessonMatch: findMatchingLesson(ticket, item) }))
     .filter((entry): entry is { item: KnowledgeItem; lessonMatch: LessonMatchResult } => isStrongLessonMatch(entry.lessonMatch));
 
@@ -1700,6 +1701,16 @@ export default function Home() {
     return "AI assistant unavailable — showing standard template instead.";
   }
 
+  function formatDraftFallbackNotice(
+    source: SuggestedResponse["source"],
+    reason?: string,
+    diagnostics?: AIDiagnostics
+  ): string {
+    return source === "no_template"
+      ? "AI assistant unavailable — no compatible organizational template exists; author the response for human review."
+      : formatFallbackNotice(reason, diagnostics);
+  }
+
   function summarizeFallbackReason(reason?: string, providerLabel?: string): string {
     const raw = reason?.trim();
     if (!raw) return "AI advisory unavailable.";
@@ -2088,7 +2099,7 @@ export default function Home() {
         advisory: baseAdvisory,
         response: {
           ...fallbackResponse,
-          fallbackNotice: formatFallbackNotice(defaultAvailabilityMessage(), baseAdvisory?.diagnostics),
+          fallbackNotice: formatDraftFallbackNotice(deterministicSource, defaultAvailabilityMessage(), baseAdvisory?.diagnostics),
           fallbackTechnicalDetails: buildFallbackTechnicalDetails(defaultAvailabilityMessage(), baseAdvisory?.diagnostics)
         },
         usedAIDraft: false
@@ -2239,7 +2250,8 @@ export default function Home() {
       },
       response: {
         ...fallbackResponse,
-        fallbackNotice: formatFallbackNotice(
+        fallbackNotice: formatDraftFallbackNotice(
+          deterministicSource,
           draftRejectionReason ?? draftResult.error ?? enrichmentResult.error ?? defaultAvailabilityMessage(),
           nextAdvisory.diagnostics
         ),
@@ -2332,10 +2344,11 @@ export default function Home() {
       items,
       canonicalProblem.title
     );
-    const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(und, m.item));
+    const lookupTicket = selectedTicket ?? makeCustomTicket(analysis.summary, analysis.ticketId);
+    const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(und, m.item, lookupTicket));
     const selectedMatchInfo =
       compatibleMatches.length > 0
-        ? selectPreferredMatch(selectedTicket ?? makeCustomTicket(analysis.summary, analysis.ticketId), compatibleMatches)
+        ? selectPreferredMatch(lookupTicket, compatibleMatches)
         : null;
     const topMatch = selectedMatchInfo?.match ?? (compatibleMatches.length > 0 ? compatibleMatches[0] : null);
     const newReasoning = buildReasoning(und, topMatch);
@@ -2358,11 +2371,11 @@ export default function Home() {
       createLogEntry(`Confidence level: ${newConfidence.level} (${newConfidence.score}/100)`, `Basis: ${newConfidence.basis.join("; ")}`)
     ];
 
-    setSimilarKnowledge(topMatch ? moveMatchToFront(matches, topMatch.item.id) : matches);
+    setSimilarKnowledge(topMatch ? moveMatchToFront(compatibleMatches, topMatch.item.id) : []);
     setReasoning(newReasoning);
     setConfidence(newConfidence);
     addLogEntries(logEntries);
-    updateMetrics({ repeatedIssuesDetected: matches.length > 0 ? 1 : 0, memoryRetrievals: 1 });
+    updateMetrics({ repeatedIssuesDetected: compatibleMatches.length > 0 ? 1 : 0, memoryRetrievals: 1 });
 
     if (selectedTicket) {
       void checkPatternDiscovery(selectedTicket, analysis);
@@ -2377,7 +2390,7 @@ export default function Home() {
     const und = toUnderstanding(analysis);
     const canonicalProblem = identifyCanonicalProblem(und, organizationProfile);
     const lessonAwareMatches = withPreDiscriminationLessonMatches(ticket, und, matches, knowledgeItems, canonicalProblem.title);
-    const compatibleMatches = lessonAwareMatches.filter((m) => isCompatibleForDrafting(und, m.item));
+    const compatibleMatches = lessonAwareMatches.filter((m) => isCompatibleForDrafting(und, m.item, ticket));
     const selectedMatchInfo = compatibleMatches.length > 0 ? selectPreferredMatch(ticket, compatibleMatches) : null;
     const topMatch = selectedMatchInfo?.match ?? null;
     const lessonMatch = selectedMatchInfo?.lessonMatch ?? null;
@@ -2389,10 +2402,10 @@ export default function Home() {
       ? await requestMatchDiscrimination(ticket, topMatch, und, lessonMatch ?? undefined)
       : null;
     const resolvedMatches = effectiveTopMatch
-      ? moveMatchToFront(lessonAwareMatches, effectiveTopMatch.item.id)
+      ? moveMatchToFront(compatibleMatches, effectiveTopMatch.item.id)
       : topMatch
-      ? stripRejectedMatch(lessonAwareMatches, topMatch.item.id)
-      : lessonAwareMatches;
+      ? stripRejectedMatch(compatibleMatches, topMatch.item.id)
+      : [];
 
     const draft = draftResponse(ticket, und, effectiveTopMatch, organizationProfile, knowledgeItems.length === 0);
     const aiDraft = await requestDraftAdvisory(ticket, und, canonicalProblem.title, effectiveTopMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", aiAdvisory);
@@ -2406,8 +2419,8 @@ export default function Home() {
           : draft.basedOnKnowledgeIds.length > 0
           ? "Draft informed by matched knowledge"
           : knowledgeItems.length === 0
-          ? "No approved knowledge exists — category template provided as starting point"
-          : "Draft uses category template (no memory match)"
+          ? "No approved knowledge exists — cold-start response requires human authoring"
+          : "No compatible knowledge match — cold-start response requires human authoring"
       )
     ]);
 
@@ -2856,7 +2869,7 @@ export default function Home() {
     // MOST TRUSTED knowledge — that is what enables auto-resolution over time.
     // Category-incompatible items are excluded before the trust-based selection so
     // a high-trust Activation item cannot drive a Login ticket's reuse response.
-    const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(enrichedUnderstanding, m.item));
+    const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(enrichedUnderstanding, m.item, second));
     const selectedMatchInfo = compatibleMatches.length > 0 ? selectPreferredMatch(second, compatibleMatches) : null;
     const reusedMatch = selectedMatchInfo?.match ?? null;
     const reusedLessonMatch = selectedMatchInfo?.lessonMatch ?? null;
@@ -2936,7 +2949,7 @@ export default function Home() {
     setSecondTicket({ ...second, status: "analyzed" });
     setAiAnalysis(secondAnalysis);
     setAiAdvisory(aiDraft.advisory ?? advisory);
-    setSimilarKnowledge(moveMatchToFront(matches, effectiveReuseMatch.item.id));
+    setSimilarKnowledge(moveMatchToFront(compatibleMatches, effectiveReuseMatch.item.id));
     setReusedKnowledgeSourceTicketId(effectiveReuseMatch.item.sourceTicketId);
     setReuseMatchId(effectiveReuseMatch.item.id);
     setReuseDecision(effectiveReuseDecision);
@@ -3092,7 +3105,7 @@ export default function Home() {
       knowledgeItems,
       canonicalProblem.title
     );
-    const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(enrichedUnderstanding, m.item));
+    const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(enrichedUnderstanding, m.item, ticket));
     const selectedMatchInfo = compatibleMatches.length > 0 ? selectPreferredMatch(ticket, compatibleMatches) : null;
     const topMatch = selectedMatchInfo?.match ?? null;
     const lessonMatchForRecord = selectedMatchInfo?.lessonMatch ?? null;
@@ -3111,7 +3124,7 @@ export default function Home() {
     setActiveTicketRecord(record);
     setTicketRecords((prev) => upsertTicketRecord(prev, record));
 
-    setSimilarKnowledge(topMatch ? moveMatchToFront(matches, topMatch.item.id) : []);
+    setSimilarKnowledge(topMatch ? moveMatchToFront(compatibleMatches, topMatch.item.id) : []);
     setReasoning(newReasoning);
     setConfidence(newConfidence);
     addLogEntries([
@@ -3123,7 +3136,7 @@ export default function Home() {
         ? createLogEntry(`Trust evaluated: ${topTrust.score}/100 → ${topTrust.decisionLabel}`)
         : createLogEntry("Trust evaluation skipped: no match"),
     ]);
-    updateMetrics({ memoryRetrievals: 1, repeatedIssuesDetected: matches.length > 0 ? 1 : 0 });
+    updateMetrics({ memoryRetrievals: 1, repeatedIssuesDetected: compatibleMatches.length > 0 ? 1 : 0 });
     void checkPatternDiscovery(ticket, analysis);
     setCurrentStep(3);
 

@@ -46,18 +46,225 @@ const COMPATIBLE_CATEGORIES: Record<string, string[]> = {
   General: []
 };
 
+type RootCauseFamily =
+  | "credential_mismatch"
+  | "credential_unavailable"
+  | "account_locked"
+  | "email_recovery"
+  | "two_factor"
+  | "invoice_question"
+  | "payment_authorization"
+  | "subscription_change"
+  | "delivery_tracking"
+  | "portal_access"
+  | "scheduling"
+  | "document_status"
+  | "installation"
+  | "compatibility"
+  | "performance"
+  | "stability"
+  | "unknown";
+
+interface RootCauseProfile {
+  family: RootCauseFamily;
+  evidence: string[];
+}
+
+export interface RootCauseCompatibility {
+  compatible: boolean;
+  reason: string;
+  ticketFamily: RootCauseFamily;
+  itemFamily: RootCauseFamily;
+}
+
+const ROOT_CAUSE_EVIDENCE: Array<{ family: Exclude<RootCauseFamily, "unknown">; patterns: RegExp[] }> = [
+  {
+    family: "credential_unavailable",
+    patterns: [
+      /\bnew\s+(?:laptop|computer|device)\b/i,
+      /\b(?:saved|stored)\s+password\b[^.!?\n]{0,80}\b(?:did not|didn't|does not|doesn't|failed to)\s+(?:transfer|carry|move|sync)\b/i,
+      /\b(?:never|do not|don't|did not|didn't)\s+(?:memorize|remember|know)\s+(?:the\s+)?password\b/i,
+      /\bpassword\b[^.!?\n]{0,60}\b(?:did not|didn't|does not|doesn't|failed to)\s+(?:transfer|carry|move|sync)\b/i,
+      /\bforgot(?:ten)?\s+(?:my\s+)?password\b/i,
+      /\bdo not know\s+(?:the\s+)?password\b/i
+    ]
+  },
+  {
+    family: "credential_mismatch",
+    patterns: [
+      /\binvalid credentials?\b/i,
+      /\bincorrect password\b/i,
+      /\bcredentials?\s+(?:are|were|being)\s+rejected\b/i,
+      /\bpassword\s+is\s+(?:correct|working)\b/i,
+      /\bexpected\s+(?:the\s+)?(?:password|credentials?)\s+to\s+work\b/i,
+      /\bcaps\s+lock\b/i,
+      /\bolder\s+(?:password|value)\b/i,
+      /\bpassword\s+(?:was|were)\s+changed\s+on\s+another\s+device\b/i
+    ]
+  },
+  {
+    family: "account_locked",
+    patterns: [/\baccount\s+locked\b/i, /\blocked\s+out\b/i, /\baccount\s+(?:blocked|suspended)\b/i]
+  },
+  {
+    family: "email_recovery",
+    patterns: [/\bforgot\s+(?:my\s+)?(?:account\s+)?email\b/i, /\b(?:retrieve|recover)\s+(?:my\s+)?(?:login\s+)?email\b/i]
+  },
+  {
+    family: "two_factor",
+    patterns: [/\btwo[- ]factor\b/i, /\b2fa\b/i, /\bauthenticator\b/i, /\bverification\s+code\b/i, /\botp\b/i, /\bbackup\s+codes?\b/i]
+  },
+  {
+    family: "invoice_question",
+    patterns: [/\binvoice\b/i, /\bbilled\s+amount\b/i, /\binvoice\s+reference\b/i]
+  },
+  {
+    family: "payment_authorization",
+    patterns: [/\bpending\s+authorization\b/i, /\bfailed\s+payment\b/i, /\bbank\s+(?:app|account)\b/i, /\btransaction\b/i]
+  },
+  {
+    family: "subscription_change",
+    patterns: [/\bcancel(?:l)?(?:ing|ation)?\b/i, /\bunsubscri(?:be|bed|ption)\b/i, /\brenew(?:al)?\b/i, /\btrial\s+expired\b/i]
+  },
+  {
+    family: "delivery_tracking",
+    patterns: [/\btracking\b/i, /\btracking\s+number\b/i, /\bpackage\b/i, /\bshipment\b/i, /\bdelivery\s+(?:delay|window)\b/i]
+  },
+  {
+    family: "portal_access",
+    patterns: [/\bclient\s+portal\b/i, /\bportal\s+access\b/i, /\bportal\s+login\b/i]
+  },
+  {
+    family: "scheduling",
+    patterns: [/\bconsultation\b/i, /\bappointment\b/i, /\bschedul(?:e|ing)\b/i, /\breschedul(?:e|ing)\b/i]
+  },
+  {
+    family: "document_status",
+    patterns: [/\bdocument\s+status\b/i, /\bfiling\s+status\b/i, /\bcase\s+document\b/i]
+  },
+  {
+    family: "installation",
+    patterns: [/\binstall(?:ation|er)?\b/i, /\breinstall\b/i, /\bsetup\b/i]
+  },
+  {
+    family: "compatibility",
+    patterns: [/\bcompatib(?:ility|le)\b/i, /\bincompatible\b/i, /\bsystem\s+requirements\b/i]
+  },
+  {
+    family: "performance",
+    patterns: [/\bperformance\b/i, /\bslow\b/i, /\blag(?:ging)?\b/i, /\bunresponsive\b/i]
+  },
+  {
+    family: "stability",
+    patterns: [/\bcrash(?:es|ed|ing)?\b/i, /\bstartup\b/i, /\b(?:wont|can't|cannot)\s+open\b/i, /\bnot\s+launching\b/i]
+  }
+];
+
+function classifyRootCause(text: string, intent?: string): RootCauseProfile {
+  const evidence = ROOT_CAUSE_EVIDENCE.map(({ family, patterns }) => ({
+    family,
+    evidence: patterns.filter((pattern) => pattern.test(text)).map((pattern) => pattern.source)
+  })).filter((entry) => entry.evidence.length > 0);
+
+  if (evidence.length === 0) return { family: "unknown", evidence: [] };
+  const highest = Math.max(...evidence.map((entry) => entry.evidence.length));
+  const winners = evidence.filter((entry) => entry.evidence.length === highest);
+  if (winners.length !== 1) {
+    return { family: "unknown", evidence: winners.flatMap((entry) => entry.evidence) };
+  }
+
+  // The deterministic intent is useful evidence only when it is specific and
+  // does not conflict with stronger root-cause language in the ticket.
+  if (winners[0].family === "credential_mismatch" && intent === "credentials_unavailable") {
+    return { family: "credential_unavailable", evidence: winners[0].evidence };
+  }
+  return { family: winners[0].family, evidence: winners[0].evidence };
+}
+
+function knowledgeRootCauseText(item: KnowledgeItem): string {
+  return [
+    item.title,
+    item.canonicalProblemTitle,
+    item.problem,
+    item.problemSummary,
+    item.internalGuidance,
+    item.customerResponseTemplate,
+    item.approvedAnswer,
+    ...(item.tags ?? []),
+    ...(item.exampleTickets ?? []).map((example) => example.originalIssue),
+    ...(item.lessons ?? []).flatMap((lesson) => [lesson.title, lesson.rootCause, lesson.solution, ...lesson.signals])
+  ].filter(Boolean).join(" ");
+}
+
+export function assessRootCauseCompatibility(
+  understanding: Understanding,
+  item: KnowledgeItem,
+  ticket: Ticket
+): RootCauseCompatibility {
+  const ticketText = normalizeLessonSignalText(`${ticket.subject} ${ticket.description}`);
+  if (item.category === "Login" && ticketHasExplicitLoginContradiction(ticketText)) {
+    return {
+      compatible: false,
+      reason: "Explicit login contradiction detected; Login template reuse is not authorized.",
+      ticketFamily: "unknown",
+      itemFamily: "unknown"
+    };
+  }
+
+  const ticketProfile = classifyRootCause(ticketText, understanding.intent);
+  const itemProfile = classifyRootCause(knowledgeRootCauseText(item));
+
+  if (ticketProfile.family === "unknown" || itemProfile.family === "unknown") {
+    return {
+      compatible: false,
+      reason: "Root-cause evidence is ambiguous; category alone does not authorize template reuse.",
+      ticketFamily: ticketProfile.family,
+      itemFamily: itemProfile.family
+    };
+  }
+
+  if (ticketProfile.family !== itemProfile.family) {
+    return {
+      compatible: false,
+      reason: `Root-cause mismatch: ticket is ${ticketProfile.family}, knowledge item is ${itemProfile.family}.`,
+      ticketFamily: ticketProfile.family,
+      itemFamily: itemProfile.family
+    };
+  }
+
+  return {
+    compatible: true,
+    reason: `Root-cause evidence agrees on ${ticketProfile.family}.`,
+    ticketFamily: ticketProfile.family,
+    itemFamily: itemProfile.family
+  };
+}
+
+function isStrongValidatedLessonMatch(ticket: Ticket, item: KnowledgeItem): boolean {
+  const lessonMatch = findMatchingLesson(ticket, item);
+  return !!lessonMatch && lessonMatch.score >= 2 && !ticketContradictsLesson(ticket, lessonMatch.lesson);
+}
+
 /**
- * Returns true only when the knowledge item's category is an acceptable source of
- * customer response templates for the given ticket understanding. Compatibility is
- * checked before any template is rendered - it is not affected by trust or similarity.
+ * Returns true only when category and root-cause evidence authorize the item as
+ * a source of customer-facing templates. A strong validated lesson is the
+ * explicit narrow exception because its signals are root-cause-specific.
  */
-export function isCompatibleForDrafting(understanding: Understanding, item: KnowledgeItem): boolean {
+export function isCompatibleForDrafting(
+  understanding: Understanding,
+  item: KnowledgeItem,
+  ticket?: Ticket
+): boolean {
   const ticketCategory = understanding.category;
   const itemCategory = item.category;
-  if (ticketCategory === itemCategory) return true;
-  if (ticketCategory === "General" || ticketCategory === UNCATEGORIZED_CATEGORY) return true;
-  const allowed = COMPATIBLE_CATEGORIES[ticketCategory];
-  return Array.isArray(allowed) ? allowed.includes(itemCategory) : false;
+  const categoryCompatible = ticketCategory === itemCategory
+    || ticketCategory === "General"
+    || ticketCategory === UNCATEGORIZED_CATEGORY
+    || (Array.isArray(COMPATIBLE_CATEGORIES[ticketCategory]) && COMPATIBLE_CATEGORIES[ticketCategory].includes(itemCategory));
+  if (!categoryCompatible) return false;
+  if (!ticket) return true;
+  if (isStrongValidatedLessonMatch(ticket, item)) return true;
+  return assessRootCauseCompatibility(understanding, item, ticket).compatible;
 }
 
 const CATEGORY_TEMPLATES: Record<string, (ticket: Ticket) => string> = {
@@ -308,11 +515,10 @@ export function draftResponse(
   const basedOnKnowledgeIds: string[] = [];
 
   const lessonSignalMatch = topMatch ? findMatchingLesson(ticket, topMatch.item) : null;
-  const compatibleMatch = topMatch && isCompatibleForDrafting(understanding, topMatch.item) ? topMatch : null;
-  const rejectedForCategory =
-    topMatch && !compatibleMatch
-      ? `Top match "${topMatch.item.title}" (${topMatch.item.category}) rejected - category incompatible with "${understanding.category}" ticket. Using correct template instead.`
-      : null;
+  const compatibleMatch = topMatch && isCompatibleForDrafting(understanding, topMatch.item, ticket) ? topMatch : null;
+  const rejectedForCompatibility = topMatch && !compatibleMatch
+    ? assessRootCauseCompatibility(understanding, topMatch.item, ticket).reason
+    : null;
 
   const lessonMatch = compatibleMatch ? lessonSignalMatch ?? findMatchingLesson(ticket, compatibleMatch.item) : null;
 
@@ -325,11 +531,15 @@ export function draftResponse(
     return { draftResponse: draft, basedOnKnowledgeIds, confidenceNote, source: "deterministic" };
   }
 
-  if (understanding.category === UNCATEGORIZED_CATEGORY) {
+  if (!compatibleMatch || understanding.category === UNCATEGORIZED_CATEGORY) {
     return {
       draftResponse: UNCATEGORIZED_PLACEHOLDER,
       basedOnKnowledgeIds: [],
-      confidenceNote: "No template available. This issue type has not been seen before. A human must author the first response and capture the learning in Reflection.",
+      confidenceNote: rejectedForCompatibility
+        ? `No compatible knowledge template was authorized. ${rejectedForCompatibility} Human review must author the response and capture the correct root cause in Reflection.`
+        : knowledgeBaseEmpty
+        ? "No approved knowledge exists yet. A human must author the first response and capture the learning in Reflection."
+        : "No compatible knowledge matched this ticket. A human must author the response and capture the learning in Reflection.",
       source: "no_template"
     };
   }
@@ -344,12 +554,8 @@ export function draftResponse(
     draft = appendTicketReferenceIfNeeded(draft, ticket.ticketId);
     confidenceNote = `Low-medium confidence (partial canonical problem match ${compatibleMatch.matchScore}%). The customer-facing template is used, but human review is required.`;
     basedOnKnowledgeIds.push(compatibleMatch.item.id);
-  } else if (rejectedForCategory) {
-    confidenceNote = `Category mismatch detected. ${rejectedForCategory} Human review required.`;
-  } else if (knowledgeBaseEmpty) {
-    confidenceNote = "No approved knowledge exists yet. This is a category template starter - not a knowledge-backed answer. Write the correct response below, then approve it to teach the organization its first lesson.";
   } else {
-    confidenceNote = `No matching knowledge found. No prior knowledge matched this ticket. This draft uses the "${understanding.category}" category template only. Human review is required before saving or sending.`;
+    confidenceNote = `No matching knowledge found. No prior knowledge matched this ticket. Human review is required before saving or sending.`;
   }
 
   return { draftResponse: draft, basedOnKnowledgeIds, confidenceNote, source: "deterministic" };

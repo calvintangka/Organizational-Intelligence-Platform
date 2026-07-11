@@ -74,7 +74,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `lib/domainClassifier.ts` - Business-domain classification before knowledge lookup.
 - `lib/canonicalProblemEngine.ts` - Canonical-problem identity, templates, internal guidance, workflows, merges, versions, canonical defaults, and reusable lesson-template normalization.
 - `lib/memory.ts` - Retrieval ranking over existing knowledge items.
-- `lib/drafting.ts` - Deterministic response drafting, category safety, lesson matching, and tone shaping.
+- `lib/drafting.ts` - Deterministic response drafting, category and root-cause template authorization, lesson matching, contradiction safety, and tone shaping.
 - `lib/reflection.ts` - Post-approval reflection decision engine.
 - `lib/trustEngine.ts` - Trust scoring, auto-resolution gating, validation-aware automation checks, and reuse outcome recording.
 - `lib/patternDiscovery.ts` - Recurring-issue detection and promotion to canonical problems.
@@ -124,6 +124,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `requestAnalysisAdvisory()` - AI analysis and canonical suggestion wrapper.
 - `requestMatchDiscrimination()` - AI same-problem vs distinct-problem check. Fails open (keeps the original match) when the AI call itself fails; only rejects on a genuine successful "distinct" judgment. Its rejection only affects the draft's match unless `processTicketPipeline()` also syncs `similarKnowledge` (see above).
 - `requestDraftAdvisory()` - Grounded AI draft wrapper plus deterministic fallback.
+- `isCompatibleForDrafting()` / `assessRootCauseCompatibility()` - Category-plus-root-cause authorization for KnowledgeItem templates; ambiguous or conflicting matches route to `no_template`, while strong non-contradicted validated lessons remain reusable.
 - `generateSuggestedResponse()` - Single-ticket draft generation stage. After discrimination, it now reorders or strips `similarKnowledge` so the manual-flow Organizational Memory / Provenance panels reflect the same effective match that grounded the rendered draft.
 - `approveResponse()` - Human approval gate before reflection. Resolves reflection from the actual rendered draft source (`suggestedResponse.basedOnKnowledgeIds` / `similarKnowledge`) instead of recomputing a fresh canonical match.
 - `confirmReflection()` - Create/merge/version/trust-update commit coordinator. Lesson-grounded commits no longer overwrite the parent generic template or create a new knowledge version unless the reviewer actually edited the generic template path.
@@ -166,7 +167,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 - `draftResponse()` - Deterministic draft generator. Uses the shared template renderer and appends the ticket reference only when the rendered lesson/memory draft does not already include the current ticket id.
 - `findMatchingLesson()` - Lesson-grounded override lookup. Now preserves negation tokens, blocks polarity mismatches like `remember my password` vs `never remembered password`, and skips contradicted login-failure lessons before scoring signals.
-- `isCompatibleForDrafting()` - Category-safety gate for draft reuse.
+- `isCompatibleForDrafting()` / `assessRootCauseCompatibility()` - Category-plus-root-cause authorization gate for draft reuse; ambiguous or conflicting evidence falls back to no-template Human Review.
 - `ticketContradictsLesson()` - Deterministic contradiction helper used by lesson matching and the page-level discrimination gate to stop explicit opposite-intent tickets from bypassing into validated lesson reuse.
 - Lesson-level `doNotPromise` guardrails reach AI lesson-grounded prompts through `requestDraftAdvisory()`.
 
