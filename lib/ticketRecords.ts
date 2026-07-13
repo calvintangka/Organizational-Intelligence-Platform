@@ -31,6 +31,20 @@ function hasLegacyTicketFallback(organizationId?: string): boolean {
   }
 }
 
+function hasLegacyTicketCounterFallback(organizationId?: string): boolean {
+  if (!organizationId || !hasStorage()) return false;
+  try {
+    const raw = window.localStorage.getItem(MIGRATION_KEY);
+    if (!raw) return false;
+    const state = JSON.parse(raw) as {
+      organizations?: Record<string, { resources?: { ticketCounter?: { status?: string } } }>;
+    };
+    return state.organizations?.[organizationId]?.resources?.ticketCounter?.status === "fallback";
+  } catch {
+    return false;
+  }
+}
+
 function write(key: string, value: unknown): void {
   if (!hasStorage()) return;
   window.localStorage.setItem(key, JSON.stringify(value));
@@ -64,6 +78,11 @@ function todayStamp(): string {
 function loadCounters(organizationId?: string): Record<string, number> {
   const scoped = read<number>(resolveStorageKey(TICKET_COUNTER_KEY, organizationId));
   if (organizationId && typeof scoped === "number") return { [organizationId]: scoped };
+  // C-1: preserve the legacy counter while this organization remains on migration fallback.
+  if (organizationId && scoped === null && hasLegacyTicketCounterFallback(organizationId)) {
+    const legacy = read<Record<string, number>>(TICKET_COUNTER_KEY);
+    return legacy ? { [organizationId]: legacy[organizationId] ?? 0 } : {};
+  }
   return read<Record<string, number>>(resolveStorageKey(TICKET_COUNTER_KEY, organizationId)) ?? {};
 }
 
