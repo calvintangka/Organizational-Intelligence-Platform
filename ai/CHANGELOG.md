@@ -13,6 +13,19 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-13] Bind legacy migration to one organization
+**Layer:** coding
+**Task/Prompt:** Implement TODO-003 Batch 1: Fix B1 — Legacy Ownership Safety.
+**Files changed:** `lib/orgMemory.ts`, `ai/CHANGELOG.md`, `ai/CURRENT_STATUS.md`, `ai/ARCHITECTURE.md`, `ai/CODEBASE_MAP.md`
+**What changed:**
+- Added durable `legacyOwnerOrganizationId` and ownership status metadata to the organization migration marker.
+- Bound all legacy migration and fallback reads to the single owner; unrelated and newly created organizations are blocked from legacy data.
+- Safely inferred the existing owner from the old single-organization marker, one unambiguous pre-fix migration record, or the repository’s original Maesa Tech workspace; ambiguous multi-organization state is durably blocked with a readable warning.
+- Preserved existing scoped data, untouched legacy v2 keys, and BUG-009 owner fallback behavior, including runtime ownership when the marker write is quota-blocked.
+**Boundaries touched:** Boundary 2 and Boundary 8 preserved. No memory-write pipeline, customer drafting, AI, authentication, actor identity, queue, database, or autonomous-execution behavior changed.
+**Verification:** Targeted in-memory localStorage probes covered original-owner migration, second/new organization blocking, reload with a new organization active, existing scoped-data preservation, owner-only quota fallback, and ambiguous pre-fix state. `npm run build` and `npx tsc --noEmit` passed.
+**Open items:** TODO-003 A1/A2/C-DUP-001/D1/E1/E2/F1 remain separate audit findings and were not changed in this batch. `graphify update .` remains blocked by the Windows uv trampoline.
+
 ## [2026-07-11] Prevent quota failure during organization migration
 **Layer:** coding
 **Task/Prompt:** Fix BUG-009: organization-isolation migration exceeds localStorage quota on startup.

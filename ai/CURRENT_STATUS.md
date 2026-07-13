@@ -1,8 +1,12 @@
 # Current Status
 
-This file is the fastest accurate snapshot of the prototype as of 2026-07-11.
+This file is the fastest accurate snapshot of the prototype as of 2026-07-13.
 
 ## What Changed Most Recently
+
+Fixed TODO-003 Batch 1 / B1: legacy ownership safety. `lib/orgMemory.ts` now persists `legacyOwnerOrganizationId` with durable ownership status, binds migration and fallback reads to that owner, and never assigns preserved global `oip.*.v2` data to a later or newly created organization. Existing pre-fix state is handled by accepting the old single-organization marker or one unambiguous migration record; the repository’s original Maesa Tech workspace is the explicit fallback owner when profile evidence is otherwise absent. Multiple pre-fix organization records or missing ownership evidence produce a durable ambiguous-blocked marker and a readable migration warning instead of guessing. Existing scoped data and legacy v2 keys remain untouched, and runtime ownership preserves BUG-009 fallback behavior if the marker write itself is quota-blocked.
+
+Targeted in-memory localStorage probes passed for original-owner migration, second-organization blocking, new-organization isolation across reload, existing scoped-data preservation, owner-only quota fallback, and ambiguous pre-fix state. `npm run build` and `npx tsc --noEmit` pass. TODO-003 remains in progress because the separate retry, duplicate-lesson, reset/delete, and idempotency defects were intentionally not changed in this batch.
 
 Fixed BUG-010: generic KnowledgeItem templates now require root-cause compatibility in addition to category compatibility. `lib/drafting.ts` classifies conservative root-cause families, rejects ambiguous or conflicting evidence, blocks explicit Login contradictions, and allows a strong non-contradicted validated lesson as the only narrow exception. `lib/analyzer.ts` distinguishes credential-unavailable tickets from credential-mismatch tickets, and `app/page.tsx` applies the authorization gate before selection, discrimination, UI provenance, deterministic drafting, AI grounding, and AI-unavailable fallback. Root-cause mismatch now routes to `no_template` Human Review instead of a broad category template. BUG-008’s paraphrase retrieval behavior, organization isolation, and persistence migration are unchanged.
 

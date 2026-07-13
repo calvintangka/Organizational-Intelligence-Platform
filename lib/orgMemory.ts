@@ -35,6 +35,10 @@ const PATTERNS_KEY = `oip.emergingPatterns.${STORAGE_VERSION}`;
 const CANDIDATES_KEY = `oip.knowledgeCandidates.${STORAGE_VERSION}`;
 const VALIDATION_RECORDS_KEY = `oip.validationRecords.${STORAGE_VERSION}`;
 const MEMORY_CHANGES_KEY = `oip.memoryChanges.${STORAGE_VERSION}`;
+const ORGANIZATION_PROFILE_KEY = "oip.organizationProfile.v1";
+const ORGANIZATION_LIST_KEY = "oip.organizationList.v1";
+// Pre-isolation v2 data belonged to the original Maesa workspace in this repository.
+const KNOWN_LEGACY_OWNER_ID = "profile-maesa-tech";
 const MAX_LOG_ENTRIES = 80;
 const MAX_SCOPED_MEMORY_CHANGE_RECORDS = 12;
 
@@ -64,6 +68,10 @@ interface OrganizationMigrationState {
     resources: Partial<Record<OrganizationMigrationResource, MigrationResourceState>>;
     completedAt?: string;
   }>;
+  legacyOwnerOrganizationId?: string;
+  legacyOwnershipStatus?: "owned" | "ambiguous";
+  legacyOwnershipReason?: string;
+  legacyOwnershipUpdatedAt?: string;
 }
 
 export interface OrganizationMigrationResult {
@@ -73,6 +81,8 @@ export interface OrganizationMigrationResult {
 }
 
 const runtimeLegacyFallbacks = new Map<string, Set<OrganizationMigrationResource>>();
+let runtimeLegacyOwnerOrganizationId: string | undefined;
+let runtimeLegacyOwnershipAmbiguous = false;
 
 function hasStorage(): boolean {
   return typeof window !== "undefined" && !!window.localStorage;
@@ -133,7 +143,11 @@ function readMigrationState(): OrganizationMigrationState {
     return {
       version: ISOLATED_STORAGE_VERSION,
       sourceVersion: STORAGE_VERSION,
-      organizations: { [stored.organizationId]: { resources: {} } }
+      organizations: { [stored.organizationId]: { resources: {} } },
+      legacyOwnerOrganizationId: stored.organizationId,
+      legacyOwnershipStatus: "owned",
+      legacyOwnershipReason: "inferred from the original single-organization migration marker",
+      legacyOwnershipUpdatedAt: new Date().toISOString()
     };
   }
 
@@ -146,10 +160,27 @@ function rememberRuntimeFallback(organizationId: string, resource: OrganizationM
   runtimeLegacyFallbacks.set(organizationId, resources);
 }
 
+function rememberRuntimeLegacyOwner(organizationId: string): void {
+  runtimeLegacyOwnerOrganizationId = organizationId;
+  runtimeLegacyOwnershipAmbiguous = false;
+}
+
+function rememberRuntimeLegacyOwnershipAmbiguous(): void {
+  runtimeLegacyOwnerOrganizationId = undefined;
+  runtimeLegacyOwnershipAmbiguous = true;
+}
+
+function stateLegacyOwner(state: OrganizationMigrationState): string | undefined {
+  if (state.legacyOwnershipStatus === "ambiguous") return undefined;
+  return state.legacyOwnerOrganizationId ?? runtimeLegacyOwnerOrganizationId;
+}
+
 function hasLegacyFallback(organizationId: string, resource: OrganizationMigrationResource): boolean {
-  if (runtimeLegacyFallbacks.get(organizationId)?.has(resource)) return true;
   const state = readMigrationState();
-  return state.organizations[organizationId]?.resources[resource]?.status === "fallback";
+  if (state.legacyOwnershipStatus === "ambiguous" || runtimeLegacyOwnershipAmbiguous) return false;
+  if (stateLegacyOwner(state) !== organizationId) return false;
+  return runtimeLegacyFallbacks.get(organizationId)?.has(resource) === true
+    || state.organizations[organizationId]?.resources[resource]?.status === "fallback";
 }
 
 function markResource(
@@ -203,6 +234,117 @@ function saveMigrationState(state: OrganizationMigrationState): boolean {
   }
 }
 
+const LEGACY_STORAGE_KEYS = [
+  KNOWLEDGE_KEY,
+  CANDIDATES_KEY,
+  VALIDATION_RECORDS_KEY,
+  MEMORY_CHANGES_KEY,
+  ORG_METRICS_KEY,
+  PATTERNS_KEY,
+  LOG_KEY,
+  "oip.ticketRecords.v2",
+  "oip.ticketCounter.v2"
+];
+
+function hasLegacyStorage(): boolean {
+  return LEGACY_STORAGE_KEYS.some((key) => hasKey(key));
+}
+
+function readPersistedOrganizationIds(): string[] | null {
+  const ids = new Set<string>();
+  try {
+    const profile = read<{ id?: string }>(ORGANIZATION_PROFILE_KEY);
+    if (profile?.id) ids.add(profile.id);
+    const list = read<Array<{ id?: string }>>(ORGANIZATION_LIST_KEY);
+    if (Array.isArray(list)) {
+      list.forEach((organization) => {
+        if (organization?.id) ids.add(organization.id);
+      });
+    }
+  } catch {
+    return null;
+  }
+  return [...ids];
+}
+
+function hasMigrationEvidence(
+  organization: OrganizationMigrationState["organizations"][string]
+): boolean {
+  return Object.keys(organization.resources).length > 0 || !!organization.completedAt;
+}
+
+interface LegacyOwnershipResolution {
+  status: "owned" | "ambiguous";
+  organizationId?: string;
+  reason: string;
+}
+
+function resolveLegacyOwnership(state: OrganizationMigrationState): LegacyOwnershipResolution {
+  if (state.legacyOwnerOrganizationId && state.legacyOwnershipStatus !== "ambiguous") {
+    return {
+      status: "owned",
+      organizationId: state.legacyOwnerOrganizationId,
+      reason: state.legacyOwnershipReason ?? "preserved durable legacy ownership metadata"
+    };
+  }
+  if (state.legacyOwnershipStatus === "ambiguous") {
+    return {
+      status: "ambiguous",
+      reason: state.legacyOwnershipReason ?? "legacy ownership was previously determined to be ambiguous"
+    };
+  }
+
+  const migrationOrganizationIds = Object.entries(state.organizations)
+    .filter(([, organization]) => hasMigrationEvidence(organization))
+    .map(([organizationId]) => organizationId);
+  if (migrationOrganizationIds.length === 1) {
+    return {
+      status: "owned",
+      organizationId: migrationOrganizationIds[0],
+      reason: "inferred from the only pre-existing organization migration record"
+    };
+  }
+  if (migrationOrganizationIds.length > 1) {
+    return {
+      status: "ambiguous",
+      reason: `multiple organizations have pre-existing migration evidence: ${migrationOrganizationIds.join(", ")}`
+    };
+  }
+
+  // The original pre-isolation workspace is known from the repository's seeded
+  // organization/profile state. This is independent of whichever organization
+  // is active when migration first runs.
+  const persistedOrganizationIds = readPersistedOrganizationIds();
+  if (persistedOrganizationIds !== null
+    && (persistedOrganizationIds.length === 0 || persistedOrganizationIds.includes(KNOWN_LEGACY_OWNER_ID))) {
+    return {
+      status: "owned",
+      organizationId: KNOWN_LEGACY_OWNER_ID,
+      reason: "inferred from the repository's original Maesa Tech workspace"
+    };
+  }
+
+  return {
+    status: "ambiguous",
+    reason: "no durable owner marker or safe existing organization evidence identifies the legacy workspace"
+  };
+}
+
+function persistLegacyOwnership(
+  state: OrganizationMigrationState,
+  ownership: LegacyOwnershipResolution
+): void {
+  state.legacyOwnershipStatus = ownership.status;
+  state.legacyOwnerOrganizationId = ownership.organizationId;
+  state.legacyOwnershipReason = ownership.reason;
+  state.legacyOwnershipUpdatedAt = new Date().toISOString();
+  if (ownership.status === "owned" && ownership.organizationId) {
+    rememberRuntimeLegacyOwner(ownership.organizationId);
+  } else {
+    rememberRuntimeLegacyOwnershipAmbiguous();
+  }
+}
+
 function readOrganizationResource<T>(
   organizationId: string | undefined,
   resource: OrganizationMigrationResource,
@@ -244,6 +386,25 @@ export function migrateLegacyOrganizationStorage(organizationId: string): Organi
 
   try {
     state = readMigrationState();
+    if (hasLegacyStorage()) {
+      const ownership = resolveLegacyOwnership(state);
+      if (ownership.status === "ambiguous") {
+        persistLegacyOwnership(state, ownership);
+        saveMigrationState(state);
+        result.warnings.push(`Legacy migration is blocked because ownership is ambiguous: ${ownership.reason}. Set legacyOwnerOrganizationId explicitly before retrying.`);
+        return result;
+      }
+
+      persistLegacyOwnership(state, ownership);
+      if (ownership.organizationId !== organizationId) {
+        saveMigrationState(state);
+        result.warnings.push(`Legacy data remains owned by ${ownership.organizationId}; no legacy data was migrated into ${organizationId}.`);
+        return result;
+      }
+    } else if (state.legacyOwnershipStatus === "owned" && state.legacyOwnerOrganizationId) {
+      rememberRuntimeLegacyOwner(state.legacyOwnerOrganizationId);
+    }
+
     organizationState = state.organizations[organizationId] ?? { resources: {} };
     state.organizations[organizationId] = organizationState;
 

@@ -83,7 +83,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 ### Persistence and profile state
 
-- `lib/orgMemory.ts` - Versioned organization-scoped localStorage load/save helpers for knowledge, candidates, validations, memory changes, metrics, log, and patterns. Owns the copy-only legacy v2 migration marker and active-organization migration.
+- `lib/orgMemory.ts` - Versioned organization-scoped localStorage load/save helpers for knowledge, candidates, validations, memory changes, metrics, log, and patterns. Owns the copy-only legacy v2 migration marker, durable single-organization legacy ownership, owner-only fallback reads, and ambiguous migration blocking.
 - `lib/organizationProfile.ts` - Async-compatible profile load/save helpers, normalization, and keyword-bank generation.
 - `lib/ticketRecords.ts` - Async-compatible ticket-record load/save helpers plus synchronous ticket-id counters and case-record utilities.
 - `lib/metrics.ts` - Metric defaults.
@@ -139,7 +139,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `discardTicket()` - Marks the active ticket as discarded, preserves the record, and resets the workspace. No knowledge artifacts created.
 - `retryAIDraft()` - Re-runs only the draft advisory call for the current ticket when AI fallback occurred.
 - `confirmAndResetOrganization()` and `resetOrganization()` - Protected danger-zone reset path.
-- Initial hydration/save effects - Load the selected org profile first, run the one-time legacy migration, then await org-owned persistence reads before setting `hydrated`; save effects pass the active org id and catch Promise rejections. `selectOrganization(id, availableOrganizations?)` pauses saves, conditionally persists the old org only when hydrated at switch start, reloads every org-owned collection, and guards rapid/late async completions. Add/delete handlers pass the computed list and route active deletion through this same load sequence.
+- Initial hydration/save effects - Load the selected org profile first, run the owner-bound legacy migration, then await org-owned persistence reads before setting `hydrated`; save effects pass the active org id and catch Promise rejections. `selectOrganization(id, availableOrganizations?)` pauses saves, conditionally persists the old org only when hydrated at switch start, reloads every org-owned collection, and guards rapid/late async completions. Add/delete handlers pass the computed list and route active deletion through this same load sequence. Ambiguous legacy ownership is surfaced through the migration warning and blocks legacy copy/fallback reads.
 
 ### `lib/analyzer.ts`
 
@@ -184,7 +184,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 ### `lib/orgMemory.ts`
 
-- `loadKnowledge()` / `saveKnowledge()` - Async-compatible knowledge persistence. `loadKnowledge()` still runs `repairCorruptedCustomerTemplates()` and `repairLegacyLessonResponseTemplates()` on every load as self-heal migrations for corrupted generic templates and legacy lesson-specific greetings/ticket references.
+- `loadKnowledge()` / `saveKnowledge()` - Async-compatible knowledge persistence. `loadKnowledge()` still runs `repairCorruptedCustomerTemplates()` and `repairLegacyLessonResponseTemplates()` on every load as self-heal migrations for corrupted generic templates and legacy lesson-specific greetings/ticket references; legacy fallback is allowed only for the durable migration owner.
 - `loadKnowledgeCandidates()` / `saveKnowledgeCandidates()` - Async-compatible candidate persistence.
 - `loadValidationRecords()` / `saveValidationRecords()` - Async-compatible validation-history persistence.
 - `loadMemoryChangeRecords()` / `saveMemoryChangeRecords()` - Async-compatible memory-change audit persistence.
