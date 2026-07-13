@@ -72,7 +72,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 - `lib/analyzer.ts` - Business relevance, category/intent understanding, reasoning summaries, confidence summaries, and classifier-category helpers.
 - `lib/domainClassifier.ts` - Business-domain classification before knowledge lookup.
-- `lib/canonicalProblemEngine.ts` - Canonical-problem identity, templates, internal guidance, workflows, merges, versions, canonical defaults, and reusable lesson-template normalization.
+- `lib/canonicalProblemEngine.ts` - Canonical-problem identity, templates, internal guidance, workflows, organization-scoped merges, lesson-preserving deduplication, deterministic lesson-conflict handling, versions, canonical defaults, and reusable lesson-template normalization.
 - `lib/memory.ts` - Retrieval ranking over existing knowledge items.
 - `lib/drafting.ts` - Deterministic response drafting, category and root-cause template authorization, lesson matching, contradiction safety, and tone shaping.
 - `lib/reflection.ts` - Post-approval reflection decision engine.
@@ -156,6 +156,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `findCanonicalProblem()` - Similarity-thresholded canonical match against stored knowledge.
 - `createCanonicalProblem()` - First validated canonical-problem creation.
 - `mergeIntoCanonicalProblem()` - Evidence merge path.
+- `mergeCanonicalProblemItems()` / `dedupeCanonicalProblems()` - Organization-scoped canonical merges that preserve unique lessons, merge equivalent lesson IDs additively, and retain conflicting lesson content under deterministic conflict-safe IDs with append-only history.
 - `upsertCanonicalProblem()` - Canonical upsert used during validated commit.
 - `withCanonicalProblemDefaults()` - Normalization and default fields.
 - `normalizeReusableResponseTemplate()` / `renderResponseTemplate()` - Shared reusable-template normalization and rendering. Repairs legacy lesson greetings like `Hi Grace Adeyemi,`, converts literal ticket references into `{{ticketId}}`, and renders `{{customerName}}`, `{{ticketId}}`, `{{organizationName}}`, and `{{greetingLine}}`.

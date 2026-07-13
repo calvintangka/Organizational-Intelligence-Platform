@@ -119,6 +119,8 @@ Because lessons are meant to be reusable across many customers, lesson `customer
 
 Starter packs extend, rather than replace, that lesson model. Imported lessons use the same `Lesson` shape with extra optional fields such as `title`, `whenToEscalate`, and `doNotPromise`, so lesson-grounded drafting and later human edits still operate on one shared knowledge structure.
 
+Canonical deduplication in `lib/canonicalProblemEngine.ts` preserves lessons in deterministic primary-then-secondary order. Equivalent lesson IDs are merged once with additive signals, escalation conditions, prohibited promises, source-ticket references, and timestamps. Materially conflicting duplicate IDs retain the secondary content under a deterministic conflict-safe ID with `conflictOfLessonId`/`conflictReason` markers and an append-only learning-history entry. Canonical merges are organization-scoped; mismatched organization IDs are kept separate and direct cross-organization merges are rejected.
+
 ## Data Model
 
 The core types live in `types/knowledge.ts`, `types/ai.ts`, `types/bulkUpload.ts`, `types/oip.ts`, and `types/ticket.ts`.

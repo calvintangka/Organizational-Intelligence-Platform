@@ -13,6 +13,19 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-13] Preserve lessons during canonical deduplication
+**Layer:** coding
+**Task/Prompt:** Implement TODO-003 Batch 4: Fix C-DUP-001 — Preserve Lessons During Canonical Knowledge Deduplication.
+**Files changed:** `lib/canonicalProblemEngine.ts`, `types/knowledge.ts`, `ai/CHANGELOG.md`, `ai/CURRENT_STATUS.md`, `ai/CODEBASE_MAP.md`, `ai/ARCHITECTURE.md`
+**What changed:**
+- Canonical merges now preserve all unique lessons in deterministic primary-then-secondary order.
+- Equivalent duplicate lesson IDs merge additive signals, escalation conditions, prohibited promises, source-ticket references, and timestamps without duplication.
+- Material same-ID conflicts retain the secondary content under a deterministic conflict-safe lesson ID and append a visible learning-history entry.
+- Canonical dedupe and upsert operations now include organization scope and reject direct cross-organization merges.
+**Boundaries touched:** Boundary 2 and Boundary 8 preserved. No drafting, contradiction detection, trust, reflection, validation, AI-provider, authentication, actor, queue, database, or autonomous-execution behavior changed.
+**Verification:** Deterministic lesson/version/example/history/organization-isolation probes; `npm run build`; `npx tsc --noEmit`; `git diff --check`.
+**Open items:** BUG-008 and unrelated TODO-003 residual risks remain outside this batch. `graphify update .` remains blocked by the Windows uv trampoline.
+
 ## [2026-07-13] Harden migration reset and deletion durability
 **Layer:** coding
 **Task/Prompt:** Implement TODO-003 Batch 3: Fix D1 + E1 + E2 — Memory-Change Write Durability, Reset Safety, and Organization Deletion Cleanup.

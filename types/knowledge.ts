@@ -126,6 +126,10 @@ export interface Lesson {
   doNotPromise?: string[];
   createdAt: string;
   sourceTicketId: string;
+  sourceTicketIds?: string[];
+  updatedAt?: string;
+  conflictOfLessonId?: string;
+  conflictReason?: string;
 }
 
 export type LessonMode = "new" | "matches_existing" | "improves_existing";

@@ -4,6 +4,10 @@ This file is the fastest accurate snapshot of the prototype as of 2026-07-13.
 
 ## What Changed Most Recently
 
+Fixed TODO-003 Batch 4 / C-DUP-001: canonical KnowledgeItem merges now preserve lessons instead of dropping the secondary item's lessons. Unique lessons retain deterministic order; equivalent same-ID lessons merge additive fields and source-ticket references; materially conflicting same-ID lessons are preserved under deterministic conflict-safe IDs with append-only conflict history. Dedupe/upsert keys include organization scope, and direct cross-organization merges are rejected. Earlier migration, reset, deletion, retry, and ownership fixes remain intact.
+
+Targeted canonical probes passed for distinct lessons, duplicate and additive lesson IDs, conflicting core content, versions, examples, learning history, organization mismatch, and repeated idempotent deduplication. `npm run build`, `npx tsc --noEmit`, and `git diff --check` pass. `graphify update .` remains blocked by the Windows uv trampoline.
+
 Fixed TODO-003 Batch 3 / D1 + E1 + E2: fallback memory-change tail writes now reject visibly on quota/storage failure instead of claiming success, while the caller retains the unsaved records for retry and preserved global history remains read-only. Reset writes a durable per-organization `legacyImportSuppressed` tombstone before clearing scoped state, so reload and migration cannot silently re-import legacy data. Deletion clears only the deleted organization's scoped resources and migration entry; deleting the legacy owner preserves the owner evidence but marks ownership ambiguous and blocks transfer. Cleanup failures propagate through the existing persistence error path. Batch 2 retry/idempotency and B1 ownership behavior remain intact.
 
 Targeted D1/E1/E2 localStorage probes passed for successful and failed tail writes, retry/reload deduplication, reset suppression, inactive and owner deletion, cleanup failure visibility, legacy preservation, and ownership blocking. `npm run build`, `npx tsc --noEmit`, and `git diff --check` pass. `graphify update .` remains blocked by the Windows uv trampoline.

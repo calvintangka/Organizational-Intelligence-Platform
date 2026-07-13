@@ -4,6 +4,7 @@
   CanonicalProblemExample,
   KnowledgeVersion,
   LearningHistoryEntry,
+  Lesson,
   OrganizationProfile
 } from "@/types";
 import type { Understanding } from "@/types/oip";
@@ -1116,6 +1117,150 @@ function completeness(item: KnowledgeItem): number {
   );
 }
 
+function lessonSourceTicketIds(lesson: Lesson): string[] {
+  return [...new Set([lesson.sourceTicketId, ...(lesson.sourceTicketIds ?? [])].filter(Boolean))].sort();
+}
+
+function lessonCompleteness(lesson: Lesson): number {
+  return (lesson.title?.length ?? 0)
+    + lesson.rootCause.length
+    + lesson.solution.length
+    + lesson.customerResponse.length
+    + (lesson.signals?.length ?? 0) * 10
+    + (lesson.whenToEscalate?.length ?? 0)
+    + (lesson.doNotPromise?.length ?? 0) * 10
+    + lessonSourceTicketIds(lesson).length * 5
+    + (lesson.updatedAt ? 5 : 0);
+}
+
+function lessonCoreSignature(lesson: Lesson): string {
+  return JSON.stringify({
+    title: lesson.title?.trim() ?? "",
+    rootCause: lesson.rootCause.trim(),
+    solution: lesson.solution.trim(),
+    customerResponse: lesson.customerResponse.trim()
+  });
+}
+
+function lessonsHaveEquivalentCore(a: Lesson, b: Lesson): boolean {
+  return lessonCoreSignature(a) === lessonCoreSignature(b);
+}
+
+function additiveTextParts(value?: string): string[] {
+  return (value ?? "")
+    .split("\n\nAdditional condition:\n")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function mergeAdditiveText(a?: string, b?: string): string | undefined {
+  const parts = [...new Set([...additiveTextParts(a), ...additiveTextParts(b)])].sort();
+  return parts.length > 0 ? parts.join("\n\nAdditional condition:\n") : undefined;
+}
+
+function mergeEquivalentLessons(a: Lesson, b: Lesson): Lesson {
+  const richer = lessonCompleteness(b) > lessonCompleteness(a) ? b : a;
+  const sourceTicketIds = [...new Set([...lessonSourceTicketIds(a), ...lessonSourceTicketIds(b)])].sort();
+  return {
+    ...richer,
+    id: a.id,
+    signals: [...new Set([...(a.signals ?? []), ...(b.signals ?? [])])].sort(),
+    whenToEscalate: mergeAdditiveText(a.whenToEscalate, b.whenToEscalate),
+    doNotPromise: [...new Set([...(a.doNotPromise ?? []), ...(b.doNotPromise ?? [])])].sort(),
+    sourceTicketId: richer.sourceTicketId || a.sourceTicketId,
+    ...(sourceTicketIds.length > 1 ? { sourceTicketIds } : {}),
+    createdAt: earlierTimestamp(a.createdAt, b.createdAt) ?? richer.createdAt,
+    updatedAt: newerTimestamp(a.updatedAt, b.updatedAt)
+  };
+}
+
+function stableLessonHash(lesson: Lesson): string {
+  const input = JSON.stringify({
+    core: lessonCoreSignature(lesson),
+    signals: [...new Set(lesson.signals ?? [])].sort(),
+    whenToEscalate: additiveTextParts(lesson.whenToEscalate).sort(),
+    doNotPromise: [...new Set(lesson.doNotPromise ?? [])].sort(),
+    sourceTicketIds: lessonSourceTicketIds(lesson)
+  });
+  let hash = 2166136261;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function uniqueLessonId(baseId: string, usedIds: Set<string>): string {
+  let candidate = baseId;
+  let suffix = 2;
+  while (usedIds.has(candidate)) {
+    candidate = `${baseId}-${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
+interface LessonMergeResult {
+  lessons: Lesson[];
+  conflictHistory: LearningHistoryEntry[];
+}
+
+function mergeLessons(
+  primaryLessons: Lesson[],
+  secondaryLessons: Lesson[],
+  canonicalProblemId: string
+): LessonMergeResult {
+  const lessons: Lesson[] = [];
+  const byId = new Map<string, Lesson>();
+  const usedIds = new Set<string>();
+  const seenConflictVariants = new Set<string>();
+  const conflictHistory: LearningHistoryEntry[] = [];
+
+  for (const lesson of [...primaryLessons, ...secondaryLessons]) {
+    const existing = byId.get(lesson.id);
+    if (!existing) {
+      byId.set(lesson.id, lesson);
+      usedIds.add(lesson.id);
+      lessons.push(lesson);
+      if (lesson.conflictOfLessonId) {
+        seenConflictVariants.add(`${lesson.conflictOfLessonId}::${stableLessonHash(lesson)}`);
+      }
+      continue;
+    }
+
+    if (lessonsHaveEquivalentCore(existing, lesson)) {
+      const merged = mergeEquivalentLessons(existing, lesson);
+      const index = lessons.findIndex((candidate) => candidate.id === existing.id);
+      if (index >= 0) lessons[index] = merged;
+      byId.set(existing.id, merged);
+      continue;
+    }
+
+    const variantKey = `${existing.id}::${stableLessonHash(lesson)}`;
+    if (seenConflictVariants.has(variantKey)) continue;
+    seenConflictVariants.add(variantKey);
+
+    const conflictId = uniqueLessonId(`${existing.id}--conflict-${stableLessonHash(lesson)}`, usedIds);
+    const conflictLesson: Lesson = {
+      ...lesson,
+      id: conflictId,
+      conflictOfLessonId: existing.id,
+      conflictReason: `Conflicting duplicate lesson ID ${existing.id}; the secondary lesson was preserved under this deterministic conflict-safe ID.`
+    };
+    usedIds.add(conflictId);
+    byId.set(conflictId, conflictLesson);
+    lessons.push(conflictLesson);
+    conflictHistory.push({
+      id: `${canonicalProblemId}-lesson-conflict-${stableLessonHash(lesson)}`,
+      event: "Conflicting duplicate lesson ID preserved",
+      detail: `Lesson ${existing.id} had materially different core content. The secondary content was preserved as ${conflictId}.`,
+      createdAt: newerTimestamp(existing.updatedAt ?? existing.createdAt, lesson.updatedAt ?? lesson.createdAt) ?? existing.createdAt
+    });
+  }
+
+  return { lessons, conflictHistory };
+}
+
 /**
  * Merge two knowledge items that represent the SAME canonical problem (same id).
  * Conservative: keeps highest trust, maxes usage counters (no inflation),
@@ -1125,6 +1270,10 @@ function completeness(item: KnowledgeItem): number {
 export function mergeCanonicalProblemItems(a: KnowledgeItem, b: KnowledgeItem): KnowledgeItem {
   const x = withCanonicalProblemDefaults(a);
   const y = withCanonicalProblemDefaults(b);
+
+  if (x.organizationId !== y.organizationId) {
+    throw new Error(`Cannot merge canonical knowledge across organizations: ${x.organizationId ?? "unscoped"} and ${y.organizationId ?? "unscoped"}.`);
+  }
 
   const xTrust = x.trustScore ?? 0;
   const yTrust = y.trustScore ?? 0;
@@ -1150,6 +1299,15 @@ export function mergeCanonicalProblemItems(a: KnowledgeItem, b: KnowledgeItem): 
 
   const historyMap = new Map<string, LearningHistoryEntry>();
   for (const entry of [...(x.learningHistory ?? []), ...(y.learningHistory ?? [])]) {
+    if (!historyMap.has(entry.id)) historyMap.set(entry.id, entry);
+  }
+
+  const lessonMerge = mergeLessons(
+    primary.lessons ?? [],
+    secondary.lessons ?? [],
+    primary.canonicalProblemId ?? primary.id
+  );
+  for (const entry of lessonMerge.conflictHistory) {
     if (!historyMap.has(entry.id)) historyMap.set(entry.id, entry);
   }
 
@@ -1194,6 +1352,7 @@ export function mergeCanonicalProblemItems(a: KnowledgeItem, b: KnowledgeItem): 
     exampleTickets: [...exampleMap.values()],
     knowledgeVersions: [...versionMap.values()],
     learningHistory: [...historyMap.values()],
+    lessons: lessonMerge.lessons,
 
     // Keep active lifecycle if either is active; keep validation/provenance if present.
     lifecycleState: x.lifecycleState === "active" || y.lifecycleState === "active" ? "active" : primary.lifecycleState ?? secondary.lifecycleState,
@@ -1219,12 +1378,14 @@ export function dedupeCanonicalProblems(items: KnowledgeItem[]): KnowledgeItem[]
 
   for (const raw of items) {
     const item = withCanonicalProblemDefaults(raw);
-    const existing = byId.get(item.id);
+    const organizationKey = item.organizationId ?? "__unscoped__";
+    const mergeKey = JSON.stringify([organizationKey, item.id]);
+    const existing = byId.get(mergeKey);
     if (existing) {
-      byId.set(item.id, mergeCanonicalProblemItems(existing, item));
+      byId.set(mergeKey, mergeCanonicalProblemItems(existing, item));
     } else {
-      byId.set(item.id, item);
-      order.push(item.id);
+      byId.set(mergeKey, item);
+      order.push(mergeKey);
     }
   }
 
@@ -1237,7 +1398,10 @@ export function dedupeCanonicalProblems(items: KnowledgeItem[]): KnowledgeItem[]
  */
 export function upsertCanonicalProblem(items: KnowledgeItem[], incoming: KnowledgeItem): KnowledgeItem[] {
   const normalized = withCanonicalProblemDefaults(incoming);
-  const index = items.findIndex((item) => withCanonicalProblemDefaults(item).id === normalized.id);
+  const index = items.findIndex((item) => {
+    const existing = withCanonicalProblemDefaults(item);
+    return existing.id === normalized.id && existing.organizationId === normalized.organizationId;
+  });
   if (index === -1) {
     return [normalized, ...items];
   }
