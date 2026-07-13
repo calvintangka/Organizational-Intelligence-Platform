@@ -83,7 +83,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 ### Persistence and profile state
 
-- `lib/orgMemory.ts` - Versioned organization-scoped localStorage load/save helpers for knowledge, candidates, validations, memory changes, metrics, log, and patterns. Owns the copy-only legacy v2 migration marker, durable single-organization legacy ownership, owner-only fallback reads, and ambiguous migration blocking.
+- `lib/orgMemory.ts` - Versioned organization-scoped localStorage load/save helpers for knowledge, candidates, validations, memory changes, metrics, log, and patterns. Owns the copy-only legacy v2 migration marker, durable single-organization legacy ownership, owner-only fallback reads, independent retryable resource states, idempotent completion, and ambiguous migration blocking.
 - `lib/organizationProfile.ts` - Async-compatible profile load/save helpers, normalization, and keyword-bank generation.
 - `lib/ticketRecords.ts` - Async-compatible ticket-record load/save helpers plus synchronous ticket-id counters and case-record utilities.
 - `lib/metrics.ts` - Metric defaults.

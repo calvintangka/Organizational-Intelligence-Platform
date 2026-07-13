@@ -53,7 +53,19 @@ export type OrganizationMigrationResource =
   | "tickets"
   | "ticketCounter";
 
-type MigrationResourceStatus = "copied" | "fallback" | "absent";
+const MIGRATION_RESOURCES: readonly OrganizationMigrationResource[] = [
+  "knowledge",
+  "candidates",
+  "validationRecords",
+  "memoryChanges",
+  "metrics",
+  "patterns",
+  "intelligenceLog",
+  "tickets",
+  "ticketCounter"
+];
+
+type MigrationResourceStatus = "copied" | "fallback" | "absent" | "error";
 
 interface MigrationResourceState {
   status: MigrationResourceStatus;
@@ -72,6 +84,7 @@ interface OrganizationMigrationState {
   legacyOwnershipStatus?: "owned" | "ambiguous";
   legacyOwnershipReason?: string;
   legacyOwnershipUpdatedAt?: string;
+  compatibilityIssue?: string;
 }
 
 export interface OrganizationMigrationResult {
@@ -83,6 +96,10 @@ export interface OrganizationMigrationResult {
 const runtimeLegacyFallbacks = new Map<string, Set<OrganizationMigrationResource>>();
 let runtimeLegacyOwnerOrganizationId: string | undefined;
 let runtimeLegacyOwnershipAmbiguous = false;
+
+function isKnownMigrationResourceStatus(value: unknown): value is MigrationResourceStatus {
+  return value === "copied" || value === "fallback" || value === "absent" || value === "error";
+}
 
 function hasStorage(): boolean {
   return typeof window !== "undefined" && !!window.localStorage;
@@ -134,8 +151,51 @@ function hasKey(key: string): boolean {
 }
 
 function readMigrationState(): OrganizationMigrationState {
-  const stored = read<Partial<OrganizationMigrationState> & { organizationId?: string }>(ORGANIZATION_ISOLATION_MIGRATION_KEY);
-  if (stored?.organizations) return stored as OrganizationMigrationState;
+  let stored: (Partial<OrganizationMigrationState> & { organizationId?: string }) | null = null;
+  try {
+    stored = read<Partial<OrganizationMigrationState> & { organizationId?: string }>(ORGANIZATION_ISOLATION_MIGRATION_KEY);
+  } catch {
+    return {
+      version: ISOLATED_STORAGE_VERSION,
+      sourceVersion: STORAGE_VERSION,
+      organizations: {},
+      compatibilityIssue: "the migration marker contains invalid JSON"
+    };
+  }
+  if (stored?.organizations && typeof stored.organizations === "object" && !Array.isArray(stored.organizations)) {
+    const organizations = stored.organizations as Record<string, { resources?: unknown }>;
+    const hasMalformedOrganization = Object.values(organizations).some((organization) => {
+      const candidate = organization as { resources?: unknown } | null;
+      return !candidate
+        || typeof candidate !== "object"
+        || !candidate.resources
+        || typeof candidate.resources !== "object"
+        || Array.isArray(candidate.resources);
+    });
+    const hasMalformedResourceState = !hasMalformedOrganization && Object.values(organizations).some((organization) =>
+      Object.entries(organization.resources as Record<string, { status?: unknown }>).some(([resource, resourceState]) =>
+        !MIGRATION_RESOURCES.includes(resource as OrganizationMigrationResource)
+        || !resourceState
+        || !isKnownMigrationResourceStatus(resourceState.status))
+    );
+    if (hasMalformedOrganization || hasMalformedResourceState) {
+      return {
+        version: ISOLATED_STORAGE_VERSION,
+        sourceVersion: STORAGE_VERSION,
+        organizations: {},
+        compatibilityIssue: "the migration marker contains an unrecognized resource state"
+      };
+    }
+    if (stored.version !== ISOLATED_STORAGE_VERSION || stored.sourceVersion !== STORAGE_VERSION) {
+      return {
+        version: ISOLATED_STORAGE_VERSION,
+        sourceVersion: STORAGE_VERSION,
+        organizations: {},
+        compatibilityIssue: "the migration marker uses an unsupported version"
+      };
+    }
+    return stored as OrganizationMigrationState;
+  }
 
   // Accept the old single-organization marker written by the first Phase 2
   // implementation and enrich it on the next safe migration pass.
@@ -151,6 +211,15 @@ function readMigrationState(): OrganizationMigrationState {
     };
   }
 
+  if (stored) {
+    return {
+      version: ISOLATED_STORAGE_VERSION,
+      sourceVersion: STORAGE_VERSION,
+      organizations: {},
+      compatibilityIssue: "the migration marker has an unrecognized shape"
+    };
+  }
+
   return { version: ISOLATED_STORAGE_VERSION, sourceVersion: STORAGE_VERSION, organizations: {} };
 }
 
@@ -158,6 +227,12 @@ function rememberRuntimeFallback(organizationId: string, resource: OrganizationM
   const resources = runtimeLegacyFallbacks.get(organizationId) ?? new Set<OrganizationMigrationResource>();
   resources.add(resource);
   runtimeLegacyFallbacks.set(organizationId, resources);
+}
+
+function forgetRuntimeFallback(organizationId: string, resource: OrganizationMigrationResource): void {
+  const resources = runtimeLegacyFallbacks.get(organizationId);
+  resources?.delete(resource);
+  if (resources?.size === 0) runtimeLegacyFallbacks.delete(organizationId);
 }
 
 function rememberRuntimeLegacyOwner(organizationId: string): void {
@@ -177,6 +252,7 @@ function stateLegacyOwner(state: OrganizationMigrationState): string | undefined
 
 function hasLegacyFallback(organizationId: string, resource: OrganizationMigrationResource): boolean {
   const state = readMigrationState();
+  if (state.compatibilityIssue) return false;
   if (state.legacyOwnershipStatus === "ambiguous" || runtimeLegacyOwnershipAmbiguous) return false;
   if (stateLegacyOwner(state) !== organizationId) return false;
   return runtimeLegacyFallbacks.get(organizationId)?.has(resource) === true
@@ -190,6 +266,7 @@ function markResource(
   reason?: string
 ): MigrationResourceState {
   if (status === "fallback") rememberRuntimeFallback(organizationId, resource);
+  else forgetRuntimeFallback(organizationId, resource);
   return { status, reason, updatedAt: new Date().toISOString() };
 }
 
@@ -201,18 +278,30 @@ function copyIfMissing<T, U = T>(
   transform: (value: T) => U,
   warnings: string[]
 ): MigrationResourceState {
-  if (hasKey(scopedKey)) return markResource(organizationId, resource, "copied");
-  if (!hasKey(legacyKey)) return markResource(organizationId, resource, "absent");
-
+  const label = resource === "memoryChanges" ? "memory change history" : resource;
   try {
+    // copyIfMissing is intentionally copy-only: an existing scoped value wins
+    // over legacy data on every retry.
+    if (hasKey(scopedKey)) return markResource(organizationId, resource, "copied");
+    if (!hasKey(legacyKey)) return markResource(organizationId, resource, "absent");
+
     const value = read<T>(legacyKey);
     if (value === null) return markResource(organizationId, resource, "absent");
     if (tryWrite(scopedKey, transform(value))) return markResource(organizationId, resource, "copied");
   } catch (error) {
-    if (!isQuotaExceededError(error)) throw error;
+    if (isQuotaExceededError(error)) {
+      rememberRuntimeFallback(organizationId, resource);
+      warnings.push(`Could not copy ${label} into organization storage because browser storage is full. Existing data remains available from legacy storage.`);
+      return markResource(organizationId, resource, "fallback", "legacy fallback retained after storage quota");
+    }
+
+    const reason = error instanceof Error ? error.message : "the stored legacy value could not be read or transformed";
+    warnings.push(`Could not migrate ${label}: ${reason}. The resource is unresolved and will be retried later.`);
+    return markResource(organizationId, resource, "error", reason);
   }
 
-  const label = resource === "memoryChanges" ? "memory change history" : resource;
+  // A false write result is the guarded quota path in tryWrite(). Keep the
+  // legacy value authoritative and retry this resource on a later pass.
   rememberRuntimeFallback(organizationId, resource);
   warnings.push(`Could not copy ${label} into organization storage because browser storage is full. Existing data remains available from legacy storage.`);
   return markResource(organizationId, resource, "fallback", "legacy fallback retained after storage quota");
@@ -224,6 +313,53 @@ function resourceStatus(
   state: OrganizationMigrationState
 ): MigrationResourceState | undefined {
   return state.organizations[organizationId]?.resources[resource];
+}
+
+function migrationStateCompatibilityWarning(
+  organizationId: string,
+  state: OrganizationMigrationState
+): string | undefined {
+  const resources = state.organizations[organizationId]?.resources ?? {};
+  for (const [resource, resourceState] of Object.entries(resources)) {
+    if (!MIGRATION_RESOURCES.includes(resource as OrganizationMigrationResource)
+      || !resourceState
+      || !isKnownMigrationResourceStatus(resourceState.status)) {
+      return `Migration state for ${organizationId} contains an unrecognized resource status (${resource}); migration is blocked until the marker is repaired.`;
+    }
+  }
+  return undefined;
+}
+
+function hasResolvedMigrationResources(
+  organizationId: string,
+  state: OrganizationMigrationState
+): boolean {
+  return MIGRATION_RESOURCES.every((resource) => {
+    const status = resourceStatus(organizationId, resource, state)?.status;
+    return status === "copied" || status === "absent";
+  });
+}
+
+function hasValidCompletedMigration(
+  organizationId: string,
+  state: OrganizationMigrationState
+): boolean {
+  const organizationState = state.organizations[organizationId];
+  return state.legacyOwnershipStatus === "owned"
+    && state.legacyOwnerOrganizationId === organizationId
+    && !!organizationState?.completedAt
+    && hasResolvedMigrationResources(organizationId, state);
+}
+
+function addPersistedResourceStatuses(
+  organizationId: string,
+  state: OrganizationMigrationState,
+  result: OrganizationMigrationResult
+): void {
+  for (const resource of MIGRATION_RESOURCES) {
+    const resourceState = resourceStatus(organizationId, resource, state);
+    if (resourceState) result.resources[resource] = resourceState.status;
+  }
 }
 
 function saveMigrationState(state: OrganizationMigrationState): boolean {
@@ -374,18 +510,35 @@ export function migrateLegacyOrganizationStorage(organizationId: string): Organi
     legacyKey: string,
     transform: (value: T) => U
   ) => {
-    const existing = resourceStatus(organizationId, resource, state);
-    const scopedKey = resolveStorageKey(legacyKey, organizationId);
-    const next = existing ?? copyIfMissing(organizationId, resource, legacyKey, scopedKey, transform, result.warnings);
-    if (existing?.status === "fallback") {
-      result.warnings.push(`Using preserved legacy ${resource} because the organization-scoped copy did not fit in browser storage.`);
+    try {
+      const existing = resourceStatus(organizationId, resource, state);
+      const scopedKey = resolveStorageKey(legacyKey, organizationId);
+      const shouldRetry = !existing
+        || existing.status === "error"
+        || (existing.status === "fallback" && resource !== "memoryChanges");
+      const next = shouldRetry
+        ? copyIfMissing(organizationId, resource, legacyKey, scopedKey, transform, result.warnings)
+        : existing;
+      if (existing?.status === "fallback" && resource === "memoryChanges") {
+        result.warnings.push("Memory change history is still being read from preserved legacy storage because its snapshots are too large to duplicate safely.");
+      }
+      organizationState.resources[resource] = next;
+      result.resources[resource] = next.status;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "the resource could not be migrated";
+      const next = markResource(organizationId, resource, "error", reason);
+      organizationState.resources[resource] = next;
+      result.resources[resource] = next.status;
+      result.warnings.push(`Could not migrate ${resource}: ${reason}. The resource is unresolved and will be retried later.`);
     }
-    organizationState.resources[resource] = next;
-    result.resources[resource] = next.status;
   };
 
   try {
     state = readMigrationState();
+    if (state.compatibilityIssue) {
+      result.warnings.push(`Legacy migration is blocked because ${state.compatibilityIssue}; the marker was left untouched.`);
+      return result;
+    }
     if (hasLegacyStorage()) {
       const ownership = resolveLegacyOwnership(state);
       if (ownership.status === "ambiguous") {
@@ -403,13 +556,28 @@ export function migrateLegacyOrganizationStorage(organizationId: string): Organi
       }
     } else if (state.legacyOwnershipStatus === "owned" && state.legacyOwnerOrganizationId) {
       rememberRuntimeLegacyOwner(state.legacyOwnerOrganizationId);
+      if (state.legacyOwnerOrganizationId !== organizationId) return result;
+    }
+
+    const compatibilityWarning = migrationStateCompatibilityWarning(organizationId, state);
+    if (compatibilityWarning) {
+      result.warnings.push(compatibilityWarning);
+      return result;
+    }
+
+    // A-1/F-1: a valid completed marker is a true reload no-op; do not
+    // repeat resource or migration-marker writes after every app startup.
+    if (hasValidCompletedMigration(organizationId, state)) {
+      addPersistedResourceStatuses(organizationId, state, result);
+      return result;
     }
 
     organizationState = state.organizations[organizationId] ?? { resources: {} };
     state.organizations[organizationId] = organizationState;
 
-    // Small, critical state is copied first. Each resource gets its own durable
-    // result so a later reload never retries a known failing copy.
+    // Small, critical state is copied first. Each resource is isolated so a
+    // malformed value cannot abort the remaining migration work; fallback and
+    // error states are retried on a later pass.
     migrate<KnowledgeItem[]>("knowledge", KNOWLEDGE_KEY, (items) => items.map((item) => ({ ...item, organizationId })));
     migrate<KnowledgeCandidate[]>("candidates", CANDIDATES_KEY, (items) => items.map((item) => ({ ...item, organizationId })));
     migrate<ValidationRecord[]>("validationRecords", VALIDATION_RECORDS_KEY, (items) => items.map((item) => ({ ...item, organizationId })));
@@ -435,14 +603,13 @@ export function migrateLegacyOrganizationStorage(organizationId: string): Organi
     organizationState.resources.memoryChanges = memoryState;
     result.resources.memoryChanges = memoryState.status;
 
-    const allResources = Object.values(organizationState.resources);
-    if (allResources.length === 9 && allResources.every((resource) => resource.status === "copied" || resource.status === "absent")) {
+    if (hasResolvedMigrationResources(organizationId, state)) {
       organizationState.completedAt ??= new Date().toISOString();
     } else {
       delete organizationState.completedAt;
     }
     if (!saveMigrationState(state)) {
-      result.warnings.push("Migration progress could not be saved because browser storage is full. Existing legacy data was left untouched, and failed large-resource copies will not be retried as full copies.");
+      result.warnings.push("Migration progress could not be saved because browser storage is full. Existing legacy data was left untouched, and unresolved resources will be retried on a later pass.");
     }
   } catch (error) {
     console.error("Organization storage migration was left partial.", error);

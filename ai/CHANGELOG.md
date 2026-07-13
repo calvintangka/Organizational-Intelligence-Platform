@@ -13,6 +13,19 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-13] Make legacy migration retryable and idempotent
+**Layer:** coding
+**Task/Prompt:** Implement TODO-003 Batch 2: Fix A1 + A2 + F1 — Migration Retry, Per-Resource Failure Isolation, and Idempotency.
+**Files changed:** `lib/orgMemory.ts`, `ai/CHANGELOG.md`, `ai/CURRENT_STATUS.md`, `ai/ARCHITECTURE.md`, `ai/CODEBASE_MAP.md`
+**What changed:**
+- Retried copy resources recorded as `fallback` or `error` while preserving any scoped value already created after an earlier attempt.
+- Isolated resource failures, recorded non-quota failures as `error`, continued migrating other resources, and kept completion unset until every required resource resolved.
+- Added a centralized resource list and a valid-completion early return so completed migration reloads perform no resource or marker writes.
+- Preserved B1 owner-only migration/fallback behavior, read-only legacy keys, and BUG-009's intentional memory-change fallback.
+**Boundaries touched:** Boundary 2 and Boundary 8 preserved. No memory-write pipeline, drafting, AI, authentication, actor identity, queue, database, or autonomous-execution behavior changed.
+**Verification:** Targeted retry, malformed-resource isolation, scoped-data protection, completion no-op, owner gating, and quota fallback probes; `npm run build`; `npx tsc --noEmit`.
+**Open items:** Duplicate lesson prevention, reset/delete migration semantics, and other TODO-003 residual risks remain outside this batch. `graphify update .` remains blocked by the Windows uv trampoline.
+
 ## [2026-07-13] Bind legacy migration to one organization
 **Layer:** coding
 **Task/Prompt:** Implement TODO-003 Batch 1: Fix B1 — Legacy Ownership Safety.

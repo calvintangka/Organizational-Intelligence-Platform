@@ -206,6 +206,8 @@ Persistence is intentionally simple and entirely client-side. `lib/orgMemory.ts`
 
 The first load performs a durable, copy-only migration from legacy global `oip.*.v2` keys to one explicitly determined legacy-owner organization. Ownership is persisted in `oip.organizationIsolationMigration.v1`; the repository’s original Maesa Tech workspace is the known fallback owner when no prior marker or scoped migration evidence exists, while ambiguous existing state blocks migration with a warning. Legacy keys are never deleted or rewritten, unrelated organizations cannot read legacy fallback resources, and existing scoped keys are not overwritten. `app/page.tsx` pauses persistence during organization switches, saves the previous organization explicitly, reloads all organization-owned collections for the selected id, and ignores late loads from superseded switches.
 
+Migration resources use independent `copied`, `fallback`, `absent`, or `error` states. Fallback/error copy resources retry safely without overwriting scoped data, malformed resources do not abort their siblings, and completion is recorded only when the centralized resource set is resolved; a valid completed marker makes later reloads a no-op. The intentional BUG-009 memory-change fallback remains authoritative in legacy storage.
+
 There is no database, backend write API, authentication boundary, or multi-user concurrency model. `loadKnowledge()` normalizes and deduplicates stored knowledge through `withLearningDefaults()` and `withCanonicalProblemDefaults()` before the app hydrates, then runs narrow self-heal migrations for corrupted top-level templates and legacy lesson-specific greetings/ticket references.
 
 ## UI View Structure
