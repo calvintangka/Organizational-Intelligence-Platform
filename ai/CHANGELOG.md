@@ -13,6 +13,18 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-13] Harden ticket runtime quota handling
+**Layer:** coding
+**Task/Prompt:** Implement TODO-003b: Fix D-1 + D-2 — Runtime Quota Hardening for Ticket Records.
+**Files changed:** `lib/orgMemory.ts`, `lib/ticketRecords.ts`, `app/page.tsx`, `ai/CHANGELOG.md`, `ai/CURRENT_STATUS.md`, `ai/CODEBASE_MAP.md`
+**What changed:**
+- Exposed a safe `hasRuntimeLegacyFallback()` accessor backed by orgMemory's existing owner/suppression-aware runtime registry; ticket records now combine persisted and runtime fallback state.
+- Guarded scoped ticket-counter writes and added atomic bulk ID-range reservation so quota failure returns no ticket ID and commits no bulk memory change.
+- Added normal-pipeline failure recovery and an empty-save guard that prevents runtime-fallback tickets from being orphaned by an empty scoped write.
+**Boundaries touched:** Boundary 2 and Boundary 8 preserved. Legacy v2 keys remain read-only; no drafting, lesson matching, trust, reflection, validation, AI, authentication, actor, queue, database, or autonomous-execution behavior changed.
+**Verification:** Deterministic runtime-fallback, owner-isolation, orphan-guard, counter-failure/retry, and bulk-reservation probes; `npm run build`; `npx tsc --noEmit`; `git diff --check`.
+**Open items:** Fully exhausted storage still prevents durable allocation and remains an explicit user-visible failure. `graphify update .` remains blocked by the Windows uv trampoline.
+
 ## [2026-07-13] Preserve lessons during canonical deduplication
 **Layer:** coding
 **Task/Prompt:** Implement TODO-003 Batch 4: Fix C-DUP-001 — Preserve Lessons During Canonical Knowledge Deduplication.

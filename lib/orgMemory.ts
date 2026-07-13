@@ -253,13 +253,28 @@ function stateLegacyOwner(state: OrganizationMigrationState): string | undefined
   return state.legacyOwnerOrganizationId ?? runtimeLegacyOwnerOrganizationId;
 }
 
-function hasLegacyFallback(organizationId: string, resource: OrganizationMigrationResource): boolean {
-  const state = readMigrationState();
+function canUseLegacyFallback(state: OrganizationMigrationState, organizationId: string): boolean {
   if (state.compatibilityIssue) return false;
   if (state.legacyOwnershipStatus === "ambiguous" || runtimeLegacyOwnershipAmbiguous) return false;
   if (runtimeResetSuppressions.has(organizationId)
     || state.organizations[organizationId]?.legacyImportSuppressed === true) return false;
-  if (stateLegacyOwner(state) !== organizationId) return false;
+  return stateLegacyOwner(state) === organizationId;
+}
+
+/** Safe runtime-only fallback visibility for resources whose marker write failed. */
+export function hasRuntimeLegacyFallback(
+  organizationId: string,
+  resource: OrganizationMigrationResource
+): boolean {
+  if (!organizationId || !hasStorage()) return false;
+  const state = readMigrationState();
+  return canUseLegacyFallback(state, organizationId)
+    && runtimeLegacyFallbacks.get(organizationId)?.has(resource) === true;
+}
+
+function hasLegacyFallback(organizationId: string, resource: OrganizationMigrationResource): boolean {
+  const state = readMigrationState();
+  if (!canUseLegacyFallback(state, organizationId)) return false;
   return runtimeLegacyFallbacks.get(organizationId)?.has(resource) === true
     || state.organizations[organizationId]?.resources[resource]?.status === "fallback";
 }

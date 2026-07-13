@@ -1,4 +1,5 @@
 import type { OrganizationProfile, TicketRecord, TicketRecordStatus } from "@/types";
+import { hasRuntimeLegacyFallback } from "@/lib/orgMemory";
 
 const STORAGE_VERSION = "v2";
 const ISOLATED_STORAGE_VERSION = "v1";
@@ -17,37 +18,68 @@ function read<T>(key: string): T | null {
   return JSON.parse(raw) as T;
 }
 
-function hasLegacyTicketFallback(organizationId?: string): boolean {
-  if (!organizationId || !hasStorage()) return false;
+type TicketFallbackResource = "tickets" | "ticketCounter";
+
+function hasPersistedLegacyTicketFallback(
+  organizationId: string,
+  resource: TicketFallbackResource
+): boolean {
   try {
     const raw = window.localStorage.getItem(MIGRATION_KEY);
     if (!raw) return false;
     const state = JSON.parse(raw) as {
-      organizations?: Record<string, { resources?: { tickets?: { status?: string } } }>;
+      legacyOwnerOrganizationId?: string;
+      legacyOwnershipStatus?: string;
+      organizationId?: string;
+      organizations?: Record<string, {
+        legacyImportSuppressed?: boolean;
+        resources?: Record<string, { status?: string }>;
+      }>;
     };
-    return state.organizations?.[organizationId]?.resources?.tickets?.status === "fallback";
+    if (state.legacyOwnershipStatus === "ambiguous") return false;
+    const ownerId = state.legacyOwnerOrganizationId ?? state.organizationId;
+    if (ownerId !== organizationId) return false;
+    if (state.organizations?.[organizationId]?.legacyImportSuppressed === true) return false;
+    return state.organizations?.[organizationId]?.resources?.[resource]?.status === "fallback";
   } catch {
     return false;
   }
 }
 
-function hasLegacyTicketCounterFallback(organizationId?: string): boolean {
+function hasLegacyTicketFallback(
+  organizationId: string | undefined,
+  resource: TicketFallbackResource
+): boolean {
   if (!organizationId || !hasStorage()) return false;
-  try {
-    const raw = window.localStorage.getItem(MIGRATION_KEY);
-    if (!raw) return false;
-    const state = JSON.parse(raw) as {
-      organizations?: Record<string, { resources?: { ticketCounter?: { status?: string } } }>;
-    };
-    return state.organizations?.[organizationId]?.resources?.ticketCounter?.status === "fallback";
-  } catch {
-    return false;
-  }
+  return hasPersistedLegacyTicketFallback(organizationId, resource)
+    || hasRuntimeLegacyFallback(organizationId, resource);
+}
+
+function hasLegacyTicketCounterFallback(organizationId?: string): boolean {
+  return hasLegacyTicketFallback(organizationId, "ticketCounter");
 }
 
 function write(key: string, value: unknown): void {
   if (!hasStorage()) return;
   window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+function writeTicketCounter(key: string, value: number): void {
+  if (!hasStorage()) {
+    throw new Error("Ticket counter could not be saved because browser storage is unavailable. No ticket ID was allocated.");
+  }
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    const candidate = error as { name?: string; code?: number; message?: string } | null;
+    if (candidate?.name === "QuotaExceededError"
+      || candidate?.code === 22
+      || candidate?.code === 1014
+      || candidate?.message?.toLowerCase().includes("quota") === true) {
+      throw new Error("Ticket counter could not be saved because browser storage is full. No ticket ID was allocated; retry after storage recovers.");
+    }
+    throw error;
+  }
 }
 
 function resolveStorageKey(baseKey: string, organizationId?: string): string {
@@ -78,7 +110,8 @@ function todayStamp(): string {
 function loadCounters(organizationId?: string): Record<string, number> {
   const scoped = read<number>(resolveStorageKey(TICKET_COUNTER_KEY, organizationId));
   if (organizationId && typeof scoped === "number") return { [organizationId]: scoped };
-  // C-1: preserve the legacy counter while this organization remains on migration fallback.
+  // C-1/D-1: preserve the legacy counter while this organization remains on
+  // persisted or runtime migration fallback.
   if (organizationId && scoped === null && hasLegacyTicketCounterFallback(organizationId)) {
     const legacy = read<Record<string, number>>(TICKET_COUNTER_KEY);
     return legacy ? { [organizationId]: legacy[organizationId] ?? 0 } : {};
@@ -87,19 +120,26 @@ function loadCounters(organizationId?: string): Record<string, number> {
 }
 
 function saveCounters(counters: Record<string, number>, organizationId?: string): void {
-  if (organizationId) write(resolveStorageKey(TICKET_COUNTER_KEY, organizationId), counters[organizationId] ?? 0);
-  else write(TICKET_COUNTER_KEY, counters);
+  if (!organizationId) throw new Error("Ticket counter cannot be persisted without an organization id.");
+  writeTicketCounter(resolveStorageKey(TICKET_COUNTER_KEY, organizationId), counters[organizationId] ?? 0);
 }
 
-export function generateTicketId(profile: OrganizationProfile): string {
+export function generateTicketIds(profile: OrganizationProfile, count: number): string[] {
+  if (count <= 0) return [];
   const prefix = orgPrefix(profile);
   const date = todayStamp();
   const counters = loadCounters(profile.id);
   const counterKey = `${profile.id}`;
-  const next = (counters[counterKey] ?? 0) + 1;
-  counters[counterKey] = next;
+  const first = (counters[counterKey] ?? 0) + 1;
+  counters[counterKey] = first + count - 1;
   saveCounters(counters, profile.id);
-  return `${prefix}-${date}-${String(next).padStart(4, "0")}`;
+  return Array.from({ length: count }, (_, index) =>
+    `${prefix}-${date}-${String(first + index).padStart(4, "0")}`
+  );
+}
+
+export function generateTicketId(profile: OrganizationProfile): string {
+  return generateTicketIds(profile, 1)[0];
 }
 
 export function createTicketRecord(
@@ -143,9 +183,10 @@ export function updateTicketRecordStatus(
 
 export async function loadTicketRecords(organizationId?: string): Promise<TicketRecord[]> {
   const scoped = read<TicketRecord[]>(resolveStorageKey(TICKET_RECORDS_KEY, organizationId));
-  const stored = scoped ?? (hasLegacyTicketFallback(organizationId) ? read<TicketRecord[]>(TICKET_RECORDS_KEY) : null);
+  const legacyFallback = hasLegacyTicketFallback(organizationId, "tickets");
+  const stored = scoped ?? (legacyFallback ? read<TicketRecord[]>(TICKET_RECORDS_KEY) : null);
   const records = stored && Array.isArray(stored) ? stored : [];
-  return organizationId && scoped === null && hasLegacyTicketFallback(organizationId)
+  return organizationId && scoped === null && legacyFallback
     ? records.map((record) => ({ ...record, orgId: organizationId }))
     : records;
 }
@@ -154,7 +195,17 @@ export async function saveTicketRecords(
   organizationId: string | undefined,
   records: TicketRecord[]
 ): Promise<void> {
-  write(resolveStorageKey(TICKET_RECORDS_KEY, organizationId), records);
+  const scopedKey = resolveStorageKey(TICKET_RECORDS_KEY, organizationId);
+  if (organizationId && records.length === 0 && read<TicketRecord[]>(scopedKey) === null
+    && hasLegacyTicketFallback(organizationId, "tickets")) {
+    const legacy = read<TicketRecord[]>(TICKET_RECORDS_KEY);
+    if (legacy && legacy.length > 0) {
+      // D-1: never replace readable runtime-fallback tickets with an empty
+      // scoped array; reset suppression disables this guard for real resets.
+      return;
+    }
+  }
+  write(scopedKey, records);
 }
 
 export function clearTicketRecords(organizationId?: string): void {

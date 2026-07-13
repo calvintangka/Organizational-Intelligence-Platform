@@ -4,6 +4,10 @@ This file is the fastest accurate snapshot of the prototype as of 2026-07-13.
 
 ## What Changed Most Recently
 
+Fixed TODO-003b / D-1 + D-2: ticket records and counters now consume orgMemory's safe runtime fallback state when migration and marker persistence both fail in one session, while ownership, reset suppression, ambiguity, and deletion checks remain enforced. Counter allocation uses a guarded scoped write; failures return no ID, preserve the legacy counter, surface through the existing error path, and recover correctly after quota recovery. Bulk validation reserves its complete contiguous ID range before committing memory, and empty fallback ticket saves cannot orphan readable legacy records.
+
+Targeted probes passed for runtime fallback with marker failure, owner-only isolation, fallback orphan prevention, truly empty organization saves, counter quota failure/retry, contiguous bulk allocation, and legacy-key immutability. `npm run build`, `npx tsc --noEmit`, and `git diff --check` pass. `graphify update .` remains blocked by the Windows uv trampoline.
+
 Fixed TODO-003 Batch 4 / C-DUP-001: canonical KnowledgeItem merges now preserve lessons instead of dropping the secondary item's lessons. Unique lessons retain deterministic order; equivalent same-ID lessons merge additive fields and source-ticket references; materially conflicting same-ID lessons are preserved under deterministic conflict-safe IDs with append-only conflict history. Dedupe/upsert keys include organization scope, and direct cross-organization merges are rejected. Earlier migration, reset, deletion, retry, and ownership fixes remain intact.
 
 Targeted canonical probes passed for distinct lessons, duplicate and additive lesson IDs, conflicting core content, versions, examples, learning history, organization mismatch, and repeated idempotent deduplication. `npm run build`, `npx tsc --noEmit`, and `git diff --check` pass. `graphify update .` remains blocked by the Windows uv trampoline.

@@ -85,6 +85,7 @@ import {
 } from "@/lib/organizationProfile";
 import {
   generateTicketId,
+  generateTicketIds,
   createTicketRecord,
   upsertTicketRecord,
   loadTicketRecords,
@@ -1109,6 +1110,7 @@ export default function Home() {
       rationale: prepared.rationale,
       createdAt: now
     });
+    const bulkTicketIds = generateTicketIds(organizationProfile, cluster.items?.length ?? 0);
     const result = applyValidatedMemoryChange(candidate, prepared.beforeState, prepared.afterState, prepared.rationale);
     setSessionCreatedIds((prev) => new Set([...prev, result.validatedItem.id]));
     setLastSavedKnowledgeId(result.validatedItem.id);
@@ -1121,8 +1123,8 @@ export default function Home() {
       updateMetrics({ humanApprovedResponses: 1, canonicalProblemsTouched: 1, knowledgeVersionsCreated: 1 });
     }
     // Create ticket records for each bulk-uploaded query
-    const bulkRecords: TicketRecord[] = (cluster.items ?? []).map((item) => {
-      const bulkTicketId = generateTicketId(organizationProfile);
+    const bulkRecords: TicketRecord[] = (cluster.items ?? []).map((item, index) => {
+      const bulkTicketId = bulkTicketIds[index];
       const rec = createTicketRecord(bulkTicketId, organizationProfile.id, item.entry.message, item.ticket.subject);
       return {
         ...rec,
@@ -3048,7 +3050,14 @@ export default function Home() {
     if (!text.trim() || isProcessing) return;
     setIsProcessing(true);
     setErrorMessage("");
-    const tId = generateTicketId(organizationProfile);
+    let tId: string;
+    try {
+      tId = generateTicketId(organizationProfile);
+    } catch (error) {
+      reportPersistenceError("generateTicketId", error);
+      setIsProcessing(false);
+      return;
+    }
     const ticket = makeCustomTicket(text.trim(), tId);
     setSelectedTicket(ticket);
     setCurrentStep(1);
