@@ -159,12 +159,8 @@ export async function saveTicketRecords(
 
 export function clearTicketRecords(organizationId?: string): void {
   if (!hasStorage()) return;
-  try {
-    window.localStorage.removeItem(resolveStorageKey(TICKET_RECORDS_KEY, organizationId));
-    window.localStorage.removeItem(resolveStorageKey(TICKET_COUNTER_KEY, organizationId));
-  } catch {
-    /* ignore */
-  }
+  window.localStorage.removeItem(resolveStorageKey(TICKET_RECORDS_KEY, organizationId));
+  window.localStorage.removeItem(resolveStorageKey(TICKET_COUNTER_KEY, organizationId));
 }
 
 export function findTicketRecord(records: TicketRecord[], ticketId: string): TicketRecord | null {

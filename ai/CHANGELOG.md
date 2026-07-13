@@ -13,6 +13,19 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-13] Harden migration reset and deletion durability
+**Layer:** coding
+**Task/Prompt:** Implement TODO-003 Batch 3: Fix D1 + E1 + E2 — Memory-Change Write Durability, Reset Safety, and Organization Deletion Cleanup.
+**Files changed:** `lib/orgMemory.ts`, `lib/ticketRecords.ts`, `app/page.tsx`, `ai/CHANGELOG.md`, `ai/CURRENT_STATUS.md`, `ai/CODEBASE_MAP.md`, `ai/ARCHITECTURE.md`
+**What changed:**
+- Fallback memory-change tail writes now fail visibly when the scoped write is rejected; legacy history remains untouched and the caller retains the in-memory records for retry.
+- Organization reset writes a durable `legacyImportSuppressed` tombstone before clearing scoped state, preventing migration and fallback reads from re-importing preserved legacy data.
+- Organization deletion clears only the deleted organization's scoped resources and migration entry; legacy-owner deletion preserves the owner evidence but enters an ambiguous blocked state rather than transferring ownership.
+- Cleanup and persistence failures now propagate through the existing app error path instead of reporting false success.
+**Boundaries touched:** Boundary 2 and Boundary 8 preserved. No memory governance pipeline, drafting, AI, authentication, actor identity, queue, database, or autonomous-execution behavior changed.
+**Verification:** Deterministic D1/E1/E2 localStorage probes; `npm run build`; `npx tsc --noEmit`; `git diff --check`.
+**Open items:** Duplicate lesson prevention, BUG-008, and unrelated TODO-003 residual risks remain outside this batch. `graphify update .` remains blocked by the Windows uv trampoline.
+
 ## [2026-07-13] Make legacy migration retryable and idempotent
 **Layer:** coding
 **Task/Prompt:** Implement TODO-003 Batch 2: Fix A1 + A2 + F1 — Migration Retry, Per-Resource Failure Isolation, and Idempotency.

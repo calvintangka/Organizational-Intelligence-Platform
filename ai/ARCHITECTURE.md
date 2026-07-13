@@ -208,6 +208,8 @@ The first load performs a durable, copy-only migration from legacy global `oip.*
 
 Migration resources use independent `copied`, `fallback`, `absent`, or `error` states. Fallback/error copy resources retry safely without overwriting scoped data, malformed resources do not abort their siblings, and completion is recorded only when the centralized resource set is resolved; a valid completed marker makes later reloads a no-op. The intentional BUG-009 memory-change fallback remains authoritative in legacy storage.
 
+Reset writes a per-organization `legacyImportSuppressed` tombstone before removing that organization's scoped resources, so preserved global legacy keys remain available for safe recovery but cannot silently repopulate the reset organization. Deletion removes only the target organization's scoped keys and migration entry; deleting the legacy owner preserves the legacy dataset and owner evidence while entering an ambiguous blocked state, never transferring ownership to another organization. Cleanup and fallback-tail write failures are surfaced through the existing application persistence error path.
+
 There is no database, backend write API, authentication boundary, or multi-user concurrency model. `loadKnowledge()` normalizes and deduplicates stored knowledge through `withLearningDefaults()` and `withCanonicalProblemDefaults()` before the app hydrates, then runs narrow self-heal migrations for corrupted top-level templates and legacy lesson-specific greetings/ticket references.
 
 ## UI View Structure

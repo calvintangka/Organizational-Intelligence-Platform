@@ -79,6 +79,8 @@ interface OrganizationMigrationState {
   organizations: Record<string, {
     resources: Partial<Record<OrganizationMigrationResource, MigrationResourceState>>;
     completedAt?: string;
+    resetAt?: string;
+    legacyImportSuppressed?: boolean;
   }>;
   legacyOwnerOrganizationId?: string;
   legacyOwnershipStatus?: "owned" | "ambiguous";
@@ -94,6 +96,7 @@ export interface OrganizationMigrationResult {
 }
 
 const runtimeLegacyFallbacks = new Map<string, Set<OrganizationMigrationResource>>();
+const runtimeResetSuppressions = new Set<string>();
 let runtimeLegacyOwnerOrganizationId: string | undefined;
 let runtimeLegacyOwnershipAmbiguous = false;
 
@@ -254,6 +257,8 @@ function hasLegacyFallback(organizationId: string, resource: OrganizationMigrati
   const state = readMigrationState();
   if (state.compatibilityIssue) return false;
   if (state.legacyOwnershipStatus === "ambiguous" || runtimeLegacyOwnershipAmbiguous) return false;
+  if (runtimeResetSuppressions.has(organizationId)
+    || state.organizations[organizationId]?.legacyImportSuppressed === true) return false;
   if (stateLegacyOwner(state) !== organizationId) return false;
   return runtimeLegacyFallbacks.get(organizationId)?.has(resource) === true
     || state.organizations[organizationId]?.resources[resource]?.status === "fallback";
@@ -539,6 +544,12 @@ export function migrateLegacyOrganizationStorage(organizationId: string): Organi
       result.warnings.push(`Legacy migration is blocked because ${state.compatibilityIssue}; the marker was left untouched.`);
       return result;
     }
+    if (runtimeResetSuppressions.has(organizationId)
+      || state.organizations[organizationId]?.legacyImportSuppressed === true) {
+      runtimeResetSuppressions.add(organizationId);
+      result.warnings.push(`Legacy migration is suppressed for ${organizationId} because the organization was explicitly reset.`);
+      return result;
+    }
     if (hasLegacyStorage()) {
       const ownership = resolveLegacyOwnership(state);
       if (ownership.status === "ambiguous") {
@@ -702,7 +713,10 @@ export async function saveMemoryChangeRecords(
     // for new writes. This avoids repeatedly attempting the known-too-large
     // full snapshot while keeping recent changes durable when space permits.
     const bounded = records.slice(-MAX_SCOPED_MEMORY_CHANGE_RECORDS);
-    tryWrite(resolveStorageKey(MEMORY_CHANGES_KEY, organizationId), bounded);
+    const scopedKey = resolveStorageKey(MEMORY_CHANGES_KEY, organizationId);
+    if (!tryWrite(scopedKey, bounded)) {
+      throw new Error("Memory change history could not be saved because browser storage is full. The new record remains in memory and will be retried; preserved legacy history was not changed.");
+    }
     return;
   }
   write(resolveStorageKey(MEMORY_CHANGES_KEY, organizationId), records);
@@ -789,15 +803,68 @@ export async function saveEmergingPatterns(
 
 /* ---------------------------- Reset ---------------------------- */
 
-/** Wipe persisted organizational memory and reseed fresh defaults. */
+function clearScopedOrganizationStorage(organizationId: string): void {
+  const keys = [KNOWLEDGE_KEY, ORG_METRICS_KEY, LOG_KEY, PATTERNS_KEY, CANDIDATES_KEY, VALIDATION_RECORDS_KEY, MEMORY_CHANGES_KEY];
+  keys.forEach((key) => window.localStorage.removeItem(resolveStorageKey(key, organizationId)));
+  clearTicketRecords(organizationId);
+}
+
+function requireMigrationStateSave(state: OrganizationMigrationState, operation: string): void {
+  if (!saveMigrationState(state)) {
+    throw new Error(`Could not persist ${operation} because browser storage is full or unavailable. No durable completion was claimed.`);
+  }
+}
+
+/** Wipe persisted organizational memory and durably suppress legacy re-import. */
 export function clearOrganization(organizationId?: string): void {
-  if (!hasStorage()) return;
-  try {
-    const keys = [KNOWLEDGE_KEY, ORG_METRICS_KEY, LOG_KEY, PATTERNS_KEY, CANDIDATES_KEY, VALIDATION_RECORDS_KEY, MEMORY_CHANGES_KEY];
-    keys.forEach((key) => window.localStorage.removeItem(resolveStorageKey(key, organizationId)));
-    clearTicketRecords(organizationId);
-  } catch {
-    /* ignore */
+  if (!hasStorage() || !organizationId) return;
+  const state = readMigrationState();
+  if (state.compatibilityIssue) {
+    throw new Error(`Organization reset is blocked because ${state.compatibilityIssue}.`);
+  }
+
+  const existing = state.organizations[organizationId];
+  state.organizations[organizationId] = {
+    ...(existing ?? { resources: {} }),
+    resources: {},
+    resetAt: new Date().toISOString(),
+    legacyImportSuppressed: true
+  };
+  delete state.organizations[organizationId].completedAt;
+  runtimeResetSuppressions.add(organizationId);
+  runtimeLegacyFallbacks.delete(organizationId);
+  requireMigrationStateSave(state, `the reset tombstone for ${organizationId}`);
+  clearScopedOrganizationStorage(organizationId);
+}
+
+/** Remove one organization's scoped state without deleting global legacy data. */
+export function deleteOrganizationData(organizationId: string): void {
+  if (!hasStorage() || !organizationId) return;
+  const hasPersistedMigrationState = hasKey(ORGANIZATION_ISOLATION_MIGRATION_KEY);
+  const state = readMigrationState();
+  if (state.compatibilityIssue) {
+    throw new Error(`Organization deletion is blocked because ${state.compatibilityIssue}.`);
+  }
+
+  clearScopedOrganizationStorage(organizationId);
+  delete state.organizations[organizationId];
+
+  const deletingLegacyOwner = state.legacyOwnerOrganizationId === organizationId
+    || runtimeLegacyOwnerOrganizationId === organizationId;
+  if (deletingLegacyOwner) {
+    // Keep the historical owner id as evidence, but block all future automatic
+    // migration/fallback rather than transferring legacy data to another org.
+    state.legacyOwnerOrganizationId = organizationId;
+    state.legacyOwnershipStatus = "ambiguous";
+    state.legacyOwnershipReason = `legacy owner ${organizationId} was deleted; ownership will not transfer automatically`;
+    state.legacyOwnershipUpdatedAt = new Date().toISOString();
+    rememberRuntimeLegacyOwnershipAmbiguous();
+  }
+
+  runtimeLegacyFallbacks.delete(organizationId);
+  runtimeResetSuppressions.delete(organizationId);
+  if (hasPersistedMigrationState || deletingLegacyOwner) {
+    requireMigrationStateSave(state, `organization deletion cleanup for ${organizationId}`);
   }
 }
 

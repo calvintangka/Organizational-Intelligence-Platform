@@ -71,6 +71,7 @@ import {
   saveValidationRecords,
   loadMemoryChangeRecords,
   saveMemoryChangeRecords,
+  deleteOrganizationData,
   migrateLegacyOrganizationStorage,
 } from "@/lib/orgMemory";
 import {
@@ -652,6 +653,9 @@ export default function Home() {
 
   function reportPersistenceError(scope: string, error: unknown) {
     console.error(`Persistence ${scope} failed.`, error);
+    const detail = error instanceof Error ? error.message : "The browser could not persist the latest change.";
+    setErrorMessage(`Persistence failed for ${scope}: ${detail}`);
+    setMigrationWarning((current) => current ? `${current} Persistence failed for ${scope}: ${detail}` : `Persistence failed for ${scope}: ${detail}`);
   }
 
   function queuePersistenceSave(scope: string, operation: Promise<void>) {
@@ -1531,7 +1535,12 @@ export default function Home() {
 
   /** Reset Organization — wipes persisted memory and reseeds defaults. */
   function resetOrganization() {
-    clearOrganization(organizationProfile.id);
+    try {
+      clearOrganization(organizationProfile.id);
+    } catch (error) {
+      reportPersistenceError("resetOrganization", error);
+      return;
+    }
     setKnowledgeItems(seedOrganizationalKnowledge().map((item) => ({ ...item, organizationId: organizationProfile.id })));
     setKnowledgeCandidates([]);
     setValidationRecords([]);
@@ -1549,7 +1558,7 @@ export default function Home() {
     const confirmed =
       typeof window === "undefined" ||
       window.confirm(
-        "Reset Organization will permanently delete all persisted Organizational Memory (knowledge, trust scores, validation records, memory change history, and lifetime metrics) and reseed defaults. Continue?"
+        "Reset Organization will clear this organization's scoped memory, preserve the legacy backup, suppress automatic legacy re-import, and reseed defaults. Continue?"
       );
     if (confirmed) resetOrganization();
   }
@@ -1563,7 +1572,11 @@ export default function Home() {
     addLogEntries([createLogEntry("Organization profile updated", `Representing ${profile.name} (${profile.industry})`)]);
   }
 
-  async function selectOrganization(id: string, availableOrganizations: OrganizationProfile[] = organizationList) {
+  async function selectOrganization(
+    id: string,
+    availableOrganizations: OrganizationProfile[] = organizationList,
+    persistCurrent = true
+  ) {
     const found = availableOrganizations.find((org) => org.id === id);
     if (!found || found.id === organizationProfile.id) return;
     const generation = ++organizationSwitchGeneration.current;
@@ -1574,15 +1587,15 @@ export default function Home() {
     try {
       // Finish the current organization's writes before any new organization can
       // become active. The old id is passed explicitly to every adapter.
-      if (wasHydrated) {
+      if (persistCurrent && wasHydrated) {
         await persistOrganizationState(organizationProfile.id);
       }
-      await saveOrganizationProfile(organizationProfile);
+      if (persistCurrent) await saveOrganizationProfile(organizationProfile);
       await saveOrganizationList(availableOrganizations);
       const loaded = await loadOrganizationState(found.id);
       if (generation !== organizationSwitchGeneration.current) return;
       setOrganizationProfile(found);
-      setOrganizationList((list) => syncProfileIntoList(list, found));
+      setOrganizationList(() => syncProfileIntoList(availableOrganizations, found));
       setKnowledgeItems(loaded.knowledge);
       setKnowledgeCandidates(loaded.candidates);
       setValidationRecords(loaded.validations);
@@ -1612,9 +1625,19 @@ export default function Home() {
     if (organizationList.length <= 1) return;
     const nextList = organizationList.filter((org) => org.id !== id);
     if (nextList.length === organizationList.length) return;
-    setOrganizationList(nextList);
-    if (id === organizationProfile.id) {
-      await selectOrganization(nextList[0].id, nextList);
+    try {
+      if (id === organizationProfile.id && hydrated) {
+        await persistOrganizationState(id);
+      }
+      deleteOrganizationData(id);
+      if (id === organizationProfile.id) {
+        await selectOrganization(nextList[0].id, nextList, false);
+      } else {
+        await saveOrganizationList(nextList);
+        setOrganizationList(nextList);
+      }
+    } catch (error) {
+      reportPersistenceError("deleteOrganization", error);
     }
   }
 

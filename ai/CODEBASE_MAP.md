@@ -191,7 +191,8 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `loadOrgMetrics()` / `saveOrgMetrics()` - Async-compatible organization metrics persistence.
 - `loadOrgLog()` / `saveOrgLog()` - Async-compatible intelligence-log persistence.
 - `loadEmergingPatterns()` / `saveEmergingPatterns()` - Async-compatible pattern persistence.
-- `clearOrganization(organizationId)` - Destructive reset scoped to one organization.
+- `clearOrganization(organizationId)` - Destructive reset scoped to one organization; writes a durable legacy-import suppression tombstone before clearing scoped resources.
+- `deleteOrganizationData(organizationId)` - Clears only one organization's scoped resources and migration entry, preserving global legacy keys and blocking ownership transfer when the legacy owner is deleted.
 
 ### `lib/bulkUpload.ts`
 
@@ -291,8 +292,8 @@ Use this file to find the minimum source needed for a task. It is written for co
 - Starter-pack import and review - `components/views/KnowledgeView.tsx` and `lib/knowledgePacks.ts`
   See the preview/import/review UI and the candidate conversion helpers.
 
-- Organizational reset / danger actions - `app/page.tsx` and `lib/orgMemory.ts`
-  See `confirmAndResetOrganization()`, `resetOrganization()`, and `clearOrganization()`.
+- Organizational reset / danger actions - `app/page.tsx`, `lib/orgMemory.ts`, and `lib/ticketRecords.ts`
+  See `confirmAndResetOrganization()`, `resetOrganization()`, `clearOrganization()`, and `deleteOrganizationData()`.
 
 - Knowledge provenance, versions, and lessons - `types/knowledge.ts`, `lib/canonicalProblemEngine.ts`, and `app/page.tsx`
   See `KnowledgeItem`, `Lesson`, `confirmReflection()`, and `mergeIntoCanonicalProblem()`.
