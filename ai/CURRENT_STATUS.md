@@ -197,3 +197,15 @@ Three-tier AI fallback chain implemented: LM Studio (local Gemma) → Claude API
 - Ownership: exports require an explicit organization ID. Ambiguous or ownerless legacy storage blocks a migration-ready package; non-owner organizations cannot receive legacy fallback data.
 - Digests: per-resource and whole-resource-payload SHA-256 digests use stable key-sorted serialization. `exportedAt` is excluded from content and metadata digests.
 - No import path or cutover exists yet. Batch 5.2+ remains intentionally unimplemented.
+
+## TODO-004 Batch 5.2 Import Metadata Status
+
+- Migration applied: `20260715194500_add_migration_import_tracking`.
+- Metadata models: `MigrationImportBatch`, `MigrationImportResource`, and `MigrationImportConflict`.
+- Batch lifecycle distinguishes pending, importing, conflict, imported, verifying, verified, and failed states. `verified` is not synonymous with `imported`.
+- Every batch initializes exactly nine resource checkpoints from the frozen export contract. Checkpoints retain expected/imported/skipped/conflict counts, source/target digests, attempts, timestamps, and errors.
+- Idempotency is scoped by `(organizationId, resourcePayloadDigest)`. Conflict evidence is deduplicated by `(batchId, fingerprint)`.
+- Conflicts preserve IDs, digests, safe optional JSON evidence, reasons, and resolution status. Open conflicts or incomplete/unverified checkpoints prevent batch verification.
+- Organization deletion cascades import metadata consistently with existing organization-owned persistence records. No normal application deletion API for migration history was added.
+- `lib/server/migrationImportService.ts` is server-internal metadata infrastructure only. It does not import KnowledgeItems, candidates, audit records, tickets, metrics, patterns, logs, or ticket sequences.
+- No public migration import endpoint, package upload, business-data importer, cutover, or mature organization migration exists yet.

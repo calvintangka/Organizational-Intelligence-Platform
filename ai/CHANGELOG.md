@@ -13,6 +13,18 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-15] Add migration import tracking foundation
+**Layer:** coding
+**Task/Prompt:** Implement TODO-004 Batch 5.2: import manifest, checkpoint, and conflict schema.
+**Files changed:** `prisma/schema.prisma`, `prisma/migrations/20260715194500_add_migration_import_tracking/migration.sql`, `types/migrationImport.ts`, `types/index.ts`, `lib/server/migrationImportService.ts`, `scripts/migration-metadata-probe.cjs`, `package.json`, `ai/CHANGELOG.md`, `ai/CURRENT_STATUS.md`, `ai/CODEBASE_MAP.md`, `ai/ARCHITECTURE.md`
+**What changed:**
+- Added durable `MigrationImportBatch`, `MigrationImportResource`, and `MigrationImportConflict` metadata models with digest idempotency, nine resource checkpoints, conflict fingerprints, and organization cascade ownership.
+- Added server-internal metadata initialization, checkpoint, conflict, resolution, lookup, and verification-safety helpers. These helpers never write business resource tables.
+- Added a disposable-organization metadata probe covering retries, cross-organization isolation, conflict quarantine, incomplete verification blocking, rollback, and cascade cleanup.
+**Boundaries touched:** PostgreSQL migration metadata only. No package import, business-data migration, public import endpoint, cutover, or mature organization migration was added.
+**Verification:** Metadata probe, export/persistence/server/db-write probes, Prisma validation/generation/status, TypeScript, build, and diff checks.
+**Open items:** Batch 5.3 still owns the import service and endpoint; metadata does not mean business data was imported or verified.
+
 ## [2026-07-15] Add read-only local persistence export
 **Layer:** coding
 **Task/Prompt:** Implement TODO-004 Batch 5.0–5.1: export package contract and strictly read-only resolved localStorage exporter.

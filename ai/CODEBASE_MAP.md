@@ -101,6 +101,9 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `lib/persistence/migrationExport.ts` - Strictly read-only resolved localStorage exporter for TODO-004 Batch 5.0–5.1. Reads scoped resources, permitted legacy fallback, ownership metadata, profiles, ticket counters, and migration state without calling migration preparation or any save path.
 - `types/migrationExport.ts` - Versioned `oip-localstorage-export-v1` contract for organization profile, source provenance, resolved resources, counts, ownership evidence, migration state, and deterministic digests.
 - `scripts/migration-export-probe.cjs` - In-memory localStorage regression probe for export byte identity, fallback history, seed exclusion, ownership blocking, reset suppression, digest idempotency, and cross-organization isolation.
+- `lib/server/migrationImportService.ts` - Server-internal Batch 5.2 metadata foundation. Initializes digest-bound import batches, nine resource checkpoints, conflict evidence, conflict resolution status, and verification-safe lifecycle transitions without writing business resources.
+- `types/migrationImport.ts` - TypeScript unions and inputs for import batch/resource/conflict metadata, lifecycle states, manifest initialization, checkpoints, and conflict summaries.
+- `scripts/migration-metadata-probe.cjs` - Disposable PostgreSQL metadata-only probe covering idempotency, cross-organization ownership, checkpoint uniqueness, conflicts, verification protection, rollback, cascade cleanup, and business-row isolation.
 - `lib/ticketRecords.ts` - Explicit-id async ticket-record load/save helpers plus synchronous quota-guarded ticket-id counters, runtime/persisted owner-only legacy fallback, atomic bulk ID reservation, and case-record utilities.
 - `lib/metrics.ts` - Metric defaults.
 - `lib/intelligenceLog.ts` - Event-log helpers.
@@ -114,8 +117,8 @@ The current default application persistence path is `app/page.tsx` -> `lib/persi
 
 ## Database Foundation (dormant in local mode)
 
-- `prisma/schema.prisma` - Prisma PostgreSQL schema for organizations and organization-owned durable records. It makes ownership relational, indexes organization-scoped access, scopes ticket-ID uniqueness by organization, carries an optimistic `revision` on knowledge items, and enforces one validation per candidate and one memory-change per validation via unique constraints.
-- `prisma/migrations/` - Applied migration history (initial schema + `20260715183000_add_write_concurrency_controls`); historical migrations are never edited.
+- `prisma/schema.prisma` - Prisma PostgreSQL schema for organizations, organization-owned durable records, and Batch 5.2 migration metadata. It makes ownership relational, indexes organization-scoped access, scopes ticket-ID uniqueness by organization, carries an optimistic `revision` on knowledge items, and enforces one validation per candidate and one memory-change per validation via unique constraints.
+- `prisma/migrations/` - Applied migration history (initial schema, `20260715183000_add_write_concurrency_controls`, and `20260715194500_add_migration_import_tracking`); historical migrations are never edited.
 - `prisma.config.ts` - Prisma CLI configuration and environment-supplied `DATABASE_URL` loading. It deliberately does not supply a fallback connection string.
 - `generated/prisma/` - Reproducible Prisma client output, generated during `prebuild` and ignored by Git.
 

@@ -269,3 +269,13 @@ The exporter requires an explicit organization ID and reads the current resolved
 The export contract is `oip-localstorage-export-v1` in `types/migrationExport.ts`. It includes ownership evidence, migration-state provenance, source-resource statuses, resolved resources, deterministic counts, and SHA-256 digests using stable key ordering. Seed/default KnowledgeItems are not exported as historical organizational memory when no persisted knowledge exists.
 
 An ambiguous legacy owner, incompatible migration marker, missing organization profile, active server persistence mode, unavailable localStorage, ownership mismatch, or unavailable SHA-256 implementation blocks the export. No import endpoint, PostgreSQL import, conflict quarantine, server ticket-sequence reconciliation, verification UI, or organization cutover exists in this batch.
+
+## Migration Import Metadata Foundation
+
+TODO-004 Batch 5.2 adds PostgreSQL metadata only through `MigrationImportBatch`, `MigrationImportResource`, and `MigrationImportConflict`. A batch is bound to exactly one `Organization`, and `(organizationId, resourcePayloadDigest)` identifies a repeated initialization of the same export resource payload. Each batch receives exactly nine checkpoints matching `oip-localstorage-export-v1`; each checkpoint stores expected/imported/skipped/conflict counts, source and target digests, attempts, timestamps, status, and error text.
+
+Conflict evidence is durable but not resolution behavior. Conflicts use a batch-local fingerprint for idempotent evidence, retain safe IDs/digests/reasons, and may retain optional structured source/target JSON snapshots for later human resolution. They never store credentials, connection strings, API keys, or unrelated browser state.
+
+Organization deletion cascades migration metadata, matching the existing prototype's organization-owned data semantics and avoiding orphaned provenance rows. There is no normal API for deleting migration history.
+
+The server-internal `lib/server/migrationImportService.ts` can initialize metadata, update checkpoints, record or resolve conflict evidence, list open conflicts, and mark a batch verified only when all nine resources are verified and no open conflict remains. It does not import business data. There is still no package upload, public migration endpoint, historical importer, PostgreSQL business-data import, verification report UI, cutover, or mature organization migration.

@@ -68,6 +68,25 @@ export type {
 } from "./migrationExport";
 export { LOCAL_STORAGE_EXPORT_FORMAT, LOCAL_STORAGE_EXPORT_VERSION } from "./migrationExport";
 export type {
+  MigrationImportBatchStatus,
+  MigrationImportConflictInput,
+  MigrationImportConflictSummary,
+  MigrationImportConflictStatus,
+  MigrationImportConflictType,
+  MigrationImportManifestInput,
+  MigrationImportBatchSummary,
+  MigrationImportResourceCheckpointInput,
+  MigrationImportResourceStatus,
+  MigrationImportResourceType
+} from "./migrationImport";
+export {
+  MIGRATION_IMPORT_BATCH_STATUSES,
+  MIGRATION_IMPORT_CONFLICT_STATUSES,
+  MIGRATION_IMPORT_CONFLICT_TYPES,
+  MIGRATION_IMPORT_RESOURCE_STATUSES,
+  MIGRATION_IMPORT_RESOURCE_TYPES
+} from "./migrationImport";
+export type {
   SupportedBulkUploadFormat,
   BulkUploadShape,
   BulkClusterConfidence,

@@ -39,6 +39,62 @@ enum EmergingPatternLifecycle {
   dismissed
 }
 
+enum MigrationImportBatchStatus {
+  pending
+  validating
+  ready
+  importing
+  partial
+  conflict
+  imported
+  verifying
+  verified
+  failed
+}
+
+enum MigrationImportResourceType {
+  knowledge
+  knowledgeCandidates
+  validationRecords
+  memoryChangeRecords
+  orgMetrics
+  intelligenceLog
+  emergingPatterns
+  ticketRecords
+  ticketSequence
+}
+
+enum MigrationImportResourceStatus {
+  pending
+  validating
+  importing
+  imported
+  conflict
+  failed
+  verified
+}
+
+enum MigrationImportConflictType {
+  same_id_different_content
+  cross_organization_ownership_mismatch
+  duplicate_candidate_validation
+  duplicate_validation_memory_relationship
+  ticket_id_collision
+  lesson_id_content_conflict
+  knowledge_version_id_conflict
+  unresolved_historical_reference
+  digest_mismatch
+  malformed_source_record
+}
+
+enum MigrationImportConflictStatus {
+  open
+  resolved_source
+  resolved_target
+  resolved_manual
+  ignored
+}
+
 model Organization {
   id          String   @id
   name        String
@@ -57,6 +113,8 @@ model Organization {
   intelligenceLogs    IntelligenceLog[]
   orgMetrics          OrgMetrics?
   ticketSequence      TicketSequence?
+  migrationImportBatches    MigrationImportBatch[]
+  migrationImportConflicts  MigrationImportConflict[]
 
   @@map("organizations")
 }
@@ -265,4 +323,89 @@ model TicketSequence {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@map("ticket_sequences")
+}
+
+model MigrationImportBatch {
+  id                    String                   @id @default(cuid())
+  organizationId        String
+  format                String
+  formatVersion         Int
+  resourcePayloadDigest String
+  metadataDigest        String?
+  sourceOrganizationId  String
+  sourcePersistenceMode String
+  sourceSchemaVersion   String
+  exportedAt            DateTime                 @db.Timestamptz(6)
+  counts                Json
+  resourceDigests       Json
+  status                MigrationImportBatchStatus @default(pending)
+  attemptCount          Int                      @default(0)
+  errorSummary          String?
+  createdAt             DateTime                 @default(now()) @db.Timestamptz(6)
+  startedAt             DateTime?                @db.Timestamptz(6)
+  completedAt           DateTime?                @db.Timestamptz(6)
+  verificationCompletedAt DateTime?              @db.Timestamptz(6)
+  updatedAt             DateTime                 @updatedAt @db.Timestamptz(6)
+
+  organization Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  resources    MigrationImportResource[]
+  conflicts    MigrationImportConflict[]
+
+  @@unique([organizationId, resourcePayloadDigest])
+  @@index([organizationId, status])
+  @@index([resourcePayloadDigest])
+  @@map("migration_import_batches")
+}
+
+model MigrationImportResource {
+  id                    String                    @id @default(cuid())
+  batchId               String
+  resourceType          MigrationImportResourceType
+  expectedCount         Int                       @default(0)
+  importedCount         Int                       @default(0)
+  skippedIdenticalCount  Int                       @default(0)
+  conflictCount         Int                       @default(0)
+  sourceDigest           String
+  targetDigest           String?
+  status                MigrationImportResourceStatus @default(pending)
+  attemptCount          Int                       @default(0)
+  errorSummary          String?
+  createdAt             DateTime                  @default(now()) @db.Timestamptz(6)
+  startedAt             DateTime?                 @db.Timestamptz(6)
+  completedAt           DateTime?                 @db.Timestamptz(6)
+  updatedAt             DateTime                  @updatedAt @db.Timestamptz(6)
+
+  batch MigrationImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, resourceType])
+  @@index([batchId, status])
+  @@map("migration_import_resources")
+}
+
+model MigrationImportConflict {
+  id             String                       @id @default(cuid())
+  batchId        String
+  organizationId String
+  resourceType   MigrationImportResourceType
+  fingerprint    String
+  sourceRecordId String?
+  conflictType   MigrationImportConflictType
+  sourceDigest   String?
+  targetDigest   String?
+  sourceSnapshot Json?
+  targetSnapshot Json?
+  reason         String
+  status         MigrationImportConflictStatus @default(open)
+  detectedAt     DateTime                     @default(now()) @db.Timestamptz(6)
+  resolvedAt     DateTime?                    @db.Timestamptz(6)
+  createdAt      DateTime                     @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime                     @updatedAt @db.Timestamptz(6)
+
+  batch        MigrationImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, fingerprint])
+  @@index([organizationId, status])
+  @@index([batchId, status])
+  @@map("migration_import_conflicts")
 }
