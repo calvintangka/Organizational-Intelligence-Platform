@@ -14,6 +14,8 @@
     "probe:migration-intake-http": "node scripts/migration-intake-http-probe.cjs",
     "probe:migration-import": "node scripts/migration-import-probe.cjs",
     "probe:migration-import-http": "node scripts/migration-import-http-probe.cjs",
+    "probe:migration-verify": "node scripts/migration-verify-probe.cjs",
+    "probe:migration-verify-http": "node scripts/migration-verify-http-probe.cjs",
     "probe:persistence-boundary": "node scripts/persistence-boundary-probe.cjs",
     "probe:server-persistence": "node scripts/server-persistence-probe.cjs",
     "probe:db-writes": "node scripts/db-write-probe.cjs",

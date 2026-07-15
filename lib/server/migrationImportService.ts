@@ -21,7 +21,8 @@ import {
 } from "@/types/migrationImport";
 import type {
   MigrationImportBatchSummary,
-  MigrationImportConflictSummary
+  MigrationImportConflictSummary,
+  MigrationImportVerificationReport
 } from "@/types/migrationImport";
 import { Prisma } from "@/generated/prisma/client";
 import type {
@@ -241,7 +242,12 @@ async function summaryForBatch(
       status: resource.status,
       attemptCount: resource.attemptCount
     })),
-    unresolvedConflictCount
+    unresolvedConflictCount,
+    verificationReport: batch.verificationReport
+      ? batch.verificationReport as unknown as MigrationImportVerificationReport
+      : null,
+    verificationError: batch.verificationError,
+    verificationCompletedAt: batch.verificationCompletedAt?.toISOString() ?? null
   };
 }
 
@@ -865,7 +871,7 @@ export async function intakeMigrationExportPackage(
 export function toSafeMigrationImportError(error: unknown): { code: string; message: string; status: number } {
   if (error instanceof MigrationImportServiceError) {
     const status = ["ORGANIZATION_NOT_FOUND", "IMPORT_NOT_FOUND"].includes(error.code) ? 404
-      : ["CONFLICT", "ORGANIZATION_MISMATCH"].includes(error.code) ? 409
+      : ["CONFLICT", "ORGANIZATION_MISMATCH", "EXPORT_DIGEST_MISMATCH", "INVALID_STATUS_TRANSITION"].includes(error.code) ? 409
         : error.code === "DATABASE_UNAVAILABLE" ? 503 : 400;
     return { code: error.code, message: error.message, status };
   }

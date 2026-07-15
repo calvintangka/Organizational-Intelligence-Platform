@@ -69,6 +69,47 @@ export const MIGRATION_IMPORT_CONFLICT_STATUSES = [
 
 export type MigrationImportConflictStatus = typeof MIGRATION_IMPORT_CONFLICT_STATUSES[number];
 
+export interface MigrationImportVerificationResourceResult {
+  resourceType: MigrationImportResourceType;
+  expectedCount: number;
+  foundCount: number;
+  missingCount: number;
+  conflictingCount: number;
+  extraCount: number;
+  sourceDigest: string;
+  normalizedSourceDigest: string;
+  targetDigest: string;
+  digestMatch: boolean;
+  sourceCoverageMatch: boolean;
+  notes: string[];
+}
+
+export interface MigrationImportVerificationReport {
+  batchId: string;
+  organizationId: string;
+  verifiedAt: string;
+  overallStatus: "passed" | "failed";
+  organizationProfileMatch: boolean;
+  resourceResults: MigrationImportVerificationResourceResult[];
+  unresolvedConflictCount: number;
+  conflicts: Array<{
+    id: string;
+    resourceType: MigrationImportResourceType;
+    sourceRecordId: string | null;
+    conflictType: string;
+    reason: string;
+    status: string;
+  }>;
+  ticketSequenceExpectedMinimum: number;
+  ticketSequenceActual: number | null;
+  ticketSequenceSafe: boolean;
+  lessonCount: { expected: number; found: number; match: boolean };
+  versionCount: { expected: number; found: number; match: boolean };
+  auditRelationshipStatus: "pass" | "fail";
+  extraTargetRowsAllowed: true;
+  notes: string[];
+}
+
 export interface MigrationImportManifestInput {
   organizationId: string;
   sourceOrganizationId: string;
@@ -144,4 +185,7 @@ export interface MigrationImportBatchSummary {
     attemptCount: number;
   }>;
   unresolvedConflictCount: number;
+  verificationReport: MigrationImportVerificationReport | null;
+  verificationError: string | null;
+  verificationCompletedAt: string | null;
 }

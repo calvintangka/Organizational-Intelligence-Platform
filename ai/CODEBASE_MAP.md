@@ -103,6 +103,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `scripts/migration-export-probe.cjs` - In-memory localStorage regression probe for export byte identity, fallback history, seed exclusion, ownership blocking, reset suppression, digest idempotency, and cross-organization isolation.
 - `lib/server/migrationImportService.ts` - Server-internal Batch 5.2 metadata foundation. Initializes digest-bound import batches, nine resource checkpoints, conflict evidence, conflict resolution status, and verification-safe lifecycle transitions without writing business resources.
 - `lib/server/migrationImportExecutionService.ts` - Server-only Batch 5.4–5.5 importer. Executes dependency-ordered additive historical writes from the immutable package, quarantines deterministic conflicts, imports immutable memory history without replaying workflows, and monotonically reconciles ticket sequences.
+- `lib/server/migrationVerificationService.ts` - Server-only Batch 5.6 verifier. Reconstructs normalized PostgreSQL domain projections, compares source-ID coverage and deterministic digests, reports nested/audit/sequence mismatches, and performs only migration metadata status/report updates.
 - `types/migrationImport.ts` - TypeScript unions and inputs for import batch/resource/conflict metadata, lifecycle states, manifest initialization, checkpoints, and conflict summaries.
 - `scripts/migration-metadata-probe.cjs` - Disposable PostgreSQL metadata-only probe covering idempotency, cross-organization ownership, checkpoint uniqueness, conflicts, verification protection, rollback, cascade cleanup, and business-row isolation.
 - `lib/ticketRecords.ts` - Explicit-id async ticket-record load/save helpers plus synchronous quota-guarded ticket-id counters, runtime/persisted owner-only legacy fallback, atomic bulk ID reservation, and case-record utilities.
@@ -339,3 +340,6 @@ The current default application persistence path is `app/page.tsx` -> `lib/persi
 
 - Dependency-ordered historical import - `app/api/organizations/[organizationId]/migration-import/[batchId]/execute/route.ts` and `lib/server/migrationImportExecutionService.ts`
   See `executeMigrationImport()`, `reconcileOrganizationProfile()`, `runResource()`, `importMemoryChanges()`, and `importTicketSequence()`. The importer performs additive direct Prisma writes with deterministic conflict quarantine; it does not call normal snapshot writers or `commitValidation()`.
+
+- Post-import verification - `app/api/organizations/[organizationId]/migration-import/[batchId]/verify/route.ts` and `lib/server/migrationVerificationService.ts`
+  See `verifyMigrationImport()`, `getMigrationVerification()`, `buildVerificationReport()`, and the normalized resource projections. Verification is report-backed, retry-safe, organization-scoped, and does not mutate business state.

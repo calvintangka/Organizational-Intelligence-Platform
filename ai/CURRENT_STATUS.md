@@ -220,4 +220,13 @@ Three-tier AI fallback chain implemented: LM Studio (local Gemma) → Claude API
 - Dependency order is profile reconciliation, KnowledgeItems, candidates, validations, tickets, emerging patterns, intelligence logs, metrics, memory history, and ticket-sequence reconciliation. Historical validation records and memory audit rows are inserted directly; normal validation/reflection workflows are not replayed.
 - Imports are additive and per-resource transactional. Identical rows are skipped, differing rows create deterministic `MigrationImportConflict` evidence, and resource conflicts prevent partial mutation of that resource.
 - Successful Batch 5.5 execution leaves all nine checkpoints `imported` and the batch `imported`; it is not yet `verified`. Memory history is preflighted against organization-owned KnowledgeItems, candidates, and validations, and ticket sequence reconciliation atomically raises (never lowers) the counter to the maximum of the server counter, package counter, and parsed source ticket suffix.
-- Failed resources remain retryable; conflicts remain quarantined. STOP: post-import verification is pending Batch 5.6; authority cutover is pending Batch 5.8; mature Maesa/FastDrop/Pramana migration remains unimplemented.
+- Failed resources remain retryable; conflicts remain quarantined.
+
+## TODO-004 Batch 5.6 Verification Status
+
+- Dedicated endpoint: `POST /api/organizations/[organizationId]/migration-import/[batchId]/verify`; report readback: `GET` on the same route.
+- Verification reconstructs normalized domain projections from PostgreSQL and compares them with the immutable package: profile, all nine resources, IDs, content digests, nested lessons/versions, validation and memory audit relationships, tickets, metrics, patterns, logs, and the safe ticket-sequence minimum.
+- Verification is additive-state aware: all source IDs must be present and match; unrelated pre-existing target rows are reported as extras and do not fail verification.
+- A clean report transitions resource checkpoints `imported` → `verified` and the batch `imported` → `verifying` → `verified`. A mismatch persists a structured failed report, leaves the batch unverified, and performs no business-data repair.
+- Verification retries are idempotent. An already verified batch returns the persisted report as a no-op; a failed report can be retried after manual repair.
+- STOP: per-organization authority cutover is pending Batch 5.8; mature Maesa/FastDrop/Pramana migration was not performed.
