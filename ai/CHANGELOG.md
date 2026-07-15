@@ -13,6 +13,19 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-15] Extract persistence adapter seam
+**Layer:** coding
+**Task/Prompt:** Implement TODO-004 Batch 2: Persistence Adapter Extraction.
+**Files changed:** `lib/persistence/adapter.ts`, `lib/persistence/localStorageAdapter.ts`, `lib/persistence/index.ts`, `app/page.tsx`, `scripts/persistence-boundary-probe.cjs`, `ai/CHANGELOG.md`, `ai/CURRENT_STATUS.md`, `ai/CODEBASE_MAP.md`, `ai/ARCHITECTURE.md`
+**What changed:**
+- Added the `PersistenceAdapter` contract and a single active `LocalStorageAdapter` selected through `persistence` / `getPersistenceAdapter()`.
+- Routed page-level hydration, resource saves, migration preparation, organization reset/deletion, and ticket ID allocation through the adapter. The adapter delegates to the existing hardened localStorage modules without reimplementing their migration, fallback, quota, reset, deletion, self-heal, or counter logic.
+- Kept the profile/list two-key model and exposed migration as `prepareOrganization(organizationId)` so localStorage-specific migration remains behind the active adapter boundary.
+- Extended the deterministic persistence probe for adapter selection, scoped delegation, invalid IDs, key-format preservation, contiguous ticket IDs, and the absence of Prisma in the client path.
+**Boundaries touched:** Persistence seam only. No data migration, key rename, v3 key, server adapter, API route, database read/write, Prisma import, authentication, authorization, queue, or workflow behavior was added.
+**Verification:** `npm run probe:persistence-boundary`; `npx tsc --noEmit`; `npm run build`; `git diff --check`.
+**Open items:** Live browser verification was not performed. PostgreSQL/Prisma remains dormant and `graphify update .` remains blocked by the Windows uv trampoline.
+
 ## [2026-07-15] Add PostgreSQL and Prisma persistence foundation
 **Layer:** coding
 **Task/Prompt:** Implement TODO-004 Batch 1: PostgreSQL + Prisma Database Foundation and Schema.

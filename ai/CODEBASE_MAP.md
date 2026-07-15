@@ -84,6 +84,9 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 ### Persistence and profile state
 
+- `lib/persistence/adapter.ts` - `PersistenceAdapter` contract for profile/list state, organization-owned resources, migration preparation, ticket ID allocation, reset, and deletion.
+- `lib/persistence/localStorageAdapter.ts` - Active localStorage implementation; delegates to the hardened local persistence modules and contains no Prisma/database logic.
+- `lib/persistence/index.ts` - Active adapter selection; `persistence` is always a `LocalStorageAdapter` in this batch.
 - `lib/organizationId.ts` - Shared compile-time/runtime non-empty organization-id guard for organization-owned persistence entry points.
 - `lib/orgMemory.ts` - Versioned organization-scoped localStorage load/save helpers for knowledge, candidates, validations, memory changes, metrics, log, and patterns. Every public organization-owned operation requires an explicit id; it owns the copy-only legacy v2 migration marker, durable single-organization legacy ownership, owner-only fallback reads, independent retryable resource states, idempotent completion, and ambiguous migration blocking.
 - `lib/organizationProfile.ts` - Async-compatible profile load/save helpers, normalization, and keyword-bank generation.
@@ -94,6 +97,8 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `lib/oipEngine.ts` - Thin export surface for pipeline modules.
 - `lib/matching.ts` - Low-level token overlap helpers used by retrieval/matching.
 - `lib/server/prisma.ts` - Server-only, singleton-safe PostgreSQL Prisma client. It is intentionally not imported by current runtime persistence adapters.
+
+The current application persistence path is `app/page.tsx` -> `lib/persistence` -> `LocalStorageAdapter` -> existing localStorage modules. A future server adapter/API/PostgreSQL path is not implemented.
 
 ## Database Foundation (dormant)
 

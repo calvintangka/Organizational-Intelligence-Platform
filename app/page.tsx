@@ -53,43 +53,16 @@ import {
   TRUST_INITIAL
 } from "@/lib/trustEngine";
 import {
-  loadKnowledge,
-  saveKnowledge,
-  loadOrgMetrics,
-  saveOrgMetrics,
-  loadOrgLog,
-  saveOrgLog,
-  clearOrganization,
-  seedOrganizationalKnowledge,
-  seedOrgMetrics,
-  seedEmergingPatterns,
-  loadEmergingPatterns,
-  saveEmergingPatterns,
-  loadKnowledgeCandidates,
-  saveKnowledgeCandidates,
-  loadValidationRecords,
-  saveValidationRecords,
-  loadMemoryChangeRecords,
-  saveMemoryChangeRecords,
-  deleteOrganizationData,
-  migrateLegacyOrganizationStorage,
-} from "@/lib/orgMemory";
+  persistence,
+} from "@/lib/persistence";
 import {
-  loadOrganizationProfile,
-  saveOrganizationProfile,
-  loadOrganizationList,
-  saveOrganizationList,
   syncProfileIntoList,
   initialsFor,
   normalizeAccentColor,
 } from "@/lib/organizationProfile";
 import {
-  generateTicketId,
-  generateTicketIds,
   createTicketRecord,
   upsertTicketRecord,
-  loadTicketRecords,
-  saveTicketRecords,
   computeEditDistance,
 } from "@/lib/ticketRecords";
 import { CaseLookupView } from "@/components/views/CaseLookupView";
@@ -535,14 +508,14 @@ export default function Home() {
   const [similarKnowledge, setSimilarKnowledge] = useState<KnowledgeMatch[]>([]);
   const [suggestedResponse, setSuggestedResponse] = useState<SuggestedResponse | null>(null);
   const [reviewedResponse, setReviewedResponse] = useState("");
-  const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>(seedOrganizationalKnowledge);
+  const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>(() => persistence.seedKnowledge());
   const [knowledgeCandidates, setKnowledgeCandidates] = useState<KnowledgeCandidate[]>([]);
   const [validationRecords, setValidationRecords] = useState<ValidationRecord[]>([]);
   const [memoryChangeRecords, setMemoryChangeRecords] = useState<MemoryChangeRecord[]>([]);
   const [organizationProfile, setOrganizationProfile] = useState<OrganizationProfile>(defaultOrganizationProfile);
   const [organizationList, setOrganizationList] = useState<OrganizationProfile[]>(seedOrganizationProfiles);
   const [metrics, setMetrics] = useState<Metrics>(createInitialMetrics);
-  const [orgMetrics, setOrgMetrics] = useState<OrgMetrics>(() => seedOrgMetrics(defaultOrganizationProfile.id));
+  const [orgMetrics, setOrgMetrics] = useState<OrgMetrics>(() => persistence.seedOrgMetrics(defaultOrganizationProfile.id));
   const [hydrated, setHydrated] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [migrationWarning, setMigrationWarning] = useState("");
@@ -600,9 +573,9 @@ export default function Home() {
 
     void (async () => {
       try {
-        const loadedProfile = await loadOrganizationProfile();
+        const loadedProfile = await persistence.loadOrganizationProfile();
         const orgId = loadedProfile.id;
-        const migration = migrateLegacyOrganizationStorage(orgId);
+        const migration = persistence.prepareOrganization(orgId);
         setMigrationWarning(migration.warnings.join(" "));
         const [
           loadedOrganizationList,
@@ -615,15 +588,15 @@ export default function Home() {
           loadedPatterns,
           loadedTicketRecords
         ] = await Promise.all([
-          loadOrganizationList(),
-          loadKnowledge(orgId),
-          loadKnowledgeCandidates(orgId),
-          loadValidationRecords(orgId),
-          loadMemoryChangeRecords(orgId),
-          loadOrgMetrics(orgId),
-          loadOrgLog(orgId),
-          loadEmergingPatterns(orgId),
-          loadTicketRecords(orgId)
+          persistence.loadOrganizationList(),
+          persistence.loadKnowledge(orgId),
+          persistence.loadKnowledgeCandidates(orgId),
+          persistence.loadValidationRecords(orgId),
+          persistence.loadMemoryChangeRecords(orgId),
+          persistence.loadOrgMetrics(orgId),
+          persistence.loadOrgLog(orgId),
+          persistence.loadEmergingPatterns(orgId),
+          persistence.loadTicketRecords(orgId)
         ]);
 
         if (cancelled) return;
@@ -667,27 +640,27 @@ export default function Home() {
 
   async function persistOrganizationState(orgId: string): Promise<void> {
     await Promise.all([
-      saveKnowledge(orgId, knowledgeItems),
-      saveKnowledgeCandidates(orgId, knowledgeCandidates),
-      saveValidationRecords(orgId, validationRecords),
-      saveMemoryChangeRecords(orgId, memoryChangeRecords),
-      saveOrgMetrics(orgId, orgMetrics),
-      saveOrgLog(orgId, intelligenceLog),
-      saveEmergingPatterns(orgId, emergingPatterns),
-      saveTicketRecords(orgId, ticketRecords)
+      persistence.saveKnowledge(orgId, knowledgeItems),
+      persistence.saveKnowledgeCandidates(orgId, knowledgeCandidates),
+      persistence.saveValidationRecords(orgId, validationRecords),
+      persistence.saveMemoryChangeRecords(orgId, memoryChangeRecords),
+      persistence.saveOrgMetrics(orgId, orgMetrics),
+      persistence.saveOrgLog(orgId, intelligenceLog),
+      persistence.saveEmergingPatterns(orgId, emergingPatterns),
+      persistence.saveTicketRecords(orgId, ticketRecords)
     ]);
   }
 
   async function loadOrganizationState(orgId: string) {
     const [knowledge, candidates, validations, changes, loadedMetrics, log, patterns, tickets] = await Promise.all([
-      loadKnowledge(orgId),
-      loadKnowledgeCandidates(orgId),
-      loadValidationRecords(orgId),
-      loadMemoryChangeRecords(orgId),
-      loadOrgMetrics(orgId),
-      loadOrgLog(orgId),
-      loadEmergingPatterns(orgId),
-      loadTicketRecords(orgId)
+      persistence.loadKnowledge(orgId),
+      persistence.loadKnowledgeCandidates(orgId),
+      persistence.loadValidationRecords(orgId),
+      persistence.loadMemoryChangeRecords(orgId),
+      persistence.loadOrgMetrics(orgId),
+      persistence.loadOrgLog(orgId),
+      persistence.loadEmergingPatterns(orgId),
+      persistence.loadTicketRecords(orgId)
     ]);
     return {
       knowledge,
@@ -702,43 +675,43 @@ export default function Home() {
   }
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveKnowledge", saveKnowledge(organizationProfile.id, knowledgeItems));
+    if (hydrated) queuePersistenceSave("saveKnowledge", persistence.saveKnowledge(organizationProfile.id, knowledgeItems));
   }, [knowledgeItems, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveKnowledgeCandidates", saveKnowledgeCandidates(organizationProfile.id, knowledgeCandidates));
+    if (hydrated) queuePersistenceSave("saveKnowledgeCandidates", persistence.saveKnowledgeCandidates(organizationProfile.id, knowledgeCandidates));
   }, [knowledgeCandidates, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveValidationRecords", saveValidationRecords(organizationProfile.id, validationRecords));
+    if (hydrated) queuePersistenceSave("saveValidationRecords", persistence.saveValidationRecords(organizationProfile.id, validationRecords));
   }, [validationRecords, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveMemoryChangeRecords", saveMemoryChangeRecords(organizationProfile.id, memoryChangeRecords));
+    if (hydrated) queuePersistenceSave("saveMemoryChangeRecords", persistence.saveMemoryChangeRecords(organizationProfile.id, memoryChangeRecords));
   }, [memoryChangeRecords, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveOrgMetrics", saveOrgMetrics(organizationProfile.id, orgMetrics));
+    if (hydrated) queuePersistenceSave("saveOrgMetrics", persistence.saveOrgMetrics(organizationProfile.id, orgMetrics));
   }, [orgMetrics, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveOrgLog", saveOrgLog(organizationProfile.id, intelligenceLog));
+    if (hydrated) queuePersistenceSave("saveOrgLog", persistence.saveOrgLog(organizationProfile.id, intelligenceLog));
   }, [intelligenceLog, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveEmergingPatterns", saveEmergingPatterns(organizationProfile.id, emergingPatterns));
+    if (hydrated) queuePersistenceSave("saveEmergingPatterns", persistence.saveEmergingPatterns(organizationProfile.id, emergingPatterns));
   }, [emergingPatterns, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveTicketRecords", saveTicketRecords(organizationProfile.id, ticketRecords));
+    if (hydrated) queuePersistenceSave("saveTicketRecords", persistence.saveTicketRecords(organizationProfile.id, ticketRecords));
   }, [ticketRecords, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveOrganizationProfile", saveOrganizationProfile(organizationProfile));
+    if (hydrated) queuePersistenceSave("saveOrganizationProfile", persistence.saveOrganizationProfile(organizationProfile));
   }, [organizationProfile, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveOrganizationList", saveOrganizationList(organizationList));
+    if (hydrated) queuePersistenceSave("saveOrganizationList", persistence.saveOrganizationList(organizationList));
   }, [organizationList, hydrated]);
 
   useEffect(() => {
@@ -1110,7 +1083,7 @@ export default function Home() {
       rationale: prepared.rationale,
       createdAt: now
     });
-    const bulkTicketIds = generateTicketIds(organizationProfile, cluster.items?.length ?? 0);
+    const bulkTicketIds = persistence.generateTicketIds(organizationProfile.id, organizationProfile, cluster.items?.length ?? 0);
     const result = applyValidatedMemoryChange(candidate, prepared.beforeState, prepared.afterState, prepared.rationale);
     setSessionCreatedIds((prev) => new Set([...prev, result.validatedItem.id]));
     setLastSavedKnowledgeId(result.validatedItem.id);
@@ -1538,18 +1511,18 @@ export default function Home() {
   /** Reset Organization — wipes persisted memory and reseeds defaults. */
   function resetOrganization() {
     try {
-      clearOrganization(organizationProfile.id);
+      persistence.resetOrganization(organizationProfile.id);
     } catch (error) {
       reportPersistenceError("resetOrganization", error);
       return;
     }
-    setKnowledgeItems(seedOrganizationalKnowledge().map((item) => ({ ...item, organizationId: organizationProfile.id })));
+    setKnowledgeItems(persistence.seedKnowledge().map((item) => ({ ...item, organizationId: organizationProfile.id })));
     setKnowledgeCandidates([]);
     setValidationRecords([]);
     setMemoryChangeRecords([]);
-    setOrgMetrics(seedOrgMetrics(organizationProfile.id));
+    setOrgMetrics(persistence.seedOrgMetrics(organizationProfile.id));
     setIntelligenceLog([]);
-    setEmergingPatterns(seedEmergingPatterns());
+    setEmergingPatterns(persistence.seedEmergingPatterns());
     setTicketRecords([]);
     setActiveTicketRecord(null);
     resetWorkflowState();
@@ -1592,8 +1565,8 @@ export default function Home() {
       if (persistCurrent && wasHydrated) {
         await persistOrganizationState(organizationProfile.id);
       }
-      if (persistCurrent) await saveOrganizationProfile(organizationProfile);
-      await saveOrganizationList(availableOrganizations);
+      if (persistCurrent) await persistence.saveOrganizationProfile(organizationProfile);
+      await persistence.saveOrganizationList(availableOrganizations);
       const loaded = await loadOrganizationState(found.id);
       if (generation !== organizationSwitchGeneration.current) return;
       setOrganizationProfile(found);
@@ -1631,11 +1604,11 @@ export default function Home() {
       if (id === organizationProfile.id && hydrated) {
         await persistOrganizationState(id);
       }
-      deleteOrganizationData(id);
+      persistence.deleteOrganization(id);
       if (id === organizationProfile.id) {
         await selectOrganization(nextList[0].id, nextList, false);
       } else {
-        await saveOrganizationList(nextList);
+        await persistence.saveOrganizationList(nextList);
         setOrganizationList(nextList);
       }
     } catch (error) {
@@ -3052,7 +3025,7 @@ export default function Home() {
     setErrorMessage("");
     let tId: string;
     try {
-      tId = generateTicketId(organizationProfile);
+      tId = persistence.generateTicketId(organizationProfile.id, organizationProfile);
     } catch (error) {
       reportPersistenceError("generateTicketId", error);
       setIsProcessing(false);
