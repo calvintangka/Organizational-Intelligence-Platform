@@ -2,6 +2,20 @@
 
 ## Entry Format
 
+## [2026-07-15] Add disposable end-to-end migration verification
+
+**Task/Prompt:** Implement TODO-004 Batch 5.7: disposable organization end-to-end migration test and hardening.
+
+**Files changed:** `scripts/migration-e2e-probe.cjs`, `package.json`, `ai/CURRENT_STATUS.md`, `ai/CHANGELOG.md`, `ai/CODEBASE_MAP.md`, `ai/ARCHITECTURE.md`
+
+- Added a canonical synthetic localStorage -> production exporter -> migration intake/import -> verification -> server readback probe for isolated disposable organizations.
+- Covered live HTTP intake/import/verify for organization A when `OIP_E2E_BASE_URL` is configured, direct service coverage for organization B, retries, failure injection recovery, conflict quarantine, ticket concurrency, sequence reconciliation, source-byte identity, cleanup, and mature-organization safeguards.
+- Kept local persistence mode and authority cutover unchanged; no mature organization was read, exported, imported, or migrated.
+
+**Verification:** `npm.cmd run probe:migration-e2e` and the same probe with `OIP_E2E_BASE_URL=http://127.0.0.1:3000` both pass.
+
+**Open items:** Batch 5.8 still owns authority cutover. The prototype import endpoints remain unauthenticated, and same-batch conflict retry requires a checkpoint-reset mechanism after manual conflict resolution.
+
 ## [YYYY-MM-DD] <short title>
 **Layer:** coding | docs | governance
 **Task/Prompt:** <prompt file or task description>
