@@ -335,3 +335,6 @@ The current default application persistence path is `app/page.tsx` -> `lib/persi
 
 - Migration package intake - `app/api/organizations/[organizationId]/migration-import/route.ts` and `lib/server/migrationImportService.ts`
   See `POST()`, `validateExportPackage()`, `intakeMigrationExportPackage()`, and `initializeMigrationImportWithResult()`. Intake persists only immutable package payload plus migration metadata and nine checkpoints; business import is intentionally absent.
+
+- Dependency-ordered historical import - `app/api/organizations/[organizationId]/migration-import/[batchId]/execute/route.ts` and `lib/server/migrationImportExecutionService.ts`
+  See `executeMigrationImport()`, `reconcileOrganizationProfile()`, `runResource()`, and the per-resource import functions. The importer performs additive direct Prisma writes with deterministic conflict quarantine; it does not call normal snapshot writers or `commitValidation()`.

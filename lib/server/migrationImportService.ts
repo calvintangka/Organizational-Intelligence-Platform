@@ -805,6 +805,13 @@ async function validateExportPackage(raw: unknown, routeOrganizationId: string):
   return packageValue as unknown as MigrationExportPackage;
 }
 
+export async function revalidateStoredMigrationExportPackage(
+  rawPackage: unknown,
+  organizationId: string
+): Promise<MigrationExportPackage> {
+  return validateExportPackage(rawPackage, organizationId);
+}
+
 export interface MigrationImportIntakeResult {
   batchId: string;
   organizationId: string;
@@ -857,7 +864,7 @@ export async function intakeMigrationExportPackage(
 
 export function toSafeMigrationImportError(error: unknown): { code: string; message: string; status: number } {
   if (error instanceof MigrationImportServiceError) {
-    const status = error.code === "ORGANIZATION_NOT_FOUND" ? 404
+    const status = ["ORGANIZATION_NOT_FOUND", "IMPORT_NOT_FOUND"].includes(error.code) ? 404
       : ["CONFLICT", "ORGANIZATION_MISMATCH"].includes(error.code) ? 409
         : error.code === "DATABASE_UNAVAILABLE" ? 503 : 400;
     return { code: error.code, message: error.message, status };

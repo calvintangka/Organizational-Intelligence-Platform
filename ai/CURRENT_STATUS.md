@@ -212,3 +212,12 @@ Three-tier AI fallback chain implemented: LM Studio (local Gemma) → Claude API
 - Intake accepts only `oip-localstorage-export-v1` version 1, validates ownership/provenance, structural references, counts, and exporter-compatible SHA-256 digests, then creates or reuses a `ready` metadata batch with exactly nine pending checkpoints.
 - The validated frozen package is retained in nullable `MigrationImportBatch.packagePayload` for deterministic later retry; arbitrary localStorage dumps are not accepted or stored.
 - Intake does not import KnowledgeItems, candidates, validations, memory history, tickets, metrics, patterns, logs, or ticket sequences. Batch 5.4 owns business-data import.
+
+## TODO-004 Batch 5.4 Import Status
+
+- Execution endpoint: `POST /api/organizations/[organizationId]/migration-import/[batchId]/execute`.
+- The importer reads only `MigrationImportBatch.packagePayload`, revalidates its organization and digest identity, and never accepts a second business payload from the browser.
+- Dependency order is profile reconciliation, KnowledgeItems, candidates, validations, tickets, emerging patterns, intelligence logs, and metrics. Historical validation records are inserted directly; normal validation/reflection workflows are not replayed.
+- Imports are additive and per-resource transactional. Identical rows are skipped, differing rows create deterministic `MigrationImportConflict` evidence, and resource conflicts prevent partial mutation of that resource.
+- Successful Batch 5.4 execution leaves the batch `partial`, with seven implemented checkpoints `imported` and `memoryChangeRecords` plus `ticketSequence` still `pending`. Failed resources remain retryable; conflicts remain quarantined.
+- MemoryChangeRecord historical reconciliation, TicketSequence reconciliation, post-import verification, cutover, and mature organization migration remain unimplemented.

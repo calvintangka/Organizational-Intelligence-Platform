@@ -629,3 +629,10 @@
 **Schema:** Added nullable immutable `packagePayload` JSONB to `MigrationImportBatch` in migration `20260715201500_add_migration_package_payload`.
 **Verification:** Intake probe, live HTTP probe, Prisma validation/generation/migration status, typecheck, build, persistence probes, and diff check passed.
 **Open items:** Batch 5.4 must implement dependency-ordered business-resource import and target conflict handling.
+
+## [2026-07-15] TODO-004 Batch 5.4 dependency-ordered historical import
+**Layer:** persistence migration
+**What changed:** Added `POST /api/organizations/[organizationId]/migration-import/[batchId]/execute` and a server-only importer that reads the stored immutable package, reconciles the existing profile conservatively, and imports KnowledgeItems, candidates, validations, tickets, patterns, logs, and metrics in dependency order.
+**Safety boundary:** Imports are additive and conflict-safe. Existing differing rows are quarantined through `MigrationImportConflict`; no snapshot deletes, normal validation/reflection replay, ticket allocation, memory-history import, ticket-sequence reconciliation, verification, or cutover was added.
+**Verification:** Disposable PostgreSQL import and live HTTP probes passed, including nested lesson/version preservation, direct validation insertion, exact ticket IDs, retry no-op behavior, cross-organization collision quarantine, and per-resource rollback.
+**Open items:** Batch 5.5 owns full MemoryChangeRecord reconciliation and TicketSequence finalization; Batch 5.6 owns post-import verification.

@@ -291,3 +291,13 @@ The endpoint requires the route organization to match the package organization a
 The validated frozen package is retained as `MigrationImportBatch.packagePayload` JSONB, bound to the batch digests and intended only for a later retryable importer. It is not an arbitrary browser-storage dump. The prototype request boundary is 25 MiB and the endpoint has no authentication or authorization; it must not be exposed to the internet without those controls.
 
 STOP HERE: package intake does not mean imported or verified. Batch 5.3 writes no KnowledgeItems, KnowledgeCandidates, ValidationRecords, MemoryChangeRecords, OrgMetrics, IntelligenceLog, EmergingPatterns, TicketRecords, or TicketSequence. Batch 5.4 owns dependency-ordered historical import, conflict handling, and business-data verification.
+
+## Dependency-Ordered Historical Import
+
+TODO-004 Batch 5.4 adds `POST /api/organizations/[organizationId]/migration-import/[batchId]/execute`. It reads only the immutable `MigrationImportBatch.packagePayload`; the browser does not resend business data. The order is profile reconciliation, KnowledgeItems, KnowledgeCandidates, ValidationRecords, TicketRecords, EmergingPatterns, IntelligenceLog, then OrgMetrics.
+
+Each implemented resource uses its own transaction and conservative preflight. Missing rows are inserted with historical IDs/content, exact matches are skipped, and differing or cross-organization rows create deterministic `MigrationImportConflict` evidence without overwriting or deleting target data. Historical ValidationRecords are inserted directly, preserving IDs and timestamps; `commitValidation()` and reflection workflows are never replayed. Knowledge revisions are preserved when present, legacy exports receive revision 1, and existing target revisions are never lowered.
+
+After successful Batch 5.4 execution, the batch is `partial`, not `imported` or `verified`: seven business checkpoints are `imported`, while `memoryChangeRecords` and `ticketSequence` remain `pending` for Batch 5.5. A resource failure marks only that resource failed and preserves earlier committed resource transactions for retry. Organization profile conflicts block execution and are quarantined without overwriting profile fields.
+
+STOP: full MemoryChangeRecord reconciliation, TicketSequence reconciliation, post-import verification, cutover, and mature Maesa/FastDrop/Pramana migration remain pending for later batches. The execute endpoint is unauthenticated; organization scoping is not authorization and the endpoint must not be internet-exposed without authentication.
