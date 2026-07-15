@@ -156,6 +156,11 @@ export interface KnowledgeItem {
   id: string;
   // Seed and legacy records can omit ownership; org-scoped persistence stamps it.
   organizationId?: string;
+  /**
+   * Server persistence optimistic-concurrency revision. Populated by database
+   * reads and bumped on every committed write; absent for local-only items.
+   */
+  revision?: number;
   title: string;
   problem: string;
   approvedAnswer: string;

@@ -16,6 +16,20 @@ export interface PersistencePreparationResult {
 }
 
 /**
+ * One logical Human Validation / Reflection commit. In server mode the whole
+ * payload persists inside a single database transaction; a failure persists
+ * nothing. `expectedKnowledgeRevision` carries the optimistic-concurrency
+ * revision of the knowledge item before this commit (null asserts creation).
+ */
+export interface ValidationCommitRequest {
+  candidate: KnowledgeCandidate;
+  validation: ValidationRecord;
+  memoryChange: MemoryChangeRecord;
+  knowledgeItem: KnowledgeItem;
+  expectedKnowledgeRevision: number | null;
+}
+
+/**
  * Application persistence seam.
  *
  * The profile/list methods represent the prototype's global browser selection
@@ -48,11 +62,18 @@ export interface PersistenceAdapter {
   loadTicketRecords(organizationId: string): Promise<TicketRecord[]>;
   saveTicketRecords(organizationId: string, records: TicketRecord[]): Promise<void>;
 
-  generateTicketId(organizationId: string, profile: OrganizationProfile): string;
-  generateTicketIds(organizationId: string, profile: OrganizationProfile, count: number): string[];
+  generateTicketId(organizationId: string, profile: OrganizationProfile): Promise<string>;
+  generateTicketIds(organizationId: string, profile: OrganizationProfile, count: number): Promise<string[]>;
 
-  resetOrganization(organizationId: string): void;
-  deleteOrganization(organizationId: string): void;
+  /**
+   * Persist one validated memory change atomically. The localStorage adapter
+   * resolves without writing (its state flows through the snapshot saves);
+   * the server adapter runs the payload as one database transaction.
+   */
+  commitValidatedMemoryChange(organizationId: string, request: ValidationCommitRequest): Promise<void>;
+
+  resetOrganization(organizationId: string): Promise<void>;
+  deleteOrganization(organizationId: string): Promise<void>;
 
   seedKnowledge(): KnowledgeItem[];
   seedOrgMetrics(organizationId: string): OrgMetrics;

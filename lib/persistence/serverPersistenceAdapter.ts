@@ -10,7 +10,7 @@ import type {
   ValidationRecord
 } from "@/types";
 import { requireOrganizationId } from "@/lib/organizationId";
-import type { PersistenceAdapter, PersistencePreparationResult } from "@/lib/persistence/adapter";
+import type { PersistenceAdapter, PersistencePreparationResult, ValidationCommitRequest } from "@/lib/persistence/adapter";
 
 const DEFAULT_ORGANIZATION_ID = "profile-maesa-tech";
 
@@ -91,60 +91,75 @@ export class ServerPersistenceAdapter implements PersistenceAdapter {
     return this.requestResource<TicketRecord[]>(organizationId, "tickets");
   }
 
-  async saveOrganizationProfile(_profile: OrganizationProfile): Promise<void> {
-    this.readOnly("saveOrganizationProfile");
+  async saveOrganizationProfile(profile: OrganizationProfile): Promise<void> {
+    const id = this.rememberOrganization(profile.id);
+    await this.requestData(`/api/organizations/${encodeURIComponent(id)}`, "PUT", profile);
   }
 
-  async saveOrganizationList(_list: OrganizationProfile[]): Promise<void> {
-    this.readOnly("saveOrganizationList");
+  async saveOrganizationList(list: OrganizationProfile[]): Promise<void> {
+    await this.requestData("/api/organizations", "PUT", list);
   }
 
-  async saveKnowledge(_organizationId: string, _items: KnowledgeItem[]): Promise<void> {
-    this.readOnly("saveKnowledge");
+  async saveKnowledge(organizationId: string, items: KnowledgeItem[]): Promise<void> {
+    await this.writeResource(organizationId, "knowledge", items);
   }
 
-  async saveKnowledgeCandidates(_organizationId: string, _candidates: KnowledgeCandidate[]): Promise<void> {
-    this.readOnly("saveKnowledgeCandidates");
+  async saveKnowledgeCandidates(organizationId: string, candidates: KnowledgeCandidate[]): Promise<void> {
+    await this.writeResource(organizationId, "knowledge-candidates", candidates);
   }
 
   async saveValidationRecords(_organizationId: string, _records: ValidationRecord[]): Promise<void> {
-    this.readOnly("saveValidationRecords");
+    this.appendOnly("saveValidationRecords");
   }
 
   async saveMemoryChangeRecords(_organizationId: string, _records: MemoryChangeRecord[]): Promise<void> {
-    this.readOnly("saveMemoryChangeRecords");
+    this.appendOnly("saveMemoryChangeRecords");
   }
 
-  async saveOrgMetrics(_organizationId: string, _metrics: OrgMetrics): Promise<void> {
-    this.readOnly("saveOrgMetrics");
+  async saveOrgMetrics(organizationId: string, metrics: OrgMetrics): Promise<void> {
+    await this.writeResource(organizationId, "metrics", metrics);
   }
 
-  async saveOrgLog(_organizationId: string, _entries: IntelligenceLogEntry[]): Promise<void> {
-    this.readOnly("saveOrgLog");
+  async saveOrgLog(organizationId: string, entries: IntelligenceLogEntry[]): Promise<void> {
+    await this.writeResource(organizationId, "intelligence-log", entries);
   }
 
-  async saveEmergingPatterns(_organizationId: string, _patterns: EmergingPattern[]): Promise<void> {
-    this.readOnly("saveEmergingPatterns");
+  async saveEmergingPatterns(organizationId: string, patterns: EmergingPattern[]): Promise<void> {
+    await this.writeResource(organizationId, "emerging-patterns", patterns);
   }
 
-  async saveTicketRecords(_organizationId: string, _records: TicketRecord[]): Promise<void> {
-    this.readOnly("saveTicketRecords");
+  async saveTicketRecords(organizationId: string, records: TicketRecord[]): Promise<void> {
+    await this.writeResource(organizationId, "tickets", records);
   }
 
-  generateTicketId(_organizationId: string, _profile: OrganizationProfile): string {
-    return this.readOnly("generateTicketId");
+  async generateTicketId(organizationId: string, profile: OrganizationProfile): Promise<string> {
+    return (await this.generateTicketIds(organizationId, profile, 1))[0];
   }
 
-  generateTicketIds(_organizationId: string, _profile: OrganizationProfile, _count: number): string[] {
-    return this.readOnly("generateTicketIds");
+  async generateTicketIds(organizationId: string, _profile: OrganizationProfile, count: number): Promise<string[]> {
+    if (count <= 0) return [];
+    const id = this.rememberOrganization(organizationId);
+    const result = await this.requestData<{ ticketIds: string[] }>(
+      `${this.organizationPath(id)}/tickets/allocate`,
+      "POST",
+      { count }
+    );
+    return result.ticketIds;
   }
 
-  resetOrganization(_organizationId: string): void {
-    this.readOnly("resetOrganization");
+  async commitValidatedMemoryChange(organizationId: string, request: ValidationCommitRequest): Promise<void> {
+    const id = this.rememberOrganization(organizationId);
+    await this.requestData(`${this.organizationPath(id)}/commits/validation`, "POST", request);
   }
 
-  deleteOrganization(_organizationId: string): void {
-    this.readOnly("deleteOrganization");
+  async resetOrganization(organizationId: string): Promise<void> {
+    const id = this.rememberOrganization(organizationId);
+    await this.requestData(`${this.organizationPath(id)}/reset`, "POST", {});
+  }
+
+  async deleteOrganization(organizationId: string): Promise<void> {
+    const id = this.rememberOrganization(organizationId);
+    await this.requestData(`/api/organizations/${encodeURIComponent(id)}`, "DELETE");
   }
 
   seedKnowledge(): KnowledgeItem[] {
@@ -179,13 +194,25 @@ export class ServerPersistenceAdapter implements PersistenceAdapter {
     return this.requestData<T>(`${this.organizationPath(id)}/${resource}`);
   }
 
-  private async requestData<T>(path: string): Promise<T> {
+  private async writeResource(organizationId: string, resource: string, payload: unknown): Promise<void> {
+    const id = this.rememberOrganization(organizationId);
+    await this.requestData(`${this.organizationPath(id)}/${resource}`, "PUT", payload);
+  }
+
+  /**
+   * Single transport for all API calls. A failed server request throws; this
+   * adapter never falls back to localStorage and never reports false success.
+   */
+  private async requestData<T>(path: string, method: "GET" | "PUT" | "POST" | "DELETE" = "GET", body?: unknown): Promise<T> {
     let response: Response;
     try {
       response = await fetch(path, {
-        method: "GET",
+        method,
         cache: "no-store",
-        headers: { Accept: "application/json" }
+        headers: body === undefined
+          ? { Accept: "application/json" }
+          : { Accept: "application/json", "Content-Type": "application/json" },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) })
       });
     } catch {
       throw new ServerPersistenceAdapterError("SERVER_PERSISTENCE_UNAVAILABLE", "Server persistence API is unavailable.", 503);
@@ -202,17 +229,17 @@ export class ServerPersistenceAdapter implements PersistenceAdapter {
       const error = payload && "error" in payload ? payload.error : undefined;
       throw new ServerPersistenceAdapterError(
         error?.code ?? "SERVER_PERSISTENCE_ERROR",
-        error?.message ?? "Server persistence could not complete the read.",
+        error?.message ?? `Server persistence could not complete the ${method} request.`,
         response.status || 502
       );
     }
     return payload.data;
   }
 
-  private readOnly(operation: string): never {
+  private appendOnly(operation: string): never {
     throw new ServerPersistenceAdapterError(
-      "SERVER_PERSISTENCE_READ_ONLY",
-      `${operation} is unavailable: server persistence is read-only in Batch 3. No localStorage fallback was attempted.`,
+      "SERVER_PERSISTENCE_APPEND_ONLY",
+      `${operation} is unavailable: audit records are append-only and persist through the transactional validation commit. No localStorage fallback was attempted.`,
       405
     );
   }

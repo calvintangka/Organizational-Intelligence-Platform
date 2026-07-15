@@ -106,12 +106,12 @@ async function main() {
   assert.equal(storage.getItem("oip.knowledge.v2"), null);
   assert.equal(storage.getItem(scopedKey(MAESA, "knowledge")), "[]");
   await assert.rejects(() => persistence.loadKnowledge("   "), /requires a non-empty organizationId/);
-  assert.throws(
+  await assert.rejects(
     () => persistence.generateTicketIds("", { id: MAESA, name: "Maesa Tech", logoInitials: "MT" }, 2),
     /requires a non-empty organizationId/
   );
 
-  const adapterTicketIds = persistence.generateTicketIds(
+  const adapterTicketIds = await persistence.generateTicketIds(
     MAESA,
     { id: MAESA, name: "Maesa Tech", logoInitials: "MT" },
     3
@@ -184,12 +184,12 @@ async function main() {
   assert.equal(JSON.parse(storage.getItem(scopedKey(MAESA, "knowledge")))[0].organizationId, MAESA);
   assert.equal((await orgMemory.loadMemoryChangeRecords(MAESA))[0].organizationId, MAESA);
 
-  persistence.resetOrganization(MAESA);
+  await persistence.resetOrganization(MAESA);
   assert.deepEqual(JSON.parse(storage.getItem("oip.knowledge.v2")), legacyKnowledge());
   assert.match(persistence.prepareOrganization(MAESA).warnings.join(" "), /explicitly reset/);
 
   await ticketRecords.saveTicketRecords(FASTDROP, [fastDropTicket]);
-  persistence.deleteOrganization(FASTDROP);
+  await persistence.deleteOrganization(FASTDROP);
   assert.equal(storage.getItem(scopedKey(FASTDROP, "ticketRecords")), null);
   assert.deepEqual(JSON.parse(storage.getItem("oip.knowledge.v2")), legacyKnowledge());
 
@@ -209,7 +209,7 @@ async function main() {
     },
   }));
   assert.match(
-    persistence.generateTicketId(MAESA, { id: MAESA, name: "Maesa Tech", logoInitials: "MT" }),
+    await persistence.generateTicketId(MAESA, { id: MAESA, name: "Maesa Tech", logoInitials: "MT" }),
     /^MT-\d{8}-0008$/
   );
 

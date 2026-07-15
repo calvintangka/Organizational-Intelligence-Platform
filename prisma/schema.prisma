@@ -85,6 +85,9 @@ model KnowledgeItem {
   lastValidatedAt          DateTime?               @db.Timestamptz(6)
   lastUpdatedAt            DateTime?               @db.Timestamptz(6)
   lastValidated            DateTime?               @db.Timestamptz(6)
+  // Optimistic concurrency control for canonical knowledge writes. Every
+  // committed update must present the current revision and bumps it by one.
+  revision                 Int                     @default(0)
   content                  Json
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -129,8 +132,10 @@ model ValidationRecord {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
+  // Each knowledge candidate is validated exactly once in the current domain
+  // workflow; this blocks duplicate validation submissions at the database.
+  @@unique([organizationId, candidateId])
   @@index([organizationId])
-  @@index([organizationId, candidateId])
   @@index([organizationId, knowledgeItemId])
   @@index([organizationId, timestamp])
   @@map("validation_records")
@@ -150,9 +155,11 @@ model MemoryChangeRecord {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
+  // One memory-change audit record per validation record: a retried commit can
+  // never append a second before/after snapshot for the same validation.
+  @@unique([organizationId, validationRecordId])
   @@index([organizationId])
   @@index([organizationId, knowledgeItemId])
-  @@index([organizationId, validationRecordId])
   @@index([organizationId, timestamp])
   @@map("memory_change_records")
 }

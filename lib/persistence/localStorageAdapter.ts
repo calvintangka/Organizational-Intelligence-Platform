@@ -136,21 +136,30 @@ export class LocalStorageAdapter implements PersistenceAdapter {
     return saveLocalStorageTicketRecords(organizationId, records);
   }
 
-  generateTicketId(organizationId: string, profile: OrganizationProfile): string {
+  async generateTicketId(organizationId: string, profile: OrganizationProfile): Promise<string> {
     this.assertProfileOrganization(organizationId, profile);
     return generateTicketId(profile);
   }
 
-  generateTicketIds(organizationId: string, profile: OrganizationProfile, count: number): string[] {
+  async generateTicketIds(organizationId: string, profile: OrganizationProfile, count: number): Promise<string[]> {
     this.assertProfileOrganization(organizationId, profile);
     return generateTicketIds(profile, count);
   }
 
-  resetOrganization(organizationId: string): void {
+  /**
+   * Local mode persists validated memory changes through the existing
+   * per-resource snapshot saves; the commit operation itself is a no-op so
+   * the hardened localStorage behavior stays byte-identical to Batch 3.
+   */
+  async commitValidatedMemoryChange(organizationId: string): Promise<void> {
+    requireOrganizationId(organizationId, "Validated memory change commit");
+  }
+
+  async resetOrganization(organizationId: string): Promise<void> {
     clearOrganization(organizationId);
   }
 
-  deleteOrganization(organizationId: string): void {
+  async deleteOrganization(organizationId: string): Promise<void> {
     deleteOrganizationData(organizationId);
   }
 

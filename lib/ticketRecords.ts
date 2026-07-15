@@ -1,5 +1,6 @@
 import type { OrganizationProfile, TicketRecord, TicketRecordStatus } from "@/types";
 import { hasRuntimeLegacyFallback } from "@/lib/orgMemory";
+import { organizationTicketPrefix, ticketDateStamp, formatTicketId } from "@/lib/ticketIdFormat";
 import { requireOrganizationId } from "@/lib/organizationId";
 
 const STORAGE_VERSION = "v2";
@@ -90,22 +91,11 @@ function resolveScopedStorageKey(baseKey: string, organizationId: string): strin
 }
 
 function orgPrefix(profile: OrganizationProfile): string {
-  if (profile.logoInitials?.trim()) return profile.logoInitials.trim().toUpperCase().slice(0, 3);
-  return profile.name
-    .split(/\s+/)
-    .map((w) => w[0])
-    .filter(Boolean)
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+  return organizationTicketPrefix(profile);
 }
 
 function todayStamp(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}${m}${day}`;
+  return ticketDateStamp();
 }
 
 function loadCounters(organizationId: string): Record<string, number> {
@@ -136,9 +126,7 @@ export function generateTicketIds(profile: OrganizationProfile, count: number): 
   const first = (counters[counterKey] ?? 0) + 1;
   counters[counterKey] = first + count - 1;
   saveCounters(counters, organizationId);
-  return Array.from({ length: count }, (_, index) =>
-    `${prefix}-${date}-${String(first + index).padStart(4, "0")}`
-  );
+  return Array.from({ length: count }, (_, index) => formatTicketId(prefix, date, first + index));
 }
 
 export function generateTicketId(profile: OrganizationProfile): string {

@@ -681,12 +681,16 @@ export default function Home() {
     };
   }
 
+  // Server mode note: knowledge, validation records, and memory change records
+  // never persist through these snapshot saves — their durable writes happen
+  // exclusively inside the transactional validation commit so the audit chain
+  // (validation -> memory change -> knowledge/trust) can never partially land.
   useEffect(() => {
     if (hydrated && persistenceMode === "local") queuePersistenceSave("saveKnowledge", persistence.saveKnowledge(organizationProfile.id, knowledgeItems));
   }, [knowledgeItems, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveKnowledgeCandidates", persistence.saveKnowledgeCandidates(organizationProfile.id, knowledgeCandidates));
+    if (hydrated) queuePersistenceSave("saveKnowledgeCandidates", persistence.saveKnowledgeCandidates(organizationProfile.id, knowledgeCandidates));
   }, [knowledgeCandidates, organizationProfile.id, hydrated]);
 
   useEffect(() => {
@@ -698,27 +702,27 @@ export default function Home() {
   }, [memoryChangeRecords, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveOrgMetrics", persistence.saveOrgMetrics(organizationProfile.id, orgMetrics));
+    if (hydrated) queuePersistenceSave("saveOrgMetrics", persistence.saveOrgMetrics(organizationProfile.id, orgMetrics));
   }, [orgMetrics, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveOrgLog", persistence.saveOrgLog(organizationProfile.id, intelligenceLog));
+    if (hydrated) queuePersistenceSave("saveOrgLog", persistence.saveOrgLog(organizationProfile.id, intelligenceLog));
   }, [intelligenceLog, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveEmergingPatterns", persistence.saveEmergingPatterns(organizationProfile.id, emergingPatterns));
+    if (hydrated) queuePersistenceSave("saveEmergingPatterns", persistence.saveEmergingPatterns(organizationProfile.id, emergingPatterns));
   }, [emergingPatterns, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveTicketRecords", persistence.saveTicketRecords(organizationProfile.id, ticketRecords));
+    if (hydrated) queuePersistenceSave("saveTicketRecords", persistence.saveTicketRecords(organizationProfile.id, ticketRecords));
   }, [ticketRecords, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveOrganizationProfile", persistence.saveOrganizationProfile(organizationProfile));
+    if (hydrated) queuePersistenceSave("saveOrganizationProfile", persistence.saveOrganizationProfile(organizationProfile));
   }, [organizationProfile, hydrated]);
 
   useEffect(() => {
-    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveOrganizationList", persistence.saveOrganizationList(organizationList));
+    if (hydrated) queuePersistenceSave("saveOrganizationList", persistence.saveOrganizationList(organizationList));
   }, [organizationList, hydrated]);
 
   useEffect(() => {
@@ -876,9 +880,16 @@ export default function Home() {
       timestamp
     };
     const validatedCandidate: KnowledgeCandidate = { ...candidate, organizationId, status: "validated" };
-    const validatedItem = stampKnowledgeItemOrganization(
-      withValidationMetadata(stampedAfterState, validatedCandidate, validation)
-    );
+    // Optimistic-concurrency bookkeeping for server persistence: the commit
+    // asserts the pre-change revision and the state copy carries the bumped
+    // one so consecutive commits against the same canonical problem chain.
+    const expectedKnowledgeRevision = beforeState ? beforeState.revision ?? 0 : null;
+    const validatedItem: KnowledgeItem = {
+      ...stampKnowledgeItemOrganization(
+        withValidationMetadata(stampedAfterState, validatedCandidate, validation)
+      ),
+      revision: (expectedKnowledgeRevision ?? 0) + 1
+    };
     const memoryChange: MemoryChangeRecord = {
       id: makeRecordId("memory-change"),
       organizationId,
@@ -890,6 +901,21 @@ export default function Home() {
       afterState: stampKnowledgeItemSnapshotOrganization(validatedItem)!,
       timestamp
     };
+
+    // Server mode: the full logical commit (candidate lifecycle, validation
+    // record, memory change record, knowledge/trust update) persists as ONE
+    // database transaction. A failure persists nothing server-side and is
+    // surfaced through the standard persistence error channel.
+    queuePersistenceSave(
+      "commitValidatedMemoryChange",
+      persistence.commitValidatedMemoryChange(organizationId, {
+        candidate: validatedCandidate,
+        validation,
+        memoryChange,
+        knowledgeItem: validatedItem,
+        expectedKnowledgeRevision
+      })
+    );
 
     setKnowledgeCandidates((prev) => {
       const exists = prev.some((item) => item.id === validatedCandidate.id);
@@ -1090,7 +1116,7 @@ export default function Home() {
       rationale: prepared.rationale,
       createdAt: now
     });
-    const bulkTicketIds = persistence.generateTicketIds(organizationProfile.id, organizationProfile, cluster.items?.length ?? 0);
+    const bulkTicketIds = await persistence.generateTicketIds(organizationProfile.id, organizationProfile, cluster.items?.length ?? 0);
     const result = applyValidatedMemoryChange(candidate, prepared.beforeState, prepared.afterState, prepared.rationale);
     setSessionCreatedIds((prev) => new Set([...prev, result.validatedItem.id]));
     setLastSavedKnowledgeId(result.validatedItem.id);
@@ -1516,9 +1542,9 @@ export default function Home() {
   }
 
   /** Reset Organization — wipes persisted memory and reseeds defaults. */
-  function resetOrganization() {
+  async function resetOrganization() {
     try {
-      persistence.resetOrganization(organizationProfile.id);
+      await persistence.resetOrganization(organizationProfile.id);
     } catch (error) {
       reportPersistenceError("resetOrganization", error);
       return;
@@ -1611,7 +1637,7 @@ export default function Home() {
       if (persistenceMode === "local" && id === organizationProfile.id && hydrated) {
         await persistOrganizationState(id);
       }
-      persistence.deleteOrganization(id);
+      await persistence.deleteOrganization(id);
       if (id === organizationProfile.id) {
         await selectOrganization(nextList[0].id, nextList, false);
       } else {
@@ -3032,7 +3058,7 @@ export default function Home() {
     setErrorMessage("");
     let tId: string;
     try {
-      tId = persistence.generateTicketId(organizationProfile.id, organizationProfile);
+      tId = await persistence.generateTicketId(organizationProfile.id, organizationProfile);
     } catch (error) {
       reportPersistenceError("generateTicketId", error);
       setIsProcessing(false);
