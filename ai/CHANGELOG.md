@@ -13,6 +13,19 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-15] Add server persistence read path
+**Layer:** coding
+**Task/Prompt:** Implement TODO-004 Batch 3: API Routes and Server Database Read Path.
+**Files changed:** `lib/server/persistenceService.ts`, `lib/server/prisma.ts`, `lib/persistence/serverPersistenceAdapter.ts`, `lib/persistence/adapter.ts`, `lib/persistence/index.ts`, `app/api/organizations/route.ts`, `app/api/organizations/[organizationId]/route.ts`, `app/api/organizations/[organizationId]/[resource]/route.ts`, `app/page.tsx`, `scripts/server-persistence-probe.cjs`, `scripts/persistence-boundary-probe.cjs`, `package.json`, `ai/CHANGELOG.md`, `ai/CURRENT_STATUS.md`, `ai/CODEBASE_MAP.md`, `ai/ARCHITECTURE.md`
+**What changed:**
+- Added GET-only organization and organization-resource API routes backed by a server-only persistence service. Every organization-owned Prisma query validates the organization ID, confirms organization existence, and scopes the database `where` clause directly to that ID.
+- Added explicit database-to-domain mapping for profile settings and JSON-backed knowledge, candidates, validation, memory-change, metrics, log, pattern, ticket, and ticket-sequence data.
+- Added an opt-in `ServerPersistenceAdapter` selected only by `NEXT_PUBLIC_OIP_PERSISTENCE_MODE=server`. It reads through the API, never imports Prisma or localStorage, and fails all writes explicitly as read-only. Local mode remains the default.
+- Made the server Prisma client lazy so missing `DATABASE_URL`, unavailable PostgreSQL, or missing schema produces a safe API error instead of affecting local mode.
+**Boundaries touched:** Read path only. No database writes, API POST/PUT/PATCH/DELETE handlers, localStorage migration, mature-data reads, authentication, authorization, queues, transactional writes, or database ticket allocation were added.
+**Verification:** `npm run probe:server-persistence`; `npm run probe:persistence-boundary`; `npm run prisma:validate`; `npm run prisma:generate`; `npx tsc --noEmit`; `npm run build`; `git diff --check`; runtime request to `/api/organizations/profile-maesa-tech/knowledge` returned safe `503 DATABASE_UNAVAILABLE` with no configured database.
+**Open items:** Live PostgreSQL read verification is pending because `DATABASE_URL` is not configured and no migration has been applied. Live browser verification was not performed. `graphify update .` remains blocked by the Windows uv trampoline.
+
 ## [2026-07-15] Extract persistence adapter seam
 **Layer:** coding
 **Task/Prompt:** Implement TODO-004 Batch 2: Persistence Adapter Extraction.

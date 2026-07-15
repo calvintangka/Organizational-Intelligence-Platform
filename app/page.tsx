@@ -54,6 +54,7 @@ import {
 } from "@/lib/trustEngine";
 import {
   persistence,
+  persistenceMode,
 } from "@/lib/persistence";
 import {
   syncProfileIntoList,
@@ -575,7 +576,7 @@ export default function Home() {
       try {
         const loadedProfile = await persistence.loadOrganizationProfile();
         const orgId = loadedProfile.id;
-        const migration = persistence.prepareOrganization(orgId);
+        const migration = await persistence.prepareOrganization(orgId);
         setMigrationWarning(migration.warnings.join(" "));
         const [
           loadedOrganizationList,
@@ -607,7 +608,10 @@ export default function Home() {
         setKnowledgeCandidates(loadedCandidates);
         setValidationRecords(loadedValidationRecords);
         setMemoryChangeRecords(loadedMemoryChangeRecords);
-        setOrgMetrics({ ...loadedOrgMetrics, organizationId: loadedOrgMetrics.organizationId ?? orgId });
+        setOrgMetrics({
+          ...(loadedOrgMetrics ?? persistence.seedOrgMetrics(orgId)),
+          organizationId: loadedOrgMetrics?.organizationId ?? orgId
+        });
         setIntelligenceLog(loadedIntelligenceLog);
         setEmergingPatterns(loadedPatterns);
         setTicketRecords(loadedTicketRecords);
@@ -667,7 +671,10 @@ export default function Home() {
       candidates,
       validations,
       changes,
-      metrics: { ...loadedMetrics, organizationId: loadedMetrics.organizationId ?? orgId },
+      metrics: {
+        ...(loadedMetrics ?? persistence.seedOrgMetrics(orgId)),
+        organizationId: loadedMetrics?.organizationId ?? orgId
+      },
       log,
       patterns,
       tickets
@@ -675,43 +682,43 @@ export default function Home() {
   }
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveKnowledge", persistence.saveKnowledge(organizationProfile.id, knowledgeItems));
+    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveKnowledge", persistence.saveKnowledge(organizationProfile.id, knowledgeItems));
   }, [knowledgeItems, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveKnowledgeCandidates", persistence.saveKnowledgeCandidates(organizationProfile.id, knowledgeCandidates));
+    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveKnowledgeCandidates", persistence.saveKnowledgeCandidates(organizationProfile.id, knowledgeCandidates));
   }, [knowledgeCandidates, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveValidationRecords", persistence.saveValidationRecords(organizationProfile.id, validationRecords));
+    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveValidationRecords", persistence.saveValidationRecords(organizationProfile.id, validationRecords));
   }, [validationRecords, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveMemoryChangeRecords", persistence.saveMemoryChangeRecords(organizationProfile.id, memoryChangeRecords));
+    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveMemoryChangeRecords", persistence.saveMemoryChangeRecords(organizationProfile.id, memoryChangeRecords));
   }, [memoryChangeRecords, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveOrgMetrics", persistence.saveOrgMetrics(organizationProfile.id, orgMetrics));
+    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveOrgMetrics", persistence.saveOrgMetrics(organizationProfile.id, orgMetrics));
   }, [orgMetrics, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveOrgLog", persistence.saveOrgLog(organizationProfile.id, intelligenceLog));
+    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveOrgLog", persistence.saveOrgLog(organizationProfile.id, intelligenceLog));
   }, [intelligenceLog, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveEmergingPatterns", persistence.saveEmergingPatterns(organizationProfile.id, emergingPatterns));
+    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveEmergingPatterns", persistence.saveEmergingPatterns(organizationProfile.id, emergingPatterns));
   }, [emergingPatterns, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveTicketRecords", persistence.saveTicketRecords(organizationProfile.id, ticketRecords));
+    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveTicketRecords", persistence.saveTicketRecords(organizationProfile.id, ticketRecords));
   }, [ticketRecords, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveOrganizationProfile", persistence.saveOrganizationProfile(organizationProfile));
+    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveOrganizationProfile", persistence.saveOrganizationProfile(organizationProfile));
   }, [organizationProfile, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveOrganizationList", persistence.saveOrganizationList(organizationList));
+    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveOrganizationList", persistence.saveOrganizationList(organizationList));
   }, [organizationList, hydrated]);
 
   useEffect(() => {
@@ -1562,11 +1569,11 @@ export default function Home() {
     try {
       // Finish the current organization's writes before any new organization can
       // become active. The old id is passed explicitly to every adapter.
-      if (persistCurrent && wasHydrated) {
+      if (persistenceMode === "local" && persistCurrent && wasHydrated) {
         await persistOrganizationState(organizationProfile.id);
       }
-      if (persistCurrent) await persistence.saveOrganizationProfile(organizationProfile);
-      await persistence.saveOrganizationList(availableOrganizations);
+      if (persistenceMode === "local" && persistCurrent) await persistence.saveOrganizationProfile(organizationProfile);
+      if (persistenceMode === "local") await persistence.saveOrganizationList(availableOrganizations);
       const loaded = await loadOrganizationState(found.id);
       if (generation !== organizationSwitchGeneration.current) return;
       setOrganizationProfile(found);
@@ -1601,7 +1608,7 @@ export default function Home() {
     const nextList = organizationList.filter((org) => org.id !== id);
     if (nextList.length === organizationList.length) return;
     try {
-      if (id === organizationProfile.id && hydrated) {
+      if (persistenceMode === "local" && id === organizationProfile.id && hydrated) {
         await persistOrganizationState(id);
       }
       persistence.deleteOrganization(id);

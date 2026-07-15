@@ -24,7 +24,7 @@ export interface PersistencePreparationResult {
  * low-level migration API so a future server adapter can make it a no-op.
  */
 export interface PersistenceAdapter {
-  prepareOrganization(organizationId: string): PersistencePreparationResult;
+  prepareOrganization(organizationId: string): PersistencePreparationResult | Promise<PersistencePreparationResult>;
 
   loadOrganizationProfile(): Promise<OrganizationProfile>;
   saveOrganizationProfile(profile: OrganizationProfile): Promise<void>;
@@ -39,7 +39,7 @@ export interface PersistenceAdapter {
   saveValidationRecords(organizationId: string, records: ValidationRecord[]): Promise<void>;
   loadMemoryChangeRecords(organizationId: string): Promise<MemoryChangeRecord[]>;
   saveMemoryChangeRecords(organizationId: string, records: MemoryChangeRecord[]): Promise<void>;
-  loadOrgMetrics(organizationId: string): Promise<OrgMetrics>;
+  loadOrgMetrics(organizationId: string): Promise<OrgMetrics | null>;
   saveOrgMetrics(organizationId: string, metrics: OrgMetrics): Promise<void>;
   loadOrgLog(organizationId: string): Promise<IntelligenceLogEntry[]>;
   saveOrgLog(organizationId: string, entries: IntelligenceLogEntry[]): Promise<void>;

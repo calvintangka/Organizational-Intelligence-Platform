@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "probe:persistence-boundary": "node scripts/persistence-boundary-probe.cjs",
+    "probe:server-persistence": "node scripts/server-persistence-probe.cjs",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate"
   },

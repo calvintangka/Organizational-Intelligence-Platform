@@ -10,7 +10,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `data/` - Seed tickets, seed knowledge, seed organization profiles, and starter knowledge packs.
 - `docs/` - Product, architecture, roadmap, canon, and implementation references for broader OIP context.
 - `lib/` - Core business logic, memory lifecycle, AI provider adapters, and pipeline engines.
-- `prisma/` - PostgreSQL database schema and future migration history; inactive until a later persistence-adapter batch.
+- `prisma/` - PostgreSQL database schema and future migration history used by the opt-in server read path; no migration is applied locally.
 - `outputs/` - Generated output artifacts.
 - `tmp/` - Temporary generation helpers and rendered assets.
 - `types/` - Shared TypeScript contracts used across UI and business logic.
@@ -22,6 +22,9 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `app/page.tsx` - Main client orchestrator; owns pipeline state, profile-first hydration, async persistence wiring, view selection, and all write-path coordination.
 - `app/api/ai/chat/route.ts` - LM Studio proxy route with request validation, timeout, and diagnostic headers.
 - `app/api/ai/claude/route.ts` - Claude API proxy route; translates OpenAI-format requests to Anthropic Messages API, returns OpenAI-compatible responses. Reads `ANTHROPIC_API_KEY` from env (server-side only). Returns 503 if key is missing.
+- `app/api/organizations/route.ts` - GET-only organization list endpoint backed by server persistence.
+- `app/api/organizations/[organizationId]/route.ts` - GET-only organization profile endpoint with validation and not-found behavior.
+- `app/api/organizations/[organizationId]/[resource]/route.ts` - GET-only dispatcher for scoped knowledge, candidate, validation, memory-change, metrics, log, pattern, ticket, and ticket-sequence reads.
 
 ## View Components
 
@@ -86,7 +89,8 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 - `lib/persistence/adapter.ts` - `PersistenceAdapter` contract for profile/list state, organization-owned resources, migration preparation, ticket ID allocation, reset, and deletion.
 - `lib/persistence/localStorageAdapter.ts` - Active localStorage implementation; delegates to the hardened local persistence modules and contains no Prisma/database logic.
-- `lib/persistence/index.ts` - Active adapter selection; `persistence` is always a `LocalStorageAdapter` in this batch.
+- `lib/persistence/serverPersistenceAdapter.ts` - Opt-in API client for server read mode. It has no Prisma/localStorage imports and rejects all writes explicitly.
+- `lib/persistence/index.ts` - Adapter selection; local is the default and server requires `NEXT_PUBLIC_OIP_PERSISTENCE_MODE=server`.
 - `lib/organizationId.ts` - Shared compile-time/runtime non-empty organization-id guard for organization-owned persistence entry points.
 - `lib/orgMemory.ts` - Versioned organization-scoped localStorage load/save helpers for knowledge, candidates, validations, memory changes, metrics, log, and patterns. Every public organization-owned operation requires an explicit id; it owns the copy-only legacy v2 migration marker, durable single-organization legacy ownership, owner-only fallback reads, independent retryable resource states, idempotent completion, and ambiguous migration blocking.
 - `lib/organizationProfile.ts` - Async-compatible profile load/save helpers, normalization, and keyword-bank generation.
@@ -97,8 +101,9 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `lib/oipEngine.ts` - Thin export surface for pipeline modules.
 - `lib/matching.ts` - Low-level token overlap helpers used by retrieval/matching.
 - `lib/server/prisma.ts` - Server-only, singleton-safe PostgreSQL Prisma client. It is intentionally not imported by current runtime persistence adapters.
+- `lib/server/persistenceService.ts` - Server-only, read-only Prisma service with organization existence checks, database-level scoping, safe error classification, and domain mapping from JSON-backed rows.
 
-The current application persistence path is `app/page.tsx` -> `lib/persistence` -> `LocalStorageAdapter` -> existing localStorage modules. A future server adapter/API/PostgreSQL path is not implemented.
+The current default application persistence path is `app/page.tsx` -> `lib/persistence` -> `LocalStorageAdapter` -> existing localStorage modules. Opt-in read mode is `app/page.tsx` -> `ServerPersistenceAdapter` -> GET API -> `persistenceService` -> Prisma. Server mode has no write path and is not a replacement for future authentication/authorization.
 
 ## Database Foundation (dormant)
 
