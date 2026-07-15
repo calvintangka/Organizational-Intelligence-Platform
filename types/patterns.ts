@@ -7,6 +7,7 @@ export interface EmergingPatternExample {
 
 export interface EmergingPattern {
   id: string;
+  // Legacy v2 patterns may omit ownership until the scoped persistence boundary stamps it.
   organizationId?: string;
   title: string;
   summary: string;

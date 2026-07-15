@@ -46,5 +46,6 @@ export interface OrgMetrics {
   aiAgreementSamples?: number;
   aiAgreementTotal?: number;
   humanAcceptedAISuggestions?: number;
+  // Legacy v2 metrics may omit ownership until the scoped persistence boundary stamps it.
   organizationId?: string;
 }

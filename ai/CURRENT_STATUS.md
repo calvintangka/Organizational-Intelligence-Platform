@@ -1,8 +1,10 @@
 # Current Status
 
-This file is the fastest accurate snapshot of the prototype as of 2026-07-13.
+This file is the fastest accurate snapshot of the prototype as of 2026-07-15.
 
 ## What Changed Most Recently
+
+Implemented TODO-004 Batch 0: every organization-owned persistence entry point now requires an explicit non-empty `organizationId` at compile time and runtime. `lib/organizationId.ts` centralizes the guard; `lib/orgMemory.ts` and `lib/ticketRecords.ts` resolve only scoped keys from public operations, while direct legacy `oip.*.v2` reads remain internal to migration/fallback paths. Legacy-compatible domain fields stay optional only for seed and v2 deserialization, and scoped loaders stamp the requested owner before returning data. The deterministic in-memory persistence-boundary probe passed for invalid IDs, Maesa/FastDrop/Pramana isolation, copy-only legacy migration, owner fallback, reset suppression, deletion cleanup, ticket-counter fallback, and scoped self-heal writeback. No browser data was touched; `npm run build`, `npx tsc --noEmit`, and `git diff --check` pass. `graphify update .` remains blocked by the Windows uv trampoline.
 
 Fixed TODO-003b / D-1 + D-2: ticket records and counters now consume orgMemory's safe runtime fallback state when migration and marker persistence both fail in one session, while ownership, reset suppression, ambiguity, and deletion checks remain enforced. Counter allocation uses a guarded scoped write; failures return no ID, preserve the legacy counter, surface through the existing error path, and recover correctly after quota recovery. Bulk validation reserves its complete contiguous ID range before committing memory, and empty fallback ticket saves cannot orphan readable legacy records.
 

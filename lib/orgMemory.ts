@@ -15,6 +15,7 @@ import {
   repairCorruptedCustomerTemplates,
   repairLegacyLessonResponseTemplates
 } from "@/lib/canonicalProblemEngine";
+import { requireOrganizationId } from "@/lib/organizationId";
 import { clearTicketRecords } from "@/lib/ticketRecords";
 
 /**
@@ -143,8 +144,8 @@ function isQuotaExceededError(error: unknown): boolean {
     || candidate?.message?.toLowerCase().includes("quota") === true;
 }
 
-function resolveStorageKey(baseKey: string, organizationId?: string): string {
-  if (!organizationId) return baseKey;
+function resolveScopedStorageKey(baseKey: string, organizationId: string): string {
+  requireOrganizationId(organizationId, "Organization storage key resolution");
   const resource = baseKey.replace(/^oip\./, "").replace(`.${STORAGE_VERSION}`, "");
   return `oip.organization.${encodeURIComponent(organizationId)}.${resource}.${ISOLATED_STORAGE_VERSION}`;
 }
@@ -266,7 +267,8 @@ export function hasRuntimeLegacyFallback(
   organizationId: string,
   resource: OrganizationMigrationResource
 ): boolean {
-  if (!organizationId || !hasStorage()) return false;
+  requireOrganizationId(organizationId, "Runtime legacy fallback lookup");
+  if (!hasStorage()) return false;
   const state = readMigrationState();
   return canUseLegacyFallback(state, organizationId)
     && runtimeLegacyFallbacks.get(organizationId)?.has(resource) === true;
@@ -502,14 +504,14 @@ function persistLegacyOwnership(
 }
 
 function readOrganizationResource<T>(
-  organizationId: string | undefined,
+  organizationId: string,
   resource: OrganizationMigrationResource,
   legacyKey: string,
   scopedKey: string
 ): T | null {
   const scoped = read<T>(scopedKey);
   if (scoped !== null) return scoped;
-  if (organizationId && hasLegacyFallback(organizationId, resource)) return read<T>(legacyKey);
+  if (hasLegacyFallback(organizationId, resource)) return read<T>(legacyKey);
   return null;
 }
 
@@ -519,8 +521,9 @@ function readOrganizationResource<T>(
  * localStorage when a scoped copy does not fit.
  */
 export function migrateLegacyOrganizationStorage(organizationId: string): OrganizationMigrationResult {
+  requireOrganizationId(organizationId, "Legacy organization storage migration");
   const result: OrganizationMigrationResult = { organizationId, resources: {}, warnings: [] };
-  if (!hasStorage() || !organizationId) return result;
+  if (!hasStorage()) return result;
 
   let state: OrganizationMigrationState = { version: ISOLATED_STORAGE_VERSION, sourceVersion: STORAGE_VERSION, organizations: {} };
   let organizationState: OrganizationMigrationState["organizations"][string] = { resources: {} };
@@ -532,7 +535,7 @@ export function migrateLegacyOrganizationStorage(organizationId: string): Organi
   ) => {
     try {
       const existing = resourceStatus(organizationId, resource, state);
-      const scopedKey = resolveStorageKey(legacyKey, organizationId);
+      const scopedKey = resolveScopedStorageKey(legacyKey, organizationId);
       const shouldRetry = !existing
         || existing.status === "error"
         || (existing.status === "fallback" && resource !== "memoryChanges");
@@ -654,8 +657,9 @@ export function seedOrganizationalKnowledge(): KnowledgeItem[] {
   );
 }
 
-export async function loadKnowledge(organizationId?: string): Promise<KnowledgeItem[]> {
-  const stored = readOrganizationResource<KnowledgeItem[]>(organizationId, "knowledge", KNOWLEDGE_KEY, resolveStorageKey(KNOWLEDGE_KEY, organizationId));
+export async function loadKnowledge(organizationId: string): Promise<KnowledgeItem[]> {
+  requireOrganizationId(organizationId, "loadKnowledge");
+  const stored = readOrganizationResource<KnowledgeItem[]>(organizationId, "knowledge", KNOWLEDGE_KEY, resolveScopedStorageKey(KNOWLEDGE_KEY, organizationId));
   if (stored && Array.isArray(stored) && stored.length > 0) {
     const normalized = stored.map((item) => withCanonicalProblemDefaults(withLearningDefaults({ ...item, organizationId: item.organizationId ?? organizationId })));
     // Migration: collapse any duplicate canonical problems left over from earlier
@@ -679,39 +683,45 @@ export async function loadKnowledge(organizationId?: string): Promise<KnowledgeI
   return seedOrganizationalKnowledge().map((item) => ({ ...item, organizationId }));
 }
 
-export async function saveKnowledge(organizationId: string | undefined, items: KnowledgeItem[]): Promise<void> {
-  write(resolveStorageKey(KNOWLEDGE_KEY, organizationId), items);
+export async function saveKnowledge(organizationId: string, items: KnowledgeItem[]): Promise<void> {
+  requireOrganizationId(organizationId, "saveKnowledge");
+  write(resolveScopedStorageKey(KNOWLEDGE_KEY, organizationId), items);
 }
 
 /* ---------------------- Validation and memory change history ---------------------- */
 
-export async function loadKnowledgeCandidates(organizationId?: string): Promise<KnowledgeCandidate[]> {
-  const stored = readOrganizationResource<KnowledgeCandidate[]>(organizationId, "candidates", CANDIDATES_KEY, resolveStorageKey(CANDIDATES_KEY, organizationId));
+export async function loadKnowledgeCandidates(organizationId: string): Promise<KnowledgeCandidate[]> {
+  requireOrganizationId(organizationId, "loadKnowledgeCandidates");
+  const stored = readOrganizationResource<KnowledgeCandidate[]>(organizationId, "candidates", CANDIDATES_KEY, resolveScopedStorageKey(CANDIDATES_KEY, organizationId));
   return stored && Array.isArray(stored) ? stored.map((candidate) => ({ ...candidate, organizationId: candidate.organizationId ?? organizationId })) : [];
 }
 
 export async function saveKnowledgeCandidates(
-  organizationId: string | undefined,
+  organizationId: string,
   candidates: KnowledgeCandidate[]
 ): Promise<void> {
-  write(resolveStorageKey(CANDIDATES_KEY, organizationId), candidates);
+  requireOrganizationId(organizationId, "saveKnowledgeCandidates");
+  write(resolveScopedStorageKey(CANDIDATES_KEY, organizationId), candidates);
 }
 
-export async function loadValidationRecords(organizationId?: string): Promise<ValidationRecord[]> {
-  const stored = readOrganizationResource<ValidationRecord[]>(organizationId, "validationRecords", VALIDATION_RECORDS_KEY, resolveStorageKey(VALIDATION_RECORDS_KEY, organizationId));
+export async function loadValidationRecords(organizationId: string): Promise<ValidationRecord[]> {
+  requireOrganizationId(organizationId, "loadValidationRecords");
+  const stored = readOrganizationResource<ValidationRecord[]>(organizationId, "validationRecords", VALIDATION_RECORDS_KEY, resolveScopedStorageKey(VALIDATION_RECORDS_KEY, organizationId));
   return stored && Array.isArray(stored) ? stored.map((record) => ({ ...record, organizationId: record.organizationId ?? organizationId })) : [];
 }
 
 export async function saveValidationRecords(
-  organizationId: string | undefined,
+  organizationId: string,
   records: ValidationRecord[]
 ): Promise<void> {
-  write(resolveStorageKey(VALIDATION_RECORDS_KEY, organizationId), records);
+  requireOrganizationId(organizationId, "saveValidationRecords");
+  write(resolveScopedStorageKey(VALIDATION_RECORDS_KEY, organizationId), records);
 }
 
-export async function loadMemoryChangeRecords(organizationId?: string): Promise<MemoryChangeRecord[]> {
-  const scoped = read<MemoryChangeRecord[]>(resolveStorageKey(MEMORY_CHANGES_KEY, organizationId));
-  const legacy = organizationId && hasLegacyFallback(organizationId, "memoryChanges")
+export async function loadMemoryChangeRecords(organizationId: string): Promise<MemoryChangeRecord[]> {
+  requireOrganizationId(organizationId, "loadMemoryChangeRecords");
+  const scoped = read<MemoryChangeRecord[]>(resolveScopedStorageKey(MEMORY_CHANGES_KEY, organizationId));
+  const legacy = hasLegacyFallback(organizationId, "memoryChanges")
     ? read<MemoryChangeRecord[]>(MEMORY_CHANGES_KEY)
     : null;
   const merged = [...(legacy ?? []), ...(scoped ?? [])];
@@ -720,26 +730,28 @@ export async function loadMemoryChangeRecords(organizationId?: string): Promise<
 }
 
 export async function saveMemoryChangeRecords(
-  organizationId: string | undefined,
+  organizationId: string,
   records: MemoryChangeRecord[]
 ): Promise<void> {
-  if (organizationId && hasLegacyFallback(organizationId, "memoryChanges")) {
+  requireOrganizationId(organizationId, "saveMemoryChangeRecords");
+  if (hasLegacyFallback(organizationId, "memoryChanges")) {
     // Preserve the complete legacy history and only keep a small scoped tail
     // for new writes. This avoids repeatedly attempting the known-too-large
     // full snapshot while keeping recent changes durable when space permits.
     const bounded = records.slice(-MAX_SCOPED_MEMORY_CHANGE_RECORDS);
-    const scopedKey = resolveStorageKey(MEMORY_CHANGES_KEY, organizationId);
+    const scopedKey = resolveScopedStorageKey(MEMORY_CHANGES_KEY, organizationId);
     if (!tryWrite(scopedKey, bounded)) {
       throw new Error("Memory change history could not be saved because browser storage is full. The new record remains in memory and will be retried; preserved legacy history was not changed.");
     }
     return;
   }
-  write(resolveStorageKey(MEMORY_CHANGES_KEY, organizationId), records);
+  write(resolveScopedStorageKey(MEMORY_CHANGES_KEY, organizationId), records);
 }
 
 /* ---------------------------- Org metrics ---------------------------- */
 
-export function seedOrgMetrics(organizationId?: string): OrgMetrics {
+export function seedOrgMetrics(organizationId: string): OrgMetrics {
+  requireOrganizationId(organizationId, "seedOrgMetrics");
   return {
     lifetimeTickets: 0,
     knowledgeReused: 0,
@@ -764,8 +776,9 @@ export function seedOrgMetrics(organizationId?: string): OrgMetrics {
   };
 }
 
-export async function loadOrgMetrics(organizationId?: string): Promise<OrgMetrics> {
-  const stored = readOrganizationResource<OrgMetrics>(organizationId, "metrics", ORG_METRICS_KEY, resolveStorageKey(ORG_METRICS_KEY, organizationId));
+export async function loadOrgMetrics(organizationId: string): Promise<OrgMetrics> {
+  requireOrganizationId(organizationId, "loadOrgMetrics");
+  const stored = readOrganizationResource<OrgMetrics>(organizationId, "metrics", ORG_METRICS_KEY, resolveScopedStorageKey(ORG_METRICS_KEY, organizationId));
   if (!stored) return seedOrgMetrics(organizationId);
   const owned = { ...stored, organizationId: stored.organizationId ?? organizationId };
 
@@ -776,24 +789,27 @@ export async function loadOrgMetrics(organizationId?: string): Promise<OrgMetric
   return owned;
 }
 
-export async function saveOrgMetrics(organizationId: string | undefined, metrics: OrgMetrics): Promise<void> {
-  write(resolveStorageKey(ORG_METRICS_KEY, organizationId), metrics);
+export async function saveOrgMetrics(organizationId: string, metrics: OrgMetrics): Promise<void> {
+  requireOrganizationId(organizationId, "saveOrgMetrics");
+  write(resolveScopedStorageKey(ORG_METRICS_KEY, organizationId), metrics);
 }
 
 /* ---------------------------- Intelligence log ---------------------------- */
 
-export async function loadOrgLog(organizationId?: string): Promise<IntelligenceLogEntry[]> {
-  const stored = readOrganizationResource<IntelligenceLogEntry[]>(organizationId, "intelligenceLog", LOG_KEY, resolveStorageKey(LOG_KEY, organizationId));
+export async function loadOrgLog(organizationId: string): Promise<IntelligenceLogEntry[]> {
+  requireOrganizationId(organizationId, "loadOrgLog");
+  const stored = readOrganizationResource<IntelligenceLogEntry[]>(organizationId, "intelligenceLog", LOG_KEY, resolveScopedStorageKey(LOG_KEY, organizationId));
   return stored && Array.isArray(stored) ? stored : [];
 }
 
 export async function saveOrgLog(
-  organizationId: string | undefined,
+  organizationId: string,
   entries: IntelligenceLogEntry[]
 ): Promise<void> {
+  requireOrganizationId(organizationId, "saveOrgLog");
   // Keep only the most recent entries to bound storage size.
   const trimmed = entries.slice(-MAX_LOG_ENTRIES);
-  write(resolveStorageKey(LOG_KEY, organizationId), trimmed);
+  write(resolveScopedStorageKey(LOG_KEY, organizationId), trimmed);
 }
 
 /* ---------------------- Emerging Patterns ---------------------- */
@@ -802,25 +818,28 @@ export function seedEmergingPatterns(): EmergingPattern[] {
   return [];
 }
 
-export async function loadEmergingPatterns(organizationId?: string): Promise<EmergingPattern[]> {
-  const stored = readOrganizationResource<EmergingPattern[]>(organizationId, "patterns", PATTERNS_KEY, resolveStorageKey(PATTERNS_KEY, organizationId));
+export async function loadEmergingPatterns(organizationId: string): Promise<EmergingPattern[]> {
+  requireOrganizationId(organizationId, "loadEmergingPatterns");
+  const stored = readOrganizationResource<EmergingPattern[]>(organizationId, "patterns", PATTERNS_KEY, resolveScopedStorageKey(PATTERNS_KEY, organizationId));
   return stored && Array.isArray(stored) && stored.length > 0
     ? stored.map((pattern) => ({ ...pattern, organizationId: pattern.organizationId ?? organizationId }))
     : seedEmergingPatterns();
 }
 
 export async function saveEmergingPatterns(
-  organizationId: string | undefined,
+  organizationId: string,
   patterns: EmergingPattern[]
 ): Promise<void> {
-  write(resolveStorageKey(PATTERNS_KEY, organizationId), patterns);
+  requireOrganizationId(organizationId, "saveEmergingPatterns");
+  write(resolveScopedStorageKey(PATTERNS_KEY, organizationId), patterns);
 }
 
 /* ---------------------------- Reset ---------------------------- */
 
 function clearScopedOrganizationStorage(organizationId: string): void {
+  requireOrganizationId(organizationId, "Scoped organization storage cleanup");
   const keys = [KNOWLEDGE_KEY, ORG_METRICS_KEY, LOG_KEY, PATTERNS_KEY, CANDIDATES_KEY, VALIDATION_RECORDS_KEY, MEMORY_CHANGES_KEY];
-  keys.forEach((key) => window.localStorage.removeItem(resolveStorageKey(key, organizationId)));
+  keys.forEach((key) => window.localStorage.removeItem(resolveScopedStorageKey(key, organizationId)));
   clearTicketRecords(organizationId);
 }
 
@@ -831,8 +850,9 @@ function requireMigrationStateSave(state: OrganizationMigrationState, operation:
 }
 
 /** Wipe persisted organizational memory and durably suppress legacy re-import. */
-export function clearOrganization(organizationId?: string): void {
-  if (!hasStorage() || !organizationId) return;
+export function clearOrganization(organizationId: string): void {
+  requireOrganizationId(organizationId, "clearOrganization");
+  if (!hasStorage()) return;
   const state = readMigrationState();
   if (state.compatibilityIssue) {
     throw new Error(`Organization reset is blocked because ${state.compatibilityIssue}.`);
@@ -854,7 +874,8 @@ export function clearOrganization(organizationId?: string): void {
 
 /** Remove one organization's scoped state without deleting global legacy data. */
 export function deleteOrganizationData(organizationId: string): void {
-  if (!hasStorage() || !organizationId) return;
+  requireOrganizationId(organizationId, "deleteOrganizationData");
+  if (!hasStorage()) return;
   const hasPersistedMigrationState = hasKey(ORGANIZATION_ISOLATION_MIGRATION_KEY);
   const state = readMigrationState();
   if (state.compatibilityIssue) {

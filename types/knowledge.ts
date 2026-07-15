@@ -40,6 +40,8 @@ export interface KnowledgeCandidateContent {
 
 export interface KnowledgeCandidate {
   id: string;
+  // Pre-isolation localStorage records may omit ownership. Org-scoped loaders
+  // stamp the requested id; persistence APIs require that id explicitly.
   organizationId?: string;
   sourceTicketIds: string[];
   proposedAction: ReflectionAction;
@@ -52,6 +54,7 @@ export interface KnowledgeCandidate {
 
 export interface ValidationRecord {
   id: string;
+  // Kept optional only for legacy v2 deserialization before migration stamps it.
   organizationId?: string;
   candidateId: string;
   knowledgeId?: string;
@@ -65,6 +68,7 @@ export interface ValidationRecord {
 
 export interface MemoryChangeRecord {
   id: string;
+  // Kept optional only for preserved legacy history read through owner fallback.
   organizationId?: string;
   knowledgeId: string;
   candidateId: string;
@@ -150,6 +154,7 @@ export interface ReflectionCommitInput {
 
 export interface KnowledgeItem {
   id: string;
+  // Seed and legacy records can omit ownership; org-scoped persistence stamps it.
   organizationId?: string;
   title: string;
   problem: string;

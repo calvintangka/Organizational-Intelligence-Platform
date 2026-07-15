@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "probe:persistence-boundary": "node scripts/persistence-boundary-probe.cjs"
   },
   "dependencies": {
     "next": "^15.0.0",

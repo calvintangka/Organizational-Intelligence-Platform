@@ -83,9 +83,10 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 ### Persistence and profile state
 
-- `lib/orgMemory.ts` - Versioned organization-scoped localStorage load/save helpers for knowledge, candidates, validations, memory changes, metrics, log, and patterns. Owns the copy-only legacy v2 migration marker, durable single-organization legacy ownership, owner-only fallback reads, independent retryable resource states, idempotent completion, and ambiguous migration blocking.
+- `lib/organizationId.ts` - Shared compile-time/runtime non-empty organization-id guard for organization-owned persistence entry points.
+- `lib/orgMemory.ts` - Versioned organization-scoped localStorage load/save helpers for knowledge, candidates, validations, memory changes, metrics, log, and patterns. Every public organization-owned operation requires an explicit id; it owns the copy-only legacy v2 migration marker, durable single-organization legacy ownership, owner-only fallback reads, independent retryable resource states, idempotent completion, and ambiguous migration blocking.
 - `lib/organizationProfile.ts` - Async-compatible profile load/save helpers, normalization, and keyword-bank generation.
-- `lib/ticketRecords.ts` - Async-compatible ticket-record load/save helpers plus synchronous quota-guarded ticket-id counters, runtime/persisted owner-only legacy fallback, atomic bulk ID reservation, and case-record utilities.
+- `lib/ticketRecords.ts` - Explicit-id async ticket-record load/save helpers plus synchronous quota-guarded ticket-id counters, runtime/persisted owner-only legacy fallback, atomic bulk ID reservation, and case-record utilities.
 - `lib/metrics.ts` - Metric defaults.
 - `lib/intelligenceLog.ts` - Event-log helpers.
 - `lib/demoState.ts` - Demo data helpers.
@@ -185,7 +186,8 @@ Use this file to find the minimum source needed for a task. It is written for co
 
 ### `lib/orgMemory.ts`
 
-- `loadKnowledge()` / `saveKnowledge()` - Async-compatible knowledge persistence. `loadKnowledge()` still runs `repairCorruptedCustomerTemplates()` and `repairLegacyLessonResponseTemplates()` on every load as self-heal migrations for corrupted generic templates and legacy lesson-specific greetings/ticket references; legacy fallback is allowed only for the durable migration owner.
+- Every public organization-owned `orgMemory` persistence function requires a non-empty `organizationId`; scoped key resolution cannot fall back to a global key. Direct legacy v2 reads are internal to migration/fallback helpers only.
+- `loadKnowledge()` / `saveKnowledge()` - Async-compatible explicit-id knowledge persistence. `loadKnowledge()` still runs `repairCorruptedCustomerTemplates()` and `repairLegacyLessonResponseTemplates()` on every load as self-heal migrations for corrupted generic templates and legacy lesson-specific greetings/ticket references; legacy fallback is allowed only for the durable migration owner.
 - `loadKnowledgeCandidates()` / `saveKnowledgeCandidates()` - Async-compatible candidate persistence.
 - `loadValidationRecords()` / `saveValidationRecords()` - Async-compatible validation-history persistence.
 - `loadMemoryChangeRecords()` / `saveMemoryChangeRecords()` - Async-compatible memory-change audit persistence.

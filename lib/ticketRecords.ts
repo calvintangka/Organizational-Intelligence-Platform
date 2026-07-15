@@ -1,5 +1,6 @@
 import type { OrganizationProfile, TicketRecord, TicketRecordStatus } from "@/types";
 import { hasRuntimeLegacyFallback } from "@/lib/orgMemory";
+import { requireOrganizationId } from "@/lib/organizationId";
 
 const STORAGE_VERSION = "v2";
 const ISOLATED_STORAGE_VERSION = "v1";
@@ -47,15 +48,15 @@ function hasPersistedLegacyTicketFallback(
 }
 
 function hasLegacyTicketFallback(
-  organizationId: string | undefined,
+  organizationId: string,
   resource: TicketFallbackResource
 ): boolean {
-  if (!organizationId || !hasStorage()) return false;
+  if (!hasStorage()) return false;
   return hasPersistedLegacyTicketFallback(organizationId, resource)
     || hasRuntimeLegacyFallback(organizationId, resource);
 }
 
-function hasLegacyTicketCounterFallback(organizationId?: string): boolean {
+function hasLegacyTicketCounterFallback(organizationId: string): boolean {
   return hasLegacyTicketFallback(organizationId, "ticketCounter");
 }
 
@@ -82,8 +83,8 @@ function writeTicketCounter(key: string, value: number): void {
   }
 }
 
-function resolveStorageKey(baseKey: string, organizationId?: string): string {
-  if (!organizationId) return baseKey;
+function resolveScopedStorageKey(baseKey: string, organizationId: string): string {
+  requireOrganizationId(organizationId, "Ticket storage key resolution");
   const resource = baseKey.replace(/^oip\./, "").replace(`.${STORAGE_VERSION}`, "");
   return `oip.organization.${encodeURIComponent(organizationId)}.${resource}.${ISOLATED_STORAGE_VERSION}`;
 }
@@ -107,32 +108,34 @@ function todayStamp(): string {
   return `${y}${m}${day}`;
 }
 
-function loadCounters(organizationId?: string): Record<string, number> {
-  const scoped = read<number>(resolveStorageKey(TICKET_COUNTER_KEY, organizationId));
-  if (organizationId && typeof scoped === "number") return { [organizationId]: scoped };
+function loadCounters(organizationId: string): Record<string, number> {
+  requireOrganizationId(organizationId, "Ticket counter lookup");
+  const scoped = read<number>(resolveScopedStorageKey(TICKET_COUNTER_KEY, organizationId));
+  if (typeof scoped === "number") return { [organizationId]: scoped };
   // C-1/D-1: preserve the legacy counter while this organization remains on
   // persisted or runtime migration fallback.
-  if (organizationId && scoped === null && hasLegacyTicketCounterFallback(organizationId)) {
+  if (scoped === null && hasLegacyTicketCounterFallback(organizationId)) {
     const legacy = read<Record<string, number>>(TICKET_COUNTER_KEY);
     return legacy ? { [organizationId]: legacy[organizationId] ?? 0 } : {};
   }
-  return read<Record<string, number>>(resolveStorageKey(TICKET_COUNTER_KEY, organizationId)) ?? {};
+  return {};
 }
 
-function saveCounters(counters: Record<string, number>, organizationId?: string): void {
-  if (!organizationId) throw new Error("Ticket counter cannot be persisted without an organization id.");
-  writeTicketCounter(resolveStorageKey(TICKET_COUNTER_KEY, organizationId), counters[organizationId] ?? 0);
+function saveCounters(counters: Record<string, number>, organizationId: string): void {
+  requireOrganizationId(organizationId, "Ticket counter persistence");
+  writeTicketCounter(resolveScopedStorageKey(TICKET_COUNTER_KEY, organizationId), counters[organizationId] ?? 0);
 }
 
 export function generateTicketIds(profile: OrganizationProfile, count: number): string[] {
+  const organizationId = requireOrganizationId(profile.id, "Ticket ID generation");
   if (count <= 0) return [];
   const prefix = orgPrefix(profile);
   const date = todayStamp();
-  const counters = loadCounters(profile.id);
-  const counterKey = `${profile.id}`;
+  const counters = loadCounters(organizationId);
+  const counterKey = organizationId;
   const first = (counters[counterKey] ?? 0) + 1;
   counters[counterKey] = first + count - 1;
-  saveCounters(counters, profile.id);
+  saveCounters(counters, organizationId);
   return Array.from({ length: count }, (_, index) =>
     `${prefix}-${date}-${String(first + index).padStart(4, "0")}`
   );
@@ -148,6 +151,7 @@ export function createTicketRecord(
   rawMessage: string,
   subject: string | null
 ): TicketRecord {
+  requireOrganizationId(orgId, "Ticket record creation");
   return {
     ticketId,
     orgId,
@@ -181,22 +185,24 @@ export function updateTicketRecordStatus(
   return { ...record, status };
 }
 
-export async function loadTicketRecords(organizationId?: string): Promise<TicketRecord[]> {
-  const scoped = read<TicketRecord[]>(resolveStorageKey(TICKET_RECORDS_KEY, organizationId));
+export async function loadTicketRecords(organizationId: string): Promise<TicketRecord[]> {
+  requireOrganizationId(organizationId, "loadTicketRecords");
+  const scoped = read<TicketRecord[]>(resolveScopedStorageKey(TICKET_RECORDS_KEY, organizationId));
   const legacyFallback = hasLegacyTicketFallback(organizationId, "tickets");
   const stored = scoped ?? (legacyFallback ? read<TicketRecord[]>(TICKET_RECORDS_KEY) : null);
   const records = stored && Array.isArray(stored) ? stored : [];
-  return organizationId && scoped === null && legacyFallback
+  return scoped === null && legacyFallback
     ? records.map((record) => ({ ...record, orgId: organizationId }))
     : records;
 }
 
 export async function saveTicketRecords(
-  organizationId: string | undefined,
+  organizationId: string,
   records: TicketRecord[]
 ): Promise<void> {
-  const scopedKey = resolveStorageKey(TICKET_RECORDS_KEY, organizationId);
-  if (organizationId && records.length === 0 && read<TicketRecord[]>(scopedKey) === null
+  requireOrganizationId(organizationId, "saveTicketRecords");
+  const scopedKey = resolveScopedStorageKey(TICKET_RECORDS_KEY, organizationId);
+  if (records.length === 0 && read<TicketRecord[]>(scopedKey) === null
     && hasLegacyTicketFallback(organizationId, "tickets")) {
     const legacy = read<TicketRecord[]>(TICKET_RECORDS_KEY);
     if (legacy && legacy.length > 0) {
@@ -208,10 +214,11 @@ export async function saveTicketRecords(
   write(scopedKey, records);
 }
 
-export function clearTicketRecords(organizationId?: string): void {
+export function clearTicketRecords(organizationId: string): void {
+  requireOrganizationId(organizationId, "clearTicketRecords");
   if (!hasStorage()) return;
-  window.localStorage.removeItem(resolveStorageKey(TICKET_RECORDS_KEY, organizationId));
-  window.localStorage.removeItem(resolveStorageKey(TICKET_COUNTER_KEY, organizationId));
+  window.localStorage.removeItem(resolveScopedStorageKey(TICKET_RECORDS_KEY, organizationId));
+  window.localStorage.removeItem(resolveScopedStorageKey(TICKET_COUNTER_KEY, organizationId));
 }
 
 export function findTicketRecord(records: TicketRecord[], ticketId: string): TicketRecord | null {

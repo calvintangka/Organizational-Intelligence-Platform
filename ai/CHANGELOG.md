@@ -13,6 +13,19 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-15] Require organization identity at the persistence boundary
+**Layer:** coding
+**Task/Prompt:** Implement TODO-004 Batch 0: Organization ID Persistence Hardening.
+**Files changed:** `lib/organizationId.ts`, `lib/orgMemory.ts`, `lib/ticketRecords.ts`, `types/knowledge.ts`, `types/metrics.ts`, `types/patterns.ts`, `scripts/persistence-boundary-probe.cjs`, `package.json`, `ai/CHANGELOG.md`, `ai/CURRENT_STATUS.md`, `ai/CODEBASE_MAP.md`, `ai/ARCHITECTURE.md`
+**What changed:**
+- Organization-owned load, save, reset, deletion, ticket-record, ticket-counter, and migration entry points now require a non-empty `organizationId` at both the TypeScript and runtime boundaries.
+- Scoped-key resolution no longer has an optional-id branch; global `oip.*.v2` access remains explicit and internal to legacy migration/fallback code.
+- Kept domain ownership fields optional only for seed and legacy-v2 deserialization compatibility; scoped loaders stamp ownership before returning records.
+- Added an in-memory deterministic probe for invalid IDs, three-organization isolation, explicit legacy copy/fallback, reset suppression, deletion cleanup, ticket-counter fallback, and scoped self-heal writeback.
+**Boundaries touched:** Boundary 2 and Boundary 8 preserved. Legacy migration, owner rules, quota fallback, reset suppression, deletion cleanup, and TODO-003b runtime fallback remain intact. No database, API, authentication, actor, queue, or autonomous-execution behavior was added.
+**Verification:** `npm run probe:persistence-boundary`; `npm run build`; `npx tsc --noEmit`; `git diff --check`.
+**Open items:** Live browser verification was not performed. `graphify query` and `graphify update .` remain blocked by the Windows uv trampoline.
+
 ## [2026-07-13] Harden ticket runtime quota handling
 **Layer:** coding
 **Task/Prompt:** Implement TODO-003b: Fix D-1 + D-2 — Runtime Quota Hardening for Ticket Records.

@@ -196,7 +196,7 @@ The route defaults to:
 
 ## Persistence
 
-Persistence is intentionally simple and entirely client-side. `lib/orgMemory.ts` stores the prototype state in `window.localStorage` under organization-scoped, versioned keys (`oip.organization.<encoded-org-id>.<resource>.v1`), including:
+Persistence is intentionally simple and entirely client-side. Every organization-owned public persistence operation requires a non-empty explicit organization ID at compile time and runtime. `lib/orgMemory.ts` stores the prototype state in `window.localStorage` under organization-scoped, versioned keys (`oip.organization.<encoded-org-id>.<resource>.v1`), including:
 
 - knowledge items
 - knowledge candidates
