@@ -81,6 +81,8 @@ export interface MigrationImportManifestInput {
   exportedAt: string;
   counts: MigrationExportCounts;
   resourceDigests: Record<MigrationExportResourceName, string>;
+  /** The frozen validated export package; never interpreted as business writes in Batch 5.3. */
+  packagePayload?: unknown;
 }
 
 export interface MigrationImportResourceCheckpointInput {

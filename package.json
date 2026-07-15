@@ -10,6 +10,8 @@
     "lint": "next lint",
     "probe:migration-export": "node scripts/migration-export-probe.cjs",
     "probe:migration-metadata": "node scripts/migration-metadata-probe.cjs",
+    "probe:migration-intake": "node scripts/migration-intake-probe.cjs",
+    "probe:migration-intake-http": "node scripts/migration-intake-http-probe.cjs",
     "probe:persistence-boundary": "node scripts/persistence-boundary-probe.cjs",
     "probe:server-persistence": "node scripts/server-persistence-probe.cjs",
     "probe:db-writes": "node scripts/db-write-probe.cjs",

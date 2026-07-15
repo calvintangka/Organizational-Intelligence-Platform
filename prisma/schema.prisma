@@ -338,6 +338,9 @@ model MigrationImportBatch {
   exportedAt            DateTime                 @db.Timestamptz(6)
   counts                Json
   resourceDigests       Json
+  // Immutable, validated oip-localstorage-export-v1 package retained for a
+  // later Batch 5.4 import attempt. This is not arbitrary browser storage.
+  packagePayload         Json?
   status                MigrationImportBatchStatus @default(pending)
   attemptCount          Int                      @default(0)
   errorSummary          String?

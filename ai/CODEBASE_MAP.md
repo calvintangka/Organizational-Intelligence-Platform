@@ -329,3 +329,9 @@ The current default application persistence path is `app/page.tsx` -> `lib/persi
 
 - Knowledge provenance, versions, and lessons - `types/knowledge.ts`, `lib/canonicalProblemEngine.ts`, and `app/page.tsx`
   See `KnowledgeItem`, `Lesson`, `confirmReflection()`, and `mergeIntoCanonicalProblem()`.
+
+- Migration export digest contract - `lib/persistence/migrationExportDigest.ts`
+  See `stableStringify()`, `computeMigrationExportDigests()`, `countMigrationExportResources()`, and `migrationExportDigestMetadata()`. The browser exporter and server intake share this implementation.
+
+- Migration package intake - `app/api/organizations/[organizationId]/migration-import/route.ts` and `lib/server/migrationImportService.ts`
+  See `POST()`, `validateExportPackage()`, `intakeMigrationExportPackage()`, and `initializeMigrationImportWithResult()`. Intake persists only immutable package payload plus migration metadata and nine checkpoints; business import is intentionally absent.

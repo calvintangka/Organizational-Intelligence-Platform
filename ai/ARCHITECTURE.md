@@ -278,4 +278,16 @@ Conflict evidence is durable but not resolution behavior. Conflicts use a batch-
 
 Organization deletion cascades migration metadata, matching the existing prototype's organization-owned data semantics and avoiding orphaned provenance rows. There is no normal API for deleting migration history.
 
-The server-internal `lib/server/migrationImportService.ts` can initialize metadata, update checkpoints, record or resolve conflict evidence, list open conflicts, and mark a batch verified only when all nine resources are verified and no open conflict remains. It does not import business data. There is still no package upload, public migration endpoint, historical importer, PostgreSQL business-data import, verification report UI, cutover, or mature organization migration.
+The server-internal `lib/server/migrationImportService.ts` can initialize metadata, update checkpoints, record or resolve conflict evidence, list open conflicts, and mark a batch verified only when all nine resources are verified and no open conflict remains. It does not import business data.
+
+## Migration Package Intake Boundary
+
+TODO-004 Batch 5.3 adds the dedicated, unauthenticated prototype endpoint `POST /api/organizations/[organizationId]/migration-import`. The accepted flow is:
+
+`localStorage` → read-only resolved export → `oip-localstorage-export-v1` → migration intake endpoint → structural validation → ownership validation → count verification → exporter-shared digest verification → `MigrationImportBatch` → nine pending checkpoints.
+
+The endpoint requires the route organization to match the package organization and requires that the target PostgreSQL `Organization` already exists. It rejects unsupported format/version, unsafe or ambiguous ownership, reset-suppressed fallback, malformed IDs/references, count mismatch, and digest mismatch. Same-organization retries keyed by `(organizationId, resourcePayloadDigest)` reuse the immutable batch; incompatible manifest metadata is rejected.
+
+The validated frozen package is retained as `MigrationImportBatch.packagePayload` JSONB, bound to the batch digests and intended only for a later retryable importer. It is not an arbitrary browser-storage dump. The prototype request boundary is 25 MiB and the endpoint has no authentication or authorization; it must not be exposed to the internet without those controls.
+
+STOP HERE: package intake does not mean imported or verified. Batch 5.3 writes no KnowledgeItems, KnowledgeCandidates, ValidationRecords, MemoryChangeRecords, OrgMetrics, IntelligenceLog, EmergingPatterns, TicketRecords, or TicketSequence. Batch 5.4 owns dependency-ordered historical import, conflict handling, and business-data verification.

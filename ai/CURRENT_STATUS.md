@@ -208,4 +208,7 @@ Three-tier AI fallback chain implemented: LM Studio (local Gemma) → Claude API
 - Conflicts preserve IDs, digests, safe optional JSON evidence, reasons, and resolution status. Open conflicts or incomplete/unverified checkpoints prevent batch verification.
 - Organization deletion cascades import metadata consistently with existing organization-owned persistence records. No normal application deletion API for migration history was added.
 - `lib/server/migrationImportService.ts` is server-internal metadata infrastructure only. It does not import KnowledgeItems, candidates, audit records, tickets, metrics, patterns, logs, or ticket sequences.
-- No public migration import endpoint, package upload, business-data importer, cutover, or mature organization migration exists yet.
+- Batch 5.3 now provides an unauthenticated but organization-scoped `POST /api/organizations/[organizationId]/migration-import` package-intake endpoint.
+- Intake accepts only `oip-localstorage-export-v1` version 1, validates ownership/provenance, structural references, counts, and exporter-compatible SHA-256 digests, then creates or reuses a `ready` metadata batch with exactly nine pending checkpoints.
+- The validated frozen package is retained in nullable `MigrationImportBatch.packagePayload` for deterministic later retry; arbitrary localStorage dumps are not accepted or stored.
+- Intake does not import KnowledgeItems, candidates, validations, memory history, tickets, metrics, patterns, logs, or ticket sequences. Batch 5.4 owns business-data import.

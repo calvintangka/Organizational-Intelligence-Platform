@@ -621,3 +621,11 @@
 **Boundaries touched:** Preserved F-04 human review for AI drafts and added explicit enforcement for no unvalidated commitments in AI customer responses.
 **Verification:** `npm.cmd run build`; live ticket-flow verification still required for LM Studio on/off behavior, tone-change observability, and the Dewi Rahayu scenario.
 **Open items:** End-to-end browser verification remains to be completed.
+
+## [2026-07-15] TODO-004 Batch 5.3 migration package intake
+**Layer:** persistence migration
+**What changed:** Added the organization-scoped `POST /api/organizations/[organizationId]/migration-import` endpoint, full `oip-localstorage-export-v1` package validation, shared exporter/intake digest logic, immutable validated package payload storage, and disposable deterministic/HTTP probes.
+**Safety boundary:** Intake creates or reuses only `MigrationImportBatch` metadata and nine pending checkpoints. It does not write business resources, import historical state, reconcile ticket sequences, cut over authority, or authenticate callers.
+**Schema:** Added nullable immutable `packagePayload` JSONB to `MigrationImportBatch` in migration `20260715201500_add_migration_package_payload`.
+**Verification:** Intake probe, live HTTP probe, Prisma validation/generation/migration status, typecheck, build, persistence probes, and diff check passed.
+**Open items:** Batch 5.4 must implement dependency-ordered business-resource import and target conflict handling.
