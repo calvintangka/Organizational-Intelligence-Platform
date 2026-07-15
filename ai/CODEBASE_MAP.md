@@ -10,6 +10,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `data/` - Seed tickets, seed knowledge, seed organization profiles, and starter knowledge packs.
 - `docs/` - Product, architecture, roadmap, canon, and implementation references for broader OIP context.
 - `lib/` - Core business logic, memory lifecycle, AI provider adapters, and pipeline engines.
+- `prisma/` - PostgreSQL database schema and future migration history; inactive until a later persistence-adapter batch.
 - `outputs/` - Generated output artifacts.
 - `tmp/` - Temporary generation helpers and rendered assets.
 - `types/` - Shared TypeScript contracts used across UI and business logic.
@@ -92,6 +93,13 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `lib/demoState.ts` - Demo data helpers.
 - `lib/oipEngine.ts` - Thin export surface for pipeline modules.
 - `lib/matching.ts` - Low-level token overlap helpers used by retrieval/matching.
+- `lib/server/prisma.ts` - Server-only, singleton-safe PostgreSQL Prisma client. It is intentionally not imported by current runtime persistence adapters.
+
+## Database Foundation (dormant)
+
+- `prisma/schema.prisma` - Prisma PostgreSQL schema for organizations and organization-owned durable records. It makes ownership relational, indexes organization-scoped access, and scopes ticket-ID uniqueness by organization.
+- `prisma.config.ts` - Prisma CLI configuration and environment-supplied `DATABASE_URL` loading. It deliberately does not supply a fallback connection string.
+- `generated/prisma/` - Reproducible Prisma client output, generated during `prebuild` and ignored by Git.
 
 ### AI layer
 

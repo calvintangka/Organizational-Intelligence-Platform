@@ -1,0 +1,261 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum KnowledgeLifecycleState {
+  active
+  candidate
+  deprecated
+}
+
+enum KnowledgeCandidateLifecycle {
+  proposed
+  validated
+  rejected
+}
+
+enum ValidationDecision {
+  approved
+  rejected
+}
+
+enum TicketRecordLifecycle {
+  open
+  in_review
+  resolved
+  rejected
+  discarded
+}
+
+enum EmergingPatternLifecycle {
+  monitoring
+  suggested
+  promoted
+  dismissed
+}
+
+model Organization {
+  id          String   @id
+  name        String
+  industry    String
+  description String
+  settings    Json
+  createdAt   DateTime @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+
+  knowledgeItems      KnowledgeItem[]
+  knowledgeCandidates KnowledgeCandidate[]
+  validationRecords   ValidationRecord[]
+  memoryChangeRecords MemoryChangeRecord[]
+  ticketRecords       TicketRecord[]
+  emergingPatterns    EmergingPattern[]
+  intelligenceLogs    IntelligenceLog[]
+  orgMetrics          OrgMetrics?
+  ticketSequence      TicketSequence?
+
+  @@map("organizations")
+}
+
+model KnowledgeItem {
+  id                       String                  @id
+  organizationId           String
+  title                    String
+  category                 String
+  canonicalProblemId       String?
+  canonicalProblemTitle    String?
+  lifecycleState           KnowledgeLifecycleState @default(active)
+  sourceTicketId           String
+  timesReused              Int                     @default(0)
+  timesSeen                Int?
+  successfulResolutions    Int?
+  failedResolutions        Int?
+  successRate              Float?
+  trustScore               Int?
+  autoResponseEligible     Boolean?
+  humanReviewCount         Int?
+  automaticResolutionCount Int?
+  createdAt                DateTime                @db.Timestamptz(6)
+  approvedAt               DateTime                @db.Timestamptz(6)
+  lastUsedAt               DateTime?               @db.Timestamptz(6)
+  lastValidatedAt          DateTime?               @db.Timestamptz(6)
+  lastUpdatedAt            DateTime?               @db.Timestamptz(6)
+  lastValidated            DateTime?               @db.Timestamptz(6)
+  content                  Json
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, category])
+  @@index([organizationId, canonicalProblemId])
+  @@map("knowledge_items")
+}
+
+model KnowledgeCandidate {
+  id                 String                      @id
+  organizationId     String
+  relatedKnowledgeId String?
+  sourceTicketIds    Json
+  proposedAction     String
+  proposedContent    Json
+  rationale          String
+  status             KnowledgeCandidateLifecycle @default(proposed)
+  createdAt          DateTime                    @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([organizationId, relatedKnowledgeId])
+  @@map("knowledge_candidates")
+}
+
+model ValidationRecord {
+  id                 String             @id
+  organizationId     String
+  candidateId        String
+  knowledgeItemId    String?
+  knowledgeVersionId String?
+  decision           ValidationDecision
+  actor              String
+  actorId            String?
+  roleExercised      String
+  rationale          String?
+  timestamp          DateTime           @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, candidateId])
+  @@index([organizationId, knowledgeItemId])
+  @@index([organizationId, timestamp])
+  @@map("validation_records")
+}
+
+model MemoryChangeRecord {
+  id                 String   @id
+  organizationId     String
+  knowledgeItemId    String
+  candidateId        String
+  validationRecordId String
+  actorId            String?
+  changeType         String
+  beforeState        Json?
+  afterState         Json
+  timestamp          DateTime @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, knowledgeItemId])
+  @@index([organizationId, validationRecordId])
+  @@index([organizationId, timestamp])
+  @@map("memory_change_records")
+}
+
+model TicketRecord {
+  id                  String                @id @default(cuid())
+  organizationId      String
+  ticketId            String
+  rawMessage          String
+  subject             String?
+  status              TicketRecordLifecycle @default(open)
+  draftSource         String?
+  classification      Json?
+  memoryMatch         Json?
+  resolution          Json
+  reflection          Json
+  validationRecordIds Json
+  actorId             String?
+  createdAt           DateTime              @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, ticketId])
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@map("ticket_records")
+}
+
+model EmergingPattern {
+  id                        String                   @id
+  organizationId            String
+  title                     String
+  summary                   String
+  category                  String
+  status                    EmergingPatternLifecycle @default(monitoring)
+  tags                      Json
+  keywords                  Json
+  exampleTickets            Json
+  timesSeen                 Int
+  confidenceScore           Float
+  suggestedCanonicalProblem Boolean
+  firstSeenAt               DateTime                 @db.Timestamptz(6)
+  lastSeenAt                DateTime                 @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([organizationId, category])
+  @@index([organizationId, lastSeenAt])
+  @@map("emerging_patterns")
+}
+
+model OrgMetrics {
+  organizationId             String   @id
+  lifetimeTickets            Int
+  knowledgeReused            Int
+  autoResolutions            Int
+  humanResolutions           Int
+  totalResolutionTimeSec     Int
+  resolutionsCount           Int
+  memoryGrowthToday          Int
+  memoryGrowthDate           String
+  mergedTickets              Int?
+  duplicatePreventions       Int?
+  knowledgeVersions          Int?
+  emergingPatternsDetected   Int?
+  promotedPatterns           Int?
+  aiCalls                    Int?
+  aiSuccesses                Int?
+  aiFailures                 Int?
+  aiFallbacks                Int?
+  aiAgreementSamples         Int?
+  aiAgreementTotal           Int?
+  humanAcceptedAISuggestions Int?
+  lastUpdatedAt              DateTime @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("org_metrics")
+}
+
+model IntelligenceLog {
+  id             String   @id
+  organizationId String
+  timestamp      DateTime @db.Timestamptz(6)
+  event          String
+  detail         String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, timestamp])
+  @@map("intelligence_log")
+}
+
+model TicketSequence {
+  organizationId String   @id
+  counter        Int      @default(0)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("ticket_sequences")
+}

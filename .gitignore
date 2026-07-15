@@ -16,5 +16,6 @@ pnpm-debug.log*
 
 *.tsbuildinfo
 graphify-out/
+generated/prisma/
 
 tmp/audit/

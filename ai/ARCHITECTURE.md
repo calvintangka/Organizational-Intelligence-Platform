@@ -196,6 +196,8 @@ The route defaults to:
 
 ## Persistence
 
+The active runtime remains client-side `localStorage`. A dormant PostgreSQL + Prisma foundation now exists in `prisma/schema.prisma` and `lib/server/prisma.ts`, but no current adapter imports the database client and no browser state is migrated or dual-written. The schema makes organization ownership a required foreign-key relation for every organization-owned durable model and scopes ticket IDs with a composite organization/ticket constraint. `DATABASE_URL` is environment-provided; until it is configured and a future migration/adaptor batch is explicitly performed, this foundation makes no database connection and changes no current data.
+
 Persistence is intentionally simple and entirely client-side. Every organization-owned public persistence operation requires a non-empty explicit organization ID at compile time and runtime. `lib/orgMemory.ts` stores the prototype state in `window.localStorage` under organization-scoped, versioned keys (`oip.organization.<encoded-org-id>.<resource>.v1`), including:
 
 - knowledge items

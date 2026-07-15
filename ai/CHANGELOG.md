@@ -13,6 +13,18 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-15] Add PostgreSQL and Prisma persistence foundation
+**Layer:** coding
+**Task/Prompt:** Implement TODO-004 Batch 1: PostgreSQL + Prisma Database Foundation and Schema.
+**Files changed:** `prisma/schema.prisma`, `prisma.config.ts`, `lib/server/prisma.ts`, `package.json`, `package-lock.json`, `.gitignore`, `ai/CHANGELOG.md`, `ai/CURRENT_STATUS.md`, `ai/CODEBASE_MAP.md`, `ai/ARCHITECTURE.md`
+**What changed:**
+- Added the PostgreSQL Prisma schema for organizations, knowledge, candidates, validations, append-only memory changes, ticket records, patterns, metrics, intelligence logs, and per-organization ticket sequences. Every organization-owned record has required relational ownership, organization indexes, and organization-scoped ticket uniqueness.
+- Added a server-only Prisma 7 client using the PostgreSQL driver adapter and a config that obtains `DATABASE_URL` from the environment without inventing or committing a connection string.
+- Added Prisma validation/generation scripts and a prebuild generation step. The generated client is ignored because it is reproducible build output.
+**Boundaries touched:** Database foundation only. The client runtime, localStorage keys, migration architecture, legacy ownership, existing organization-scoped data, and browser storage were not read, cleared, or rewritten. No database calls, APIs, UI wiring, authentication, actors, queues, or autonomous execution were added.
+**Verification:** `npm run prisma:validate`; `npm run prisma:generate`; `npx tsc --noEmit`; `npm run build`; `git diff --check`.
+**Open items:** `DATABASE_URL` is not configured in the local environment, so no PostgreSQL migration was created or applied. `graphify query` and `graphify update .` remain blocked by the Windows uv trampoline.
+
 ## [2026-07-15] Require organization identity at the persistence boundary
 **Layer:** coding
 **Task/Prompt:** Implement TODO-004 Batch 0: Organization ID Persistence Hardening.
