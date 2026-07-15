@@ -636,3 +636,10 @@
 **Safety boundary:** Imports are additive and conflict-safe. Existing differing rows are quarantined through `MigrationImportConflict`; no snapshot deletes, normal validation/reflection replay, ticket allocation, memory-history import, ticket-sequence reconciliation, verification, or cutover was added.
 **Verification:** Disposable PostgreSQL import and live HTTP probes passed, including nested lesson/version preservation, direct validation insertion, exact ticket IDs, retry no-op behavior, cross-organization collision quarantine, and per-resource rollback.
 **Open items:** Batch 5.5 owns full MemoryChangeRecord reconciliation and TicketSequence finalization; Batch 5.6 owns post-import verification.
+
+## [2026-07-15] TODO-004 Batch 5.5 memory history and ticket sequence reconciliation
+**Layer:** persistence migration
+**What changed:** Completed the existing execute endpoint so it resumes through all nine checkpoints, imports immutable MemoryChangeRecord history after validating organization-owned references and snapshots, and reconciles TicketSequence monotonically from the server counter, package counter, and highest valid source ticket suffix.
+**Safety boundary:** Historical memory rows are inserted directly without replaying validation/reflection workflows or changing knowledge revisions. Same-ID differences, cross-organization references, duplicate validation relationships, unresolved references, and malformed ticket IDs create durable conflicts; a memory-resource conflict inserts zero memory rows. Sequence reconciliation never allocates tickets or edits TicketRecords and cannot lower a concurrent server counter.
+**Verification:** Disposable PostgreSQL migration-import probe passed with preserved snapshots, nested lesson/version data, the max-counter sequence matrix, retry no-op, conflict quarantine, isolation, and rollback coverage. Live HTTP import probe, persistence probes, Prisma validation/status, typecheck, build, and diff check passed.
+**Open items:** Batch 5.6 owns post-import verification; Batch 5.8 owns authority cutover; mature organization migration remains pending.

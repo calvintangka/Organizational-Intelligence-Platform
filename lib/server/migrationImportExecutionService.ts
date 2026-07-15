@@ -19,6 +19,7 @@ import type {
   IntelligenceLogEntry,
   KnowledgeCandidate,
   KnowledgeItem,
+  MemoryChangeRecord,
   OrgMetrics,
   OrganizationProfile,
   TicketRecord,
@@ -32,6 +33,7 @@ import {
   sha256,
   stableStringify
 } from "@/lib/persistence/migrationExportDigest";
+import { parseTicketId } from "@/lib/ticketIdFormat";
 
 const IMPLEMENTED_RESOURCE_TYPES = [
   "knowledge",
@@ -43,7 +45,8 @@ const IMPLEMENTED_RESOURCE_TYPES = [
   "orgMetrics"
 ] as const satisfies readonly MigrationImportResourceType[];
 
-type ImplementedResourceType = typeof IMPLEMENTED_RESOURCE_TYPES[number];
+const FINAL_RESOURCE_TYPES = MIGRATION_IMPORT_RESOURCE_TYPES;
+type RunnableResourceType = typeof MIGRATION_IMPORT_RESOURCE_TYPES[number];
 type TransactionClient = Prisma.TransactionClient;
 type JsonRecord = Record<string, unknown>;
 
@@ -58,7 +61,7 @@ export interface MigrationImportExecutionResult {
   failedResource: MigrationImportResourceType | null;
   resourceCheckpoints: Awaited<ReturnType<typeof getMigrationImportBatch>>["resourceCheckpoints"];
   unresolvedConflictCount: number;
-  nextAction: "resolve_conflicts_or_retry" | "retry_failed_resource" | "begin_batch_5_5_finalization";
+  nextAction: "resolve_conflicts_or_retry" | "retry_failed_resource" | "begin_batch_5_6_verification";
 }
 
 interface ImportCounts {
@@ -330,6 +333,56 @@ function targetValidationProjection(row: JsonRecord): JsonRecord {
   return { ...row, timestamp: (row.timestamp as Date).toISOString() };
 }
 
+function memoryData(record: MemoryChangeRecord, organizationId: string) {
+  const beforeState = record.beforeState === null || record.beforeState === undefined
+    ? null
+    : asRecord(record.beforeState, "memoryChangeRecord.beforeState");
+  const afterState = asRecord(record.afterState, "memoryChangeRecord.afterState");
+  return {
+    id: requiredString(record.id, "memoryChangeRecord.id"),
+    organizationId,
+    knowledgeItemId: requiredString(record.knowledgeId, "memoryChangeRecord.knowledgeId"),
+    candidateId: requiredString(record.candidateId, "memoryChangeRecord.candidateId"),
+    validationRecordId: requiredString(record.validationRecordId, "memoryChangeRecord.validationRecordId"),
+    actorId: null,
+    changeType: requiredString(record.changeType, "memoryChangeRecord.changeType"),
+    beforeState: beforeState === null ? Prisma.DbNull : jsonValue(beforeState),
+    afterState: jsonValue(afterState),
+    timestamp: dateValue(record.timestamp, "memoryChangeRecord.timestamp")
+  };
+}
+
+function memoryProjection(record: MemoryChangeRecord, organizationId: string): JsonRecord {
+  const data = memoryData(record, organizationId);
+  return {
+    id: data.id,
+    organizationId: data.organizationId,
+    knowledgeItemId: data.knowledgeItemId,
+    candidateId: data.candidateId,
+    validationRecordId: data.validationRecordId,
+    actorId: data.actorId,
+    changeType: data.changeType,
+    beforeState: record.beforeState ?? null,
+    afterState: record.afterState,
+    timestamp: data.timestamp.toISOString()
+  };
+}
+
+function targetMemoryProjection(row: JsonRecord): JsonRecord {
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    knowledgeItemId: row.knowledgeItemId,
+    candidateId: row.candidateId,
+    validationRecordId: row.validationRecordId,
+    actorId: row.actorId,
+    changeType: row.changeType,
+    beforeState: row.beforeState ?? null,
+    afterState: row.afterState,
+    timestamp: (row.timestamp as Date).toISOString()
+  };
+}
+
 function ticketLifecycle(value: unknown): "open" | "in_review" | "resolved" | "rejected" | "discarded" {
   return enumValue(value, ["open", "in_review", "resolved", "rejected", "discarded"], "ticketRecord.status");
 }
@@ -468,13 +521,17 @@ function projectionDigest(projection: JsonRecord): Promise<string> {
   return sha256(stableStringify(projection));
 }
 
+function testFailureRequested(kind: "memory-after-first" | "ticket-sequence-after-reconcile"): boolean {
+  return process.env.NODE_ENV === "test" && process.env.MIGRATION_IMPORT_FAILURE_INJECTION === kind;
+}
+
 async function createConflictTx(
   tx: TransactionClient,
   batchId: string,
   organizationId: string,
   resourceType: MigrationImportResourceType,
   sourceRecordId: string,
-  conflictType: "same_id_different_content" | "cross_organization_ownership_mismatch" | "duplicate_candidate_validation" | "ticket_id_collision",
+  conflictType: "same_id_different_content" | "cross_organization_ownership_mismatch" | "duplicate_candidate_validation" | "duplicate_validation_memory_relationship" | "ticket_id_collision" | "unresolved_historical_reference" | "malformed_source_record",
   sourceDigest: string,
   targetDigest: string | undefined,
   reason: string
@@ -757,11 +814,135 @@ async function importMetrics(
   return { importedCount: 1, skippedIdenticalCount: 0, conflictCount: 0 };
 }
 
+async function importMemoryChanges(
+  tx: TransactionClient,
+  organizationId: string,
+  batchId: string,
+  exportPackage: MigrationExportPackage
+): Promise<ImportCounts> {
+  const source = exportPackage.resources.memoryChangeRecords;
+  const ids = source.map((record) => requiredString(record.id, "memoryChangeRecord.id"));
+  const validationIds = source.map((record) => requiredString(record.validationRecordId, "memoryChangeRecord.validationRecordId"));
+  const candidateIds = source.map((record) => requiredString(record.candidateId, "memoryChangeRecord.candidateId"));
+  const knowledgeIds = source.map((record) => requiredString(record.knowledgeId, "memoryChangeRecord.knowledgeId"));
+  const targets = await tx.memoryChangeRecord.findMany({ where: { id: { in: ids } } });
+  const sameOrgByValidation = await tx.memoryChangeRecord.findMany({ where: { organizationId, validationRecordId: { in: validationIds } } });
+  const validations = await tx.validationRecord.findMany({ where: { id: { in: validationIds } } });
+  const candidates = await tx.knowledgeCandidate.findMany({ where: { id: { in: candidateIds } } });
+  const knowledge = await tx.knowledgeItem.findMany({ where: { id: { in: knowledgeIds } } });
+  const targetById = new Map(targets.map((row) => [row.id, row]));
+  const validationById = new Map(validations.map((row) => [row.id, row]));
+  const candidateById = new Map(candidates.map((row) => [row.id, row]));
+  const knowledgeById = new Map(knowledge.map((row) => [row.id, row]));
+  const memoryByValidation = new Map(sameOrgByValidation.map((row) => [row.validationRecordId, row]));
+  const sourceByValidation = new Map<string, MemoryChangeRecord>();
+  const conflicts: Array<{
+    record: MemoryChangeRecord;
+    type: "same_id_different_content" | "cross_organization_ownership_mismatch" | "duplicate_validation_memory_relationship" | "unresolved_historical_reference";
+    targetDigest?: string;
+    reason: string;
+  }> = [];
+  const skips: MemoryChangeRecord[] = [];
+
+  for (const record of source) {
+    const id = requiredString(record.id, "memoryChangeRecord.id");
+    const validationId = requiredString(record.validationRecordId, "memoryChangeRecord.validationRecordId");
+    const validation = validationById.get(validationId);
+    const candidate = candidateById.get(requiredString(record.candidateId, "memoryChangeRecord.candidateId"));
+    const knowledgeItem = knowledgeById.get(requiredString(record.knowledgeId, "memoryChangeRecord.knowledgeId"));
+    const target = targetById.get(id);
+    const targetDigest = target ? await projectionDigest(targetMemoryProjection(target as unknown as JsonRecord)) : undefined;
+
+    if (sourceByValidation.has(validationId) && sourceByValidation.get(validationId)?.id !== id) {
+      conflicts.push({ record, type: "duplicate_validation_memory_relationship", targetDigest, reason: `Validation record ${validationId} is linked to more than one historical memory record.` });
+      continue;
+    }
+    sourceByValidation.set(validationId, record);
+    if (target && target.organizationId !== organizationId) {
+      conflicts.push({ record, type: "cross_organization_ownership_mismatch", targetDigest, reason: `Memory change record ${id} belongs to another organization.` });
+      continue;
+    }
+    if (validation && validation.organizationId !== organizationId || candidate && candidate.organizationId !== organizationId || knowledgeItem && knowledgeItem.organizationId !== organizationId) {
+      conflicts.push({ record, type: "cross_organization_ownership_mismatch", targetDigest, reason: `Memory change record ${id} references data owned by another organization.` });
+      continue;
+    }
+    if (!validation || !candidate || !knowledgeItem) {
+      conflicts.push({ record, type: "unresolved_historical_reference", targetDigest, reason: `Memory change record ${id} has an unresolved validation, candidate, or knowledge reference.` });
+      continue;
+    }
+    if (validation.candidateId !== record.candidateId || (validation.knowledgeItemId ?? null) !== (record.knowledgeId ?? null)) {
+      conflicts.push({ record, type: "unresolved_historical_reference", targetDigest, reason: `Memory change record ${id} does not match its validation relationships.` });
+      continue;
+    }
+
+    const sourceProjection = memoryProjection(record, organizationId);
+    if (target) {
+      if (stableStringify(sourceProjection) === stableStringify(targetMemoryProjection(target as unknown as JsonRecord))) skips.push(record);
+      else conflicts.push({ record, type: "same_id_different_content", targetDigest, reason: `Memory change record ${id} has different historical content.` });
+      continue;
+    }
+    const validationTarget = memoryByValidation.get(validationId);
+    if (validationTarget && validationTarget.id !== id) {
+      const validationTargetDigest = await projectionDigest(targetMemoryProjection(validationTarget as unknown as JsonRecord));
+      conflicts.push({ record, type: "duplicate_validation_memory_relationship", targetDigest: validationTargetDigest, reason: `Validation record ${validationId} is already linked to a different memory record.` });
+    }
+  }
+
+  if (conflicts.length > 0) {
+    let created = 0;
+    for (const conflict of conflicts) {
+      if (await createConflictTx(tx, batchId, organizationId, "memoryChangeRecords", requiredString(conflict.record.id, "memoryChangeRecord.id"), conflict.type, resourceDigest(exportPackage, "memoryChangeRecords"), conflict.targetDigest, conflict.reason)) created += 1;
+    }
+    return { importedCount: 0, skippedIdenticalCount: 0, conflictCount: created || conflicts.length };
+  }
+  let insertedCount = 0;
+  for (const record of source) {
+    if (skips.includes(record)) continue;
+    await tx.memoryChangeRecord.create({ data: memoryData(record, organizationId) });
+    insertedCount += 1;
+    if (insertedCount === 1 && testFailureRequested("memory-after-first")) {
+      throw new Error("Injected test failure after the first memory history insert.");
+    }
+  }
+  return { importedCount: source.length - skips.length, skippedIdenticalCount: skips.length, conflictCount: 0 };
+}
+
+async function importTicketSequence(
+  tx: TransactionClient,
+  organizationId: string,
+  batchId: string,
+  exportPackage: MigrationExportPackage
+): Promise<ImportCounts> {
+  const sourceDigest = resourceDigest(exportPackage, "ticketSequence");
+  const malformed = exportPackage.resources.ticketRecords.filter((record) => !parseTicketId(record.ticketId));
+  if (malformed.length > 0) {
+    let created = 0;
+    for (const record of malformed) {
+      if (await createConflictTx(tx, batchId, organizationId, "ticketSequence", String(record.ticketId), "malformed_source_record", sourceDigest, undefined, `Ticket ${String(record.ticketId)} does not match the generated ticket ID format.`)) created += 1;
+    }
+    return { importedCount: 0, skippedIdenticalCount: 0, conflictCount: created || malformed.length };
+  }
+  const packageCounter = exportPackage.resources.ticketSequence?.counter ?? 0;
+  const highestParsed = exportPackage.resources.ticketRecords.reduce((highest, record) => Math.max(highest, parseTicketId(record.ticketId)?.sequenceNumber ?? 0), 0);
+  const current = await tx.ticketSequence.findUnique({ where: { organizationId } });
+  const requiredCounter = Math.max(current?.counter ?? 0, packageCounter, highestParsed);
+  await tx.ticketSequence.createMany({ data: [{ organizationId, counter: requiredCounter }], skipDuplicates: true });
+  if (requiredCounter > 0) {
+    await tx.ticketSequence.updateMany({ where: { organizationId, counter: { lt: requiredCounter } }, data: { counter: requiredCounter } });
+  }
+  if (testFailureRequested("ticket-sequence-after-reconcile")) {
+    throw new Error("Injected test failure after ticket sequence reconciliation.");
+  }
+  return current && current.counter >= requiredCounter
+    ? { importedCount: 0, skippedIdenticalCount: 1, conflictCount: 0 }
+    : { importedCount: 1, skippedIdenticalCount: 0, conflictCount: 0 };
+}
+
 async function importResourceInTransaction(
   tx: TransactionClient,
   organizationId: string,
   batchId: string,
-  resourceType: ImplementedResourceType,
+  resourceType: RunnableResourceType,
   exportPackage: MigrationExportPackage
 ): Promise<ImportCounts> {
   switch (resourceType) {
@@ -772,13 +953,15 @@ async function importResourceInTransaction(
     case "emergingPatterns": return importPatterns(tx, organizationId, batchId, exportPackage);
     case "intelligenceLog": return importLogs(tx, organizationId, batchId, exportPackage);
     case "orgMetrics": return importMetrics(tx, organizationId, batchId, exportPackage);
+    case "memoryChangeRecords": return importMemoryChanges(tx, organizationId, batchId, exportPackage);
+    case "ticketSequence": return importTicketSequence(tx, organizationId, batchId, exportPackage);
   }
 }
 
 async function startResource(
   organizationId: string,
   batchId: string,
-  resourceType: ImplementedResourceType
+  resourceType: RunnableResourceType
 ): Promise<boolean> {
   const prisma = getPrismaClient();
   return prisma.$transaction(async (tx) => {
@@ -793,7 +976,7 @@ async function startResource(
   });
 }
 
-async function markResourceFailed(organizationId: string, batchId: string, resourceType: ImplementedResourceType, error: unknown): Promise<void> {
+async function markResourceFailed(organizationId: string, batchId: string, resourceType: RunnableResourceType, error: unknown): Promise<void> {
   const prisma = getPrismaClient();
   const message = error instanceof MigrationImportServiceError ? error.message : "The historical resource transaction failed.";
   await prisma.$transaction(async (tx) => {
@@ -807,7 +990,7 @@ async function markResourceFailed(organizationId: string, batchId: string, resou
 async function runResource(
   organizationId: string,
   batchId: string,
-  resourceType: ImplementedResourceType,
+  resourceType: RunnableResourceType,
   exportPackage: MigrationExportPackage
 ): Promise<void> {
   if (!await startResource(organizationId, batchId, resourceType)) return;
@@ -854,17 +1037,26 @@ async function finalizeBatch(organizationId: string, batchId: string): Promise<v
     const batch = await tx.migrationImportBatch.findUnique({ where: { id: batchId } });
     if (!batch || batch.organizationId !== organizationId) throw new MigrationImportServiceError("IMPORT_NOT_FOUND", "The migration import batch was not found.");
     const resources = await tx.migrationImportResource.findMany({ where: { batchId } });
+    const openConflictCount = await tx.migrationImportConflict.count({ where: { batchId, status: "open" } });
     const hasConflict = resources.some((resource) => resource.status === "conflict");
     const hasFailure = resources.some((resource) => resource.status === "failed");
+    const fullyImported = FINAL_RESOURCE_TYPES.every((resourceType) => resources.find((resource) => resource.resourceType === resourceType)?.status === "imported");
+    const status = fullyImported && openConflictCount === 0
+      ? "imported"
+      : hasConflict || openConflictCount > 0
+        ? "conflict"
+        : hasFailure
+          ? "failed"
+          : "partial";
     await tx.migrationImportBatch.update({
       where: { id: batchId },
-      data: { status: hasConflict ? "conflict" : hasFailure ? "failed" : "partial", errorSummary: hasFailure ? batch.errorSummary : null }
+      data: { status, errorSummary: hasFailure ? batch.errorSummary : null }
     });
   });
 }
 
 function dependencyBlocked(sourceCount: number, statuses: Map<MigrationImportResourceType, string>, dependencies: MigrationImportResourceType[]): boolean {
-  return sourceCount > 0 && dependencies.some((dependency) => statuses.get(dependency) === "conflict");
+  return sourceCount > 0 && dependencies.some((dependency) => statuses.get(dependency) !== "imported");
 }
 
 function executionResultFromSummary(
@@ -885,7 +1077,7 @@ function executionResultFromSummary(
     failedResource: failedResource ?? summary.resourceCheckpoints.find((checkpoint) => checkpoint.status === "failed")?.resourceType ?? null,
     resourceCheckpoints: summary.resourceCheckpoints,
     unresolvedConflictCount: summary.unresolvedConflictCount,
-    nextAction: hasConflict ? "resolve_conflicts_or_retry" : hasFailure ? "retry_failed_resource" : "begin_batch_5_5_finalization"
+    nextAction: hasConflict ? "resolve_conflicts_or_retry" : hasFailure ? "retry_failed_resource" : "begin_batch_5_6_verification"
   };
 }
 
@@ -898,7 +1090,7 @@ export async function executeMigrationImport(
   const prisma = getPrismaClient();
   const batch = await prisma.migrationImportBatch.findUnique({ where: { id: batchId }, include: { resources: true } });
   if (!batch || batch.organizationId !== organizationId) throw new MigrationImportServiceError("IMPORT_NOT_FOUND", "The migration import batch was not found.");
-  if (!["ready", "partial", "conflict", "failed", "importing"].includes(batch.status)) {
+  if (!["ready", "partial", "conflict", "failed", "importing", "imported"].includes(batch.status)) {
     throw new MigrationImportServiceError("CONFLICT", `Migration batch status ${batch.status} cannot be executed.`);
   }
   if (!batch.packagePayload) throw new MigrationImportServiceError("INVALID_STATUS_TRANSITION", "The migration batch has no immutable package payload.");
@@ -909,10 +1101,13 @@ export async function executeMigrationImport(
   if (batch.metadataDigest !== exportPackage.digests.metadataDigest) {
     throw new MigrationImportServiceError("CONFLICT", "The stored package metadata no longer matches the migration batch manifest.");
   }
-  const noOp = IMPLEMENTED_RESOURCE_TYPES.every((resourceType) => {
+  const noOp = FINAL_RESOURCE_TYPES.every((resourceType) => {
     const checkpoint = batch.resources.find((resource) => resource.resourceType === resourceType);
-    return checkpoint?.status === "imported" || checkpoint?.status === "conflict";
+    return checkpoint?.status === "imported";
   });
+  if (batch.status === "imported" || noOp) {
+    return executionResultFromSummary(await getMigrationImportBatch(organizationId, batchId), null, true);
+  }
   const profileConflict = await reconcileOrganizationProfile(organizationId, batchId, exportPackage);
   if (profileConflict) {
     await finalizeBatch(organizationId, batchId);
@@ -922,14 +1117,16 @@ export async function executeMigrationImport(
 
   const statuses = new Map<MigrationImportResourceType, string>(batch.resources.map((resource) => [resource.resourceType, resource.status]));
   const resources = exportPackage.resources;
-  const sequence: Array<{ type: ImplementedResourceType; count: number; dependencies: MigrationImportResourceType[] }> = [
+  const sequence: Array<{ type: RunnableResourceType; count: number; dependencies: MigrationImportResourceType[] }> = [
     { type: "knowledge", count: resources.knowledge.length, dependencies: [] },
     { type: "knowledgeCandidates", count: resources.knowledgeCandidates.length, dependencies: ["knowledge"] },
     { type: "validationRecords", count: resources.validationRecords.length, dependencies: ["knowledge", "knowledgeCandidates"] },
     { type: "ticketRecords", count: resources.ticketRecords.length, dependencies: ["validationRecords"] },
     { type: "emergingPatterns", count: resources.emergingPatterns.length, dependencies: [] },
     { type: "intelligenceLog", count: resources.intelligenceLog.length, dependencies: [] },
-    { type: "orgMetrics", count: resources.orgMetrics ? 1 : 0, dependencies: [] }
+    { type: "orgMetrics", count: resources.orgMetrics ? 1 : 0, dependencies: [] },
+    { type: "memoryChangeRecords", count: resources.memoryChangeRecords.length, dependencies: ["knowledge", "knowledgeCandidates", "validationRecords"] },
+    { type: "ticketSequence", count: 1, dependencies: ["ticketRecords", "memoryChangeRecords"] }
   ];
   let failedResource: MigrationImportResourceType | null = null;
   for (const item of sequence) {

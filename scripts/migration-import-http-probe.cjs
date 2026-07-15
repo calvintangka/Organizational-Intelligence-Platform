@@ -1,4 +1,4 @@
-/* Live HTTP verification for Batch 5.4 execution. */
+/* Live HTTP verification for Batch 5.5 history and sequence reconciliation. */
 const assert = require("node:assert/strict");
 const intakeProbe = require("./migration-intake-probe.cjs");
 const { populatedPackage } = require("./migration-import-probe.cjs");
@@ -32,16 +32,17 @@ async function main() {
     assert.equal(intake.response.status, 201);
     const execute = await post(`/api/organizations/${ORG}/migration-import/${intake.body.data.batchId}/execute`);
     assert.equal(execute.response.status, 200);
-    assert.equal(execute.body.data.status, "partial");
+    assert.equal(execute.body.data.status, "imported");
     assert.equal(execute.body.data.noOp, false);
-    assert.equal(execute.body.data.resourceCheckpoints.filter((row) => row.status === "imported").length, 7);
-    assert.equal(execute.body.data.resourceCheckpoints.find((row) => row.resourceType === "memoryChangeRecords").status, "pending");
+    assert.equal(execute.body.data.resourceCheckpoints.filter((row) => row.status === "imported").length, 9);
+    assert.equal(execute.body.data.resourceCheckpoints.find((row) => row.resourceType === "memoryChangeRecords").status, "imported");
+    assert.equal(execute.body.data.resourceCheckpoints.find((row) => row.resourceType === "ticketSequence").status, "imported");
 
     const knowledge = await get(`/api/organizations/${ORG}/knowledge`);
     assert.equal(knowledge.response.status, 200);
     assert.equal(knowledge.body.data[0].id, "import-knowledge-1");
     const tickets = await get(`/api/organizations/${ORG}/tickets`);
-    assert.equal(tickets.body.data[0].ticketId, "MT-IMPORT-1");
+    assert.equal(tickets.body.data[0].ticketId, "MT-20260715-0015");
 
     const retry = await post(`/api/organizations/${ORG}/migration-import/${intake.body.data.batchId}/execute`);
     assert.equal(retry.response.status, 200);

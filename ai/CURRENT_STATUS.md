@@ -213,11 +213,11 @@ Three-tier AI fallback chain implemented: LM Studio (local Gemma) → Claude API
 - The validated frozen package is retained in nullable `MigrationImportBatch.packagePayload` for deterministic later retry; arbitrary localStorage dumps are not accepted or stored.
 - Intake does not import KnowledgeItems, candidates, validations, memory history, tickets, metrics, patterns, logs, or ticket sequences. Batch 5.4 owns business-data import.
 
-## TODO-004 Batch 5.4 Import Status
+## TODO-004 Batch 5.4–5.5 Import Status
 
 - Execution endpoint: `POST /api/organizations/[organizationId]/migration-import/[batchId]/execute`.
 - The importer reads only `MigrationImportBatch.packagePayload`, revalidates its organization and digest identity, and never accepts a second business payload from the browser.
-- Dependency order is profile reconciliation, KnowledgeItems, candidates, validations, tickets, emerging patterns, intelligence logs, and metrics. Historical validation records are inserted directly; normal validation/reflection workflows are not replayed.
+- Dependency order is profile reconciliation, KnowledgeItems, candidates, validations, tickets, emerging patterns, intelligence logs, metrics, memory history, and ticket-sequence reconciliation. Historical validation records and memory audit rows are inserted directly; normal validation/reflection workflows are not replayed.
 - Imports are additive and per-resource transactional. Identical rows are skipped, differing rows create deterministic `MigrationImportConflict` evidence, and resource conflicts prevent partial mutation of that resource.
-- Successful Batch 5.4 execution leaves the batch `partial`, with seven implemented checkpoints `imported` and `memoryChangeRecords` plus `ticketSequence` still `pending`. Failed resources remain retryable; conflicts remain quarantined.
-- MemoryChangeRecord historical reconciliation, TicketSequence reconciliation, post-import verification, cutover, and mature organization migration remain unimplemented.
+- Successful Batch 5.5 execution leaves all nine checkpoints `imported` and the batch `imported`; it is not yet `verified`. Memory history is preflighted against organization-owned KnowledgeItems, candidates, and validations, and ticket sequence reconciliation atomically raises (never lowers) the counter to the maximum of the server counter, package counter, and parsed source ticket suffix.
+- Failed resources remain retryable; conflicts remain quarantined. STOP: post-import verification is pending Batch 5.6; authority cutover is pending Batch 5.8; mature Maesa/FastDrop/Pramana migration remains unimplemented.

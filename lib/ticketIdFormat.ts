@@ -40,3 +40,28 @@ export function formatTicketIdRange(
   const first = lastSequenceNumber - count + 1;
   return Array.from({ length: count }, (_, index) => formatTicketId(prefix, dateStamp, first + index));
 }
+
+export interface ParsedTicketId {
+  prefix: string;
+  dateStamp: string;
+  sequenceNumber: number;
+}
+
+/**
+ * Parse only the ticket format emitted by formatTicketId. A malformed ID
+ * returns null rather than silently contributing sequence zero to migration.
+ */
+export function parseTicketId(value: unknown): ParsedTicketId | null {
+  if (typeof value !== "string") return null;
+  const match = /^([A-Za-z0-9]+)-(\d{8})-(\d{1,9})$/.exec(value);
+  if (!match) return null;
+  const [, prefix, dateStamp, sequenceText] = match;
+  const year = Number(dateStamp.slice(0, 4));
+  const month = Number(dateStamp.slice(4, 6));
+  const day = Number(dateStamp.slice(6, 8));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  const sequenceNumber = Number(sequenceText);
+  if (!Number.isSafeInteger(sequenceNumber) || sequenceNumber < 0) return null;
+  return { prefix, dateStamp, sequenceNumber };
+}
