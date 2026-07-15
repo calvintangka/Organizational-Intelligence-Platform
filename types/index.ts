@@ -52,6 +52,22 @@ export type { Observation, ExtractedTicketFields, Understanding, ReasoningSummar
 export type { EmergingPattern, EmergingPatternExample } from "./patterns";
 export type { OrganizationProfile, CustomerTone } from "./organization";
 export type {
+  BlockedMigrationExport,
+  MigrationExportCounts,
+  MigrationExportDigests,
+  MigrationExportMigrationState,
+  MigrationExportOwnershipEvidence,
+  MigrationExportPackage,
+  MigrationExportResourceName,
+  MigrationExportResourceSource,
+  MigrationExportResourceStatus,
+  MigrationExportResources,
+  MigrationExportResult,
+  MigrationExportTicketSequence,
+  ReadyMigrationExport
+} from "./migrationExport";
+export { LOCAL_STORAGE_EXPORT_FORMAT, LOCAL_STORAGE_EXPORT_VERSION } from "./migrationExport";
+export type {
   SupportedBulkUploadFormat,
   BulkUploadShape,
   BulkClusterConfidence,

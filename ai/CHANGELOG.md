@@ -13,6 +13,19 @@
 **Verification:** <what was tested>
 **Open items:** <anything left unverified>
 
+## [2026-07-15] Add read-only local persistence export
+**Layer:** coding
+**Task/Prompt:** Implement TODO-004 Batch 5.0–5.1: export package contract and strictly read-only resolved localStorage exporter.
+**Files changed:** `types/migrationExport.ts`, `lib/persistence/migrationExport.ts`, `lib/orgMemory.ts`, `lib/canonicalProblemEngine.ts`, `scripts/migration-export-probe.cjs`, `package.json`, `ai/CHANGELOG.md`, `ai/CURRENT_STATUS.md`, `ai/CODEBASE_MAP.md`, `ai/ARCHITECTURE.md`
+**What changed:**
+- Added versioned `oip-localstorage-export-v1` package types covering resolved resources, ownership evidence, migration state, counts, and deterministic SHA-256 digests.
+- Added `exportOrganizationSnapshot()` as a localStorage-only, read-only resolved exporter with explicit organization ownership and blocked-export behavior.
+- Reused pure knowledge normalization while giving read-only repair metadata deterministic timestamps/IDs; no self-healing writeback is invoked.
+- Added deterministic coverage for byte-identical storage, fallback history/tickets, seed exclusion, ownership ambiguity, reset suppression, digest idempotency, and cross-organization isolation.
+**Boundaries touched:** Local persistence/export only. No PostgreSQL import, server import endpoint, cutover, or mature organization migration was implemented.
+**Verification:** `npm.cmd run probe:migration-export`, persistence probes, Prisma validation/status, TypeScript, build, and diff checks.
+**Open items:** Batch 5.2+ import metadata and server import remain intentionally unimplemented.
+
 ## [2026-07-15] Add transactional server persistence writes
 **Layer:** coding
 **Task/Prompt:** Implement TODO-004 Batch 4: Transactional Server Database Write Path.

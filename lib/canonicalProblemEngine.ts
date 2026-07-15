@@ -1437,7 +1437,8 @@ function templateMatchesLessonResponse(template: string, lessonResponse: string)
  */
 export function repairCorruptedCustomerTemplates(
   items: KnowledgeItem[],
-  profile: OrganizationProfile = defaultOrganizationProfile
+  profile: OrganizationProfile = defaultOrganizationProfile,
+  options?: { timestamp?: string; deterministic?: boolean }
 ): { items: KnowledgeItem[]; repairedCount: number } {
   let repairedCount = 0;
   const result = items.map((raw) => {
@@ -1451,7 +1452,8 @@ export function repairCorruptedCustomerTemplates(
     repairedCount++;
 
     const genericTemplate = getCustomerResponseTemplate(item.category, profile);
-    const at = new Date().toISOString();
+    const at = options?.timestamp ?? new Date().toISOString();
+    const historySuffix = options?.deterministic ? "readonly-export" : String(Date.now());
     return {
       ...item,
       customerResponseTemplate: genericTemplate,
@@ -1459,7 +1461,7 @@ export function repairCorruptedCustomerTemplates(
       learningHistory: [
         ...(item.learningHistory ?? []),
         {
-          id: `${item.canonicalProblemId ?? item.id}-history-repair-${Date.now()}`,
+          id: `${item.canonicalProblemId ?? item.id}-history-repair-${historySuffix}`,
           event: "Data integrity fix: generic template restored",
           detail: `The generic customer response template had been overwritten by lesson-specific content (root cause: "${clobberedBy.rootCause}") due to a bug where teaching a lesson during knowledge evolution overwrote the shared template. Restored to a genuinely generic baseline for "${item.canonicalProblemTitle ?? item.title}". All lessons, including their individual customer responses, are unchanged.`,
           createdAt: at
@@ -1471,7 +1473,10 @@ export function repairCorruptedCustomerTemplates(
   return { items: result, repairedCount };
 }
 
-export function repairLegacyLessonResponseTemplates(items: KnowledgeItem[]): { items: KnowledgeItem[]; repairedCount: number } {
+export function repairLegacyLessonResponseTemplates(
+  items: KnowledgeItem[],
+  options?: { timestamp?: string; deterministic?: boolean }
+): { items: KnowledgeItem[]; repairedCount: number } {
   let repairedCount = 0;
 
   const result = items.map((raw, index) => {
@@ -1492,14 +1497,15 @@ export function repairLegacyLessonResponseTemplates(items: KnowledgeItem[]): { i
 
     if (!itemChanged) return item;
 
-    const at = new Date().toISOString();
+    const at = options?.timestamp ?? new Date().toISOString();
+    const historySuffix = options?.deterministic ? "readonly-export" : String(Date.now());
     return {
       ...item,
       lessons: repairedLessons,
       learningHistory: [
         ...(item.learningHistory ?? []),
         {
-          id: `${item.canonicalProblemId ?? item.id}-history-lesson-template-repair-${index}-${Date.now()}`,
+          id: `${item.canonicalProblemId ?? item.id}-history-lesson-template-repair-${index}-${historySuffix}`,
           event: "Data integrity fix: reusable lesson templates normalized",
           detail: "Legacy lesson customer-response templates were normalized to reusable placeholders before deterministic rendering. Customer-specific greetings and stored ticket references were converted to placeholder form without changing the lesson's solution or routing guidance.",
           createdAt: at

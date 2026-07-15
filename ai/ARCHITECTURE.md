@@ -259,3 +259,13 @@ The code intentionally simplifies the broader OIP vision documented elsewhere in
   AI can suggest, discriminate, and personalize drafts, but it does not validate knowledge, directly commit memory, or bypass human review.
 
 That simplicity is deliberate: the prototype demonstrates the learning loop, governance surfaces, and memory lifecycle without implementing the full multi-actor platform architecture.
+
+## Read-Only Local Persistence Export
+
+TODO-004 Batch 5.0–5.1 adds `exportOrganizationSnapshot()` in `lib/persistence/migrationExport.ts`. It is deliberately outside `PersistenceAdapter`: exporting browser localStorage is a migration-specific local capability and must not require `ServerPersistenceAdapter` to implement a browser operation.
+
+The exporter requires an explicit organization ID and reads the current resolved local view without calling `prepareOrganization()`, `migrateLegacyOrganizationStorage()`, public self-healing loaders, save functions, ticket allocation, API routes, or Prisma. Scoped resources remain authoritative; owner-permitted legacy fallback is included. Memory changes preserve legacy full history plus the scoped tail, with scoped records winning only for an identical record ID in the resolved view.
+
+The export contract is `oip-localstorage-export-v1` in `types/migrationExport.ts`. It includes ownership evidence, migration-state provenance, source-resource statuses, resolved resources, deterministic counts, and SHA-256 digests using stable key ordering. Seed/default KnowledgeItems are not exported as historical organizational memory when no persisted knowledge exists.
+
+An ambiguous legacy owner, incompatible migration marker, missing organization profile, active server persistence mode, unavailable localStorage, ownership mismatch, or unavailable SHA-256 implementation blocks the export. No import endpoint, PostgreSQL import, conflict quarantine, server ticket-sequence reconciliation, verification UI, or organization cutover exists in this batch.

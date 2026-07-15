@@ -186,3 +186,14 @@ Three-tier AI fallback chain implemented: LM Studio (local Gemma) → Claude API
 - Persistence: browser localStorage via `lib/orgMemory.ts`.
 - AI provider: LM Studio through same-origin proxy.
 - Governance docs: present under `/ai`.
+
+## TODO-004 Batch 5.0–5.1 Export Status
+
+- Export contract: `types/migrationExport.ts`, format `oip-localstorage-export-v1`.
+- Read-only exporter: `lib/persistence/migrationExport.ts`, public function `exportOrganizationSnapshot(organizationId)`.
+- Export semantics: resolved in-memory organization state, not a raw browser-storage dump. Scoped data wins; permitted legacy fallback is included; memory history merges legacy full history with the scoped tail and deduplicates by ID.
+- Knowledge normalization: pure canonicalization and template repair may shape the exported resolved view, but deterministic repair metadata is generated in memory only. No migration preparation, self-healing writeback, marker update, counter allocation, reset, or persistence-mode change occurs.
+- Seed rule: displayed seed KnowledgeItems are excluded when no persisted knowledge exists. The package records `source: "seed"` for provenance and exports an empty knowledge resource.
+- Ownership: exports require an explicit organization ID. Ambiguous or ownerless legacy storage blocks a migration-ready package; non-owner organizations cannot receive legacy fallback data.
+- Digests: per-resource and whole-resource-payload SHA-256 digests use stable key-sorted serialization. `exportedAt` is excluded from content and metadata digests.
+- No import path or cutover exists yet. Batch 5.2+ remains intentionally unimplemented.

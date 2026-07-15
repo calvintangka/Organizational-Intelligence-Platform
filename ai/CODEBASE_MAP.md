@@ -98,6 +98,9 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `lib/organizationId.ts` - Shared compile-time/runtime non-empty organization-id guard for organization-owned persistence entry points.
 - `lib/orgMemory.ts` - Versioned organization-scoped localStorage load/save helpers for knowledge, candidates, validations, memory changes, metrics, log, and patterns. Every public organization-owned operation requires an explicit id; it owns the copy-only legacy v2 migration marker, durable single-organization legacy ownership, owner-only fallback reads, independent retryable resource states, idempotent completion, and ambiguous migration blocking.
 - `lib/organizationProfile.ts` - Async-compatible profile load/save helpers, normalization, and keyword-bank generation.
+- `lib/persistence/migrationExport.ts` - Strictly read-only resolved localStorage exporter for TODO-004 Batch 5.0–5.1. Reads scoped resources, permitted legacy fallback, ownership metadata, profiles, ticket counters, and migration state without calling migration preparation or any save path.
+- `types/migrationExport.ts` - Versioned `oip-localstorage-export-v1` contract for organization profile, source provenance, resolved resources, counts, ownership evidence, migration state, and deterministic digests.
+- `scripts/migration-export-probe.cjs` - In-memory localStorage regression probe for export byte identity, fallback history, seed exclusion, ownership blocking, reset suppression, digest idempotency, and cross-organization isolation.
 - `lib/ticketRecords.ts` - Explicit-id async ticket-record load/save helpers plus synchronous quota-guarded ticket-id counters, runtime/persisted owner-only legacy fallback, atomic bulk ID reservation, and case-record utilities.
 - `lib/metrics.ts` - Metric defaults.
 - `lib/intelligenceLog.ts` - Event-log helpers.

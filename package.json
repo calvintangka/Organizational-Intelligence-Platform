@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "probe:migration-export": "node scripts/migration-export-probe.cjs",
     "probe:persistence-boundary": "node scripts/persistence-boundary-probe.cjs",
     "probe:server-persistence": "node scripts/server-persistence-probe.cjs",
     "probe:db-writes": "node scripts/db-write-probe.cjs",

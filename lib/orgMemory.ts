@@ -74,7 +74,7 @@ interface MigrationResourceState {
   updatedAt: string;
 }
 
-interface OrganizationMigrationState {
+export interface OrganizationMigrationState {
   version: string;
   sourceVersion: string;
   organizations: Record<string, {
@@ -225,6 +225,15 @@ function readMigrationState(): OrganizationMigrationState {
   }
 
   return { version: ISOLATED_STORAGE_VERSION, sourceVersion: STORAGE_VERSION, organizations: {} };
+}
+
+/**
+ * Read the migration marker without preparing, repairing, or persisting it.
+ * This is intentionally separate from `migrateLegacyOrganizationStorage()`
+ * for read-only migration export tooling.
+ */
+export function readMigrationStateForExport(): OrganizationMigrationState {
+  return readMigrationState();
 }
 
 function rememberRuntimeFallback(organizationId: string, resource: OrganizationMigrationResource): void {
@@ -657,28 +666,61 @@ export function seedOrganizationalKnowledge(): KnowledgeItem[] {
   );
 }
 
+/**
+ * Apply the same in-memory normalization used by loadKnowledge() without the
+ * self-healing writeback. Export tooling uses this to describe the resolved
+ * visible state while preserving the exact browser storage bytes.
+ */
+interface KnowledgeSnapshotNormalization {
+  normalized: KnowledgeItem[];
+  deduped: KnowledgeItem[];
+  items: KnowledgeItem[];
+  repairedTemplateCount: number;
+  repairedLessonCount: number;
+}
+
+function normalizePersistedKnowledgeSnapshotDetails(
+  organizationId: string,
+  stored: KnowledgeItem[],
+  options?: { deterministicRepairs?: boolean }
+): KnowledgeSnapshotNormalization {
+  requireOrganizationId(organizationId, "normalizePersistedKnowledgeSnapshot");
+  const normalized = stored.map((item) => withCanonicalProblemDefaults(withLearningDefaults({
+    ...item,
+    organizationId: item.organizationId ?? organizationId
+  })));
+  const deduped = dedupeCanonicalProblems(normalized);
+  const repairOptions = options?.deterministicRepairs
+    ? { timestamp: "1970-01-01T00:00:00.000Z", deterministic: true }
+    : undefined;
+  const { items: repairedTemplates, repairedCount: repairedTemplateCount } = repairCorruptedCustomerTemplates(deduped, undefined, repairOptions);
+  const { items, repairedCount: repairedLessonCount } = repairLegacyLessonResponseTemplates(repairedTemplates, repairOptions);
+  return { normalized, deduped, items, repairedTemplateCount, repairedLessonCount };
+}
+
+export function normalizePersistedKnowledgeSnapshot(
+  organizationId: string,
+  stored: KnowledgeItem[],
+  options?: { deterministicRepairs?: boolean }
+): KnowledgeItem[] {
+  return normalizePersistedKnowledgeSnapshotDetails(organizationId, stored, options).items;
+}
+
 export async function loadKnowledge(organizationId: string): Promise<KnowledgeItem[]> {
   requireOrganizationId(organizationId, "loadKnowledge");
   const stored = readOrganizationResource<KnowledgeItem[]>(organizationId, "knowledge", KNOWLEDGE_KEY, resolveScopedStorageKey(KNOWLEDGE_KEY, organizationId));
   if (stored && Array.isArray(stored) && stored.length > 0) {
-    const normalized = stored.map((item) => withCanonicalProblemDefaults(withLearningDefaults({ ...item, organizationId: item.organizationId ?? organizationId })));
-    // Migration: collapse any duplicate canonical problems left over from earlier
-    // testing or pre-canonical localStorage, and persist the cleaned memory.
-    const deduped = dedupeCanonicalProblems(normalized);
-    // Self-heal: restore any generic customerResponseTemplate that a fixed bug had
-    // overwritten with a lesson's specific response (see repairCorruptedCustomerTemplates).
-    const { items: repairedTemplates, repairedCount: repairedTemplateCount } = repairCorruptedCustomerTemplates(deduped);
-    // Self-heal legacy lesson customerResponse values that stored a specific
-    // customer greeting or hard-coded ticket reference instead of reusable placeholders.
-    const { items: repaired, repairedCount: repairedLessonCount } = repairLegacyLessonResponseTemplates(repairedTemplates);
-    if (deduped.length !== normalized.length || repairedTemplateCount > 0 || repairedLessonCount > 0) {
+    const normalized = normalizePersistedKnowledgeSnapshotDetails(organizationId, stored);
+    if (normalized.deduped.length !== normalized.normalized.length
+      || normalized.repairedTemplateCount > 0
+      || normalized.repairedLessonCount > 0) {
       try {
-        await saveKnowledge(organizationId, repaired);
+        await saveKnowledge(organizationId, normalized.items);
       } catch {
         /* keep load behavior intact even if a self-heal writeback fails */
       }
     }
-    return repaired;
+    return normalized.items;
   }
   return seedOrganizationalKnowledge().map((item) => ({ ...item, organizationId }));
 }
