@@ -95,6 +95,11 @@ enum MigrationImportConflictStatus {
   ignored
 }
 
+enum PersistenceAuthority {
+  local
+  server
+}
+
 model Organization {
   id          String   @id
   name        String
@@ -115,6 +120,7 @@ model Organization {
   ticketSequence      TicketSequence?
   migrationImportBatches    MigrationImportBatch[]
   migrationImportConflicts  MigrationImportConflict[]
+  persistenceAuthority      OrganizationPersistenceAuthority?
 
   @@map("organizations")
 }
@@ -355,6 +361,7 @@ model MigrationImportBatch {
   organization Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   resources    MigrationImportResource[]
   conflicts    MigrationImportConflict[]
+  cutovers     OrganizationPersistenceAuthority[]
 
   @@unique([organizationId, resourcePayloadDigest])
   @@index([organizationId, status])
@@ -413,4 +420,31 @@ model MigrationImportConflict {
   @@index([organizationId, status])
   @@index([batchId, status])
   @@map("migration_import_conflicts")
+}
+
+/**
+ * Durable, organization-scoped persistence authority (TODO-004 Batch 5.8).
+ * A row exists only once an organization has explicitly cut over to server
+ * authority; a MISSING row resolves to `local`. The routing decision for
+ * server-cutover organizations therefore lives server-side, not in one browser.
+ * `migrationBatchId` binds the cutover to the exact verified MigrationImportBatch
+ * that proved the organization's PostgreSQL state. localStorage is never deleted
+ * by a cutover; the preserved local copy is historical rollback evidence only.
+ */
+model OrganizationPersistenceAuthority {
+  organizationId    String                @id
+  authority         PersistenceAuthority  @default(local)
+  previousAuthority PersistenceAuthority?
+  migrationBatchId  String?
+  reason            String?
+  cutoverAt         DateTime?             @db.Timestamptz(6)
+  createdAt         DateTime              @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime              @updatedAt @db.Timestamptz(6)
+
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  migrationBatch MigrationImportBatch?  @relation(fields: [migrationBatchId], references: [id], onDelete: SetNull)
+
+  @@index([authority])
+  @@index([migrationBatchId])
+  @@map("organization_persistence_authority")
 }

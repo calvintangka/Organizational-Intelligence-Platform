@@ -96,7 +96,12 @@ function legacyKnowledge() {
 async function main() {
   resetStorage();
 
-  assert.ok(persistence instanceof LocalStorageAdapter, "LocalStorageAdapter must be the active adapter");
+  // The active adapter is now the per-organization routing adapter. In the
+  // default (no env flag) deployment every organization is local-authoritative,
+  // so it must route to LocalStorageAdapter and never to the server adapter.
+  assert.equal(persistenceModule.activePersistenceMode(), "local", "default active authority must be local");
+  assert.ok(persistenceModule.persistenceAdapterForAuthority("local") instanceof LocalStorageAdapter, "local authority must select LocalStorageAdapter");
+  assert.ok(!(persistence instanceof persistenceModule.ServerPersistenceAdapter), "server adapter must not be active by default");
   assert.equal(fs.readFileSync(path.join(root, "lib", "persistence", "localStorageAdapter.ts"), "utf8").includes("lib/server/prisma"), false);
   assert.equal(fs.readFileSync(path.join(root, "app", "page.tsx"), "utf8").includes("lib/server/prisma"), false);
 

@@ -2,6 +2,22 @@
 
 ## Entry Format
 
+## [2026-07-15] Add per-organization persistence cutover
+
+**Task/Prompt:** Implement TODO-004 Batch 5.8: per-organization persistence authority and cutover controls.
+
+**Files changed:** `prisma/schema.prisma`, `prisma/migrations/20260715220000_add_persistence_authority/migration.sql`, `types/persistenceAuthority.ts`, `lib/server/persistenceAuthorityService.ts`, `app/api/organizations/[organizationId]/persistence-authority/route.ts`, `app/api/organizations/[organizationId]/persistence-authority/cutover/route.ts`, `lib/persistence/authorityRouting.ts`, `lib/persistence/index.ts`, `app/page.tsx`, `scripts/migration-cutover-probe.cjs`, `scripts/persistence-boundary-probe.cjs`, `package.json`, `ai/*`
+
+- Added a durable, organization-scoped `OrganizationPersistenceAuthority` model (new migration `20260715220000_add_persistence_authority`). A missing row resolves to `local`; `server` is reached only through an explicit, verified, one-way cutover bound to the exact `MigrationImportBatch`.
+- Added `lib/server/persistenceAuthorityService.ts` with `getPersistenceAuthorityState()` (safe default local) and `cutOverToServerAuthority()` (strict eligibility: verified batch owned by the org, passed verification report, all nine checkpoints verified, zero unresolved conflicts; idempotent for the same batch; rejects a different batch once server-authoritative). Cutover imports no data, reruns no migration, and never touches localStorage.
+- Added `GET /api/organizations/[organizationId]/persistence-authority` and `POST /api/organizations/[organizationId]/persistence-authority/cutover` (both unauthenticated, prototype-only).
+- Replaced the single global adapter with a `RoutingPersistenceAdapter`: cross-organization selection state (profile/list) routes to the global-mode shell adapter, while every organization-owned resource routes to the active organization's authority-selected adapter. Added `getPersistenceAdapterForOrganization()`, `activatePersistenceOrganization()`, and `activePersistenceMode()`. `app/page.tsx` activates authority before hydration and on switch, gates per-org snapshot saves on the active authority, and routes reset/delete/ticket allocation through the correct backend. No automatic server→local fallback; authority-discovery failure blocks hydration unless durable local client evidence proves the org is local.
+- Local remains the committed default: with `NEXT_PUBLIC_OIP_PERSISTENCE_MODE` unset/`local`, every organization is local and no authority round-trips are made (byte-identical default). Mature Maesa/FastDrop/Pramana data was not exported, migrated, or cut over.
+
+**Verification:** `npm run probe:migration-cutover` (cases A–S) plus the full migration/persistence/db-write regression suite, `prisma validate`/`generate`, `prisma migrate status` (6 applied), `tsc --noEmit`, `next build`, and `git diff --check` all pass. Live HTTP check against the dev server confirmed default-local read, full migration, verified cutover to server, idempotent replay, and one-way rejection.
+
+**Open items:** Cutover is one-way in Batch 5.8 (no automatic revert). Endpoints remain unauthenticated (must not be internet-exposed). The Batch 5.7 same-batch conflict-checkpoint-reset limitation is unchanged; eligibility deliberately relies on the verified batch only.
+
 ## [2026-07-15] Add disposable end-to-end migration verification
 
 **Task/Prompt:** Implement TODO-004 Batch 5.7: disposable organization end-to-end migration test and hardening.

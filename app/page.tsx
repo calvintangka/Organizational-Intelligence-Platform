@@ -55,6 +55,9 @@ import {
 import {
   persistence,
   persistenceMode,
+  activePersistenceMode,
+  activatePersistenceOrganization,
+  getPersistenceAdapterForOrganization,
 } from "@/lib/persistence";
 import {
   syncProfileIntoList,
@@ -576,6 +579,11 @@ export default function Home() {
       try {
         const loadedProfile = await persistence.loadOrganizationProfile();
         const orgId = loadedProfile.id;
+        // Resolve this organization's durable authority and select its adapter
+        // BEFORE touching any organization-owned resource. A discovery failure
+        // for a non-local organization throws here and hydration is left
+        // incomplete rather than forking into localStorage.
+        await activatePersistenceOrganization(orgId);
         const migration = await persistence.prepareOrganization(orgId);
         setMigrationWarning(migration.warnings.join(" "));
         const [
@@ -686,7 +694,7 @@ export default function Home() {
   // exclusively inside the transactional validation commit so the audit chain
   // (validation -> memory change -> knowledge/trust) can never partially land.
   useEffect(() => {
-    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveKnowledge", persistence.saveKnowledge(organizationProfile.id, knowledgeItems));
+    if (hydrated && activePersistenceMode() === "local") queuePersistenceSave("saveKnowledge", persistence.saveKnowledge(organizationProfile.id, knowledgeItems));
   }, [knowledgeItems, organizationProfile.id, hydrated]);
 
   useEffect(() => {
@@ -694,11 +702,11 @@ export default function Home() {
   }, [knowledgeCandidates, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveValidationRecords", persistence.saveValidationRecords(organizationProfile.id, validationRecords));
+    if (hydrated && activePersistenceMode() === "local") queuePersistenceSave("saveValidationRecords", persistence.saveValidationRecords(organizationProfile.id, validationRecords));
   }, [validationRecords, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveMemoryChangeRecords", persistence.saveMemoryChangeRecords(organizationProfile.id, memoryChangeRecords));
+    if (hydrated && activePersistenceMode() === "local") queuePersistenceSave("saveMemoryChangeRecords", persistence.saveMemoryChangeRecords(organizationProfile.id, memoryChangeRecords));
   }, [memoryChangeRecords, organizationProfile.id, hydrated]);
 
   useEffect(() => {
@@ -1593,13 +1601,17 @@ export default function Home() {
     setErrorMessage("");
     resetWorkflowState();
     try {
-      // Finish the current organization's writes before any new organization can
-      // become active. The old id is passed explicitly to every adapter.
-      if (persistenceMode === "local" && persistCurrent && wasHydrated) {
+      // Finish the OUTGOING organization's resource writes through ITS OWN
+      // authority before any new organization can become active. The outgoing
+      // authority is still active here (activation for the incoming org happens
+      // after these saves), so cross-source writes are impossible.
+      if (activePersistenceMode() === "local" && persistCurrent && wasHydrated) {
         await persistOrganizationState(organizationProfile.id);
       }
       if (persistenceMode === "local" && persistCurrent) await persistence.saveOrganizationProfile(organizationProfile);
       if (persistenceMode === "local") await persistence.saveOrganizationList(availableOrganizations);
+      // Select the INCOMING organization's adapter before loading its resources.
+      await activatePersistenceOrganization(found.id);
       const loaded = await loadOrganizationState(found.id);
       if (generation !== organizationSwitchGeneration.current) return;
       setOrganizationProfile(found);
@@ -1634,10 +1646,14 @@ export default function Home() {
     const nextList = organizationList.filter((org) => org.id !== id);
     if (nextList.length === organizationList.length) return;
     try {
-      if (persistenceMode === "local" && id === organizationProfile.id && hydrated) {
+      if (activePersistenceMode() === "local" && id === organizationProfile.id && hydrated) {
         await persistOrganizationState(id);
       }
-      await persistence.deleteOrganization(id);
+      // Route deletion through the DELETED organization's own authority so a
+      // server-authoritative organization is removed from PostgreSQL and a
+      // local-authoritative one from localStorage — never the wrong backend.
+      const targetAdapter = await getPersistenceAdapterForOrganization(id);
+      await targetAdapter.deleteOrganization(id);
       if (id === organizationProfile.id) {
         await selectOrganization(nextList[0].id, nextList, false);
       } else {

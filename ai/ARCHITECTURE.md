@@ -315,3 +315,35 @@ TODO-004 Batch 5.7 adds `scripts/migration-e2e-probe.cjs` as the canonical dispo
 The probe asserts an empty disposable database before import, immutable source localStorage bytes, independent organization-scoped server readbacks, idempotent intake/import/verification retries, memory and sequence failure-injection recovery, conflict quarantine, open-conflict verification blocking, monotonic ticket allocation under concurrency, cleanup, and that no authority cutover occurs. It also records the current prototype limitation that resolving a conflict changes conflict metadata but does not reset the conflicted resource checkpoint for same-batch retry; a repaired migration currently requires a new package/batch or a future checkpoint-reset mechanism. Historical import remains a dedicated server migration service and endpoint, not the normal validation transaction or snapshot PUT path, because lessons, versions, audit history, and revisions must be inserted as historical state without replaying business workflows.
 
 STOP: per-organization authority cutover is pending Batch 5.8, and mature Maesa/FastDrop/Pramana migration remains pending. The prototype endpoints are unauthenticated; organization scoping is not authorization and these endpoints must not be internet-exposed without authentication.
+
+## Per-Organization Persistence Authority & Cutover
+
+TODO-004 Batch 5.8 makes persistence authority per-organization and durable instead of a single global mode. The authority lives server-side in `OrganizationPersistenceAuthority` (migration `20260715220000_add_persistence_authority`): one row per organization with `authority` (`local`|`server`), `previousAuthority`, `migrationBatchId`, `reason`, and `cutoverAt`. A MISSING row resolves to `local`, so every existing organization is local by default and the routing decision for server-cutover organizations lives server-side, not in one browser.
+
+Authority flow:
+
+```
+Organization
+  -> Persistence Authority Lookup
+     -> LOCAL  -> LocalStorageAdapter
+     -> SERVER -> ServerPersistenceAdapter
+```
+
+Cutover:
+
+```
+Verified Migration Batch
+  -> Explicit Cutover (POST .../persistence-authority/cutover)
+     -> Organization Authority = server
+     -> localStorage preserved (rollback evidence only)
+```
+
+`lib/server/persistenceAuthorityService.ts` owns the rules. `getPersistenceAuthorityState()` returns the durable state (safe local default, no secrets) plus the bound batch's verification summary. `cutOverToServerAuthority()` cuts an organization over ONLY when all hold: the batch is owned by that organization (a verified batch for Org X can never cut over Org Y), `status = verified`, a verification report with `overallStatus = passed`, all nine resource checkpoints verified, and zero unresolved conflicts. Eligibility relies on the verified batch alone and does not reason around the Batch 5.7 stale-conflicted-checkpoint limitation. The write is a single transaction that sets authority, records `cutoverAt`, `previousAuthority`, and the source `migrationBatchId`; it performs NO data import, reruns NO migration, and never clears or rewrites localStorage keys or migration markers. Cutover is idempotent for the same batch (safe no-op) and rejects a different batch once server-authoritative. Cutover is one-way in Batch 5.8: server authority does not automatically revert to local, because server-side writes after cutover would make a casual revert fork state.
+
+Client routing uses a `RoutingPersistenceAdapter` (`lib/persistence/index.ts`). Two backends are tracked at once: the SHELL adapter (chosen from the global `NEXT_PUBLIC_OIP_PERSISTENCE_MODE`) owns cross-organization selection state (the organization profile and list — which organizations exist and which is selected), while the ACTIVE RESOURCE adapter is chosen from the active organization's authority and owns every organization-owned resource, ticket allocation, reset, and delete. `getPersistenceAdapterForOrganization()` resolves authority and returns the concrete adapter; `activatePersistenceOrganization()` selects it before any resource read/write; `activePersistenceMode()` reports the active authority and gates per-organization snapshot saves.
+
+Precedence and discovery policy: `NEXT_PUBLIC_OIP_PERSISTENCE_MODE` unset or `local` (the committed default) is local-first — every organization is local and NO authority round-trips are made, preserving the byte-identical local default. `NEXT_PUBLIC_OIP_PERSISTENCE_MODE=server` is a server-capable deployment where per-organization authority is resolved from the durable server record and an organization is server-authoritative only after an explicit verified cutover. There is no automatic server→local fallback: a server-authoritative organization whose server is unreachable raises an explicit persistence error rather than reading or writing localStorage, and an authority-discovery failure blocks hydration unless durable local client evidence (a cached `local` observation) proves the organization is local. A not-yet-registered organization (404) is treated as a safe local default.
+
+Reset and delete route to the active/deleted organization's own backend: a server-authoritative organization resets/deletes in PostgreSQL (its authority row cascades on organization delete), a local-authoritative one in localStorage; the two backends are never both run automatically. Deleting a server-authoritative organization can remove its PostgreSQL organization/business data through the existing verified cascade, but never deletes the preserved localStorage copy.
+
+Cutover is per organization, has no automatic fallback, has no automatic rollback, and preserves the local source. The endpoints are unauthenticated and prototype-only; they must not be internet-exposed. Mature Maesa/FastDrop/Pramana organizations have not been migrated or cut over — that remains the next controlled step.
