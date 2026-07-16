@@ -4,6 +4,7 @@ import {
   intakeMigrationExportPackage,
   toSafeMigrationImportError
 } from "@/lib/server/migrationImportService";
+import { requireOrganizationMembership } from "@/lib/server/authorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,15 +16,15 @@ export async function POST(
   context: { params: Promise<{ organizationId: string }> }
 ) {
   const { organizationId } = await context.params;
-  const advertisedLength = Number(request.headers.get("content-length") ?? "0");
-  if (advertisedLength > MAX_PACKAGE_BYTES) {
-    return NextResponse.json(
-      { error: { code: "PACKAGE_TOO_LARGE", message: "The migration package exceeds the 25 MiB prototype intake limit." } },
-      { status: 413 }
-    );
-  }
-
   try {
+    await requireOrganizationMembership(organizationId);
+    const advertisedLength = Number(request.headers.get("content-length") ?? "0");
+    if (advertisedLength > MAX_PACKAGE_BYTES) {
+      return NextResponse.json(
+        { error: { code: "PACKAGE_TOO_LARGE", message: "The migration package exceeds the 25 MiB prototype intake limit." } },
+        { status: 413 }
+      );
+    }
     const rawBody = await request.text();
     if (new TextEncoder().encode(rawBody).byteLength > MAX_PACKAGE_BYTES) {
       return NextResponse.json(

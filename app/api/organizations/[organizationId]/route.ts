@@ -7,6 +7,7 @@ import {
   validateOrganizationId
 } from "@/lib/server/persistenceService";
 import type { OrganizationProfile } from "@/types";
+import { requireOrganizationMembership } from "@/lib/server/authorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +25,7 @@ export async function GET(_request: Request, context: OrganizationRouteContext) 
   try {
     const { organizationId } = await context.params;
     validateOrganizationId(organizationId);
+    await requireOrganizationMembership(organizationId);
     return NextResponse.json({ data: await getOrganizationProfile(organizationId) }, { status: 200 });
   } catch (error) {
     return errorResponse(error);
@@ -35,6 +37,7 @@ export async function PUT(request: Request, context: OrganizationRouteContext) {
   try {
     const { organizationId } = await context.params;
     const id = validateOrganizationId(organizationId);
+    await requireOrganizationMembership(id);
     let body: unknown;
     try {
       body = await request.json();
@@ -68,6 +71,7 @@ export async function DELETE(_request: Request, context: OrganizationRouteContex
   try {
     const { organizationId } = await context.params;
     validateOrganizationId(organizationId);
+    await requireOrganizationMembership(organizationId);
     await deleteOrganization(organizationId);
     return NextResponse.json({ data: { deleted: true } }, { status: 200 });
   } catch (error) {

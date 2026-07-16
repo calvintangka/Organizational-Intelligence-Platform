@@ -4,6 +4,7 @@ import {
   toSafePersistenceError,
   validateOrganizationId
 } from "@/lib/server/persistenceService";
+import { requireOrganizationMembership } from "@/lib/server/authorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +22,7 @@ export async function POST(request: Request, context: AllocateRouteContext) {
   try {
     const { organizationId } = await context.params;
     validateOrganizationId(organizationId);
+    await requireOrganizationMembership(organizationId);
     let body: unknown;
     try {
       body = await request.json();

@@ -37,6 +37,7 @@ import {
   MIGRATION_EXPORT_RESOURCE_NAMES,
   stableStringify
 } from "@/lib/persistence/migrationExportDigest";
+import { AuthorizationError } from "@/lib/server/authorization";
 
 export type MigrationImportServiceErrorCode =
   | "INVALID_MANIFEST"
@@ -869,6 +870,9 @@ export async function intakeMigrationExportPackage(
 }
 
 export function toSafeMigrationImportError(error: unknown): { code: string; message: string; status: number } {
+  if (error instanceof AuthorizationError) {
+    return { code: error.code, message: error.message, status: error.status };
+  }
   if (error instanceof MigrationImportServiceError) {
     const status = ["ORGANIZATION_NOT_FOUND", "IMPORT_NOT_FOUND"].includes(error.code) ? 404
       : ["CONFLICT", "ORGANIZATION_MISMATCH", "EXPORT_DIGEST_MISMATCH", "INVALID_STATUS_TRANSITION"].includes(error.code) ? 409

@@ -27,8 +27,11 @@ import type {
   ValidationRecord as PrismaValidationRecord
 } from "@/generated/prisma/client";
 import { formatTicketIdRange, organizationTicketPrefix, ticketDateStamp } from "@/lib/ticketIdFormat";
+import { AuthorizationError } from "@/lib/server/authorization";
 
 export type PersistenceServiceErrorCode =
+  | "UNAUTHENTICATED"
+  | "FORBIDDEN"
   | "INVALID_ORGANIZATION_ID"
   | "INVALID_REQUEST"
   | "ORGANIZATION_NOT_FOUND"
@@ -322,6 +325,14 @@ export async function listOrganizationProfiles(): Promise<OrganizationProfile[]>
   return rows.map(mapOrganization);
 }
 
+export async function listOrganizationProfilesForUser(userId: string): Promise<OrganizationProfile[]> {
+  const rows = await readDatabase("authorized organization list", () => prisma.organization.findMany({
+    where: { memberships: { some: { userId } } },
+    orderBy: { name: "asc" }
+  }));
+  return rows.map(mapOrganization);
+}
+
 export async function getOrganizationProfile(organizationId: string): Promise<OrganizationProfile> {
   return mapOrganization(await requireOrganization(organizationId));
 }
@@ -389,6 +400,9 @@ function mapTicketSequence(row: PrismaTicketSequence): { organizationId: string;
 }
 
 export function toSafePersistenceError(error: unknown): { code: PersistenceServiceErrorCode; message: string; status: number } {
+  if (error instanceof AuthorizationError) {
+    return { code: error.code, message: error.message, status: error.status };
+  }
   const safe = error instanceof PersistenceServiceError
     ? error
     : classifyDatabaseError(error, "the requested resource");

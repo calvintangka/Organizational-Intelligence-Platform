@@ -5,6 +5,7 @@ import {
   verifyMigrationImport
 } from "@/lib/server/migrationVerificationService";
 import { toSafeMigrationImportError } from "@/lib/server/migrationImportService";
+import { requireOrganizationMembership } from "@/lib/server/authorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,6 +16,7 @@ export async function POST(
 ) {
   try {
     const { organizationId, batchId } = await context.params;
+    await requireOrganizationMembership(organizationId);
     const result = await verifyMigrationImport(organizationId, batchId);
     return NextResponse.json({ data: result }, { status: result.status === "passed" ? 200 : 409 });
   } catch (error) {
@@ -29,6 +31,7 @@ export async function GET(
 ) {
   try {
     const { organizationId, batchId } = await context.params;
+    await requireOrganizationMembership(organizationId);
     const result = await getMigrationVerification(organizationId, batchId);
     return NextResponse.json({ data: result }, { status: 200 });
   } catch (error) {

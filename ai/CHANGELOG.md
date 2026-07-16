@@ -2,6 +2,17 @@
 
 ## Entry Format
 
+## [2026-07-16] TODO-P002-02 Organization Membership & Authorization
+
+**Task/Prompt:** Connect authenticated users to organizations and enforce membership access server-side.
+
+**Files changed:** `prisma/schema.prisma`, `prisma/migrations/20260716010000_add_organization_memberships/migration.sql`, `lib/server/authorization.ts`, organization API routes, `scripts/membership-authorization-probe.cjs`, `scripts/seed-development-memberships.cjs`, `package.json`
+
+- Added minimal `OrganizationMembership` records with a composite `(userId, organizationId)` key and `member` role.
+- All organization-scoped persistence, migration, authority, reset, ticket, and validation routes now require authentication and valid membership; failures return 401/403.
+- Organization listing is membership-filtered. An idempotent development seeder grants Maesa Tech and FastDrop Logistics; Pramana Legal is intentionally not seeded.
+- Verification: membership authorization probe, authentication probe, Prisma validation, typecheck, and production build.
+
 ## [2026-07-16] TODO-P002-01 Authentication Foundation
 
 **Task/Prompt:** Implement the narrow authentication foundation for a persistent authenticated user identity.

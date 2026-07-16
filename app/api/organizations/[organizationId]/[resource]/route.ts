@@ -18,6 +18,7 @@ import {
   toSafePersistenceError,
   validateOrganizationId
 } from "@/lib/server/persistenceService";
+import { requireOrganizationMembership } from "@/lib/server/authorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,6 +43,7 @@ export async function GET(_request: Request, context: ResourceRouteContext) {
   try {
     const { organizationId, resource } = await context.params;
     validateOrganizationId(organizationId);
+    await requireOrganizationMembership(organizationId);
     const handler = resourceHandlers[resource];
     if (!handler) {
       return NextResponse.json(
@@ -75,6 +77,7 @@ export async function PUT(request: Request, context: ResourceRouteContext) {
   try {
     const { organizationId, resource } = await context.params;
     validateOrganizationId(organizationId);
+    await requireOrganizationMembership(organizationId);
     if (APPEND_ONLY_RESOURCES.has(resource)) {
       return NextResponse.json(
         { error: { code: "APPEND_ONLY_RESOURCE", message: "Audit records can only be written through the validation commit operation." } },

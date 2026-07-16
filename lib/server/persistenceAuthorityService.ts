@@ -11,10 +11,13 @@ import type {
   PersistenceAuthorityVerificationSummary,
   PersistenceCutoverResult
 } from "@/types/persistenceAuthority";
+import { AuthorizationError } from "@/lib/server/authorization";
 
 type TransactionClient = Prisma.TransactionClient;
 
 export type PersistenceAuthorityErrorCode =
+  | "UNAUTHENTICATED"
+  | "FORBIDDEN"
   | "INVALID_ORGANIZATION_ID"
   | "INVALID_REQUEST"
   | "ORGANIZATION_NOT_FOUND"
@@ -307,6 +310,9 @@ export async function cutOverToServerAuthority(
 }
 
 export function toSafePersistenceAuthorityError(error: unknown): { code: string; message: string; status: number } {
+  if (error instanceof AuthorizationError) {
+    return { code: error.code, message: error.message, status: error.status };
+  }
   const safe = error instanceof PersistenceAuthorityServiceError ? error : classifyDatabaseError(error);
   return { code: safe.code, message: safe.message, status: safe.status };
 }

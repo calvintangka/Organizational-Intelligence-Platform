@@ -109,6 +109,7 @@ model User {
   updatedAt    DateTime      @updatedAt @db.Timestamptz(6)
 
   sessions AuthSession[]
+  memberships OrganizationMembership[]
 
   @@map("users")
 }
@@ -148,8 +149,23 @@ model Organization {
   migrationImportBatches    MigrationImportBatch[]
   migrationImportConflicts  MigrationImportConflict[]
   persistenceAuthority      OrganizationPersistenceAuthority?
+  memberships               OrganizationMembership[]
 
   @@map("organizations")
+}
+
+model OrganizationMembership {
+  userId         String
+  organizationId String
+  role           String   @default("member")
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([userId, organizationId])
+  @@index([organizationId])
+  @@map("organization_memberships")
 }
 
 model KnowledgeItem {

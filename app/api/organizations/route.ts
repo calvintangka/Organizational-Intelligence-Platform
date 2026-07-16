@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server";
 import {
-  listOrganizationProfiles,
+  listOrganizationProfilesForUser,
   toSafePersistenceError,
-  upsertOrganizationProfiles
+  upsertOrganizationProfiles,
+  validateOrganizationId
 } from "@/lib/server/persistenceService";
+import { requireAuthenticatedUser, requireOrganizationMembership } from "@/lib/server/authorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    return NextResponse.json({ data: await listOrganizationProfiles() }, { status: 200 });
+    const user = await requireAuthenticatedUser();
+    return NextResponse.json({ data: await listOrganizationProfilesForUser(user.id) }, { status: 200 });
   } catch (error) {
     const safe = toSafePersistenceError(error);
     return NextResponse.json({ error: { code: safe.code, message: safe.message } }, { status: safe.status });
@@ -20,6 +23,7 @@ export async function GET() {
 /** Upsert the provided organization profiles. Deletion only via DELETE. */
 export async function PUT(request: Request) {
   try {
+    await requireAuthenticatedUser();
     let body: unknown;
     try {
       body = await request.json();
@@ -34,6 +38,10 @@ export async function PUT(request: Request) {
         { error: { code: "INVALID_REQUEST", message: "The organization list payload must be an array." } },
         { status: 400 }
       );
+    }
+    for (const profile of body) {
+      const id = validateOrganizationId((profile as { id?: unknown } | null)?.id);
+      await requireOrganizationMembership(id);
     }
     return NextResponse.json({ data: await upsertOrganizationProfiles(body) }, { status: 200 });
   } catch (error) {

@@ -2,6 +2,10 @@
 
 This file is the fastest accurate snapshot of the prototype as of 2026-07-16.
 
+## TODO-P002-02 Organization Membership & Authorization — Completed
+
+Added the minimal PostgreSQL-backed `OrganizationMembership` model and server-side membership checks across organization-scoped persistence APIs. Authenticated members receive access; unauthenticated requests return 401 and non-members return 403. Organization lists are membership-filtered. The idempotent development seeder grants Maesa Tech and FastDrop Logistics when `AUTH_DEVELOPMENT_USER_EMAIL` identifies the existing development user; Pramana Legal remains intentionally unseeded. TODO-P002-03 and later P-002 work remain out of scope.
+
 ## TODO-P002-01 Authentication Foundation — Completed
 
 Added the minimum persistent authentication foundation: PostgreSQL-backed `User` and `AuthSession` models, scrypt password hashing, opaque HttpOnly session cookies, login/logout/current-user routes, and a protected login gate around the existing OIP application. Focused authentication verification, Prisma validation, typecheck, and production build pass. No organization membership, authorization, switching, actor provenance, persistence routing, migration, or mature organizational data changes were made. P-002 remains in progress.

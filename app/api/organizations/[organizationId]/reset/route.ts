@@ -4,6 +4,7 @@ import {
   toSafePersistenceError,
   validateOrganizationId
 } from "@/lib/server/persistenceService";
+import { requireOrganizationMembership } from "@/lib/server/authorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +22,7 @@ export async function POST(_request: Request, context: ResetRouteContext) {
   try {
     const { organizationId } = await context.params;
     validateOrganizationId(organizationId);
+    await requireOrganizationMembership(organizationId);
     await resetOrganizationData(organizationId);
     return NextResponse.json({ data: { reset: true } }, { status: 200 });
   } catch (error) {

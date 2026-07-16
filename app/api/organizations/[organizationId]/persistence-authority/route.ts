@@ -5,6 +5,7 @@ import {
   toSafePersistenceAuthorityError,
   validateOrganizationId
 } from "@/lib/server/persistenceAuthorityService";
+import { requireOrganizationMembership } from "@/lib/server/authorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ export async function GET(_request: Request, context: AuthorityRouteContext) {
   try {
     const { organizationId } = await context.params;
     validateOrganizationId(organizationId);
+    await requireOrganizationMembership(organizationId);
     const state = await getPersistenceAuthorityState(organizationId);
     return NextResponse.json({ data: state }, { status: 200 });
   } catch (error) {
