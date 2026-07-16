@@ -2,6 +2,15 @@
 
 ## Entry Format
 
+## [2026-07-16] TODO-010: Correct Malformed Persisted Lesson Signal (BUG-007 closed)
+
+**Task/Prompt:** Surgical data correction of the confirmed manual-typo signal "et up new password".
+
+**Files changed:** none (PostgreSQL data correction; documentation only)
+
+- Corrected `"et up new password"` -> `"set up new password"` in Maesa Tech's live `knowledge_items` row `canonical-login-issue`, lesson `lesson-1783585050591-f47l`, `content.lessons[].signals`. Exactly one string value changed; verified the exact malformed value no longer exists in any live table and the corrected value is present.
+- Append-only `memory_change_records` audit snapshots retain the historical typo intentionally (audit history is never rewritten). No revision bump, no schema/logic changes, no other organizations touched.
+
 ## [2026-07-16] TODO-009 Step 3: Cold-Start False-Positive Protection (BUG-008 closed)
 
 **Task/Prompt:** Prevent weak single-word lexical overlap from authorizing lesson reuse on cold-start/Uncategorized tickets, without regressing Step 2.

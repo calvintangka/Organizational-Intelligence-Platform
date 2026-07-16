@@ -1,5 +1,9 @@
 # Current Status
 
+## TODO-010 Malformed Persisted Signal Corrected - Completed (BUG-007 Fixed/Closed)
+
+The confirmed manual-typo signal `"et up new password"` in Maesa Tech's live `canonical-login-issue` knowledge item (lesson `lesson-1783585050591-f47l`) was corrected to `"set up new password"` directly in PostgreSQL. Only that one string value changed; the rest of the record is byte-identical. Append-only `memory_change_records` before/after audit snapshots still contain the historical typo by design — audit history is never rewritten. No unrelated mature data was touched.
+
 ## TODO-009 Semantically Equivalent Paraphrase Retrieval Failures - Completed (BUG-008 Fixed)
 
 Step 3 closed the cold-start false positive: strong-lesson evidence now requires multi-token signal matches (`isStrongLessonEvidence` in `lib/drafting.ts`) — a set of generic one-word overlaps ("webhook", "integration") can no longer authorize lesson reuse, and Uncategorized/General tickets (no category evidence) require two multi-token matched signals instead of one. The page-glue strength check and both probes now share this rule. With Step 1 (Maesa profile vocabulary restore), Step 2 (semantic compatibility fallback for the deterministic "unknown" state), and Step 3 together, the full BUG-008 matrix passes: direct match, mild paraphrase, strong paraphrase (via semantic fallback), weak overlap rejected, contradiction rejected, ambiguous no_template, cold-start webhook no_template with no Activation lesson reuse, forged/ambiguous/unavailable semantic results all fail closed. Verified: semantic probe 32/32, retrieval probe all safety cases (exit 0), typecheck. Mature Maesa used read-only. Remaining separate finding (NOT part of TODO-009): a stale browser session can re-save Maesa's pre-restore empty profile vocabulary over the Step 1 fix — tracked as its own task.
