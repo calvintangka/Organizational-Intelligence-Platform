@@ -630,6 +630,12 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRetryingDraft, setIsRetryingDraft] = useState(false);
   const organizationSwitchGeneration = useRef(0);
+  // The server returns a fresh organization revision after each profile write.
+  // Keep that revision outside React state so a successful save does not
+  // trigger another save, while later legitimate edits still carry the
+  // latest optimistic-concurrency precondition.
+  const profileRevisionByOrganization = useRef<Record<string, string>>({});
+  const profileSettingsRevisionByOrganization = useRef<Record<string, number>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -725,6 +731,8 @@ export default function Home() {
         if (cancelled) return;
 
         setOrganizationProfile(loadedProfile);
+        profileRevisionByOrganization.current[orgId] = loadedProfile.updatedAt;
+        profileSettingsRevisionByOrganization.current[orgId] = loadedProfile.profileRevision ?? 0;
         setOrganizationList(syncProfileIntoList(loadedOrganizationList, loadedProfile));
         setKnowledgeItems(loadedKnowledge);
         setKnowledgeCandidates(loadedCandidates);
@@ -840,11 +848,27 @@ export default function Home() {
   }, [ticketRecords, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveOrganizationProfile", persistence.saveOrganizationProfile(organizationProfile));
+    if (!hydrated) return;
+    const snapshot = {
+      ...organizationProfile,
+      updatedAt: profileRevisionByOrganization.current[organizationProfile.id] ?? organizationProfile.updatedAt,
+      profileRevision: profileSettingsRevisionByOrganization.current[organizationProfile.id] ?? organizationProfile.profileRevision ?? 0
+    };
+    void persistence.saveOrganizationProfile(snapshot)
+      .then((saved) => {
+        profileRevisionByOrganization.current[saved.id] = saved.updatedAt;
+        profileSettingsRevisionByOrganization.current[saved.id] = saved.profileRevision ?? 0;
+      })
+      .catch((error) => {
+        reportPersistenceError("saveOrganizationProfile", error);
+      });
   }, [organizationProfile, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveOrganizationList", persistence.saveOrganizationList(organizationList));
+    // In server mode the organization list is authoritative membership data.
+    // Persisting a whole stale list would replay old profile JSON into every
+    // organization, so only the local shell may snapshot this legacy state.
+    if (hydrated && persistenceMode === "local") queuePersistenceSave("saveOrganizationList", persistence.saveOrganizationList(organizationList));
   }, [organizationList, hydrated]);
 
   useEffect(() => {
@@ -1755,6 +1779,8 @@ export default function Home() {
       if (generation !== organizationSwitchGeneration.current) return;
       const incomingProfile = authorizedProfile && authorizedProfile.id === found.id ? authorizedProfile : found;
       setOrganizationProfile(incomingProfile);
+      profileRevisionByOrganization.current[found.id] = incomingProfile.updatedAt;
+      profileSettingsRevisionByOrganization.current[found.id] = incomingProfile.profileRevision ?? 0;
       setOrganizationList((current) => syncProfileIntoList(current, incomingProfile));
       setKnowledgeItems(loaded.knowledge);
       setKnowledgeCandidates(loaded.candidates);

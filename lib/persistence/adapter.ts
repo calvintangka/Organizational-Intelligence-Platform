@@ -41,7 +41,7 @@ export interface PersistenceAdapter {
   prepareOrganization(organizationId: string): PersistencePreparationResult | Promise<PersistencePreparationResult>;
 
   loadOrganizationProfile(): Promise<OrganizationProfile>;
-  saveOrganizationProfile(profile: OrganizationProfile): Promise<void>;
+  saveOrganizationProfile(profile: OrganizationProfile): Promise<OrganizationProfile>;
   loadOrganizationList(): Promise<OrganizationProfile[]>;
   saveOrganizationList(list: OrganizationProfile[]): Promise<void>;
 

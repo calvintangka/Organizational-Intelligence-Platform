@@ -2,7 +2,7 @@
 
 ## TODO-012 Focused Classifier/Canonical Fix - Completed; TODO-012 Remains Ongoing
 
-The 12 confirmed classifier/canonical failures are fixed with boundary-aware signal matching, focused specificity weights, deterministic resolution of strong neighboring-category evidence, and a generic Delivery canonical mapping. The expanded deterministic probe now passes 22 categories and 76 cases, including direct/paraphrase coverage, all focused failures, explicit `patch`/`dispatch` boundaries, vague-delivery safety, ambiguity, cold start, and TODO-011 Billing relevance. TODO-009 retrieval/semantic safety and TODO-011 Billing probes pass. No mature data was modified, and the separate stale-profile overwrite defect remains untouched. TODO-012 stays Ongoing pending a final acceptance decision.
+The 12 confirmed classifier/canonical failures are fixed with boundary-aware signal matching, focused specificity weights, deterministic resolution of strong neighboring-category evidence, and a generic Delivery canonical mapping. The expanded deterministic probe now passes 22 categories and 76 cases, including direct/paraphrase coverage, all focused failures, explicit `patch`/`dispatch` boundaries, vague-delivery safety, ambiguity, cold start, and TODO-011 Billing relevance. TODO-009 retrieval/semantic safety and TODO-011 Billing probes pass. The separate stale-profile overwrite defect is now protected by server-side profile revisions and a focused regression probe; TODO-012 stays Ongoing pending a final acceptance decision.
 
 ## TODO-011 Generic Billing Fallback Relevance - Completed (PRODUCT/CONTENT-001 Fixed/Closed)
 

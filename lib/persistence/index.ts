@@ -86,7 +86,7 @@ class RoutingPersistenceAdapter implements PersistenceAdapter {
     return this.shellAdapter.loadOrganizationProfile();
   }
 
-  saveOrganizationProfile(profile: OrganizationProfile): Promise<void> {
+  saveOrganizationProfile(profile: OrganizationProfile): Promise<OrganizationProfile> {
     return this.shellAdapter.saveOrganizationProfile(profile);
   }
 

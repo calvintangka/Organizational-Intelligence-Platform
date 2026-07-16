@@ -1,5 +1,12 @@
 # Change Log
 
+## [2026-07-17] Prevent stale organization profile overwrite
+
+**Task/Prompt:** Protect server-authoritative Maesa Tech and FastDrop Logistics profiles from older browser snapshots.
+
+- Server profile and organization-list writes now reject stale profile revisions; the client carries the latest revision returned by PostgreSQL and server mode no longer snapshots the whole organization list automatically.
+- The focused stale-profile probe passes for blocked stale writes and legitimate edits. The idempotent vocabulary restore now advances the profile revision while preserving mature business data.
+
 ## Entry Format
 
 ## [2026-07-17] TODO-012 Focused Classifier and Canonical Mapping Fix

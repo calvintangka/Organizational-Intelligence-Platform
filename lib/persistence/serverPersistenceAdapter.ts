@@ -91,9 +91,9 @@ export class ServerPersistenceAdapter implements PersistenceAdapter {
     return this.requestResource<TicketRecord[]>(organizationId, "tickets");
   }
 
-  async saveOrganizationProfile(profile: OrganizationProfile): Promise<void> {
+  async saveOrganizationProfile(profile: OrganizationProfile): Promise<OrganizationProfile> {
     const id = this.rememberOrganization(profile.id);
-    await this.requestData(`/api/organizations/${encodeURIComponent(id)}`, "PUT", profile);
+    return this.requestData<OrganizationProfile>(`/api/organizations/${encodeURIComponent(id)}`, "PUT", profile);
   }
 
   async saveOrganizationList(list: OrganizationProfile[]): Promise<void> {

@@ -78,9 +78,11 @@ function readOrganizationProfileFromStorage(): OrganizationProfile {
   return normalizeOrganizationProfile(JSON.parse(raw) as OrganizationProfile);
 }
 
-export async function saveOrganizationProfile(profile: OrganizationProfile): Promise<void> {
-  if (!hasStorage()) return;
-  window.localStorage.setItem(ORGANIZATION_PROFILE_KEY, JSON.stringify(normalizeOrganizationProfile(profile)));
+export async function saveOrganizationProfile(profile: OrganizationProfile): Promise<OrganizationProfile> {
+  const normalized = normalizeOrganizationProfile(profile);
+  if (!hasStorage()) return normalized;
+  window.localStorage.setItem(ORGANIZATION_PROFILE_KEY, JSON.stringify(normalized));
+  return normalized;
 }
 
 export function resetOrganizationProfile(): OrganizationProfile {

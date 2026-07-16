@@ -21,4 +21,6 @@ export interface OrganizationProfile {
   logoInitials?: string;
   createdAt: string;
   updatedAt: string;
+  /** Server-side optimistic-concurrency revision for profile settings. */
+  profileRevision?: number;
 }

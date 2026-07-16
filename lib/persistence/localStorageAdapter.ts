@@ -60,7 +60,7 @@ export class LocalStorageAdapter implements PersistenceAdapter {
     return loadOrganizationProfile();
   }
 
-  saveOrganizationProfile(profile: OrganizationProfile): Promise<void> {
+  saveOrganizationProfile(profile: OrganizationProfile): Promise<OrganizationProfile> {
     return saveOrganizationProfile(profile);
   }
 

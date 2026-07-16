@@ -28,6 +28,7 @@
     "probe:test-organization": "node scripts/test-organization-probe.cjs",
     "probe:actor-propagation": "node scripts/actor-propagation-probe.cjs",
     "probe:todo012-canonical-regression": "node scripts/todo012-canonical-regression-probe.cjs",
+    "probe:stale-profile-overwrite": "node scripts/stale-profile-overwrite-probe.cjs",
     "seed:test-organization": "node scripts/seed-test-organization.cjs",
     "seed:development-memberships": "node scripts/seed-development-memberships.cjs",
     "prisma:validate": "prisma validate",

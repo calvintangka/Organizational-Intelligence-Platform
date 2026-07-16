@@ -120,7 +120,8 @@ function mapOrganization(row: PrismaOrganization): OrganizationProfile {
     accentColor: optionalString(settings.accentColor),
     logoInitials: optionalString(settings.logoInitials),
     createdAt: iso(row.createdAt),
-    updatedAt: iso(row.updatedAt)
+    updatedAt: iso(row.updatedAt),
+    profileRevision: typeof settings._profileRevision === "number" ? settings._profileRevision : 0
   };
 }
 
@@ -497,7 +498,8 @@ function toOrganizationRow(profile: OrganizationProfile): {
       autoResolutionThreshold: profile.autoResolutionThreshold ?? 80,
       escalationRules: profile.escalationRules ?? [],
       accentColor: profile.accentColor,
-      logoInitials: profile.logoInitials
+      logoInitials: profile.logoInitials,
+      _profileRevision: profile.profileRevision ?? 0
     }),
     createdAt: optionalDate(profile.createdAt) ?? new Date()
   };
@@ -658,13 +660,26 @@ async function upsertTicketRecordTx(
 
 export async function upsertOrganizationProfile(profile: OrganizationProfile): Promise<OrganizationProfile> {
   const row = toOrganizationRow(profile);
-  const saved = await writeDatabase("organization profile", () =>
-    prisma.organization.upsert({
+  const saved = await writeDatabase("organization profile", async () => {
+    const existing = await prisma.organization.findUnique({ where: { id: row.id }, select: { updatedAt: true, settings: true } });
+    const incomingUpdatedAt = optionalDate(profile.updatedAt);
+    if (existing && incomingUpdatedAt && incomingUpdatedAt.getTime() < existing.updatedAt.getTime()) {
+      throw conflict("This organization profile is stale and was not saved. Reload the latest profile before editing it.");
+    }
+    const currentSettings = asRecord(existing?.settings);
+    const currentRevision = typeof currentSettings._profileRevision === "number" ? currentSettings._profileRevision : 0;
+    const incomingRevision = profile.profileRevision ?? 0;
+    if (existing && incomingRevision < currentRevision) {
+      throw conflict("This organization profile is stale and was not saved. Reload the latest profile before editing it.");
+    }
+    const nextSettings = asRecord(row.settings);
+    nextSettings._profileRevision = existing ? currentRevision + 1 : Math.max(0, incomingRevision);
+    return prisma.organization.upsert({
       where: { id: row.id },
-      create: row,
-      update: { name: row.name, industry: row.industry, description: row.description, settings: row.settings }
-    })
-  );
+      create: { ...row, settings: json(nextSettings) },
+      update: { name: row.name, industry: row.industry, description: row.description, settings: json(nextSettings) }
+    });
+  });
   return mapOrganization(saved);
 }
 
@@ -675,11 +690,20 @@ export async function upsertOrganizationProfiles(list: OrganizationProfile[]): P
   const saved = await writeDatabase("organization list", () =>
     prisma.$transaction(async (tx) => {
       const results = [];
-      for (const row of rows) {
+      for (const [index, row] of rows.entries()) {
+        const existing = await tx.organization.findUnique({ where: { id: row.id }, select: { settings: true } });
+        const currentSettings = asRecord(existing?.settings);
+        const currentRevision = typeof currentSettings._profileRevision === "number" ? currentSettings._profileRevision : 0;
+        const incomingRevision = list[index].profileRevision ?? 0;
+        if (existing && incomingRevision < currentRevision) {
+          throw conflict("This organization list contains a stale profile and was not saved. Reload the latest organizations before editing them.");
+        }
+        const nextSettings = asRecord(row.settings);
+        nextSettings._profileRevision = existing ? currentRevision + 1 : Math.max(0, incomingRevision);
         results.push(await tx.organization.upsert({
           where: { id: row.id },
-          create: row,
-          update: { name: row.name, industry: row.industry, description: row.description, settings: row.settings }
+          create: { ...row, settings: json(nextSettings) },
+          update: { name: row.name, industry: row.industry, description: row.description, settings: json(nextSettings) }
         }));
       }
       return results;
