@@ -75,6 +75,8 @@ const { getPrismaClient } = require(path.join(root, "lib", "server", "prisma.ts"
 const ORG_A = "test-oip-write-a";
 const ORG_B = "test-oip-write-b";
 const NOW = new Date().toISOString();
+// commitValidation requires the trusted server-resolved actor (TODO-007).
+const PROBE_ACTOR = { id: "probe-actor-user", name: "Write Probe Validator" };
 
 function profile(id, name, initials) {
   return {
@@ -215,11 +217,11 @@ async function main() {
     { id: "lesson-a1", rootCause: "Probe cause", solution: "Probe fix", customerResponse: "Hi {{customerName}}", signals: ["probe"], createdAt: NOW, sourceTicketId: "TW-PROBE-0001" }
   ]);
   const createPayload = commitPayload(ORG_A, "create", itemA, null);
-  const created = await service.commitValidation(ORG_A, createPayload);
+  const created = await service.commitValidation(ORG_A, createPayload, PROBE_ACTOR);
   assert.equal(created.replayed, false);
   assert.equal(created.knowledgeRevision, 1);
 
-  const replayed = await service.commitValidation(ORG_A, createPayload);
+  const replayed = await service.commitValidation(ORG_A, createPayload, PROBE_ACTOR);
   assert.equal(replayed.replayed, true, "E: identical resubmission must be an idempotent replay");
   let counts = await candidateRowCounts(prisma, ORG_A, createPayload.candidate.id);
   assert.deepEqual(counts, { validations: 1, memoryChanges: 1 }, "E: replay must not duplicate audit records");
@@ -228,7 +230,7 @@ async function main() {
   duplicate.candidate.id = createPayload.candidate.id;
   duplicate.validation.candidateId = createPayload.candidate.id;
   duplicate.memoryChange.candidateId = createPayload.candidate.id;
-  await assert.rejects(() => service.commitValidation(ORG_A, duplicate), (error) => error.code === "CONFLICT");
+  await assert.rejects(() => service.commitValidation(ORG_A, duplicate, PROBE_ACTOR), (error) => error.code === "CONFLICT");
   counts = await candidateRowCounts(prisma, ORG_A, createPayload.candidate.id);
   assert.deepEqual(counts, { validations: 1, memoryChanges: 1 }, "E: duplicate submission must not add audit records");
 
@@ -238,8 +240,8 @@ async function main() {
   const winnerItem = { ...knowledgeItem("probe-knowledge-a", ORG_A, [...itemA.lessons, lessonKeep]), revision: 2 };
   const loserItem = { ...knowledgeItem("probe-knowledge-a", ORG_A, [...itemA.lessons, lessonRace]), revision: 2 };
   const results = await Promise.allSettled([
-    service.commitValidation(ORG_A, commitPayload(ORG_A, "race-1", winnerItem, 1)),
-    service.commitValidation(ORG_A, commitPayload(ORG_A, "race-2", loserItem, 1))
+    service.commitValidation(ORG_A, commitPayload(ORG_A, "race-1", winnerItem, 1), PROBE_ACTOR),
+    service.commitValidation(ORG_A, commitPayload(ORG_A, "race-2", loserItem, 1), PROBE_ACTOR)
   ]);
   const fulfilled = results.filter((result) => result.status === "fulfilled");
   const rejected = results.filter((result) => result.status === "rejected");
@@ -253,7 +255,7 @@ async function main() {
 
   /* F. Failed validation transaction leaves no partial state. */
   const failing = commitPayload(ORG_A, "fail", { ...knowledgeItem("probe-knowledge-a", ORG_A), revision: 99 }, 99);
-  await assert.rejects(() => service.commitValidation(ORG_A, failing), (error) => error.code === "CONFLICT");
+  await assert.rejects(() => service.commitValidation(ORG_A, failing, PROBE_ACTOR), (error) => error.code === "CONFLICT");
   counts = await candidateRowCounts(prisma, ORG_A, failing.candidate.id);
   assert.deepEqual(counts, { validations: 0, memoryChanges: 0 }, "F: rollback must remove the audit rows");
   assert.equal(
@@ -265,7 +267,7 @@ async function main() {
   /* G. Reflection-style merge commit uses the same transaction. */
   const current = (await service.loadKnowledge(ORG_A)).find((item) => item.id === "probe-knowledge-a");
   const reflectionItem = { ...current, lessons: [...current.lessons, { id: "lesson-reflect", rootCause: "Reflect", solution: "Reflect", customerResponse: "Reflect {{customerName}}", signals: [], createdAt: NOW, sourceTicketId: "TW-PROBE-0004" }] };
-  const reflected = await service.commitValidation(ORG_A, commitPayload(ORG_A, "reflect", reflectionItem, current.revision));
+  const reflected = await service.commitValidation(ORG_A, commitPayload(ORG_A, "reflect", reflectionItem, current.revision), PROBE_ACTOR);
   assert.equal(reflected.knowledgeRevision, current.revision + 1, "G: reflection commit bumps the revision");
   const afterReflection = (await service.loadKnowledge(ORG_A)).find((item) => item.id === "probe-knowledge-a");
   assert.equal(afterReflection.lessons.length, 3, "G: reflection lesson persists atomically");

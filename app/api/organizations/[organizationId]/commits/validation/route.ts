@@ -22,7 +22,9 @@ export async function POST(request: Request, context: CommitRouteContext) {
   try {
     const { organizationId } = await context.params;
     validateOrganizationId(organizationId);
-    await requireOrganizationMembership(organizationId);
+    // The authenticated session user is the only trusted actor identity; the
+    // request body can never control validation attribution.
+    const { user } = await requireOrganizationMembership(organizationId);
     let body: unknown;
     try {
       body = await request.json();
@@ -32,7 +34,7 @@ export async function POST(request: Request, context: CommitRouteContext) {
         { status: 400 }
       );
     }
-    const result = await commitValidation(organizationId, body);
+    const result = await commitValidation(organizationId, body, { id: user.id, name: user.name });
     return NextResponse.json({ data: result }, { status: 200 });
   } catch (error) {
     const safe = toSafePersistenceError(error);

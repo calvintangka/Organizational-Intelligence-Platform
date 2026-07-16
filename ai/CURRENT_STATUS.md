@@ -1,5 +1,9 @@
 # Current Status
 
+## TODO-007 Actor Identity in Validation History - Completed
+
+New validation commits now record the authenticated actor: the commit route passes the session-resolved user into `commitValidation`, which stamps `ValidationRecord.actorId` and `MemoryChangeRecord.actorId` with `user.id` and derives the human-readable `ValidationRecord.actor` from the trusted server-side `user.name`. Client-supplied actor/actorId payload fields are ignored, so attribution cannot be spoofed. Historical records keep `actorId = null`; no backfill, no Actor model, no schema change. TODO-006 (identity foundation) was audit-confirmed as already complete via P-002.
+
 ## TODO-005 Persistent Test Organizations - Completed
 
 Added the fixed PostgreSQL-backed `test-oip-regression` organization with the idempotent `npm run seed:test-organization` reset/seed command. It restores deterministic tickets, knowledge, validated lessons, versions, memory history, metrics, patterns, logs, and ticket sequence state without touching mature organizations. Set `AUTH_DEVELOPMENT_USER_EMAIL` when the development user should receive idempotent membership. P-002 remains in progress.

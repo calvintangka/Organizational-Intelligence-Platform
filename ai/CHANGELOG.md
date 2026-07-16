@@ -2,6 +2,16 @@
 
 ## Entry Format
 
+## [2026-07-16] TODO-007 Actor Identity in Validation History
+
+**Task/Prompt:** Propagate the authenticated user identity into new ValidationRecord and MemoryChangeRecord writes without redesigning auth, persistence, or provenance.
+
+**Files changed:** `app/api/organizations/[organizationId]/commits/validation/route.ts`, `lib/server/persistenceService.ts`, `scripts/db-write-probe.cjs`, `scripts/actor-propagation-probe.cjs`
+
+- The validation commit route now captures the user from `requireOrganizationMembership` and passes the trusted identity into `commitValidation`, which sets `actorId = user.id` on both audit records and `ValidationRecord.actor = user.name`; request-body actor/actorId values are ignored.
+- Historical/migration paths still write `actorId = null` unchanged; no backfill and no Actor model.
+- Verification: new actor-propagation probe (server-derived actorId, spoof rejection, historical null preservation, 401/403, mature-data snapshot), authentication probe, membership-authorization probe, db-write probe, and typecheck.
+
 ## [2026-07-16] TODO-005 Persistent Test Organizations
 
 **Task/Prompt:** Provide one safe, persistent, reproducible PostgreSQL-backed test organization without using mature organizational data.

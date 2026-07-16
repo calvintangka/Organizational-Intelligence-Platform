@@ -985,8 +985,17 @@ function validateCommitPayload(organizationId: string, payload: unknown): Valida
  * without writing; a different submission for an already-validated candidate
  * is rejected by the (organizationId, candidateId) unique constraint with 409.
  */
-export async function commitValidation(organizationId: string, rawPayload: unknown): Promise<ValidationCommitResult> {
+export async function commitValidation(
+  organizationId: string,
+  rawPayload: unknown,
+  // Trusted actor identity resolved server-side from the auth session (TODO-007).
+  // Attribution never comes from the request payload.
+  actor: { id: string; name: string }
+): Promise<ValidationCommitResult> {
   const organization = await requireOrganization(organizationId);
+  if (!actor || typeof actor.id !== "string" || actor.id.length === 0) {
+    throw invalidRequest("A trusted authenticated actor is required for validation commits.");
+  }
   const payload = validateCommitPayload(organization.id, rawPayload);
 
   return writeDatabase("validation commit", () =>
@@ -1018,8 +1027,8 @@ export async function commitValidation(organizationId: string, rawPayload: unkno
             knowledgeItemId: payload.validation.knowledgeId ?? payload.knowledgeItem.id,
             knowledgeVersionId: payload.validation.knowledgeVersionId ?? null,
             decision: payload.validation.decision,
-            actor: requireString(payload.validation.actor, "validation actor"),
-            actorId: null,
+            actor: actor.name,
+            actorId: actor.id,
             roleExercised: payload.validation.roleExercised ?? "knowledge_validator",
             rationale: payload.validation.rationale ?? null,
             timestamp: parseDate(payload.validation.timestamp, "validation timestamp")
@@ -1040,7 +1049,7 @@ export async function commitValidation(organizationId: string, rawPayload: unkno
             knowledgeItemId: payload.knowledgeItem.id,
             candidateId: payload.candidate.id,
             validationRecordId: payload.validation.id,
-            actorId: null,
+            actorId: actor.id,
             changeType: requireString(payload.memoryChange.changeType, "memory change changeType"),
             beforeState: nullableJson(payload.memoryChange.beforeState),
             afterState: json(payload.memoryChange.afterState),
