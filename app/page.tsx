@@ -662,8 +662,23 @@ export default function Home() {
 
     void (async () => {
       try {
-        const loadedProfile = await persistence.loadOrganizationProfile();
-        const orgId = loadedProfile.id;
+        // The authenticated active-organization context is authoritative on
+        // refresh. Do not let a preserved shell/localStorage selection choose
+        // an organization outside the user's current membership set.
+        const activeResponse = await fetch("/api/auth/active-organization", { cache: "no-store" });
+        const activePayload = await activeResponse.json().catch(() => null) as {
+          data?: { activeOrganizationId?: string | null; organization?: OrganizationProfile | null };
+          error?: { message?: string };
+        } | null;
+        if (!activeResponse.ok) {
+          throw new Error(activePayload?.error?.message ?? "Unable to resolve the active organization.");
+        }
+        const activeContext = activePayload?.data;
+        if (!activeContext?.activeOrganizationId || !activeContext.organization) {
+          throw new Error("No authorized organization is available for this user.");
+        }
+        const loadedProfile = activeContext.organization;
+        const orgId = activeContext.activeOrganizationId;
         // Resolve this organization's durable authority and select its adapter
         // BEFORE touching any organization-owned resource. A discovery failure
         // for a non-local organization throws here and hydration is left
@@ -1684,6 +1699,31 @@ export default function Home() {
     const found = availableOrganizations.find((org) => org.id === id);
     if (!found || found.id === organizationProfile.id) return;
     const generation = ++organizationSwitchGeneration.current;
+    let authorizedProfile: OrganizationProfile | null = null;
+    // Membership authorization happens before any outgoing state is reset or
+    // persisted. A rejected switch therefore leaves the current workspace
+    // untouched and cannot write outgoing data into the requested scope.
+    try {
+      const response = await fetch("/api/auth/active-organization", {
+        method: "PUT",
+        cache: "no-store",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: found.id })
+      });
+      const payload = await response.json().catch(() => null) as {
+        data?: { organization?: OrganizationProfile | null };
+        error?: { message?: string };
+      } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error?.message ?? "You do not have access to that organization.");
+      }
+      authorizedProfile = payload?.data?.organization ?? null;
+    } catch (error) {
+      if (generation === organizationSwitchGeneration.current) {
+        setErrorMessage(error instanceof Error ? error.message : "You do not have access to that organization.");
+      }
+      return;
+    }
     const wasHydrated = hydrated;
     setHydrated(false);
     setErrorMessage("");
@@ -1702,8 +1742,9 @@ export default function Home() {
       await activatePersistenceOrganization(found.id);
       const loaded = await loadOrganizationState(found.id);
       if (generation !== organizationSwitchGeneration.current) return;
-      setOrganizationProfile(found);
-      setOrganizationList(() => syncProfileIntoList(availableOrganizations, found));
+      const incomingProfile = authorizedProfile && authorizedProfile.id === found.id ? authorizedProfile : found;
+      setOrganizationProfile(incomingProfile);
+      setOrganizationList(() => syncProfileIntoList(availableOrganizations, incomingProfile));
       setKnowledgeItems(loaded.knowledge);
       setKnowledgeCandidates(loaded.candidates);
       setValidationRecords(loaded.validations);
@@ -1719,7 +1760,7 @@ export default function Home() {
       // clear it; local orgs surface it only when they still read memory history
       // from legacy storage. This is read-only — it never rewrites the marker.
       setMigrationWarning(
-        activePersistenceMode() === "local" && readsMemoryChangeHistoryFromLegacy(found.id)
+        activePersistenceMode() === "local" && readsMemoryChangeHistoryFromLegacy(incomingProfile.id)
           ? LEGACY_MEMORY_FALLBACK_WARNING
           : ""
       );

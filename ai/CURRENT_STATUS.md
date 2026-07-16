@@ -1,5 +1,9 @@
 # Current Status
 
+## TODO-P002-04 Secure Global Organization Switching — Completed
+
+Organization selection now verifies membership through `PUT /api/auth/active-organization` before changing client state or persisting the outgoing workspace. Refresh hydration resolves the authenticated active organization first, then activates its authority and reloads the complete scoped context (profile, tickets, knowledge, memory/history, validations, metrics, log, and patterns). Generation guards prevent stale async loads from contaminating the incoming workspace; rejected switches leave the current workspace unchanged. Pramana remains outside the authenticated membership flow. P-002 remains in progress.
+
 This file is the fastest accurate snapshot of the prototype as of 2026-07-16.
 
 ## TODO-P002-03 Active Organization Context — Completed

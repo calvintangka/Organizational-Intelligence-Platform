@@ -2,6 +2,17 @@
 
 ## Entry Format
 
+## [2026-07-16] TODO-P002-04 Secure Global Organization Switching
+
+**Task/Prompt:** Connect the existing organization switch action to the authenticated active-organization context without building the final account/workspace menu.
+
+**Files changed:** `app/page.tsx`, `scripts/organization-switching-probe.cjs`, `package.json`
+
+- Refresh hydration now starts from the server-authoritative active organization.
+- Switching verifies membership before outgoing state changes, updates the durable active organization, activates the incoming persistence authority, and reloads all organization-scoped resources with stale-load generation protection.
+- Unauthorized switches remain 403 with the active organization and current workspace unchanged. Pramana remains intentionally outside the authenticated membership flow.
+- Verification: organization-switching probe, active-organization probe, membership-authorization probe, typecheck, and production build.
+
 ## [2026-07-16] TODO-P002-03 Active Organization Context
 
 **Task/Prompt:** Add the authenticated user's durable active organization context without implementing organization switching UI.
