@@ -2,6 +2,17 @@
 
 ## Entry Format
 
+## [2026-07-17] TODO-012 Focused Classifier and Canonical Mapping Fix
+
+**Task/Prompt:** Fix only the confirmed deterministic category and canonical-mapping failures from the TODO-012 regression suite.
+
+**Files changed:** `lib/textSignal.ts`, `lib/analyzer.ts`, `lib/canonicalProblemEngine.ts`, `scripts/todo012-canonical-regression-probe.cjs`
+
+- Added shared word/phrase-boundary matching so signals such as `patch` no longer match inside `dispatch`, and removed generated reasoning prose from canonical signal matching.
+- Added focused specificity weights for the confirmed logistics, portal, consultation, account-access, activation, and payment-failure conflicts without changing safe ambiguity fallback.
+- Added the generic `Delivery Problem` canonical mapping and preserved TODO-011 invoice/duplicate-charge/refund/payment behavior.
+- Verification: TODO-012 broad probe 76/76, BUG-008 retrieval safety, BUG-008 semantic 32/32, TODO-011 Billing relevance, and typecheck. TODO-012 remains Ongoing pending final acceptance.
+
 ## [2026-07-17] TODO-012 Broad Canonical Regression QA
 
 **Task/Prompt:** Validate the current intelligence pipeline across every supported canonical problem category without fixing discovered product defects.

@@ -10,6 +10,7 @@
 import type { Understanding } from "@/types/oip";
 import { defaultOrganizationProfile } from "@/data/seedOrganizationProfiles";
 import { profileKeywordBank } from "@/lib/organizationProfile";
+import { containsSignal } from "@/lib/textSignal";
 
 export const CANONICAL_MATCH_THRESHOLD = 58;
 
@@ -125,6 +126,14 @@ const CANONICAL_RULES: Array<{
     signals: ["subscription", "cancel", "unsubscribe", "plan", "renew", "renewal"],
     tags: ["subscription", "plan", "renewal"],
     summary: "Customers need help changing, cancelling, or understanding a subscription."
+  },
+  {
+    id: "canonical-delivery-problem",
+    title: "Delivery Problem",
+    category: "Delivery",
+    signals: ["delivery", "shipping", "order", "shipment"],
+    tags: ["delivery", "shipping", "order"],
+    summary: "Customers need help with a general delivery, shipping, or order issue without stronger evidence for a specific delivery problem."
   },
   {
     id: "canonical-delivery-delay",
@@ -828,10 +837,10 @@ function ruleAllowedByProfile(
   const profileText = profileKeywordBank(profile).join(" ").toLowerCase();
   const ruleText = `${rule.title} ${rule.category} ${rule.signals.join(" ")} ${rule.tags.join(" ")}`.toLowerCase();
   return (
-    profile.supportedDomains.some((domain) => ruleText.includes(domain.toLowerCase())) ||
-    profile.supportedIssueTypes.some((issueType) => ruleText.includes(issueType.toLowerCase())) ||
-    rule.signals.some((signal) => profileText.includes(signal)) ||
-    rule.tags.some((tag) => profileText.includes(tag.replace("-", " ")))
+    profile.supportedDomains.some((domain) => containsSignal(ruleText, domain)) ||
+    profile.supportedIssueTypes.some((issueType) => containsSignal(ruleText, issueType)) ||
+    rule.signals.some((signal) => containsSignal(profileText, signal)) ||
+    rule.tags.some((tag) => containsSignal(profileText, tag.replace("-", " ")))
   );
 }
 
@@ -848,11 +857,13 @@ export function identifyCanonicalProblem(
     };
   }
 
-  const text = `${understanding.summary} ${understanding.coreProblem} ${understanding.category} ${understanding.tags.join(" ")} ${understanding.detectedSignals.join(" ")}`.toLowerCase();
+  // Exclude generated reasoning prose (for example, "Key signals detected")
+  // so canonical signals cannot match incidental boilerplate.
+  const text = `${understanding.coreProblem} ${understanding.category} ${understanding.tags.join(" ")} ${understanding.detectedSignals.join(" ")}`.toLowerCase();
   const allowedRules = CANONICAL_RULES.filter((rule) => ruleAllowedByProfile(rule, profile));
   const rule =
     allowedRules.find((candidate) => candidate.category === understanding.category) ??
-    allowedRules.find((candidate) => candidate.signals.some((signal) => text.includes(signal)));
+    allowedRules.find((candidate) => candidate.signals.some((signal) => containsSignal(text, signal)));
 
   if (rule) {
     return {

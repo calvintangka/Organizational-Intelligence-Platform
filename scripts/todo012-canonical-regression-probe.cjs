@@ -38,6 +38,7 @@ const { getRecognizedClassifierCategories, understandForProfile } = require(path
 const { identifyCanonicalProblem, withCanonicalProblemDefaults } = require(path.join(root, "lib", "canonicalProblemEngine.ts"));
 const { retrieveMemory } = require(path.join(root, "lib", "memory.ts"));
 const { draftResponse, isCompatibleForDrafting } = require(path.join(root, "lib", "drafting.ts"));
+const { containsSignal } = require(path.join(root, "lib", "textSignal.ts"));
 const { seedOrganizationProfiles } = require(path.join(root, "data", "seedOrganizationProfiles.ts"));
 
 const NOW = "2026-07-17T00:00:00.000Z";
@@ -151,6 +152,14 @@ function checkCategoryCase(testCase, variant) {
   }
 }
 
+totalCases += 2;
+if (containsSignal("The parcel is ready for dispatch.", "patch")) {
+  fail("Word boundary: dispatch", "CLASSIFICATION_FAILURE", "patch not matched", "patch matched", "signal matching", "A signal must not match inside a larger word.");
+}
+if (!containsSignal("Please install the patch before retrying.", "patch")) {
+  fail("Word boundary: patch", "CLASSIFICATION_FAILURE", "patch matched", "patch missed", "signal matching", "A standalone signal must still match.");
+}
+
 for (const testCase of categoryCases) {
   checkCategoryCase(testCase, "direct");
   checkCategoryCase(testCase, "paraphrase");
@@ -213,6 +222,22 @@ for (const [label, text, expectedCategory, expectedIntent, expectedCanonical, al
   const inappropriateAuthorization = !allowsAuthorization && canonical.title === "Payment Authorization Confusion";
   if (understanding.category !== expectedCategory || understanding.intent !== expectedIntent || canonical.title !== expectedCanonical || subscriptionSelected || inappropriateAuthorization) {
     fail(label, "IRRELEVANT_FALLBACK", `${expectedCategory}/${expectedIntent}/${expectedCanonical}; no Subscription fallback`, `${understanding.category}/${understanding.intent ?? "-"}/${canonical.title}; top=${compatible[0]?.item.category ?? "none"}`, "canonical/retrieval", `authorizationAllowed=${allowsAuthorization}`);
+  }
+}
+
+// Vague delivery evidence may remain generic, but must not be forced into a
+// specific logistics subtype.
+{
+  totalCases += 1;
+  const ticket = ticketOf("Vague delivery issue", "Something is wrong with my delivery, but I do not have more details yet.");
+  const understanding = understandForProfile(ticket, profile);
+  const canonical = identifyCanonicalProblem(understanding, profile);
+  const compatible = retrieveMemory(understanding, memory, new Set()).filter((match) => isCompatibleForDrafting(understanding, match.item, ticket));
+  const draft = draftResponse(ticket, understanding, compatible[0] ?? null, profile, false);
+  const genericDelivery = understanding.category === "Delivery" && canonical.title === "Delivery Problem";
+  const safelyAmbiguous = understanding.category === "Uncategorized" && compatible.length === 0 && draft.source === "no_template";
+  if (!genericDelivery && !safelyAmbiguous) {
+    fail("Vague Delivery", "CLASSIFICATION_FAILURE", "generic Delivery or safe ambiguity", `${understanding.category} / ${canonical.title} / ${draft.source}`, "specificity", "Weak evidence must not force a specific logistics subtype.");
   }
 }
 

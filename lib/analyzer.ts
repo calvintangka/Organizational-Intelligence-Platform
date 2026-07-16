@@ -3,6 +3,7 @@ import type { ExtractedTicketFields, Observation, Understanding, ReasoningSummar
 import type { KnowledgeMatch, OrganizationProfile } from "@/types";
 import { defaultOrganizationProfile } from "@/data/seedOrganizationProfiles";
 import { profileKeywordBank } from "@/lib/organizationProfile";
+import { containsSignal } from "@/lib/textSignal";
 
 const FALLBACK_PROFILE = defaultOrganizationProfile;
 
@@ -101,7 +102,7 @@ function normalizeForSignalMatching(value: string): string {
 }
 
 function findMatchedSignals(text: string, signals: string[]): string[] {
-  return signals.filter((signal) => text.includes(signal));
+  return signals.filter((signal) => containsSignal(text, signal));
 }
 
 function emptyExtractedTicketFields(): ExtractedTicketFields {
@@ -428,6 +429,17 @@ export function isRecognizedClassifierCategory(category: string): boolean {
 // confidence instead of requiring one exact phrase. Categories not listed here
 // fall back to the default 1-point-per-keyword system.
 const CATEGORY_WEIGHTS: Record<string, Array<[string, number]>> = {
+  Activation: [
+    ["activation code", 8],
+    ["product key", 8],
+    ["activation", 6],
+    ["activate", 5],
+    ["license", 6],
+    ["serial", 5],
+    ["version mismatch", 5],
+    ["product version", 1],
+    ["version", 1]
+  ],
   // 2FA terms are highly specific â€” any single strong signal wins over Login
   "Two-Factor Auth": [
     ["two-factor", 8],
@@ -452,6 +464,12 @@ const CATEGORY_WEIGHTS: Record<string, Array<[string, number]>> = {
   // incidental Subscription vocabulary ("subscription", "renewal", "plan")
   // so validated billing lessons stay reachable. Base keywords keep weight 1.
   Billing: [
+    ["payment keeps failing", 8],
+    ["payment failure", 8],
+    ["payment failed", 8],
+    ["card declined", 8],
+    ["transaction does not go through", 8],
+    ["transaction declined", 8],
     ["charged twice", 6],
     ["double charged", 6],
     ["duplicate charge", 6],
@@ -524,6 +542,97 @@ const CATEGORY_WEIGHTS: Record<string, Array<[string, number]>> = {
     ["dont remember my login email", 5],
     ["don't remember my login email", 5],
     ["access", 1]
+  ],
+  "Account Access": [
+    ["cannot access account", 8],
+    ["cant access account", 8],
+    ["account access", 7],
+    ["access to my account", 7],
+    ["account blocked", 7],
+    ["account suspended", 7],
+    ["account banned", 7],
+    ["blocked", 5],
+    ["suspended", 5],
+    ["banned", 5],
+    ["account", 1]
+  ],
+  Delivery: [
+    ["delivery", 1],
+    ["shipping", 1],
+    ["tracking", 1],
+    ["order", 1],
+    ["arrived", 1],
+    ["delayed", 1],
+    ["delay", 1],
+    ["package", 1],
+    ["shipment", 1]
+  ],
+  "Delivery Delay": [
+    ["delivery delay", 9],
+    ["tracking has not updated", 6],
+    ["tracking not updated", 6],
+    ["has not arrived", 8],
+    ["not arrived", 8],
+    ["delayed", 7],
+    ["late", 6],
+    ["delivery", 1],
+    ["tracking", 1],
+    ["package", 1],
+    ["shipment", 1]
+  ],
+  "Package Tracking": [
+    ["tracking number", 8],
+    ["package tracking", 8],
+    ["tracking", 4],
+    ["not updated", 3],
+    ["status", 1],
+    ["package", 1],
+    ["parcel", 1],
+    ["shipment", 1]
+  ],
+  "Lost Package": [
+    ["lost package", 9],
+    ["missing package", 9],
+    ["lost parcel", 9],
+    ["missing parcel", 9],
+    ["never arrived", 9],
+    ["cannot find", 6],
+    ["package", 1],
+    ["parcel", 1]
+  ],
+  "Address Change": [
+    ["address change", 9],
+    ["change address", 9],
+    ["wrong address", 9],
+    ["delivery address", 9],
+    ["new address", 8]
+  ],
+  "Courier Issue": [
+    ["courier", 7],
+    ["delivery person", 7],
+    ["driver", 6],
+    ["did not call", 6],
+    ["pickup", 5]
+  ],
+  "Client Portal Access": [
+    ["cannot access portal", 10],
+    ["client portal", 9],
+    ["portal access", 9],
+    ["portal login", 9],
+    ["client login", 9]
+  ],
+  "Consultation Booking": [
+    ["schedule consultation", 10],
+    ["book appointment", 8],
+    ["lawyer appointment", 8],
+    ["consultation", 6],
+    ["booking", 5]
+  ],
+  "Appointment Rescheduling": [
+    ["change appointment", 9],
+    ["move my appointment", 9],
+    ["reschedule", 9],
+    ["appointment", 1]
   ]
 };
 
@@ -603,7 +712,7 @@ const UNCATEGORIZED_REASONING = "No existing category matched this query with su
 function scoreIntentEvidence(category: string, fullText: string): number {
   const patterns = CATEGORY_INTENT_PATTERNS[category] ?? [];
   return patterns.reduce((total, [pattern, weight]) => {
-    const matched = typeof pattern === "string" ? fullText.includes(pattern) : pattern.test(fullText);
+    const matched = typeof pattern === "string" ? containsSignal(fullText, pattern) : pattern.test(fullText);
     return matched ? total + weight : total;
   }, 0);
 }
@@ -629,10 +738,10 @@ export function understand(ticket: Ticket): Understanding {
 function categoryAllowedByProfile(rule: { category: string; keywords: string[]; tags: string[] }, profile: OrganizationProfile): boolean {
   const profileText = profileKeywordBank(profile).join(" ").toLowerCase();
   const categoryText = `${rule.category} ${rule.tags.join(" ")} ${rule.keywords.join(" ")}`.toLowerCase();
-  return rule.keywords.some((keyword) => profileText.includes(keyword)) ||
-    rule.tags.some((tag) => profileText.includes(tag.replace("-", " "))) ||
-    profileText.includes(rule.category.toLowerCase()) ||
-    profile.supportedDomains.some((domain) => categoryText.includes(domain.toLowerCase()));
+  return rule.keywords.some((keyword) => containsSignal(profileText, keyword)) ||
+    rule.tags.some((tag) => containsSignal(profileText, tag.replace("-", " "))) ||
+    containsSignal(profileText, rule.category) ||
+    profile.supportedDomains.some((domain) => containsSignal(categoryText, domain));
 }
 
 export function understandForProfile(ticket: Ticket, profile: OrganizationProfile = FALLBACK_PROFILE): Understanding {
@@ -653,11 +762,11 @@ export function understandForProfile(ticket: Ticket, profile: OrganizationProfil
     const weights = CATEGORY_WEIGHTS[rule.category];
     if (weights) {
       for (const [keyword, weight] of weights) {
-        if (fullText.includes(keyword)) score += weight;
+        if (containsSignal(fullText, keyword)) score += weight;
       }
     } else {
       for (const keyword of rule.keywords) {
-        if (fullText.includes(keyword)) score++;
+        if (containsSignal(fullText, keyword)) score++;
       }
     }
 
@@ -741,7 +850,7 @@ export function understandForProfile(ticket: Ticket, profile: OrganizationProfil
   const detectedSignals: string[] = [];
   for (const rule of rules) {
     for (const keyword of rule.keywords) {
-      if (fullText.includes(keyword) && !detectedSignals.includes(keyword)) {
+      if (containsSignal(fullText, keyword) && !detectedSignals.includes(keyword)) {
         detectedSignals.push(keyword);
  
 
@@ -823,10 +932,10 @@ export function understandForProfile(ticket: Ticket, profile: OrganizationProfil
 function inferIntent(category: string, detectedSignals: string[], fullText: string): string | undefined {
   const hasSignal = (matcher: string | RegExp) =>
     typeof matcher === "string"
-      ? detectedSignals.includes(matcher) || fullText.includes(matcher)
+      ? detectedSignals.includes(matcher) || containsSignal(fullText, matcher)
       : matcher.test(fullText);
   const hasEmailRecoverySignal =
-    EMAIL_RECOVERY_SIGNALS.some((signal) => fullText.includes(signal)) ||
+    EMAIL_RECOVERY_SIGNALS.some((signal) => containsSignal(fullText, signal)) ||
     (
       fullText.includes("email") &&
       ["forgot", "forgotten", "retrieve", "retrieving", "recover", "remember"].some((term) => fullText.includes(term))
@@ -884,7 +993,7 @@ function inferIntent(category: string, detectedSignals: string[], fullText: stri
       }
       return "general_2fa_failure";
     case "Billing":
-      if (hasSignal("invoice")) return "invoice_question";
+      if (hasSignal("invoice") || hasSignal("invoices")) return "invoice_question";
       if (hasSignal("authorization") || hasSignal("transaction")) return "payment_authorization_confusion";
       return "billing_charge_issue";
     case "Subscription":
@@ -893,8 +1002,9 @@ function inferIntent(category: string, detectedSignals: string[], fullText: stri
       if (hasSignal("renew") || hasSignal("renewal") || hasSignal("plan")) return "renewal_or_plan_change";
       return "subscription_help";
     case "Activation":
+      if (hasSignal("version mismatch") || hasSignal("product version")) return "version_mismatch";
       if (hasSignal("activation code") || hasSignal("product key") || hasSignal("license")) return "code_or_key_rejected";
-      if (hasSignal("version") || hasSignal("product version")) return "version_mismatch";
+      if (hasSignal("version")) return "version_mismatch";
       return "activation_help";
     case "Refund":
       return "refund_request";

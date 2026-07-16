@@ -1,8 +1,8 @@
 # Current Status
 
-## TODO-012 Broad Canonical Regression Testing - Remains Ongoing
+## TODO-012 Focused Classifier/Canonical Fix - Completed; TODO-012 Remains Ongoing
 
-Added a deterministic 22-category, 73-case regression probe covering direct wording, paraphrases, canonical mapping, memory reachability, supported intents, TODO-011 Billing relevance, weak overlap, ambiguity, and cold start. The audit confirmed 12 category/canonical failures, including Delivery-family discrimination, Client Portal versus Login, Consultation Booking ambiguity, generic Account Access, and Activation/version ambiguity. TODO-009 semantic compatibility and safety pass under deterministic profile isolation, but TODO-011 payment failure currently classifies as `Uncategorized`. Read-only validation also found empty products/services/domains/vocabulary in both mature PostgreSQL profiles. No production logic or mature data was changed; TODO-012 is not completed.
+The 12 confirmed classifier/canonical failures are fixed with boundary-aware signal matching, focused specificity weights, deterministic resolution of strong neighboring-category evidence, and a generic Delivery canonical mapping. The expanded deterministic probe now passes 22 categories and 76 cases, including direct/paraphrase coverage, all focused failures, explicit `patch`/`dispatch` boundaries, vague-delivery safety, ambiguity, cold start, and TODO-011 Billing relevance. TODO-009 retrieval/semantic safety and TODO-011 Billing probes pass. No mature data was modified, and the separate stale-profile overwrite defect remains untouched. TODO-012 stays Ongoing pending a final acceptance decision.
 
 ## TODO-011 Generic Billing Fallback Relevance - Completed (PRODUCT/CONTENT-001 Fixed/Closed)
 
