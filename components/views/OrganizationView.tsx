@@ -186,7 +186,10 @@ export function OrganizationView({
         {/* Org switcher / management */}
         <div className="mt-6">
           <div className="flex items-center justify-between">
-            <p className={label}>Switch organization</p>
+            <div>
+              <p className={label}>Organization profiles</p>
+              <p className={`text-xs ${darkMode ? "text-slate-500" : "text-slate-400"}`}>Use the account menu for global workspace switching.</p>
+            </div>
             <button
               type="button"
               onClick={() => setAddOpen((v) => !v)}

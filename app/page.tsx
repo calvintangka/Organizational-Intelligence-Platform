@@ -11,6 +11,7 @@ import { KnowledgeView } from "@/components/views/KnowledgeView";
 import { DashboardView } from "@/components/views/DashboardView";
 import { OrganizationView } from "@/components/views/OrganizationView";
 import { AccentPicker } from "@/components/AccentPicker";
+import { AccountWorkspaceMenu } from "@/components/AccountWorkspaceMenu";
 import { primaryDemoTicketId, secondDemoTicketId, seedTickets } from "@/data/seedTickets";
 import { defaultOrganizationProfile, seedOrganizationProfiles } from "@/data/seedOrganizationProfiles";
 import { createAIAdapter } from "@/lib/ai/adapter";
@@ -575,6 +576,7 @@ export default function Home() {
   const [memoryChangeRecords, setMemoryChangeRecords] = useState<MemoryChangeRecord[]>([]);
   const [organizationProfile, setOrganizationProfile] = useState<OrganizationProfile>(defaultOrganizationProfile);
   const [organizationList, setOrganizationList] = useState<OrganizationProfile[]>(seedOrganizationProfiles);
+  const [authorizedOrganizations, setAuthorizedOrganizations] = useState<OrganizationProfile[]>([]);
   const [metrics, setMetrics] = useState<Metrics>(createInitialMetrics);
   const [orgMetrics, setOrgMetrics] = useState<OrgMetrics>(() => persistence.seedOrgMetrics(defaultOrganizationProfile.id));
   const [hydrated, setHydrated] = useState(false);
@@ -662,6 +664,13 @@ export default function Home() {
 
     void (async () => {
       try {
+        const organizationsResponse = await fetch("/api/organizations", { cache: "no-store" });
+        const organizationsPayload = await organizationsResponse.json().catch(() => null) as { data?: OrganizationProfile[]; error?: { message?: string } } | null;
+        if (!organizationsResponse.ok || !Array.isArray(organizationsPayload?.data)) {
+          throw new Error(organizationsPayload?.error?.message ?? "Unable to load available organizations.");
+        }
+        const authorizedProfiles = organizationsPayload.data;
+        if (!cancelled) setAuthorizedOrganizations(authorizedProfiles);
         // The authenticated active-organization context is authoritative on
         // refresh. Do not let a preserved shell/localStorage selection choose
         // an organization outside the user's current membership set.
@@ -1744,7 +1753,7 @@ export default function Home() {
       if (generation !== organizationSwitchGeneration.current) return;
       const incomingProfile = authorizedProfile && authorizedProfile.id === found.id ? authorizedProfile : found;
       setOrganizationProfile(incomingProfile);
-      setOrganizationList(() => syncProfileIntoList(availableOrganizations, incomingProfile));
+      setOrganizationList((current) => syncProfileIntoList(current, incomingProfile));
       setKnowledgeItems(loaded.knowledge);
       setKnowledgeCandidates(loaded.candidates);
       setValidationRecords(loaded.validations);
@@ -3403,6 +3412,7 @@ export default function Home() {
   };
 
   const accent = normalizeAccentColor(organizationProfile.accentColor);
+  const currentOrganizationForMenu = authorizedOrganizations.find((organization) => organization.id === organizationProfile.id) ?? null;
 
   if (authStatus === "loading") {
     return <main className="flex min-h-screen items-center justify-center bg-[#F3F6FA] text-sm text-slate-500">Checking authentication…</main>;
@@ -3429,17 +3439,15 @@ export default function Home() {
         {/* Top bar */}
         <header className={`flex flex-shrink-0 items-center justify-end px-4 pb-2 md:px-6 md:pb-0 md:pt-6 ${darkMode ? "bg-[#0b1220]" : "bg-[#F3F6FA]"}`}>
           <div className="flex items-center gap-3">
-            <div className="hidden text-right sm:block">
-              <p className={`text-sm font-semibold ${darkMode ? "text-white" : "text-[#111827]"}`}>{authUser.name}</p>
-              <p className={`text-xs ${darkMode ? "text-slate-400" : "text-slate-500"}`}>{authUser.email}</p>
-            </div>
-            <button type="button" onClick={() => { void logout(); }} className={`rounded-xl border px-3 py-2 text-sm font-semibold ${darkMode ? "border-[#2d3f52] text-slate-300 hover:bg-[#1e3048]" : "border-slate-300 text-slate-700 hover:bg-slate-50"}`}>Sign out</button>
-            <div
-              className="flex h-11 w-14 items-center justify-center rounded-2xl text-xs font-bold text-white shadow-sm"
-              style={{ backgroundColor: accent }}
-            >
-              {initialsFor(organizationProfile)}
-            </div>
+            <AccountWorkspaceMenu
+              user={authUser}
+              currentOrganization={currentOrganizationForMenu}
+              organizations={authorizedOrganizations}
+              darkMode={darkMode}
+              accentColor={accent}
+              onSelectOrganization={(id) => selectOrganization(id, authorizedOrganizations)}
+              onSignOut={logout}
+            />
           </div>
         </header>
 
@@ -3567,9 +3575,9 @@ export default function Home() {
           {activeView === "organization" && (
             <OrganizationView
               profile={organizationProfile}
-              organizations={organizationList}
+              organizations={authorizedOrganizations}
               onChange={changeOrganizationProfile}
-              onSelectOrg={selectOrganization}
+              onSelectOrg={(id) => { void selectOrganization(id, authorizedOrganizations); }}
               onAddOrg={addOrganization}
               onDeleteOrg={deleteOrganization}
               darkMode={darkMode}

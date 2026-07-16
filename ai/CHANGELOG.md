@@ -2,6 +2,16 @@
 
 ## Entry Format
 
+## [2026-07-16] TODO-P002-05 Account / Workspace Menu
+
+**Task/Prompt:** Move global account and workspace controls into a compact top-right menu without changing auth or switching infrastructure.
+
+**Files changed:** `components/AccountWorkspaceMenu.tsx`, `app/page.tsx`, `components/views/OrganizationView.tsx`
+
+- Added authenticated identity, current organization, membership-filtered organization actions, sign out, outside-click/Escape close, and a no-organizations state.
+- Reused the existing secure organization switching and logout flows; Organization Settings now points users to the account menu for global switching.
+- Verification: browser menu smoke test, organization-switching probe, authentication probe, typecheck, and production build.
+
 ## [2026-07-16] TODO-P002-04 Secure Global Organization Switching
 
 **Task/Prompt:** Connect the existing organization switch action to the authenticated active-organization context without building the final account/workspace menu.
