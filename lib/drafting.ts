@@ -75,6 +75,8 @@ export interface RootCauseCompatibility {
   reason: string;
   ticketFamily: RootCauseFamily;
   itemFamily: RootCauseFamily;
+  /** True when the rejection is an explicit contradiction — a hard veto that no fallback may override. */
+  contradiction?: boolean;
 }
 
 const ROOT_CAUSE_EVIDENCE: Array<{ family: Exclude<RootCauseFamily, "unknown">; patterns: RegExp[] }> = [
@@ -207,7 +209,8 @@ export function assessRootCauseCompatibility(
       compatible: false,
       reason: "Explicit login contradiction detected; Login template reuse is not authorized.",
       ticketFamily: "unknown",
-      itemFamily: "unknown"
+      itemFamily: "unknown",
+      contradiction: true
     };
   }
 
@@ -215,6 +218,8 @@ export function assessRootCauseCompatibility(
   const itemProfile = classifyRootCause(knowledgeRootCauseText(item));
 
   if (ticketProfile.family === "unknown" || itemProfile.family === "unknown") {
+    // NOT a contradiction: evidence is merely insufficient. This is the only
+    // state a semantic fallback is allowed to resolve.
     return {
       compatible: false,
       reason: "Root-cause evidence is ambiguous; category alone does not authorize template reuse.",
@@ -250,21 +255,105 @@ function isStrongValidatedLessonMatch(ticket: Ticket, item: KnowledgeItem): bool
  * a source of customer-facing templates. A strong validated lesson is the
  * explicit narrow exception because its signals are root-cause-specific.
  */
+function isCategoryCompatible(ticketCategory: string, itemCategory: string): boolean {
+  return ticketCategory === itemCategory
+    || ticketCategory === "General"
+    || ticketCategory === UNCATEGORIZED_CATEGORY
+    || (Array.isArray(COMPATIBLE_CATEGORIES[ticketCategory]) && COMPATIBLE_CATEGORIES[ticketCategory].includes(itemCategory));
+}
+
 export function isCompatibleForDrafting(
   understanding: Understanding,
   item: KnowledgeItem,
   ticket?: Ticket
 ): boolean {
-  const ticketCategory = understanding.category;
-  const itemCategory = item.category;
-  const categoryCompatible = ticketCategory === itemCategory
-    || ticketCategory === "General"
-    || ticketCategory === UNCATEGORIZED_CATEGORY
-    || (Array.isArray(COMPATIBLE_CATEGORIES[ticketCategory]) && COMPATIBLE_CATEGORIES[ticketCategory].includes(itemCategory));
-  if (!categoryCompatible) return false;
+  if (!isCategoryCompatible(understanding.category, item.category)) return false;
   if (!ticket) return true;
   if (isStrongValidatedLessonMatch(ticket, item)) return true;
   return assessRootCauseCompatibility(understanding, item, ticket).compatible;
+}
+
+export type CompatibilityDecisionState = "compatible" | "incompatible" | "unknown";
+
+export interface CompatibilityDecision {
+  state: CompatibilityDecisionState;
+  reason: string;
+}
+
+/**
+ * Three-state deterministic compatibility verdict (TODO-009 Step 2).
+ *
+ * "compatible"   — existing deterministic evidence authorizes reuse.
+ * "incompatible" — a deterministic HARD VETO: category mismatch, explicit
+ *                  contradiction, or two KNOWN root-cause families that differ.
+ *                  No fallback of any kind may override this state.
+ * "unknown"      — root-cause evidence is merely insufficient (a family could
+ *                  not be classified). This is the ONLY state the semantic
+ *                  fallback is permitted to resolve.
+ */
+export function assessCompatibilityDecision(
+  understanding: Understanding,
+  item: KnowledgeItem,
+  ticket: Ticket
+): CompatibilityDecision {
+  if (!isCategoryCompatible(understanding.category, item.category)) {
+    return { state: "incompatible", reason: `Category "${item.category}" is not compatible with ticket category "${understanding.category}".` };
+  }
+  if (isStrongValidatedLessonMatch(ticket, item)) {
+    return { state: "compatible", reason: "Strong validated lesson match authorizes reuse deterministically." };
+  }
+  const rootCause = assessRootCauseCompatibility(understanding, item, ticket);
+  if (rootCause.compatible) {
+    return { state: "compatible", reason: rootCause.reason };
+  }
+  if (rootCause.contradiction) {
+    return { state: "incompatible", reason: rootCause.reason };
+  }
+  if (rootCause.ticketFamily !== "unknown" && rootCause.itemFamily !== "unknown") {
+    return { state: "incompatible", reason: rootCause.reason };
+  }
+  return { state: "unknown", reason: rootCause.reason };
+}
+
+/**
+ * A semantic-equivalence confirmation produced by the AI discrimination layer
+ * for ONE validated lesson of ONE knowledge item. drafting re-verifies every
+ * deterministic gate before honoring it (see authorizeSemanticLessonReuse), so
+ * a fabricated authorization can never bypass a hard veto.
+ */
+export interface SemanticLessonAuthorization {
+  itemId: string;
+  lessonId: string;
+  confidence: "high";
+  reasoning: string;
+}
+
+/**
+ * Fail-closed gatekeeper for semantic lesson reuse. Returns the authorized
+ * lesson only when EVERY deterministic condition holds:
+ * - the ticket category was actually classified (no Uncategorized/General bypass),
+ * - the deterministic decision for this item is exactly "unknown"
+ *   (semantic may resolve unknown; it must never override compatible/incompatible),
+ * - the authorization references this item and one of its real lessons,
+ * - the ticket does not explicitly contradict that lesson,
+ * - the semantic confidence is "high".
+ * Anything else returns null and the caller keeps the safe no_template path.
+ */
+export function authorizeSemanticLessonReuse(
+  understanding: Understanding,
+  item: KnowledgeItem,
+  ticket: Ticket,
+  authorization: SemanticLessonAuthorization | null | undefined
+): Lesson | null {
+  if (!authorization) return null;
+  if (authorization.confidence !== "high") return null;
+  if (authorization.itemId !== item.id) return null;
+  if (understanding.category === UNCATEGORIZED_CATEGORY || understanding.category === "General") return null;
+  if (assessCompatibilityDecision(understanding, item, ticket).state !== "unknown") return null;
+  const lesson = (item.lessons ?? []).find((candidate) => candidate.id === authorization.lessonId);
+  if (!lesson) return null;
+  if (ticketContradictsLesson(ticket, lesson)) return null;
+  return lesson;
 }
 
 const CATEGORY_TEMPLATES: Record<string, (ticket: Ticket) => string> = {
@@ -503,7 +592,8 @@ export function draftResponse(
   understanding: Understanding,
   topMatch: KnowledgeMatch | null,
   profile: OrganizationProfile = defaultOrganizationProfile,
-  knowledgeBaseEmpty = false
+  knowledgeBaseEmpty = false,
+  semanticAuthorization: SemanticLessonAuthorization | null = null
 ): Pick<SuggestedResponse, "draftResponse" | "basedOnKnowledgeIds" | "confidenceNote" | "source"> {
   const templateFn = CATEGORY_TEMPLATES[understanding.category] ?? CATEGORY_TEMPLATES["General"];
   const profileTemplate = getCustomerResponseTemplate(understanding.category, profile, understanding);
@@ -528,6 +618,23 @@ export function draftResponse(
     const lessonLabel = lessonMatch.lesson.title ?? lessonMatch.lesson.rootCause;
     confidenceNote = `Lesson-informed draft: "${lessonLabel}" (matched signals: ${lessonMatch.matchedSignals.join(", ")}). Root cause: ${lessonMatch.lesson.rootCause}. Solution: ${lessonMatch.lesson.solution}. Human review is still required unless trust allows auto-resolution.`;
     basedOnKnowledgeIds.push(compatibleMatch.item.id);
+    return { draftResponse: draft, basedOnKnowledgeIds, confidenceNote, source: "deterministic" };
+  }
+
+  // Semantic fallback (TODO-009 Step 2): only reachable when the deterministic
+  // compatibility gate did NOT authorize the match. authorizeSemanticLessonReuse
+  // re-verifies every deterministic gate (state must be exactly "unknown", no
+  // contradiction, real lesson, high confidence) before a lesson-informed draft
+  // is allowed; any failure falls through to the existing no_template path.
+  const semanticLesson = !compatibleMatch && topMatch
+    ? authorizeSemanticLessonReuse(understanding, topMatch.item, ticket, semanticAuthorization)
+    : null;
+  if (semanticLesson && topMatch) {
+    draft = renderLessonResponse(semanticLesson, ticket, profile, understanding);
+    draft = appendTicketReferenceIfNeeded(draft, ticket.ticketId);
+    const lessonLabel = semanticLesson.title ?? semanticLesson.rootCause;
+    confidenceNote = `Lesson-informed draft (semantic match): "${lessonLabel}". Deterministic root-cause evidence was insufficient, and the AI discrimination layer confirmed with high confidence that this ticket describes the same underlying problem. Reasoning: ${semanticAuthorization?.reasoning ?? "n/a"}. Root cause: ${semanticLesson.rootCause}. Solution: ${semanticLesson.solution}. Human review is still required unless trust allows auto-resolution.`;
+    basedOnKnowledgeIds.push(topMatch.item.id);
     return { draftResponse: draft, basedOnKnowledgeIds, confidenceNote, source: "deterministic" };
   }
 

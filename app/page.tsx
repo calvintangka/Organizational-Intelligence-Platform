@@ -22,7 +22,8 @@ import { classifyBusinessDomain } from "@/lib/domainClassifier";
 import { analyzeBulkEntries, prepareBulkClusterCommit } from "@/lib/bulkUpload";
 import { retrieveMemory } from "@/lib/memory";
 import { draftResponse, findMatchingLesson, isCompatibleForDrafting, ticketContradictsLesson } from "@/lib/drafting";
-import type { LessonMatchResult } from "@/lib/drafting";
+import type { LessonMatchResult, SemanticLessonAuthorization } from "@/lib/drafting";
+import { evaluateSemanticLessonCompatibility } from "@/lib/ai/semanticCompatibility";
 import {
   buildKnowledgeItemFromPackCandidate,
   buildPackCandidateContent,
@@ -2183,6 +2184,49 @@ export default function Home() {
     return topMatch;
   }
 
+  /**
+   * TODO-009 Step 2: semantic compatibility fallback for BUG-008 paraphrases.
+   * Consulted ONLY when the deterministic compatibility gate produced zero
+   * compatible matches. Evaluates the top retrieval candidate's validated
+   * lessons through the existing AI discrimination layer; lib/drafting
+   * re-verifies every deterministic veto before any reuse, so this can resolve
+   * "unknown" but can never override a contradiction or known incompatibility.
+   */
+  async function requestSemanticCompatibilityFallback(
+    ticket: Ticket,
+    understanding: ReturnType<typeof understandForProfile>,
+    retrievalMatches: KnowledgeMatch[]
+  ): Promise<{ match: KnowledgeMatch; authorization: SemanticLessonAuthorization } | null> {
+    if (aiAdapter.config.mode === "disabled") return null;
+    const candidate = retrievalMatches[0];
+    if (!candidate) return null;
+
+    const evaluation = await evaluateSemanticLessonCompatibility(aiAdapter.provider, ticket, understanding, candidate.item);
+    if (evaluation.aiResults.length > 0) recordAIResults(evaluation.aiResults);
+    if (!evaluation.authorization) {
+      // Only log when the fallback actually consulted the LLM; silent
+      // ineligibility (compatible/incompatible/unclassified) needs no entry.
+      if (evaluation.aiResults.length > 0) {
+        addLogEntries([
+          createLogEntry(
+            "Semantic compatibility fallback declined",
+            evaluation.declineReason ?? "No confident semantic equivalence; keeping human-review path."
+          )
+        ]);
+      }
+      return null;
+    }
+
+    addLogEntries([
+      createLogEntry(
+        "Semantic compatibility fallback: validated lesson confirmed",
+        `"${candidate.item.title}" — deterministic root-cause evidence was insufficient; AI discrimination confirmed the same underlying problem with high confidence.`
+      ),
+      createLogEntry("Semantic compatibility reasoning", evaluation.authorization.reasoning)
+    ]);
+    return { match: candidate, authorization: evaluation.authorization };
+  }
+
   async function requestAnalysisAdvisory(
     ticket: Ticket,
     deterministicUnderstanding: ReturnType<typeof understandForProfile>,
@@ -2595,14 +2639,23 @@ export default function Home() {
     const effectiveTopMatch = topMatch
       ? await requestMatchDiscrimination(ticket, topMatch, und, lessonMatch ?? undefined)
       : null;
+    // Semantic fallback runs ONLY when the deterministic gate produced no
+    // compatible match at all (the "unknown" paraphrase case) — never after a
+    // discrimination rejection of a deterministically compatible match.
+    const semanticFallback = compatibleMatches.length === 0
+      ? await requestSemanticCompatibilityFallback(ticket, und, lessonAwareMatches)
+      : null;
     const resolvedMatches = effectiveTopMatch
       ? moveMatchToFront(compatibleMatches, effectiveTopMatch.item.id)
+      : semanticFallback
+      ? [semanticFallback.match]
       : topMatch
       ? stripRejectedMatch(compatibleMatches, topMatch.item.id)
       : [];
 
-    const draft = draftResponse(ticket, und, effectiveTopMatch, organizationProfile, knowledgeItems.length === 0);
-    const aiDraft = await requestDraftAdvisory(ticket, und, canonicalProblem.title, effectiveTopMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", aiAdvisory);
+    const draftMatch = effectiveTopMatch ?? semanticFallback?.match ?? null;
+    const draft = draftResponse(ticket, und, draftMatch, organizationProfile, knowledgeItems.length === 0, semanticFallback?.authorization ?? null);
+    const aiDraft = await requestDraftAdvisory(ticket, und, canonicalProblem.title, draftMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", aiAdvisory);
     const response = aiDraft.response;
 
     addLogEntries([
@@ -3355,8 +3408,15 @@ export default function Home() {
       // treated the ticket as unmatched, producing a contradictory UI state.
       setSimilarKnowledge((prev) => stripRejectedMatch(prev, topMatch.item.id));
     }
-    const draft = draftResponse(ticket, enrichedUnderstanding, effectiveTopMatch, organizationProfile, knowledgeItems.length === 0);
-    const aiDraft = await requestDraftAdvisory(ticket, enrichedUnderstanding, canonicalProblem.title, effectiveTopMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", advisory);
+    // Semantic fallback (TODO-009 Step 2): only when the deterministic gate
+    // produced no compatible match at all — never after discrimination rejection.
+    const semanticFallback = compatibleMatches.length === 0
+      ? await requestSemanticCompatibilityFallback(ticket, enrichedUnderstanding, matches)
+      : null;
+    if (semanticFallback) setSimilarKnowledge([semanticFallback.match]);
+    const draftMatch = effectiveTopMatch ?? semanticFallback?.match ?? null;
+    const draft = draftResponse(ticket, enrichedUnderstanding, draftMatch, organizationProfile, knowledgeItems.length === 0, semanticFallback?.authorization ?? null);
+    const aiDraft = await requestDraftAdvisory(ticket, enrichedUnderstanding, canonicalProblem.title, draftMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", advisory);
     const response = aiDraft.response;
 
     // Update record with draft source and move to in_review

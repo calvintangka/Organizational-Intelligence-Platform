@@ -2,6 +2,18 @@
 
 ## Entry Format
 
+## [2026-07-16] TODO-009 Step 2: Semantic Compatibility Fallback (BUG-008)
+
+**Task/Prompt:** Fix the confirmed strong-paraphrase false negative by letting the existing AI discrimination layer resolve the deterministic "unknown" root-cause state — without weakening any deterministic safety gate.
+
+**Files changed:** `lib/drafting.ts`, `lib/ai/semanticCompatibility.ts` (new), `app/page.tsx`, `scripts/bug008-semantic-probe.cjs` (new)
+
+- Three-state deterministic verdict (`assessCompatibilityDecision`): compatible preserves the current path; incompatible (category mismatch / explicit contradiction / two known differing families) is a hard veto; only "unknown" may consult the semantic fallback.
+- `evaluateSemanticLessonCompatibility` reuses `discriminateMatch` per validated lesson of the top retrieval candidate (overlap-ranked, capped at 6, contradicted lessons excluded); authorization requires explicit same-problem at explicit high confidence; provider failure aborts immediately.
+- `draftResponse` accepts an optional `SemanticLessonAuthorization` and re-verifies every deterministic gate via `authorizeSemanticLessonReuse` before rendering a lesson-informed draft — forged authorizations are inert.
+- Wired into both page draft flows, only when the deterministic gate produced zero compatible matches (never after a discrimination rejection).
+- Verification: focused semantic probe (27 checks incl. veto non-override, fail-closed ambiguity/unavailability, forgery rejection; read-only Maesa), existing retrieval probe (deterministic-only path unchanged and still fail-closed), typecheck. Cold-start false positive remains pending Step 3; TODO-009 stays open.
+
 ## [2026-07-16] BUG-008 Data Fix: Restore Maesa Profile Vocabulary
 
 **Task/Prompt:** Restore Maesa Tech's missing organization profile vocabulary in PostgreSQL (data correction only; no retrieval logic changes).
