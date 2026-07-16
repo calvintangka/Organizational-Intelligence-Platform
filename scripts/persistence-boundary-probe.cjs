@@ -189,6 +189,27 @@ async function main() {
   assert.equal(JSON.parse(storage.getItem(scopedKey(MAESA, "knowledge")))[0].organizationId, MAESA);
   assert.equal((await orgMemory.loadMemoryChangeRecords(MAESA))[0].organizationId, MAESA);
 
+  // TODO-004 Batch 5.8 — authority-aware migration warning (memory fallback).
+  // The legacy notice is genuinely present for this local, fallback-backed org.
+  assert.ok(migration.warnings.includes(orgMemory.LEGACY_MEMORY_FALLBACK_WARNING), "memory fallback warning present");
+  assert.equal(orgMemory.readsMemoryChangeHistoryFromLegacy(MAESA), true, "read-only fallback check is true");
+  // A: local authority + fallback -> warning surfaces.
+  assert.equal(persistenceModule.migrationWarningForMode("local", migration.warnings), migration.warnings.join(" "));
+  // B / C / E: server authority (or a switch to/among server orgs) -> suppressed.
+  assert.equal(persistenceModule.migrationWarningForMode("server", migration.warnings), "");
+  assert.equal(persistenceModule.migrationWarningForMode("server", [orgMemory.LEGACY_MEMORY_FALLBACK_WARNING]), "");
+  // D: switching to a local org that still reads legacy memory can surface it,
+  // computed read-only (no marker rewrite).
+  const snapshot = () => JSON.stringify([...storage.values.entries()].sort(([a], [b]) => a.localeCompare(b)));
+  const storageBefore = snapshot();
+  const switchNotice = orgMemory.readsMemoryChangeHistoryFromLegacy(MAESA)
+    ? orgMemory.LEGACY_MEMORY_FALLBACK_WARNING
+    : "";
+  assert.equal(switchNotice, orgMemory.LEGACY_MEMORY_FALLBACK_WARNING);
+  assert.equal(snapshot(), storageBefore, "read-only fallback check must not mutate storage");
+  // A server-authoritative switch clears it regardless of fallback state.
+  assert.equal(persistenceModule.migrationWarningForMode("server", [switchNotice]), "");
+
   await persistence.resetOrganization(MAESA);
   assert.deepEqual(JSON.parse(storage.getItem("oip.knowledge.v2")), legacyKnowledge());
   assert.match(persistence.prepareOrganization(MAESA).warnings.join(" "), /explicitly reset/);

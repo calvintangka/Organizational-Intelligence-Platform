@@ -58,7 +58,12 @@ import {
   activePersistenceMode,
   activatePersistenceOrganization,
   getPersistenceAdapterForOrganization,
+  migrationWarningForMode,
 } from "@/lib/persistence";
+import {
+  LEGACY_MEMORY_FALLBACK_WARNING,
+  readsMemoryChangeHistoryFromLegacy,
+} from "@/lib/orgMemory";
 import {
   syncProfileIntoList,
   initialsFor,
@@ -585,7 +590,10 @@ export default function Home() {
         // incomplete rather than forking into localStorage.
         await activatePersistenceOrganization(orgId);
         const migration = await persistence.prepareOrganization(orgId);
-        setMigrationWarning(migration.warnings.join(" "));
+        // Authority-aware: the legacy localStorage migration notice is only
+        // relevant while the active organization operates locally. A
+        // server-authoritative organization reads memory history from PostgreSQL.
+        setMigrationWarning(migrationWarningForMode(activePersistenceMode(), migration.warnings));
         const [
           loadedOrganizationList,
           loadedKnowledge,
@@ -1626,6 +1634,15 @@ export default function Home() {
       setTicketRecords(loaded.tickets);
       setBusinessRelevance(null);
       setAiAdvisory(null);
+      // Recompute the legacy-storage notice for the INCOMING organization so a
+      // prior organization's warning never lingers. Server-authoritative orgs
+      // clear it; local orgs surface it only when they still read memory history
+      // from legacy storage. This is read-only — it never rewrites the marker.
+      setMigrationWarning(
+        activePersistenceMode() === "local" && readsMemoryChangeHistoryFromLegacy(found.id)
+          ? LEGACY_MEMORY_FALLBACK_WARNING
+          : ""
+      );
       setHydrated(true);
     } catch (error) {
       if (generation !== organizationSwitchGeneration.current) return;

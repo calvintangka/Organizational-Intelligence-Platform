@@ -525,6 +525,14 @@ function readOrganizationResource<T>(
 }
 
 /**
+ * The single legacy memory-change fallback notice. Exported so the UI can
+ * recompute it read-only when switching organizations without re-running (and
+ * thus re-writing) the migration marker.
+ */
+export const LEGACY_MEMORY_FALLBACK_WARNING =
+  "Memory change history is still being read from preserved legacy storage because its snapshots are too large to duplicate safely.";
+
+/**
  * Migrate the pre-isolation v2 workspace into the active organization by
  * resource. Legacy keys are deliberately read-only here and remain in
  * localStorage when a scoped copy does not fit.
@@ -552,7 +560,7 @@ export function migrateLegacyOrganizationStorage(organizationId: string): Organi
         ? copyIfMissing(organizationId, resource, legacyKey, scopedKey, transform, result.warnings)
         : existing;
       if (existing?.status === "fallback" && resource === "memoryChanges") {
-        result.warnings.push("Memory change history is still being read from preserved legacy storage because its snapshots are too large to duplicate safely.");
+        result.warnings.push(LEGACY_MEMORY_FALLBACK_WARNING);
       }
       organizationState.resources[resource] = next;
       result.resources[resource] = next.status;
@@ -636,7 +644,7 @@ export function migrateLegacyOrganizationStorage(organizationId: string): Organi
       legacyMemoryExists ? "legacy fallback retained to avoid duplicating snapshots" : undefined
     );
     if (memoryState.status === "fallback") {
-      result.warnings.push("Memory change history is still being read from preserved legacy storage because its snapshots are too large to duplicate safely.");
+      result.warnings.push(LEGACY_MEMORY_FALLBACK_WARNING);
     }
     organizationState.resources.memoryChanges = memoryState;
     result.resources.memoryChanges = memoryState.status;
@@ -769,6 +777,16 @@ export async function loadMemoryChangeRecords(organizationId: string): Promise<M
   const merged = [...(legacy ?? []), ...(scoped ?? [])];
   const byId = new Map(merged.map((record) => [record.id, record]));
   return Array.from(byId.values()).map((record) => ({ ...record, organizationId: record.organizationId ?? organizationId }));
+}
+
+/**
+ * Read-only: whether this organization still reads memory-change history from
+ * preserved legacy localStorage. Drives the authority-aware UI notice on
+ * organization switch WITHOUT mutating any migration marker or metadata.
+ */
+export function readsMemoryChangeHistoryFromLegacy(organizationId: string): boolean {
+  requireOrganizationId(organizationId, "readsMemoryChangeHistoryFromLegacy");
+  return hasStorage() && hasLegacyFallback(organizationId, "memoryChanges");
 }
 
 export async function saveMemoryChangeRecords(

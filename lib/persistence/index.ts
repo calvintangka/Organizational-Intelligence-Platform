@@ -217,6 +217,17 @@ export function activePersistenceMode(): PersistenceMode {
   return routingPersistence.activeAuthority();
 }
 
+/**
+ * Authority-aware gate for the legacy localStorage migration notice. Warnings
+ * from `prepareOrganization` describe LocalStorageAdapter migration state, so
+ * they are only relevant when the active organization is operating locally. A
+ * server-authoritative organization reads/writes through PostgreSQL and must
+ * never surface the legacy-storage notice.
+ */
+export function migrationWarningForMode(mode: PersistenceMode, warnings: string[]): string {
+  return mode === "local" ? warnings.join(" ") : "";
+}
+
 /** Resolve and select the adapter for one organization before hydration. */
 export function activatePersistenceOrganization(organizationId: string): Promise<PersistenceAuthority> {
   return routingPersistence.activateOrganization(organizationId);

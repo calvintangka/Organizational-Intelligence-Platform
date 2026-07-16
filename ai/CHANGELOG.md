@@ -2,6 +2,20 @@
 
 ## Entry Format
 
+## [2026-07-16] Scope migration warning to local persistence
+
+**Task/Prompt:** Make the stale legacy-storage migration notice authority-aware after FastDrop and Maesa were cut over to server authority.
+
+**Files changed:** `lib/orgMemory.ts`, `lib/persistence/index.ts`, `app/page.tsx`, `scripts/persistence-boundary-probe.cjs`, `ai/CHANGELOG.md`
+
+- Root cause: the "Memory change history is still being read from preserved legacy storage…" notice is produced only by the LocalStorageAdapter migration path and was surfaced regardless of the active organization's persistence authority. Server-authoritative organizations read/write MemoryChangeRecords through PostgreSQL, so the notice was stale for them.
+- Added `migrationWarningForMode(mode, warnings)` (pure) in the persistence barrel: returns the joined warnings only when the active mode is `local`, otherwise `""`. Hydration now sets the notice via this gate on `activePersistenceMode()`.
+- Organization switch recomputes the notice write-free: server-authoritative → cleared; local → surfaced only when the new read-only `readsMemoryChangeHistoryFromLegacy(orgId)` (in `lib/orgMemory.ts`) reports the org still reads memory history from legacy storage. It never re-runs `prepareOrganization`, so no migration marker/metadata is rewritten on switch.
+- Extracted the notice text as `LEGACY_MEMORY_FALLBACK_WARNING` (replacing the two duplicated literals — behavior-preserving) so the switch path reuses the exact string.
+- UI-only change: no adapter, export/import, MemoryChangeRecord reconciliation, PostgreSQL, authority, cutover, ticket, or reset/delete behavior changed. The notice is still shown for genuinely local organizations (e.g. Pramana). Mature FastDrop/Maesa/Pramana data untouched.
+
+**Verification:** `probe:persistence-boundary` (extended with authority-aware assertions A–E + read-only-no-mutation check), `probe:server-persistence`, `probe:migration-cutover`, `tsc --noEmit`, `next build`, `git diff --check` all pass.
+
 ## [2026-07-15] Add per-organization persistence cutover
 
 **Task/Prompt:** Implement TODO-004 Batch 5.8: per-organization persistence authority and cutover controls.
