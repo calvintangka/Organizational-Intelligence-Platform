@@ -25,6 +25,8 @@
     "probe:membership-authorization": "node scripts/membership-authorization-probe.cjs",
     "probe:active-organization": "node scripts/active-organization-probe.cjs",
     "probe:organization-switching": "node scripts/organization-switching-probe.cjs",
+    "probe:test-organization": "node scripts/test-organization-probe.cjs",
+    "seed:test-organization": "node scripts/seed-test-organization.cjs",
     "seed:development-memberships": "node scripts/seed-development-memberships.cjs",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate"

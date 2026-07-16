@@ -1,5 +1,9 @@
 # Current Status
 
+## TODO-005 Persistent Test Organizations - Completed
+
+Added the fixed PostgreSQL-backed `test-oip-regression` organization with the idempotent `npm run seed:test-organization` reset/seed command. It restores deterministic tickets, knowledge, validated lessons, versions, memory history, metrics, patterns, logs, and ticket sequence state without touching mature organizations. Set `AUTH_DEVELOPMENT_USER_EMAIL` when the development user should receive idempotent membership. P-002 remains in progress.
+
 ## TODO-P002-05 Account / Workspace Menu - Completed
 
 Added a compact authenticated account/workspace menu to the top-right avatar. It shows the current user, current authorized organization, membership-filtered organizations, existing secure switching actions, and sign out. Empty memberships show a clear no-organizations state while logout remains available. Organization Settings now de-emphasizes global switching. P-002 remains in progress.

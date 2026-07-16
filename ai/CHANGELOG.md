@@ -2,6 +2,16 @@
 
 ## Entry Format
 
+## [2026-07-16] TODO-005 Persistent Test Organizations
+
+**Task/Prompt:** Provide one safe, persistent, reproducible PostgreSQL-backed test organization without using mature organizational data.
+
+**Files changed:** `scripts/seed-test-organization.cjs`, `scripts/test-organization-probe.cjs`, `package.json`
+
+- Added fixed organization `test-oip-regression` (`OIP Regression Test`) with strict mature-organization guards.
+- Added `npm run seed:test-organization`, which resets and restores the deterministic migration fixture, keeps the organization server-authoritative, and optionally preserves/assigns development membership through `AUTH_DEVELOPMENT_USER_EMAIL`.
+- Verification: focused test-organization probe and typecheck; mature Maesa/FastDrop rows remained unchanged.
+
 ## [2026-07-16] TODO-P002-05 Account / Workspace Menu
 
 **Task/Prompt:** Move global account and workspace controls into a compact top-right menu without changing auth or switching infrastructure.
