@@ -23,6 +23,7 @@
     "probe:db-writes": "node scripts/db-write-probe.cjs",
     "probe:authentication": "node scripts/authentication-probe.cjs",
     "probe:membership-authorization": "node scripts/membership-authorization-probe.cjs",
+    "probe:active-organization": "node scripts/active-organization-probe.cjs",
     "seed:development-memberships": "node scripts/seed-development-memberships.cjs",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate"

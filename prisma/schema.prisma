@@ -105,11 +105,15 @@ model User {
   name         String
   email        String        @unique
   passwordHash String
+  activeOrganizationId String?
   createdAt    DateTime      @default(now()) @db.Timestamptz(6)
   updatedAt    DateTime      @updatedAt @db.Timestamptz(6)
 
   sessions AuthSession[]
   memberships OrganizationMembership[]
+  activeOrganization Organization? @relation("UserActiveOrganization", fields: [activeOrganizationId], references: [id], onDelete: SetNull)
+
+  @@index([activeOrganizationId])
 
   @@map("users")
 }
@@ -150,6 +154,7 @@ model Organization {
   migrationImportConflicts  MigrationImportConflict[]
   persistenceAuthority      OrganizationPersistenceAuthority?
   memberships               OrganizationMembership[]
+  activeUsers               User[]                   @relation("UserActiveOrganization")
 
   @@map("organizations")
 }

@@ -2,6 +2,10 @@
 
 This file is the fastest accurate snapshot of the prototype as of 2026-07-16.
 
+## TODO-P002-03 Active Organization Context — Completed
+
+Added a durable user-scoped `activeOrganizationId` and `/api/auth/active-organization` GET/PUT context API. Reads verify current membership, stale unauthorized values fall back deterministically to the earliest membership (`createdAt`, then `organizationId`), and users with no memberships receive a null context. No organization switching UI or persistence routing changes were made. P-002 remains in progress.
+
 ## TODO-P002-02 Organization Membership & Authorization — Completed
 
 Added the minimal PostgreSQL-backed `OrganizationMembership` model and server-side membership checks across organization-scoped persistence APIs. Authenticated members receive access; unauthenticated requests return 401 and non-members return 403. Organization lists are membership-filtered. The idempotent development seeder grants Maesa Tech and FastDrop Logistics when `AUTH_DEVELOPMENT_USER_EMAIL` identifies the existing development user; Pramana Legal remains intentionally unseeded. TODO-P002-03 and later P-002 work remain out of scope.

@@ -2,6 +2,17 @@
 
 ## Entry Format
 
+## [2026-07-16] TODO-P002-03 Active Organization Context
+
+**Task/Prompt:** Add the authenticated user's durable active organization context without implementing organization switching UI.
+
+**Files changed:** `prisma/schema.prisma`, `prisma/migrations/20260716020000_add_active_organization_context/migration.sql`, `lib/server/activeOrganization.ts`, `app/api/auth/active-organization/route.ts`, `scripts/active-organization-probe.cjs`, `package.json`
+
+- Added nullable user-scoped `activeOrganizationId` with a foreign key to `Organization`.
+- GET resolves the stored active organization only when it is still a membership; otherwise it persists the first membership ordered by `createdAt`, then `organizationId`. Users without memberships receive a clear null state.
+- PUT requires authentication and membership, returning 401/403/404 as appropriate. No switching UI or persistence routing was changed.
+- Verification: active-organization probe, authentication probe, membership authorization probe, Prisma validation, typecheck, and production build.
+
 ## [2026-07-16] TODO-P002-02 Organization Membership & Authorization
 
 **Task/Prompt:** Connect authenticated users to organizations and enforce membership access server-side.
