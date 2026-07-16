@@ -448,6 +448,44 @@ const CATEGORY_WEIGHTS: Record<string, Array<[string, number]>> = {
     ["verification code", 6],
     ["authenticator", 4]
   ],
+  // TODO-011: strong problem-specific Billing/Refund phrases must outrank
+  // incidental Subscription vocabulary ("subscription", "renewal", "plan")
+  // so validated billing lessons stay reachable. Base keywords keep weight 1.
+  Billing: [
+    ["charged twice", 6],
+    ["double charged", 6],
+    ["duplicate charge", 6],
+    ["charged me again", 6],
+    ["two charges", 5],
+    // Refund phrases also count as Billing evidence: profiles without a
+    // dedicated refund domain (e.g. Maesa) disable the Refund category rule,
+    // and Billing's compatible categories already include Refund knowledge.
+    // When both rules are active, Refund's higher weights still win.
+    ["request a refund", 6],
+    ["refund request", 6],
+    ["want a refund", 6],
+    ["payment", 1],
+    ["charge", 1],
+    ["charged", 1],
+    ["billing", 1],
+    ["invoice", 1],
+    ["transaction", 1],
+    ["receipt", 1],
+    ["card", 1],
+    ["bank", 1],
+    ["authorization", 1]
+  ],
+  Refund: [
+    ["request a refund", 6],
+    ["refund request", 6],
+    ["want a refund", 6],
+    ["refund", 3],
+    ["money back", 3],
+    ["reimbursement", 3],
+    ["return payment", 1],
+    ["cancel payment", 1],
+    ["wrong plan", 1]
+  ],
   Login: [
     ["login failed", 4],
     ["authentication failed", 4],

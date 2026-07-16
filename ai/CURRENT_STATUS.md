@@ -1,5 +1,9 @@
 # Current Status
 
+## TODO-011 Generic Billing Fallback Relevance - Completed (PRODUCT/CONTENT-001 Fixed/Closed)
+
+Two confirmed root causes fixed. (1) Canonical labeling: `invoice_question` now canonicalizes as "Billing & Invoice Issue" and `billing_charge_issue` as "Billing & Charge Issue" via `INTENT_CANONICAL_RULES`; "Payment Authorization Confusion" is reserved for actual authorization/transaction evidence (its generic "billing"/"invoice"/"charge" signals were removed). (2) Category weighting: new `CATEGORY_WEIGHTS` for Billing and Refund give strong problem-specific phrases ("charged twice", "duplicate charge", "request a refund") weight 6 so they outrank incidental Subscription vocabulary; refund phrases also count as Billing evidence because profiles without a refund domain (Maesa) disable the Refund rule and Billing's compatible categories already include Refund knowledge. Result (Maesa read-only): billing-profile update -> safe no_template with generic canonical; duplicate charge -> validated "Duplicate charge in one billing cycle" lesson reused; refund -> validated "Refund request for unused service period" lesson reused; invoice request -> "Billing & Invoice Issue", safe no_template; payment failure -> safe no_template. The unrelated Subscription cancellation template no longer surfaces. `COMPATIBLE_CATEGORIES` unchanged. TODO-009 probes fully green (no regression).
+
 ## TODO-010 Malformed Persisted Signal Corrected - Completed (BUG-007 Fixed/Closed)
 
 The confirmed manual-typo signal `"et up new password"` in Maesa Tech's live `canonical-login-issue` knowledge item (lesson `lesson-1783585050591-f47l`) was corrected to `"set up new password"` directly in PostgreSQL. Only that one string value changed; the rest of the record is byte-identical. Append-only `memory_change_records` before/after audit snapshots still contain the historical typo by design — audit history is never rewritten. No unrelated mature data was touched.

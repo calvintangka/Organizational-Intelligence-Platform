@@ -200,11 +200,15 @@ async function main() {
     console.log(`draft (first 340 chars): ${draft.draftResponse.replace(/\s+/g, " ").slice(0, 340)}`);
     console.log(`dispute-specific markers in draft: [${disputeHits.join("; ")}]`);
     console.log(`invoice-specific markers in draft: [${invoiceHits.join("; ")}]`);
-    if (!expectation.dispute && disputeHits.length > 0 && draft.source !== "no_template") {
-      console.log(">>> RELEVANCE FLAG: non-dispute billing intent received dispute-specific guidance");
+    // Relevance flags apply to FALLBACK guidance only. A validated
+    // lesson-informed draft is human-approved specific content (category 1:
+    // correct specific reuse), even when its wording mentions invoices.
+    const isValidatedLessonDraft = draft.confidenceNote.startsWith("Lesson-informed");
+    if (!isValidatedLessonDraft && !expectation.dispute && disputeHits.length > 0 && draft.source !== "no_template") {
+      console.log(">>> RELEVANCE FLAG: non-dispute billing intent received dispute-specific fallback guidance");
     }
-    if (!expectation.invoice && !expectation.dispute && invoiceHits.length > 0 && draft.source !== "no_template") {
-      console.log(">>> RELEVANCE FLAG: non-invoice billing intent received invoice-specific guidance");
+    if (!isValidatedLessonDraft && !expectation.invoice && !expectation.dispute && invoiceHits.length > 0 && draft.source !== "no_template") {
+      console.log(">>> RELEVANCE FLAG: non-invoice billing intent received invoice-specific fallback guidance");
     }
     console.log("");
   }

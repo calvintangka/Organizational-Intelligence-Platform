@@ -28,6 +28,24 @@ const INTENT_CANONICAL_RULES: Record<string, CanonicalProblemIdentity> = {
     problemSummary: "Customers cannot log in because they do not remember the email address or account identifier associated with their account.",
     category: "Login",
     tags: ["login", "account", "email", "email-recovery"]
+  },
+  // TODO-011: generic billing intents must carry appropriately generic
+  // canonical labels. "Payment Authorization Confusion" is reserved for the
+  // payment_authorization_confusion intent (actual authorization/transaction
+  // evidence), which resolves through the CANONICAL_RULES scan below.
+  invoice_question: {
+    id: "canonical-billing-invoice-issue",
+    title: "Billing & Invoice Issue",
+    problemSummary: "Customers have a question about invoice details, invoice copies, or the information shown on an invoice.",
+    category: "Billing",
+    tags: ["billing", "invoice"]
+  },
+  billing_charge_issue: {
+    id: "canonical-billing-charge-issue",
+    title: "Billing & Charge Issue",
+    problemSummary: "Customers report a general billing or charge concern without payment-authorization evidence.",
+    category: "Billing",
+    tags: ["billing", "payment"]
   }
 };
 
@@ -85,7 +103,10 @@ const CANONICAL_RULES: Array<{
     id: "canonical-payment-authorization",
     title: "Payment Authorization Confusion",
     category: "Billing",
-    signals: ["payment", "billing", "charge", "charged", "invoice", "authorization", "card", "transaction"],
+    // TODO-011: generic billing vocabulary ("billing", "invoice", "charge")
+    // must not canonicalize as an authorization problem; this label requires
+    // authorization/transaction evidence.
+    signals: ["payment", "authorization", "card", "transaction"],
     tags: ["payment", "billing", "authorization"],
     summary: "Customers see payment failure or billing confusion caused by pending authorization or transaction status."
   },

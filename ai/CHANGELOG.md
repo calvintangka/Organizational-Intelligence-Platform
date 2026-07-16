@@ -2,6 +2,17 @@
 
 ## Entry Format
 
+## [2026-07-17] TODO-011: Improve Generic Billing Fallback Relevance (PRODUCT/CONTENT-001 closed)
+
+**Task/Prompt:** Fix the two confirmed root causes behind irrelevant billing-specific guidance: over-specific canonical labeling and Billing/Refund category loss to incidental Subscription vocabulary.
+
+**Files changed:** `lib/canonicalProblemEngine.ts`, `lib/analyzer.ts`, `scripts/todo011-billing-fallback-probe.cjs`
+
+- `INTENT_CANONICAL_RULES`: `invoice_question` -> "Billing & Invoice Issue"; `billing_charge_issue` -> "Billing & Charge Issue". The "Payment Authorization Confusion" canonical rule no longer matches generic "billing"/"invoice"/"charge"/"charged" text — it requires payment/authorization/card/transaction evidence.
+- `CATEGORY_WEIGHTS` for Billing ("charged twice"/"double charged"/"duplicate charge"/"charged me again" = 6, refund-request phrases = 6, base keywords = 1) and Refund ("request a refund"/"refund request"/"want a refund" = 6). Duplicate-charge and refund tickets now classify Billing (not Subscription), making the already-validated Maesa duplicate-charge and refund lessons reachable; the unrelated Subscription cancellation template no longer surfaces. `COMPATIBLE_CATEGORIES` untouched.
+- Probe relevance flags now exempt validated lesson-informed drafts (human-approved specific content is correct reuse, not fallback).
+- Verification: TODO-011 probe (A safe no_template + generic canonical, B/C correct validated lesson reuse, D "Billing & Invoice Issue" + safe no_template, E safe no_template; zero relevance flags), BUG-008 retrieval probe (all safety cases, exit 0), BUG-008 semantic probe 32/32, typecheck. Maesa read-only.
+
 ## [2026-07-16] TODO-010: Correct Malformed Persisted Lesson Signal (BUG-007 closed)
 
 **Task/Prompt:** Surgical data correction of the confirmed manual-typo signal "et up new password".
