@@ -2,6 +2,16 @@
 
 ## Entry Format
 
+## [2026-07-17] TODO-012 Broad Canonical Regression QA
+
+**Task/Prompt:** Validate the current intelligence pipeline across every supported canonical problem category without fixing discovered product defects.
+
+**Files changed:** `scripts/todo012-canonical-regression-probe.cjs`, `scripts/bug008-semantic-probe.cjs`, `scripts/todo011-billing-fallback-probe.cjs`, `package.json`
+
+- Added `npm run probe:todo012-canonical-regression`: 22 categories and 73 deterministic in-memory cases with failure-only traces.
+- Made the existing TODO-009/TODO-011 read-only probes use the checked-in Maesa profile for logic isolation when mature PostgreSQL vocabulary is empty, while preserving an explicit mature-state warning.
+- Confirmed TODO-009 semantic safety passes, but found 12 broad category/canonical failures plus a TODO-011 payment-failure classification regression. TODO-012 remains ongoing; no production logic or mature data was modified.
+
 ## [2026-07-17] TODO-011: Improve Generic Billing Fallback Relevance (PRODUCT/CONTENT-001 closed)
 
 **Task/Prompt:** Fix the two confirmed root causes behind irrelevant billing-specific guidance: over-specific canonical labeling and Billing/Refund category loss to incidental Subscription vocabulary.

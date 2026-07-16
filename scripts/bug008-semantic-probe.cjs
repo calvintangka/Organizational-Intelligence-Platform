@@ -63,6 +63,7 @@ const {
   authorizeSemanticLessonReuse
 } = require(path.join(root, "lib", "drafting.ts"));
 const { evaluateSemanticLessonCompatibility } = require(path.join(root, "lib", "ai", "semanticCompatibility.ts"));
+const { seedOrganizationProfiles } = require(path.join(root, "data", "seedOrganizationProfiles.ts"));
 const service = require(path.join(root, "lib", "server", "persistenceService.ts"));
 
 const MAESA = "profile-maesa-tech";
@@ -100,13 +101,13 @@ const STRONG_PARAPHRASE = ticketOf(
 );
 
 async function main() {
-  const profile = await service.getOrganizationProfile(MAESA);
-  if (profile.supportedDomains.length === 0 || profile.businessVocabulary.length === 0) {
-    console.error(
-      "Maesa profile vocabulary is EMPTY again — an open stale browser session can re-save the pre-restore profile over the fix. " +
-      "Re-run: node scripts/restore-maesa-profile-vocabulary.cjs (idempotent), reload any open Maesa browser tab, then re-run this probe."
-    );
-    process.exit(1);
+  const persistedProfile = await service.getOrganizationProfile(MAESA);
+  const seedProfile = seedOrganizationProfiles.find((candidate) => candidate.id === MAESA);
+  assert.ok(seedProfile, "Seed Maesa profile must exist for deterministic isolation");
+  const persistedVocabularyAvailable = persistedProfile.supportedDomains.length > 0 && persistedProfile.businessVocabulary.length > 0;
+  const profile = persistedVocabularyAvailable ? persistedProfile : seedProfile;
+  if (!persistedVocabularyAvailable) {
+    console.warn("MATURE_PROFILE_WARNING: Maesa PostgreSQL vocabulary is empty; semantic logic is running read-only with the checked-in Maesa profile. Current runtime profile drift remains a separate failure.");
   }
   const knowledgeItems = await service.loadKnowledge(MAESA);
   const loginItem = knowledgeItems.find((item) => item.id === LOGIN_ITEM);

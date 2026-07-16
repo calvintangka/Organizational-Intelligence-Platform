@@ -54,6 +54,7 @@ const {
   assessCompatibilityDecision
 } = require(path.join(root, "lib", "drafting.ts"));
 const { identifyCanonicalProblem } = require(path.join(root, "lib", "canonicalProblemEngine.ts"));
+const { seedOrganizationProfiles } = require(path.join(root, "data", "seedOrganizationProfiles.ts"));
 const service = require(path.join(root, "lib", "server", "persistenceService.ts"));
 
 const MAESA = "profile-maesa-tech";
@@ -142,30 +143,34 @@ function markersIn(text, markers) {
 }
 
 async function main() {
-  const profile = await service.getOrganizationProfile(MAESA);
-  if (profile.supportedDomains.length === 0) {
-    console.error("Maesa profile vocabulary is EMPTY — run node scripts/restore-maesa-profile-vocabulary.cjs first.");
-    process.exit(1);
+  const persistedProfile = await service.getOrganizationProfile(MAESA);
+  const seedProfile = seedOrganizationProfiles.find((candidate) => candidate.id === MAESA);
+  assert.ok(seedProfile, "Seed Maesa profile must exist for deterministic isolation");
+  const persistedVocabularyAvailable = persistedProfile.supportedDomains.length > 0 && persistedProfile.businessVocabulary.length > 0;
+  const profile = persistedVocabularyAvailable ? persistedProfile : seedProfile;
+  if (!persistedVocabularyAvailable) {
+    console.warn("MATURE_PROFILE_WARNING: Maesa PostgreSQL vocabulary is empty; Billing logic is running read-only with the checked-in Maesa profile. Current runtime profile drift remains a separate failure.");
   }
   const knowledgeItems = await service.loadKnowledge(MAESA);
   console.log(`Loaded Maesa READ-ONLY: ${knowledgeItems.length} knowledge items.\n`);
+  const failures = [];
 
   const cases = [
     ["A billing-profile update", "Update the company details on our billing account",
       "Hello, our company was renamed and we moved offices. I need to change the company name and billing address on my account so everything is registered correctly going forward.",
-      { dispute: false, invoice: false }],
+      { category: "Billing", intent: "billing_charge_issue", canonical: "Billing & Charge Issue", dispute: false, invoice: false }],
     ["B duplicate charge", "Charged twice for the same subscription",
       "I was charged twice for the same subscription this month. Two identical charges appear for one renewal. Please fix the duplicate charge.",
-      { dispute: true, invoice: false }],
+      { category: "Billing", intent: "billing_charge_issue", canonical: "Billing & Charge Issue", dispute: true, invoice: false }],
     ["C refund request", "Refund request after cancellation",
       "I cancelled my subscription and would like to request a refund for the unused months remaining on my plan.",
-      { dispute: false, invoice: false }],
+      { category: "Refund", intent: "refund_request", canonical: "Refund Request", dispute: false, invoice: false }],
     ["D invoice request", "Copy of last month's invoice",
       "Can you send me a copy of last month's invoice? I cannot find it in my inbox and need it for our records.",
-      { dispute: false, invoice: true }],
+      { category: "Billing", intent: "invoice_question", canonical: "Billing & Invoice Issue", dispute: false, invoice: true }],
     ["E payment failure", "Payment keeps failing on renewal",
       "My payment keeps failing when I try to renew my subscription. The card is valid but the transaction does not go through.",
-      { dispute: false, invoice: false }]
+      { category: "Billing", intent: "payment_authorization_confusion", canonical: "Payment Authorization Confusion", dispute: false, invoice: false }]
   ];
 
   for (const [label, subject, description, expectation] of cases) {
@@ -200,17 +205,35 @@ async function main() {
     console.log(`draft (first 340 chars): ${draft.draftResponse.replace(/\s+/g, " ").slice(0, 340)}`);
     console.log(`dispute-specific markers in draft: [${disputeHits.join("; ")}]`);
     console.log(`invoice-specific markers in draft: [${invoiceHits.join("; ")}]`);
+    if (und.category !== expectation.category) {
+      failures.push(`${label}: CLASSIFICATION_FAILURE expected=${expectation.category} actual=${und.category}`);
+    }
+    if (und.intent !== expectation.intent) {
+      failures.push(`${label}: CLASSIFICATION_FAILURE expectedIntent=${expectation.intent} actual=${und.intent ?? "none"}`);
+    }
+    if (canonical.title !== expectation.canonical) {
+      failures.push(`${label}: CANONICAL_MAPPING_FAILURE expected=${expectation.canonical} actual=${canonical.title}`);
+    }
+    if (topMatch?.item.category === "Subscription") {
+      failures.push(`${label}: IRRELEVANT_FALLBACK selected unrelated Subscription knowledge`);
+    }
     // Relevance flags apply to FALLBACK guidance only. A validated
     // lesson-informed draft is human-approved specific content (category 1:
     // correct specific reuse), even when its wording mentions invoices.
     const isValidatedLessonDraft = draft.confidenceNote.startsWith("Lesson-informed");
     if (!isValidatedLessonDraft && !expectation.dispute && disputeHits.length > 0 && draft.source !== "no_template") {
       console.log(">>> RELEVANCE FLAG: non-dispute billing intent received dispute-specific fallback guidance");
+      failures.push(`${label}: IRRELEVANT_FALLBACK non-dispute intent received dispute-specific guidance`);
     }
     if (!isValidatedLessonDraft && !expectation.invoice && !expectation.dispute && invoiceHits.length > 0 && draft.source !== "no_template") {
       console.log(">>> RELEVANCE FLAG: non-invoice billing intent received invoice-specific fallback guidance");
+      failures.push(`${label}: IRRELEVANT_FALLBACK non-invoice intent received invoice-specific guidance`);
     }
     console.log("");
+  }
+  if (failures.length > 0) {
+    console.error(`TODO-011 FAILURES:\n- ${failures.join("\n- ")}`);
+    process.exitCode = 1;
   }
   console.log("Read-only probe complete; no data was written.");
 }
