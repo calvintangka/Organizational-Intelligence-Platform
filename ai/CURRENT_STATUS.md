@@ -1,6 +1,10 @@
 # Current Status
 
-This file is the fastest accurate snapshot of the prototype as of 2026-07-15.
+This file is the fastest accurate snapshot of the prototype as of 2026-07-16.
+
+## TODO-P002-01 Authentication Foundation — Completed
+
+Added the minimum persistent authentication foundation: PostgreSQL-backed `User` and `AuthSession` models, scrypt password hashing, opaque HttpOnly session cookies, login/logout/current-user routes, and a protected login gate around the existing OIP application. Focused authentication verification, Prisma validation, typecheck, and production build pass. No organization membership, authorization, switching, actor provenance, persistence routing, migration, or mature organizational data changes were made. P-002 remains in progress.
 
 ## What Changed Most Recently
 

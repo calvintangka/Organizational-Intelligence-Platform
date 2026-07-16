@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Sidebar } from "@/components/maesa/Sidebar";
 import type { ActiveView } from "@/components/maesa/Sidebar";
 import { HomeView } from "@/components/views/HomeView";
@@ -509,7 +509,59 @@ function applyAdvisoryExtractedFields(
   };
 }
 
+type AuthUser = { id: string; name: string; email: string };
+
+function LoginScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUser) => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setIsSubmitting(true);
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.data) {
+        setError(payload?.error?.message ?? "Unable to sign in.");
+        return;
+      }
+      onAuthenticated(payload.data);
+    } catch {
+      setError("Unable to reach the authentication service.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#F3F6FA] px-4">
+      <form onSubmit={submit} className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#2563EB]">Powered by OIP</p>
+        <h1 className="mt-3 text-3xl font-bold text-[#111827]">Sign in to OIP</h1>
+        <p className="mt-2 text-sm text-slate-500">Use your authenticated OIP account to continue.</p>
+        <label className="mt-8 block text-sm font-semibold text-slate-700" htmlFor="auth-email">Email</label>
+        <input id="auth-email" name="email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-[#2563EB]" />
+        <label className="mt-5 block text-sm font-semibold text-slate-700" htmlFor="auth-password">Password</label>
+        <input id="auth-password" name="password" type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-[#2563EB]" />
+        {error && <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+        <button type="submit" disabled={isSubmitting} className="mt-6 w-full rounded-xl bg-[#2563EB] px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
+          {isSubmitting ? "Signing in…" : "Sign in"}
+        </button>
+      </form>
+    </main>
+  );
+}
+
 export default function Home() {
+  const [authStatus, setAuthStatus] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [secondTicket, setSecondTicket] = useState<Ticket | null>(null);
@@ -575,9 +627,37 @@ export default function Home() {
   const [isRetryingDraft, setIsRetryingDraft] = useState(false);
   const organizationSwitchGeneration = useRef(0);
 
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/auth/me", { cache: "no-store" })
+      .then(async (response) => ({ response, payload: await response.json().catch(() => null) }))
+      .then(({ response, payload }) => {
+        if (cancelled) return;
+        if (response.ok && payload?.data) {
+          setAuthUser(payload.data);
+          setAuthStatus("authenticated");
+        } else {
+          setAuthStatus("unauthenticated");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setAuthStatus("unauthenticated");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setAuthUser(null);
+    setAuthStatus("unauthenticated");
+  }
+
   /* ---------- Persistence: load on mount, save on change ---------- */
 
   useEffect(() => {
+    if (authStatus !== "authenticated") return;
     let cancelled = false;
 
     void (async () => {
@@ -643,7 +723,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authStatus]);
 
   function reportPersistenceError(scope: string, error: unknown) {
     console.error(`Persistence ${scope} failed.`, error);
@@ -3283,6 +3363,13 @@ export default function Home() {
 
   const accent = normalizeAccentColor(organizationProfile.accentColor);
 
+  if (authStatus === "loading") {
+    return <main className="flex min-h-screen items-center justify-center bg-[#F3F6FA] text-sm text-slate-500">Checking authentication…</main>;
+  }
+  if (!authUser) {
+    return <LoginScreen onAuthenticated={(user) => { setAuthUser(user); setAuthStatus("authenticated"); }} />;
+  }
+
   return (
     <div className={`flex h-screen flex-col overflow-hidden md:flex-row ${darkMode ? "bg-[#0b1220]" : "bg-[#F3F6FA]"}`}>
       {/* Sidebar */}
@@ -3301,6 +3388,11 @@ export default function Home() {
         {/* Top bar */}
         <header className={`flex flex-shrink-0 items-center justify-end px-4 pb-2 md:px-6 md:pb-0 md:pt-6 ${darkMode ? "bg-[#0b1220]" : "bg-[#F3F6FA]"}`}>
           <div className="flex items-center gap-3">
+            <div className="hidden text-right sm:block">
+              <p className={`text-sm font-semibold ${darkMode ? "text-white" : "text-[#111827]"}`}>{authUser.name}</p>
+              <p className={`text-xs ${darkMode ? "text-slate-400" : "text-slate-500"}`}>{authUser.email}</p>
+            </div>
+            <button type="button" onClick={() => { void logout(); }} className={`rounded-xl border px-3 py-2 text-sm font-semibold ${darkMode ? "border-[#2d3f52] text-slate-300 hover:bg-[#1e3048]" : "border-slate-300 text-slate-700 hover:bg-slate-50"}`}>Sign out</button>
             <div
               className="flex h-11 w-14 items-center justify-center rounded-2xl text-xs font-bold text-white shadow-sm"
               style={{ backgroundColor: accent }}

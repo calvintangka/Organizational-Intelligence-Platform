@@ -2,6 +2,17 @@
 
 ## Entry Format
 
+## [2026-07-16] TODO-P002-01 Authentication Foundation
+
+**Task/Prompt:** Implement the narrow authentication foundation for a persistent authenticated user identity.
+
+**Files changed:** `prisma/schema.prisma`, `prisma/migrations/20260716000000_add_authentication_foundation/migration.sql`, `lib/auth.ts`, `app/api/auth/login/route.ts`, `app/api/auth/logout/route.ts`, `app/api/auth/me/route.ts`, `app/page.tsx`, `scripts/authentication-probe.cjs`, `package.json`
+
+- Added password-hashed `User` records and opaque, database-backed `AuthSession` records without organization membership or authorization fields.
+- Added login, logout, current-user retrieval, persistent HttpOnly session cookies, and a minimal protected login screen around the existing OIP application.
+- Existing organization persistence, authority routing, migration records, and mature organization data were not changed.
+- Verification: authentication probe, Prisma validation, TypeScript check, and production build.
+
 ## [2026-07-16] Scope migration warning to local persistence
 
 **Task/Prompt:** Make the stale legacy-storage migration notice authority-aware after FastDrop and Maesa were cut over to server authority.

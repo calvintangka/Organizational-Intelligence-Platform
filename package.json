@@ -21,6 +21,7 @@
     "probe:persistence-boundary": "node scripts/persistence-boundary-probe.cjs",
     "probe:server-persistence": "node scripts/server-persistence-probe.cjs",
     "probe:db-writes": "node scripts/db-write-probe.cjs",
+    "probe:authentication": "node scripts/authentication-probe.cjs",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate"
   },
