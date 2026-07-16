@@ -2,6 +2,17 @@
 
 ## Entry Format
 
+## [2026-07-16] TODO-009 Step 3: Cold-Start False-Positive Protection (BUG-008 closed)
+
+**Task/Prompt:** Prevent weak single-word lexical overlap from authorizing lesson reuse on cold-start/Uncategorized tickets, without regressing Step 2.
+
+**Files changed:** `lib/drafting.ts`, `app/page.tsx`, `scripts/bug008-semantic-probe.cjs`, `scripts/bug008-retrieval-probe.cjs`
+
+- `LessonMatchResult` now carries `multiTokenMatches`; new shared `isStrongLessonEvidence` requires >=2 matched signals AND multi-token signal evidence (>=1 for classified tickets, >=2 for Uncategorized/General, which lack category evidence). The strong-lesson exception in `isCompatibleForDrafting`/`assessCompatibilityDecision` and the page-glue strength check use the shared rule.
+- Fixes the confirmed false positive: the "webhook signature verification failing" cold-start ticket no longer reuses the Activation item's lesson via the generic "webhook"/"integration" single-word signals — it now yields no_template/human review. The Step 2 semantic fallback still refuses unclassified tickets.
+- No regression: direct match, mild paraphrase, and the strong BUG-008 paraphrase (via semantic fallback) still reuse the validated login lesson; contradiction and known-incompatible root causes remain hard-vetoed.
+- Verification: semantic probe 32/32 (incl. new cold-start and multi-token-evidence cases), retrieval probe all safety cases pass (exit 0), typecheck. **TODO-009 is Completed; BUG-008 is fixed.**
+
 ## [2026-07-16] TODO-009 Step 2: Semantic Compatibility Fallback (BUG-008)
 
 **Task/Prompt:** Fix the confirmed strong-paraphrase false negative by letting the existing AI discrimination layer resolve the deterministic "unknown" root-cause state — without weakening any deterministic safety gate.

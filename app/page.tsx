@@ -21,7 +21,7 @@ import { assessBusinessRelevanceForProfile, observe, understandForProfile, build
 import { classifyBusinessDomain } from "@/lib/domainClassifier";
 import { analyzeBulkEntries, prepareBulkClusterCommit } from "@/lib/bulkUpload";
 import { retrieveMemory } from "@/lib/memory";
-import { draftResponse, findMatchingLesson, isCompatibleForDrafting, ticketContradictsLesson } from "@/lib/drafting";
+import { draftResponse, findMatchingLesson, isCompatibleForDrafting, isStrongLessonEvidence, ticketContradictsLesson } from "@/lib/drafting";
 import type { LessonMatchResult, SemanticLessonAuthorization } from "@/lib/drafting";
 import { evaluateSemanticLessonCompatibility } from "@/lib/ai/semanticCompatibility";
 import {
@@ -209,8 +209,6 @@ const steps = [
   "Metrics"
 ];
 
-const STRONG_LESSON_MATCH_THRESHOLD = 2;
-
 interface MatchWithLesson {
   match: KnowledgeMatch;
   lessonMatch: LessonMatchResult | null;
@@ -239,8 +237,11 @@ function makeCustomTicket(description: string, ticketId?: string): Ticket {
   };
 }
 
+// TODO-009 Step 3: strength now requires multi-token signal evidence — see
+// isStrongLessonEvidence in lib/drafting.ts. Generic one-word overlaps
+// ("webhook", "integration") no longer count as a strong lesson match.
 function isStrongLessonMatch(lessonMatch: LessonMatchResult | null | undefined): lessonMatch is LessonMatchResult {
-  return !!lessonMatch && lessonMatch.score >= STRONG_LESSON_MATCH_THRESHOLD;
+  return isStrongLessonEvidence(lessonMatch);
 }
 
 function buildDiscriminationLessonPayload(lessonMatch: LessonMatchResult) {

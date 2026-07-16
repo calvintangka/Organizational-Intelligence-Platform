@@ -245,9 +245,30 @@ export function assessRootCauseCompatibility(
   };
 }
 
-function isStrongValidatedLessonMatch(ticket: Ticket, item: KnowledgeItem): boolean {
+/**
+ * TODO-009 Step 3: is this lesson match strong enough EVIDENCE to authorize
+ * reuse on its own? Requires >=2 matched signals AND multi-token signal
+ * matches — a set of generic one-word overlaps ("webhook", "integration")
+ * never qualifies. Tickets without a classified category (Uncategorized /
+ * General) carry no category evidence, so their lesson evidence must be
+ * doubly strong (>=2 multi-token matched signals).
+ */
+export function isStrongLessonEvidence(
+  lessonMatch: LessonMatchResult | null | undefined,
+  ticketCategoryClassified = true
+): lessonMatch is LessonMatchResult {
+  if (!lessonMatch || lessonMatch.score < 2) return false;
+  return lessonMatch.multiTokenMatches >= (ticketCategoryClassified ? 1 : 2);
+}
+
+function isTicketCategoryClassified(understanding: Understanding): boolean {
+  return understanding.category !== UNCATEGORIZED_CATEGORY && understanding.category !== "General";
+}
+
+function isStrongValidatedLessonMatch(understanding: Understanding, ticket: Ticket, item: KnowledgeItem): boolean {
   const lessonMatch = findMatchingLesson(ticket, item);
-  return !!lessonMatch && lessonMatch.score >= 2 && !ticketContradictsLesson(ticket, lessonMatch.lesson);
+  return isStrongLessonEvidence(lessonMatch, isTicketCategoryClassified(understanding))
+    && !ticketContradictsLesson(ticket, lessonMatch.lesson);
 }
 
 /**
@@ -269,7 +290,7 @@ export function isCompatibleForDrafting(
 ): boolean {
   if (!isCategoryCompatible(understanding.category, item.category)) return false;
   if (!ticket) return true;
-  if (isStrongValidatedLessonMatch(ticket, item)) return true;
+  if (isStrongValidatedLessonMatch(understanding, ticket, item)) return true;
   return assessRootCauseCompatibility(understanding, item, ticket).compatible;
 }
 
@@ -299,7 +320,7 @@ export function assessCompatibilityDecision(
   if (!isCategoryCompatible(understanding.category, item.category)) {
     return { state: "incompatible", reason: `Category "${item.category}" is not compatible with ticket category "${understanding.category}".` };
   }
-  if (isStrongValidatedLessonMatch(ticket, item)) {
+  if (isStrongValidatedLessonMatch(understanding, ticket, item)) {
     return { state: "compatible", reason: "Strong validated lesson match authorizes reuse deterministically." };
   }
   const rootCause = assessRootCauseCompatibility(understanding, item, ticket);
@@ -391,6 +412,10 @@ export interface LessonMatchResult {
   lesson: Lesson;
   matchedSignals: string[];
   score: number;
+  /** How many matched signals carry >=2 meaningful tokens. Generic one-word
+   *  overlaps ("webhook", "integration") score matches but are not evidence
+   *  of the same underlying problem (TODO-009 Step 3). */
+  multiTokenMatches: number;
 }
 
 const LESSON_NEGATION_TOKENS = new Set([
@@ -548,7 +573,8 @@ export function findMatchingLesson(ticket: Ticket, item: KnowledgeItem): LessonM
       .filter(Boolean);
     const matchedSignals = signals.filter((signal) => signalMatchesTicket(signal, ticketText, ticketTokens));
     if (matchedSignals.length > 0 && (!best || matchedSignals.length > best.score)) {
-      best = { lesson, matchedSignals, score: matchedSignals.length };
+      const multiTokenMatches = matchedSignals.filter((signal) => tokenizeLessonSignal(signal).length >= 2).length;
+      best = { lesson, matchedSignals, score: matchedSignals.length, multiTokenMatches };
     }
   }
   return best;

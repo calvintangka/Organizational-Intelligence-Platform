@@ -57,6 +57,8 @@ const { retrieveMemory } = require(path.join(root, "lib", "memory.ts"));
 const {
   draftResponse,
   isCompatibleForDrafting,
+  isStrongLessonEvidence,
+  findMatchingLesson,
   assessCompatibilityDecision,
   authorizeSemanticLessonReuse
 } = require(path.join(root, "lib", "drafting.ts"));
@@ -271,8 +273,48 @@ async function main() {
     check("H sanity: valid authorization on unknown state is honored", draft.basedOnKnowledgeIds.includes(LOGIN_ITEM));
   }
 
+  /* I. Cold-start webhook false positive (Step 3): Activation lesson NOT reused. */
+  {
+    const ticket = ticketOf(
+      "Webhook signature verification failing",
+      "Since yesterday our integration reports that webhook signature verification fails for every event payload you send us. Nothing changed on our side."
+    );
+    const { und, matches, compatibleMatches } = pipeline(ticket);
+    const activationItem = knowledgeItems.find((item) => item.id === "canonical-activation-failure");
+    assert.ok(activationItem, "Maesa activation item must exist");
+    const lessonMatch = findMatchingLesson(ticket, activationItem);
+    check(
+      "I1 cold start: generic single-word signals are not strong evidence",
+      !isStrongLessonEvidence(lessonMatch, true) && !isStrongLessonEvidence(lessonMatch, false),
+      lessonMatch ? `score=${lessonMatch.score} multiToken=${lessonMatch.multiTokenMatches}` : "no lesson match"
+    );
+    check("I2 cold start: activation item no longer passes the compatibility gate", !compatibleMatches.some((m) => m.item.id === activationItem.id));
+    const draft = draftResponse(ticket, und, compatibleMatches[0] ?? matches[0] ?? null, profile, false);
+    check("I3 cold start: no_template, no lesson reuse", draft.source === "no_template" && draft.basedOnKnowledgeIds.length === 0, `${draft.source} basedOn=${draft.basedOnKnowledgeIds.length}`);
+    const calls = [];
+    const evaluation = await evaluateSemanticLessonCompatibility(
+      mockProvider(() => ({ isDistinctFromMatch: false, confidence: "high", reasoning: "attempted override" }), calls),
+      ticket, und, activationItem
+    );
+    check("I4 cold start: semantic fallback refuses the unclassified ticket", evaluation.authorization === null && calls.length === 0, `calls=${calls.length}`);
+  }
+
+  /* J. Valid strong multi-token evidence still authorizes, even unclassified. */
+  {
+    const ticket = ticketOf(
+      "Cannot sign in after switching laptops",
+      "Hi, I switched laptops this week and my browser no longer saved my Maesa password. My saved logins did not transfer to the new laptop, and since I always relied on browser autofill I don't remember it when typing manually. Could you help me set up a new password?"
+    );
+    const lessonMatch = findMatchingLesson(ticket, loginItem);
+    check(
+      "J multi-token lesson evidence remains strong (classified and unclassified)",
+      isStrongLessonEvidence(lessonMatch, true) && isStrongLessonEvidence(lessonMatch, false),
+      lessonMatch ? `score=${lessonMatch.score} multiToken=${lessonMatch.multiTokenMatches}` : "none"
+    );
+  }
+
   console.log(`\n${failures.length === 0 ? "All semantic compatibility cases passed." : `FAILURES: ${failures.join("; ")}`}`);
-  console.log("Read-only probe complete; no data was written. Cold-start false-positive remains pending Step 3.");
+  console.log("Read-only probe complete; no data was written.");
   if (failures.length > 0) process.exitCode = 1;
 }
 
