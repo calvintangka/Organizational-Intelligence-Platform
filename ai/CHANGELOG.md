@@ -2,6 +2,16 @@
 
 ## Entry Format
 
+## [2026-07-16] BUG-008 Data Fix: Restore Maesa Profile Vocabulary
+
+**Task/Prompt:** Restore Maesa Tech's missing organization profile vocabulary in PostgreSQL (data correction only; no retrieval logic changes).
+
+**Files changed:** `scripts/restore-maesa-profile-vocabulary.cjs` (new), `scripts/bug008-retrieval-probe.cjs` (read-only audit probe from the BUG-008 investigation)
+
+- Restored `products`, `services`, `supportedDomains`, `businessVocabulary` in Maesa's `organizations.settings` from the seed profile via a targeted jsonb merge; only empty fields are filled, so the script is idempotent.
+- Before: every Maesa ticket classified as Uncategorized (empty vocabulary disabled all category rules). After: representative login/billing tickets classify correctly through the real server load path.
+- Verification: restore script (with built-in before/after classification, idempotency, Maesa data-count, and FastDrop/Pramana byte-identical checks) run twice, BUG-008 retrieval probe (server profile now classifies like the seed profile; the paraphrase matching defect remains open by design), and typecheck.
+
 ## [2026-07-16] TODO-007 Actor Identity in Validation History
 
 **Task/Prompt:** Propagate the authenticated user identity into new ValidationRecord and MemoryChangeRecord writes without redesigning auth, persistence, or provenance.

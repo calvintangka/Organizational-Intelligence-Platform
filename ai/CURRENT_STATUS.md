@@ -1,5 +1,9 @@
 # Current Status
 
+## BUG-008 Data Fix: Maesa Profile Vocabulary Restored - Completed
+
+The TODO-009/BUG-008 audit found Maesa Tech's PostgreSQL organization settings had empty `products`/`services`/`supportedDomains`/`businessVocabulary`, which disabled every category rule in `categoryAllowedByProfile()` and made all server-authoritative Maesa tickets classify as Uncategorized. `scripts/restore-maesa-profile-vocabulary.cjs` restored exactly those four fields from the trusted seed profile via a targeted jsonb merge (idempotent: only empty fields are filled; reruns are no-ops). Maesa identity, knowledge, tickets, memory, validations, metrics, migration metadata, and persistence authority are unchanged; FastDrop and Pramana verified byte-identical. Representative tickets now classify (Login/Billing) through the real server load path. BUG-008's paraphrase matching defect itself remains open — retrieval logic was intentionally not modified.
+
 ## TODO-007 Actor Identity in Validation History - Completed
 
 New validation commits now record the authenticated actor: the commit route passes the session-resolved user into `commitValidation`, which stamps `ValidationRecord.actorId` and `MemoryChangeRecord.actorId` with `user.id` and derives the human-readable `ValidationRecord.actor` from the trusted server-side `user.name`. Client-supplied actor/actorId payload fields are ignored, so attribution cannot be spoofed. Historical records keep `actorId = null`; no backfill, no Actor model, no schema change. TODO-006 (identity foundation) was audit-confirmed as already complete via P-002.
