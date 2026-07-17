@@ -32,6 +32,7 @@
     "probe:stale-profile-overwrite": "node scripts/stale-profile-overwrite-probe.cjs",
     "probe:todo014-lifecycle": "node scripts/todo014-lifecycle-probe.cjs",
     "probe:todo003-markers": "node scripts/todo003-markers-probe.cjs",
+    "probe:todo015-source-ticket-idempotency": "node scripts/todo015-source-ticket-idempotency-probe.cjs",
     "seed:test-organization": "node scripts/seed-test-organization.cjs",
     "seed:development-memberships": "node scripts/seed-development-memberships.cjs",
     "prisma:validate": "prisma validate",
