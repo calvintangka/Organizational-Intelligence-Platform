@@ -1153,6 +1153,39 @@ function lessonSourceTicketIds(lesson: Lesson): string[] {
   return [...new Set([lesson.sourceTicketId, ...(lesson.sourceTicketIds ?? [])].filter(Boolean))].sort();
 }
 
+/**
+ * Conservative comparison-only normalization for lesson identity. This is
+ * deliberately textual: no stemming, synonym expansion, fuzzy matching, or
+ * semantic inference is involved.
+ */
+export function normalizeLessonIdentityText(value: string): string {
+  return value
+    .replace(/\r\n?/g, "\n")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase()
+    .replace(/[.!?]+$/, "")
+    .trim();
+}
+
+export function lessonContentFingerprint(lesson: Pick<Lesson, "rootCause" | "solution" | "customerResponse">): string {
+  return JSON.stringify({
+    rootCause: normalizeLessonIdentityText(lesson.rootCause),
+    solution: normalizeLessonIdentityText(lesson.solution),
+    customerResponse: normalizeLessonIdentityText(lesson.customerResponse)
+  });
+}
+
+function normalizeLessonAliases(lesson: Lesson): Lesson {
+  const aliases = [...new Set((lesson.aliasLessonIds ?? [])
+    .filter((alias): alias is string => typeof alias === "string" && alias.length > 0 && alias !== lesson.id))]
+    .sort();
+  return aliases.length > 0 ? { ...lesson, aliasLessonIds: aliases } : (() => {
+    const { aliasLessonIds: _ignored, ...withoutAliases } = lesson;
+    return withoutAliases;
+  })();
+}
+
 function lessonCompleteness(lesson: Lesson): number {
   return (lesson.title?.length ?? 0)
     + lesson.rootCause.length
@@ -1175,7 +1208,7 @@ function lessonCoreSignature(lesson: Lesson): string {
 }
 
 function lessonsHaveEquivalentCore(a: Lesson, b: Lesson): boolean {
-  return lessonCoreSignature(a) === lessonCoreSignature(b);
+  return lessonContentFingerprint(a) === lessonContentFingerprint(b);
 }
 
 function additiveTextParts(value?: string): string[] {
@@ -1190,20 +1223,30 @@ function mergeAdditiveText(a?: string, b?: string): string | undefined {
   return parts.length > 0 ? parts.join("\n\nAdditional condition:\n") : undefined;
 }
 
-function mergeEquivalentLessons(a: Lesson, b: Lesson): Lesson {
+function mergeEquivalentLessons(a: Lesson, b: Lesson, canonicalId = a.id, additionalAliases: string[] = []): Lesson {
   const richer = lessonCompleteness(b) > lessonCompleteness(a) ? b : a;
   const sourceTicketIds = [...new Set([...lessonSourceTicketIds(a), ...lessonSourceTicketIds(b)])].sort();
-  return {
+  const aliases = [...new Set([
+    ...(a.aliasLessonIds ?? []),
+    ...(b.aliasLessonIds ?? []),
+    ...additionalAliases
+  ])].filter((alias) => alias && alias !== canonicalId).sort();
+  return normalizeLessonAliases({
     ...richer,
-    id: a.id,
+    id: canonicalId,
+    ...(a.title !== undefined ? { title: a.title } : {}),
+    rootCause: a.rootCause,
+    solution: a.solution,
+    customerResponse: a.customerResponse,
     signals: [...new Set([...(a.signals ?? []), ...(b.signals ?? [])])].sort(),
     whenToEscalate: mergeAdditiveText(a.whenToEscalate, b.whenToEscalate),
     doNotPromise: [...new Set([...(a.doNotPromise ?? []), ...(b.doNotPromise ?? [])])].sort(),
-    sourceTicketId: richer.sourceTicketId || a.sourceTicketId,
+    sourceTicketId: a.sourceTicketId || b.sourceTicketId,
     ...(sourceTicketIds.length > 1 ? { sourceTicketIds } : {}),
+    ...(aliases.length > 0 ? { aliasLessonIds: aliases } : {}),
     createdAt: earlierTimestamp(a.createdAt, b.createdAt) ?? richer.createdAt,
     updatedAt: newerTimestamp(a.updatedAt, b.updatedAt)
-  };
+  });
 }
 
 function stableLessonHash(lesson: Lesson): string {
@@ -1237,10 +1280,91 @@ interface LessonMergeResult {
   conflictHistory: LearningHistoryEntry[];
 }
 
+export interface LessonMergeOptions {
+  dedupeLessonContent?: boolean;
+  /** IDs that were already durable before the current write. */
+  durableLessonIds?: ReadonlySet<string>;
+  /** Keep the first/current lesson as canonical for an add-path merge. */
+  preferredCanonicalIds?: ReadonlySet<string>;
+}
+
+function lessonCanonicalCompare(a: Lesson, b: Lesson): number {
+  const aTime = Date.parse(a.createdAt);
+  const bTime = Date.parse(b.createdAt);
+  if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) return aTime - bTime;
+  if (Number.isFinite(aTime) && !Number.isFinite(bTime)) return -1;
+  if (!Number.isFinite(aTime) && Number.isFinite(bTime)) return 1;
+  return a.id.localeCompare(b.id);
+}
+
+function chooseEquivalentCanonical(a: Lesson, b: Lesson, options: LessonMergeOptions): Lesson {
+  if (options.preferredCanonicalIds?.has(a.id) && !options.preferredCanonicalIds.has(b.id)) return a;
+  if (options.preferredCanonicalIds?.has(b.id) && !options.preferredCanonicalIds.has(a.id)) return b;
+  return lessonCanonicalCompare(a, b) <= 0 ? a : b;
+}
+
+function aliasesForRemovedLesson(lesson: Lesson, options: LessonMergeOptions): string[] {
+  const aliases = [...(lesson.aliasLessonIds ?? [])];
+  if (!options.durableLessonIds || options.durableLessonIds.has(lesson.id)) aliases.push(lesson.id);
+  return [...new Set(aliases)].filter(Boolean).sort();
+}
+
+function canAttachAliases(lessons: Lesson[], canonical: Lesson, removed: Lesson, aliases: string[]): boolean {
+  const canonicalIds = new Set(lessons.map((lesson) => lesson.id));
+  for (const alias of aliases) {
+    if (!alias || alias === canonical.id || alias === removed.id) continue;
+    if (canonicalIds.has(alias)) return false;
+  }
+
+  const ownerByAlias = new Map<string, string>();
+  for (const lesson of lessons) {
+    for (const alias of lesson.aliasLessonIds ?? []) {
+      if (canonicalIds.has(alias) && alias !== lesson.id) return false;
+      const owner = ownerByAlias.get(alias);
+      if (owner && owner !== lesson.id && owner !== removed.id) return false;
+      ownerByAlias.set(alias, lesson.id);
+    }
+  }
+  return aliases.every((alias) => !ownerByAlias.has(alias) || ownerByAlias.get(alias) === canonical.id || ownerByAlias.get(alias) === removed.id);
+}
+
+function contentDeduplicateLessons(
+  input: Lesson[],
+  options: LessonMergeOptions
+): Lesson[] {
+  let lessons = input.map(normalizeLessonAliases);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    outer: for (let leftIndex = 0; leftIndex < lessons.length; leftIndex += 1) {
+      for (let rightIndex = leftIndex + 1; rightIndex < lessons.length; rightIndex += 1) {
+        const left = lessons[leftIndex];
+        const right = lessons[rightIndex];
+        if (left.id === right.id || !lessonsHaveEquivalentCore(left, right)) continue;
+
+        const canonical = chooseEquivalentCanonical(left, right, options);
+        const removed = canonical.id === left.id ? right : left;
+        const aliases = aliasesForRemovedLesson(removed, options);
+        if (!canAttachAliases(lessons, canonical, removed, aliases)) continue;
+
+        const merged = mergeEquivalentLessons(canonical, removed, canonical.id, aliases);
+        const keepIndex = lessons.findIndex((lesson) => lesson.id === canonical.id);
+        const removeIndex = lessons.findIndex((lesson) => lesson.id === removed.id);
+        lessons = lessons.filter((lesson) => lesson.id !== removed.id);
+        lessons[keepIndex > removeIndex ? keepIndex - 1 : keepIndex] = merged;
+        changed = true;
+        break outer;
+      }
+    }
+  }
+  return lessons.map(normalizeLessonAliases);
+}
+
 function mergeLessons(
   primaryLessons: Lesson[],
   secondaryLessons: Lesson[],
-  canonicalProblemId: string
+  canonicalProblemId: string,
+  options: LessonMergeOptions = {}
 ): LessonMergeResult {
   const lessons: Lesson[] = [];
   const byId = new Map<string, Lesson>();
@@ -1248,7 +1372,8 @@ function mergeLessons(
   const seenConflictVariants = new Set<string>();
   const conflictHistory: LearningHistoryEntry[] = [];
 
-  for (const lesson of [...primaryLessons, ...secondaryLessons]) {
+  for (const rawLesson of [...primaryLessons, ...secondaryLessons]) {
+    const lesson = normalizeLessonAliases(rawLesson);
     const existing = byId.get(lesson.id);
     if (!existing) {
       byId.set(lesson.id, lesson);
@@ -1261,7 +1386,7 @@ function mergeLessons(
     }
 
     if (lessonsHaveEquivalentCore(existing, lesson)) {
-      const merged = mergeEquivalentLessons(existing, lesson);
+      const merged = mergeEquivalentLessons(existing, lesson, existing.id);
       const index = lessons.findIndex((candidate) => candidate.id === existing.id);
       if (index >= 0) lessons[index] = merged;
       byId.set(existing.id, merged);
@@ -1273,12 +1398,12 @@ function mergeLessons(
     seenConflictVariants.add(variantKey);
 
     const conflictId = uniqueLessonId(`${existing.id}--conflict-${stableLessonHash(lesson)}`, usedIds);
-    const conflictLesson: Lesson = {
+    const conflictLesson: Lesson = normalizeLessonAliases({
       ...lesson,
       id: conflictId,
       conflictOfLessonId: existing.id,
       conflictReason: `Conflicting duplicate lesson ID ${existing.id}; the secondary lesson was preserved under this deterministic conflict-safe ID.`
-    };
+    });
     usedIds.add(conflictId);
     byId.set(conflictId, conflictLesson);
     lessons.push(conflictLesson);
@@ -1290,7 +1415,89 @@ function mergeLessons(
     });
   }
 
-  return { lessons, conflictHistory };
+  return {
+    lessons: options.dedupeLessonContent === false ? lessons.map(normalizeLessonAliases) : contentDeduplicateLessons(lessons, options),
+    conflictHistory
+  };
+}
+
+/**
+ * Merge one newly proposed lesson into an existing item. The incoming ID is
+ * transient for this path, so an equivalent proposal is not turned into an
+ * alias unless it already carries durable alias metadata.
+ */
+export function mergeLessonIntoExisting(
+  existingLessons: Lesson[],
+  incoming: Lesson,
+  canonicalProblemId = "lesson-dedup"
+): { lessons: Lesson[]; matchedLessonId: string | null } {
+  const normalizedIncoming = normalizeLessonAliases(incoming);
+  const match = existingLessons.find((lesson) => lessonsHaveEquivalentCore(lesson, normalizedIncoming));
+  if (!match) return { lessons: [...existingLessons.map(normalizeLessonAliases), normalizedIncoming], matchedLessonId: null };
+
+  const aliases = (normalizedIncoming.aliasLessonIds ?? []).filter((alias) => alias !== match.id);
+  const canMerge = canAttachAliases(existingLessons, match, normalizedIncoming, aliases);
+  if (!canMerge) return { lessons: [...existingLessons.map(normalizeLessonAliases), normalizedIncoming], matchedLessonId: null };
+
+  const merged = mergeEquivalentLessons(match, normalizedIncoming, match.id, aliases);
+  return {
+    lessons: existingLessons.map((lesson) => lesson.id === match.id ? merged : normalizeLessonAliases(lesson)),
+    matchedLessonId: match.id
+  };
+}
+
+export function dedupeLessonCollection(
+  lessons: Lesson[],
+  options: LessonMergeOptions = {}
+): Lesson[] {
+  return mergeLessons([], lessons, "lesson-dedup", options).lessons;
+}
+
+/**
+ * Normalize only newly proposed lesson IDs against an already durable lesson
+ * set. Existing duplicate pairs are intentionally left untouched (NO_BACKFILL).
+ */
+export function dedupeNewLessonProposals(
+  persistedLessons: Lesson[],
+  proposedLessons: Lesson[]
+): Lesson[] {
+  const persistedIds = new Set(persistedLessons.map((lesson) => lesson.id));
+  let result = proposedLessons.map(normalizeLessonAliases);
+
+  for (const proposal of [...result]) {
+    if (persistedIds.has(proposal.id)) continue;
+    const canonical = result.find((lesson) =>
+      persistedIds.has(lesson.id) && lessonsHaveEquivalentCore(lesson, proposal)
+    );
+    if (!canonical) continue;
+
+    const aliases = (proposal.aliasLessonIds ?? []).filter((alias) => alias !== canonical.id);
+    if (!canAttachAliases(result, canonical, proposal, aliases)) continue;
+    const merged = mergeEquivalentLessons(canonical, proposal, canonical.id, aliases);
+    result = result
+      .filter((lesson) => lesson.id !== proposal.id)
+      .map((lesson) => lesson.id === canonical.id ? merged : lesson);
+  }
+
+  return result.map(normalizeLessonAliases);
+}
+
+export function resolveLessonIdForItem(item: KnowledgeItem, lessonId: string | null | undefined): string | null {
+  if (!lessonId || !item.lessons?.length) return null;
+  const canonical = item.lessons.find((lesson) => lesson.id === lessonId);
+  if (canonical) return canonical.id;
+  const owners = item.lessons.filter((lesson) => (lesson.aliasLessonIds ?? []).includes(lessonId));
+  return owners.length === 1 ? owners[0].id : null;
+}
+
+export function resolveLessonId(
+  organizationId: string,
+  knowledgeItemId: string,
+  lessonId: string | null | undefined,
+  knowledgeItems: KnowledgeItem[]
+): string | null {
+  const item = knowledgeItems.find((candidate) => candidate.id === knowledgeItemId && candidate.organizationId === organizationId);
+  return item ? resolveLessonIdForItem(item, lessonId) : null;
 }
 
 /**
@@ -1299,7 +1506,11 @@ function mergeLessons(
  * unions example tickets / versions / history, keeps newest timestamps and the
  * most complete guidance + customer template.
  */
-export function mergeCanonicalProblemItems(a: KnowledgeItem, b: KnowledgeItem): KnowledgeItem {
+export function mergeCanonicalProblemItems(
+  a: KnowledgeItem,
+  b: KnowledgeItem,
+  options: { dedupeLessonContent?: boolean; lessonMergeOptions?: LessonMergeOptions } = {}
+): KnowledgeItem {
   const x = withCanonicalProblemDefaults(a);
   const y = withCanonicalProblemDefaults(b);
 
@@ -1337,7 +1548,11 @@ export function mergeCanonicalProblemItems(a: KnowledgeItem, b: KnowledgeItem): 
   const lessonMerge = mergeLessons(
     primary.lessons ?? [],
     secondary.lessons ?? [],
-    primary.canonicalProblemId ?? primary.id
+    primary.canonicalProblemId ?? primary.id,
+    {
+      dedupeLessonContent: options.dedupeLessonContent ?? true,
+      ...(options.dedupeLessonContent === false ? {} : (options.lessonMergeOptions ?? {}))
+    }
   );
   for (const entry of lessonMerge.conflictHistory) {
     if (!historyMap.has(entry.id)) historyMap.set(entry.id, entry);
@@ -1404,7 +1619,10 @@ export function mergeCanonicalProblemItems(a: KnowledgeItem, b: KnowledgeItem): 
  * Duplicates are merged (not dropped) so no usage history or examples are lost.
  * Original ordering of first appearance is preserved.
  */
-export function dedupeCanonicalProblems(items: KnowledgeItem[]): KnowledgeItem[] {
+export function dedupeCanonicalProblems(
+  items: KnowledgeItem[],
+  options: { dedupeLessonContent?: boolean; lessonMergeOptions?: LessonMergeOptions } = {}
+): KnowledgeItem[] {
   const order: string[] = [];
   const byId = new Map<string, KnowledgeItem>();
 
@@ -1414,7 +1632,10 @@ export function dedupeCanonicalProblems(items: KnowledgeItem[]): KnowledgeItem[]
     const mergeKey = JSON.stringify([organizationKey, item.id]);
     const existing = byId.get(mergeKey);
     if (existing) {
-      byId.set(mergeKey, mergeCanonicalProblemItems(existing, item));
+      byId.set(mergeKey, mergeCanonicalProblemItems(existing, item, {
+        dedupeLessonContent: options.dedupeLessonContent ?? false,
+        lessonMergeOptions: options.lessonMergeOptions
+      }));
     } else {
       byId.set(mergeKey, item);
       order.push(mergeKey);
@@ -1438,7 +1659,10 @@ export function upsertCanonicalProblem(items: KnowledgeItem[], incoming: Knowled
     return [normalized, ...items];
   }
   const next = [...items];
-  next[index] = mergeCanonicalProblemItems(items[index], normalized);
+  // Snapshot upserts must not become an automatic mature-data backfill. New
+  // lesson proposals are deduplicated before this point; preserve any older
+  // different-ID duplicates unless an explicit consolidation opts in.
+  next[index] = mergeCanonicalProblemItems(items[index], normalized, { dedupeLessonContent: false });
   return next;
 }
 

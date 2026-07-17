@@ -32,10 +32,14 @@ import {
 import { generateReflection } from "@/lib/reflection";
 import {
   createCanonicalProblem,
+  dedupeLessonCollection,
   getCustomerResponseTemplate,
   identifyCanonicalProblem,
+  lessonContentFingerprint,
+  mergeLessonIntoExisting,
   mergeIntoCanonicalProblem,
   normalizeReusableLessonTemplate,
+  resolveLessonIdForItem,
   upsertCanonicalProblem,
   withCanonicalProblemDefaults
 } from "@/lib/canonicalProblemEngine";
@@ -2849,17 +2853,23 @@ export default function Home() {
         createdAt: now,
         sourceTicketId: ticketId
       };
-      return { ...item, lessons: [...existingLessons, lesson] };
+      const merged = mergeLessonIntoExisting(existingLessons, lesson, item.canonicalProblemId ?? item.id);
+      return { ...item, lessons: merged.lessons };
     }
 
     if (lessonDraft.mode === "improves_existing" && lessonDraft.existingLessonId) {
-      return {
+      const canonicalLessonId = resolveLessonIdForItem(item, lessonDraft.existingLessonId) ?? lessonDraft.existingLessonId;
+      const updated = {
         ...item,
         lessons: existingLessons.map(l =>
-          l.id === lessonDraft.existingLessonId
+          l.id === canonicalLessonId
             ? { ...l, rootCause: lessonDraft.rootCause, solution: lessonDraft.solution, customerResponse: normalizedCustomerResponse, signals: lessonDraft.signals }
             : l
         )
+      };
+      return {
+        ...updated,
+        lessons: dedupeLessonCollection(updated.lessons ?? [], { dedupeLessonContent: true })
       };
     }
 
@@ -2872,6 +2882,7 @@ export default function Home() {
     const und = toUnderstanding(aiAnalysis);
     const now = new Date().toISOString();
     const lessonDraft = input?.lessonDraft;
+    let committedItemForReflection: KnowledgeItem | null = null;
 
     if (reflectionDecision.action === "create_new") {
       const problemName = input?.problemName?.trim();
@@ -2913,6 +2924,7 @@ export default function Home() {
       );
       if (lessonDraft) newItem = applyLessonToItem(newItem, { ...lessonDraft, mode: "new" }, selectedTicket.id, now);
       const committedItem = commitValidatedMemoryChange(candidate, null, newItem, reflectionDecision.rationale);
+      committedItemForReflection = committedItem;
       setSessionCreatedIds((prev) => new Set([...prev, committedItem.id]));
       setLastApprovedSourceTicketId(selectedTicket.id);
       setLastSavedKnowledgeId(committedItem.id);
@@ -2944,6 +2956,7 @@ export default function Home() {
         let merged = mergeIntoCanonicalProblem(target, selectedTicket, und, undefined, "human", now);
         if (lessonDraft) merged = applyLessonToItem(merged, lessonDraft, selectedTicket.id, now);
         const committedItem = commitValidatedMemoryChange(candidate, target, merged, reflectionDecision.rationale);
+        committedItemForReflection = committedItem;
         setSessionCreatedIds((prev) => new Set([...prev, committedItem.id]));
         setLastApprovedSourceTicketId(selectedTicket.id);
         setLastSavedKnowledgeId(committedItem.id);
@@ -3020,6 +3033,7 @@ export default function Home() {
         };
         if (lessonDraft) evolved = applyLessonToItem(evolved, lessonDraft, selectedTicket.id, now);
         const committedItem = commitValidatedMemoryChange(candidate, target, evolved, reflectionDecision.versionReason ?? reflectionDecision.rationale);
+        committedItemForReflection = committedItem;
         setSessionCreatedIds((prev) => new Set([...prev, committedItem.id]));
         setLastApprovedSourceTicketId(selectedTicket.id);
         setLastSavedKnowledgeId(committedItem.id);
@@ -3073,6 +3087,7 @@ export default function Home() {
           let trustItem = result.item;
           if (lessonDraft) trustItem = applyLessonToItem(trustItem, lessonDraft, selectedTicket.id, now);
           const committedItem = commitValidatedMemoryChange(candidate, target, trustItem, reflectionDecision.rationale);
+          committedItemForReflection = committedItem;
           setLastTrustDelta(result.trustDelta);
           setLastSavedKnowledgeId(committedItem.id);
           addLogEntries(result.events.map((e) => createLogEntry(e.event, e.detail)));
@@ -3100,8 +3115,15 @@ export default function Home() {
 
     // Update ticket record with reflection outcome and resolve
     if (activeTicketRecord) {
+      const lessonDraftFingerprint = lessonDraft?.mode === "new"
+        ? lessonContentFingerprint({
+            rootCause: lessonDraft.rootCause,
+            solution: lessonDraft.solution,
+            customerResponse: normalizeReusableLessonTemplate(lessonDraft.customerResponse)
+          })
+        : null;
       const lessonCreated = lessonDraft?.mode === "new"
-        ? knowledgeItems.find((k) => k.id === lastSavedKnowledgeId)?.lessons?.at(-1)?.id ?? null
+        ? committedItemForReflection?.lessons?.find((lesson) => lessonContentFingerprint(lesson) === lessonDraftFingerprint)?.id ?? null
         : null;
       const lessonReinforced = lessonDraft?.mode === "improves_existing" ? lessonDraft.existingLessonId ?? null : null;
       const updated: TicketRecord = {

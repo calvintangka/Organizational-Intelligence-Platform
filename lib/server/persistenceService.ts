@@ -28,6 +28,7 @@ import type {
 } from "@/generated/prisma/client";
 import { formatTicketIdRange, organizationTicketPrefix, ticketDateStamp } from "@/lib/ticketIdFormat";
 import { AuthorizationError } from "@/lib/server/authorization";
+import { dedupeLessonCollection, dedupeNewLessonProposals } from "@/lib/canonicalProblemEngine";
 
 export type PersistenceServiceErrorCode =
   | "UNAUTHENTICATED"
@@ -509,6 +510,25 @@ const KNOWLEDGE_LIFECYCLES = ["active", "candidate", "deprecated"] as const;
 const CANDIDATE_LIFECYCLES = ["proposed", "validated", "rejected"] as const;
 const TICKET_LIFECYCLES = ["open", "in_review", "resolved", "rejected", "discarded"] as const;
 const PATTERN_LIFECYCLES = ["monitoring", "suggested", "promoted", "dismissed"] as const;
+
+function normalizeValidationKnowledgeItem(item: KnowledgeItem, stored: KnowledgeItem | null): KnowledgeItem {
+  if (!stored) {
+    const lessons = item.lessons ?? [];
+    return {
+      ...item,
+      lessons: dedupeLessonCollection(lessons, {
+        dedupeLessonContent: true,
+        durableLessonIds: new Set<string>(),
+        preferredCanonicalIds: new Set(lessons.length > 0 ? [lessons[0].id] : [])
+      })
+    };
+  }
+
+  return {
+    ...item,
+    lessons: dedupeNewLessonProposals(stored.lessons ?? [], item.lessons ?? [])
+  };
+}
 
 function narrowEnum<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
   return allowed.includes(value as T) ? value as T : fallback;
@@ -1054,6 +1074,12 @@ export async function commitValidation(
         };
       }
 
+      const existingKnowledgeRow = await tx.knowledgeItem.findUnique({ where: { id: payload.knowledgeItem.id } });
+      const storedKnowledge = existingKnowledgeRow && existingKnowledgeRow.organizationId === organization.id
+        ? mapKnowledge(existingKnowledgeRow)
+        : null;
+      const normalizedKnowledgeItem = normalizeValidationKnowledgeItem(payload.knowledgeItem, storedKnowledge);
+
       await upsertCandidateTx(tx, organization.id, { ...payload.candidate, status: "validated" });
 
       try {
@@ -1107,7 +1133,7 @@ export async function commitValidation(
       // createMany({ skipDuplicates }) is conflict-safe (it never raises a unique
       // violation), so it cannot abort the surrounding transaction; and because the
       // claim shares this transaction, a later rollback also removes the evidence.
-      let knowledgeToPersist = payload.knowledgeItem;
+      let knowledgeToPersist = normalizedKnowledgeItem;
       let trustApplied = true;
       const sourceTicketIds = [
         ...new Set(
@@ -1126,12 +1152,12 @@ export async function commitValidation(
         const storedTrust =
           stored && stored.organizationId === organization.id
             ? stored.trustScore ?? 0
-            : payload.knowledgeItem.trustScore ?? 0;
-        const eventDelta = (payload.knowledgeItem.trustScore ?? storedTrust) - storedTrust;
+            : normalizedKnowledgeItem.trustScore ?? 0;
+        const eventDelta = (normalizedKnowledgeItem.trustScore ?? storedTrust) - storedTrust;
         const claim = await tx.trustEvidence.createMany({
           data: sourceTicketIds.map((sourceTicketId) => ({
             organizationId: organization.id,
-            knowledgeItemId: payload.knowledgeItem.id,
+            knowledgeItemId: normalizedKnowledgeItem.id,
             sourceTicketId,
             trustEventType: HUMAN_REUSE_TRUST_EVENT,
             validationRecordId: payload.validation.id,
@@ -1143,7 +1169,7 @@ export async function commitValidation(
         // otherwise every source ticket already counted -> keep the stored trust.
         if (claim.count === 0) {
           trustApplied = false;
-          knowledgeToPersist = { ...payload.knowledgeItem, trustScore: storedTrust };
+          knowledgeToPersist = { ...normalizedKnowledgeItem, trustScore: storedTrust };
         }
       }
 

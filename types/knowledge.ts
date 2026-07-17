@@ -121,6 +121,8 @@ export interface LearningHistoryEntry {
 
 export interface Lesson {
   id: string;
+  /** Historical lesson IDs that now resolve to this canonical lesson. */
+  aliasLessonIds?: string[];
   title?: string;
   rootCause: string;
   solution: string;

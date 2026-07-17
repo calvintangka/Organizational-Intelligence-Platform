@@ -734,7 +734,21 @@ async function validateExportPackage(raw: unknown, routeOrganizationId: string):
     const item = asRecord(itemValue, `knowledge[${index}]`);
     organizationField(item, "organizationId", organizationId);
     const lessons = item.lessons === undefined ? [] : asArray(item.lessons, `knowledge[${index}].lessons`);
-    uniqueIds(lessons, `knowledge[${index}].lessons`);
+    const lessonIds = uniqueIds(lessons, `knowledge[${index}].lessons`);
+    for (const [lessonIndex, lessonValue] of lessons.entries()) {
+      const lesson = asRecord(lessonValue, `knowledge[${index}].lessons[${lessonIndex}]`);
+      if (lesson.aliasLessonIds === undefined) continue;
+      const aliases = asArray(lesson.aliasLessonIds, `knowledge[${index}].lessons[${lessonIndex}].aliasLessonIds`);
+      const seenAliases = new Set<string>();
+      for (const [aliasIndex, aliasValue] of aliases.entries()) {
+        const alias = stableId(aliasValue, `knowledge[${index}].lessons[${lessonIndex}].aliasLessonIds[${aliasIndex}]`);
+        if (seenAliases.has(alias)) invalidExport(`knowledge[${index}].lessons[${lessonIndex}].aliasLessonIds contains duplicate ${alias}.`);
+        if (alias === lesson.id || lessonIds.has(alias)) {
+          invalidExport(`knowledge[${index}].lessons[${lessonIndex}].aliasLessonIds cannot overlap a canonical lesson id.`);
+        }
+        seenAliases.add(alias);
+      }
+    }
     const versions = item.knowledgeVersions === undefined ? [] : asArray(item.knowledgeVersions, `knowledge[${index}].knowledgeVersions`);
     for (const versionId of uniqueIds(versions, `knowledge[${index}].knowledgeVersions`, "versionId")) knowledgeVersionIds.add(versionId);
   }

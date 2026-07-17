@@ -299,7 +299,7 @@ async function main() {
   const p5Classification = afterP5.trustScore > (trustBeforeP3 + 5) ? "TRUST_INFLATION_RISK" : "SAFE_IDEMPOTENT";
   report.phase5 = { repeatTrust, trustAppliedFlags, finalTrust: afterP5.trustScore, revision: afterP5.revision, classification: p5Classification };
 
-  // ============ PHASE 6: duplicate lesson content, NEW id ============
+  // ============ PHASE 6: duplicate lesson content, NEW transient id ============
   const dupeLessonId = "todo014-lesson-base-dupe";
   const original = afterP5.lessons.find((l) => l.id === baseLessonId);
   const p6After = { ...afterP5, lessons: [...afterP5.lessons, { id: dupeLessonId, rootCause: original.rootCause, solution: original.solution, customerResponse: original.customerResponse, signals: [...original.signals], createdAt: nextTime(), sourceTicketId: "todo014-ticket-0005" }], lastUpdated: nextTime() };
@@ -310,7 +310,8 @@ async function main() {
   const contentIdentical = dupe && orig2 && dupe.rootCause === orig2.rootCause && dupe.solution === orig2.solution && dupe.customerResponse === orig2.customerResponse;
   const dupePersisted = !!dupe && contentIdentical && dupe.id !== orig2.id;
   const p6Protection = dupePersisted ? "NO_CONTENT_PROTECTION" : "PROTECTED";
-  assert.equal(afterP6.lessons.length, 3, "P6: duplicate-content lesson with a new id is appended");
+  assert.equal(afterP6.lessons.length, 2, "P6: duplicate-content lesson with a new transient id is not appended");
+  assert.equal(dupePersisted, false, "P6: transient duplicate id must not become a durable alias");
   report.phase6 = { lessons: afterP6.lessons.map((l) => l.id), duplicatePersisted: dupePersisted, protection: p6Protection };
 
   // ---- Mature data safety ----

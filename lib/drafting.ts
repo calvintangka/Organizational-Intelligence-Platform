@@ -5,7 +5,8 @@ import {
   getCustomerResponseTemplate,
   renderCustomerResponse,
   renderCustomerTemplateForTicket,
-  resolveCustomerAddressingName
+  resolveCustomerAddressingName,
+  resolveLessonIdForItem
 } from "@/lib/canonicalProblemEngine";
 import { defaultOrganizationProfile } from "@/data/seedOrganizationProfiles";
 
@@ -371,7 +372,8 @@ export function authorizeSemanticLessonReuse(
   if (authorization.itemId !== item.id) return null;
   if (understanding.category === UNCATEGORIZED_CATEGORY || understanding.category === "General") return null;
   if (assessCompatibilityDecision(understanding, item, ticket).state !== "unknown") return null;
-  const lesson = (item.lessons ?? []).find((candidate) => candidate.id === authorization.lessonId);
+  const resolvedLessonId = resolveLessonIdForItem(item, authorization.lessonId);
+  const lesson = (item.lessons ?? []).find((candidate) => candidate.id === resolvedLessonId);
   if (!lesson) return null;
   if (ticketContradictsLesson(ticket, lesson)) return null;
   return lesson;
