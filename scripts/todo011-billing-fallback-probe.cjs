@@ -162,9 +162,14 @@ async function main() {
     ["B duplicate charge", "Charged twice for the same subscription",
       "I was charged twice for the same subscription this month. Two identical charges appear for one renewal. Please fix the duplicate charge.",
       { category: "Billing", intent: "billing_charge_issue", canonical: "Billing & Charge Issue", dispute: true, invoice: false }],
-    ["C refund request", "Refund request after cancellation",
+    // Maesa does NOT enable the Refund category (no "refund" in supportedDomains
+    // or businessVocabulary), so strong refund phrasing safely falls back to
+    // Billing and the validated billing refund lesson path stays reachable. This
+    // is the intended refund-disabled behavior (see analyzer.ts Billing weights
+    // note). The refund-ENABLED path is asserted separately below.
+    ["C refund request (refund-disabled profile -> Billing fallback)", "Refund request after cancellation",
       "I cancelled my subscription and would like to request a refund for the unused months remaining on my plan.",
-      { category: "Refund", intent: "refund_request", canonical: "Refund Request", dispute: false, invoice: false }],
+      { category: "Billing", intent: "billing_charge_issue", canonical: "Billing & Charge Issue", dispute: false, invoice: false }],
     ["D invoice request", "Copy of last month's invoice",
       "Can you send me a copy of last month's invoice? I cannot find it in my inbox and need it for our records.",
       { category: "Billing", intent: "invoice_question", canonical: "Billing & Invoice Issue", dispute: false, invoice: true }],
@@ -231,6 +236,49 @@ async function main() {
     }
     console.log("");
   }
+
+  // TODO-011 follow-up: profile-aware refund category support.
+  // Refund resolves to the Refund category ONLY when the organization profile
+  // enables it. FastDrop is a real refund-supported profile ("refund" appears in
+  // its supportedDomains, businessVocabulary, and services), so strong refund
+  // phrasing must classify as Refund there. A refund-supported profile that also
+  // enables Subscription/Billing (in-memory clone, no mature data touched) must
+  // still resolve refund evidence to Refund despite incidental subscription words.
+  const refundSupported = await service.getOrganizationProfile("profile-fastdrop-logistics");
+  const refundPlusSubscription = {
+    ...refundSupported,
+    supportedDomains: [...refundSupported.supportedDomains, "subscription", "billing"],
+    businessVocabulary: [...refundSupported.businessVocabulary, "subscription", "plan", "renewal", "invoice"]
+  };
+  const refundEnabledChecks = [
+    ["F refund request (refund-supported profile)", refundSupported,
+      "Refund request after cancellation",
+      "I cancelled and would like to request a refund for the unused portion of my order.",
+      { category: "Refund", intent: "refund_request", canonical: "Refund Request" }],
+    ["G refund request + incidental subscription words (refund-supported profile)", refundPlusSubscription,
+      "Refund after cancelling my subscription",
+      "I cancelled my subscription and want a refund for the remaining months on my plan.",
+      { category: "Refund", intent: "refund_request", canonical: "Refund Request" }]
+  ];
+  for (const [label, prof, subject, description, expectation] of refundEnabledChecks) {
+    const ticket = ticketOf(subject, description);
+    const und = understandForProfile(ticket, prof);
+    const canonical = identifyCanonicalProblem(und, prof);
+    console.log(`=== ${label} ===`);
+    console.log(`ticket: "${subject}"`);
+    console.log(`category=${und.category} intent=${und.intent ?? "-"} canonical=${canonical.title}`);
+    if (und.category !== expectation.category) {
+      failures.push(`${label}: CLASSIFICATION_FAILURE expected=${expectation.category} actual=${und.category}`);
+    }
+    if (und.intent !== expectation.intent) {
+      failures.push(`${label}: CLASSIFICATION_FAILURE expectedIntent=${expectation.intent} actual=${und.intent ?? "none"}`);
+    }
+    if (canonical.title !== expectation.canonical) {
+      failures.push(`${label}: CANONICAL_MAPPING_FAILURE expected=${expectation.canonical} actual=${canonical.title}`);
+    }
+    console.log("");
+  }
+
   if (failures.length > 0) {
     console.error(`TODO-011 FAILURES:\n- ${failures.join("\n- ")}`);
     process.exitCode = 1;
