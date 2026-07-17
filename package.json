@@ -30,6 +30,7 @@
     "probe:todo012-canonical-regression": "node scripts/todo012-canonical-regression-probe.cjs",
     "probe:todo013-sequential-ticket-isolation": "node scripts/todo013-sequential-ticket-isolation-probe.cjs",
     "probe:stale-profile-overwrite": "node scripts/stale-profile-overwrite-probe.cjs",
+    "probe:todo014-lifecycle": "node scripts/todo014-lifecycle-probe.cjs",
     "seed:test-organization": "node scripts/seed-test-organization.cjs",
     "seed:development-memberships": "node scripts/seed-development-memberships.cjs",
     "prisma:validate": "prisma validate",
