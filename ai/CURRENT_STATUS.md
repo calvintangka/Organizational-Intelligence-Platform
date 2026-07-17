@@ -1,5 +1,9 @@
 # Current Status
 
+## TODO-012 Broad Canonical Regression - Completed (Final Acceptance Rerun PASS)
+
+Final acceptance rerun against post-TODO-013 HEAD `8e63bf5` passed all gates read-only, no code or mature data changed: broad canonical suite 76/76 across 22 categories; BUG-008 retrieval pass (Maesa vocab products=3/services=4/supportedDomains=15/businessVocabulary=25); BUG-008 semantic 32/32; TODO-011 Billing exit 0 (Maesa refund→Billing fallback, FastDrop refund→Refund, refund+subscription wording→Refund, duplicate charge→Billing, billing-profile safe, invoice→Billing, payment failure→payment_authorization_confusion, no unrelated Subscription fallback); TODO-013 sequential-ticket isolation pass (no state leakage, late async guard, durable reuse); organization switching pass; stale-profile overwrite pass; `tsc --noEmit` clean. Real Maesa read-only: Login→Login, duplicate charge→Billing, invoice→Billing, activation→Activation. Real FastDrop read-only: delivery→Delivery Delay, refund→Refund, off-domain login→Uncategorized (fail closed). Maesa/FastDrop/Pramana unchanged. TODO-012 moves Ongoing → Completed.
+
 ## TODO-013 Sequential Ticket State Isolation - Completed
 
 The focused sequential-ticket probe passes four independent-ticket sequences, cross-organization context checks, durable-memory reuse checks, and a delayed-response race. Ticket-scoped async work now uses a monotonic generation guard; resets and authorized organization switches invalidate older requests before incoming state is loaded. TODO-012 classifier/canonical work remains unchanged.
