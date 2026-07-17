@@ -1,11 +1,12 @@
 /*
- * TODO-015 source-ticket trust idempotency reproduction probe (AUDIT ONLY).
+ * TODO-015 source-ticket trust idempotency probe (post-fix verification).
  *
  * Drives the REAL commitValidation transaction + lib/trustEngine.recordResolution
- * against DISPOSABLE organizations (test-oip-015a / test-oip-015b) to reproduce
- * cases A-H. It asserts CURRENT behavior (including the reproduced gap) so the
- * audit is deterministic. No fix is applied. Disposable orgs are deleted at the
- * end; mature Maesa/FastDrop/Pramana are never referenced.
+ * against DISPOSABLE organizations (test-oip-015a / test-oip-015b). Verifies that a
+ * source ticket contributes trust only ONCE per (organizationId, knowledgeItemId,
+ * trustEventType) while audit records (ValidationRecord / MemoryChangeRecord) are
+ * still written. Disposable orgs are deleted at the end; mature
+ * Maesa/FastDrop/Pramana are never referenced.
  */
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -47,6 +48,7 @@ const { withCanonicalProblemDefaults } = require(path.join(root, "lib", "canonic
 const ORGA = "test-oip-015a";
 const ORGB = "test-oip-015b";
 const ACTOR = { id: "todo015-actor", name: "TODO-015 Probe" };
+const EVENT = "HUMAN_REUSE";
 const NOW = "2026-07-17T00:00:00.000Z";
 let clock = Date.parse("2026-07-17T12:00:00.000Z");
 const nextTime = () => new Date((clock += 1000)).toISOString();
@@ -54,7 +56,6 @@ const nextTime = () => new Date((clock += 1000)).toISOString();
 function profile(id) {
   return { id, name: `Probe ${id}`, industry: "Probe", description: "Disposable TODO-015 org.", products: ["p"], services: [], supportedDomains: ["billing"], businessVocabulary: [], supportedIssueTypes: [], outOfScopeTopics: [], customerTone: "professional", supportBoundaries: [], autoResolutionThreshold: 80, escalationRules: [], logoInitials: "T5", createdAt: NOW, updatedAt: NOW };
 }
-
 function baseItem(orgId, id) {
   return withCanonicalProblemDefaults({
     id, organizationId: orgId, title: "Trust item", category: "Billing",
@@ -65,7 +66,6 @@ function baseItem(orgId, id) {
     knowledgeVersions: [{ versionId: `${id}-v1`, version: 1, createdAt: NOW, changeReason: "seed", sourceTicketId: "seed-ticket", summary: "v1" }]
   });
 }
-
 function payload({ orgId, candidateId, validationId, memoryId, action, sourceTicketIds, item, expectedRevision }) {
   return {
     candidate: { id: candidateId, organizationId: orgId, sourceTicketIds, proposedAction: action, proposedContent: { solution: "x", customerResponseTemplate: item.customerResponseTemplate, internalGuidance: "x" }, rationale: "todo015", status: "proposed", createdAt: nextTime() },
@@ -75,90 +75,87 @@ function payload({ orgId, candidateId, validationId, memoryId, action, sourceTic
     expectedKnowledgeRevision: expectedRevision
   };
 }
-
-async function loadItem(orgId, id) {
-  return (await service.loadKnowledge(orgId)).find((i) => i.id === id);
-}
-async function orgCounts(prisma, orgId) {
-  return {
-    validations: await prisma.validationRecord.count({ where: { organizationId: orgId } }),
-    memory: await prisma.memoryChangeRecord.count({ where: { organizationId: orgId } }),
-    candidates: await prisma.knowledgeCandidate.count({ where: { organizationId: orgId } })
-  };
-}
+async function loadItem(orgId, id) { return (await service.loadKnowledge(orgId)).find((i) => i.id === id); }
 async function cleanup() {
   for (const id of [ORGA, ORGB]) {
     try { await service.deleteOrganization(id); } catch (e) { if (e?.code !== "ORGANIZATION_NOT_FOUND") throw e; }
   }
 }
 
-/** A trust-adding (trust_update_only) commit computed via the real trustEngine. */
-async function trustCommit({ orgId, itemId, suffix, sourceTicketIds, profileObj }) {
-  const current = await loadItem(orgId, itemId);
-  const result = recordResolution(current, { mode: "human", success: true, at: nextTime() }, profileObj, []);
-  const p = payload({ orgId, candidateId: `c-${suffix}`, validationId: `v-${suffix}`, memoryId: `m-${suffix}`, action: "trust_update_only", sourceTicketIds, item: result.item, expectedRevision: current.revision });
-  const res = await service.commitValidation(orgId, p, ACTOR);
-  return { res, payload: p, trustFrom: current.trustScore, trustTo: result.trustTo };
-}
-
 async function main() {
   const prisma = getPrismaClient();
   const report = { cases: {} };
+  const evidenceCount = (orgId, itemId, sourceTicketId) => prisma.trustEvidence.count({ where: { organizationId: orgId, knowledgeItemId: itemId, sourceTicketId, trustEventType: EVENT } });
+  const orgCounts = async (orgId) => ({
+    validations: await prisma.validationRecord.count({ where: { organizationId: orgId } }),
+    memory: await prisma.memoryChangeRecord.count({ where: { organizationId: orgId } })
+  });
+
+  // A trust-adding (trust_update_only) commit computed via the real trustEngine.
+  async function trustCommit({ orgId, itemId, suffix, sourceTicketIds, profileObj, expectedRevisionOverride }) {
+    const current = await loadItem(orgId, itemId);
+    const result = recordResolution(current, { mode: "human", success: true, at: nextTime() }, profileObj, []);
+    const p = payload({ orgId, candidateId: `c-${suffix}`, validationId: `v-${suffix}`, memoryId: `m-${suffix}`, action: "trust_update_only", sourceTicketIds, item: result.item, expectedRevision: expectedRevisionOverride ?? current.revision });
+    const res = await service.commitValidation(orgId, p, ACTOR);
+    return { res, payload: p, before: current.trustScore };
+  }
+
   try {
     await cleanup();
     await service.upsertOrganizationProfiles([profile(ORGA), profile(ORGB)]);
     const profA = await service.getOrganizationProfile(ORGA);
     const profB = await service.getOrganizationProfile(ORGB);
+    await service.commitValidation(ORGA, payload({ orgId: ORGA, candidateId: "c-seed", validationId: "v-seed", memoryId: "m-seed", action: "create_new", sourceTicketIds: ["seed-ticket"], item: baseItem(ORGA, "kA"), expectedRevision: null }), ACTOR);
+    assert.equal((await loadItem(ORGA, "kA")).trustScore, 20, "baseline trust 20");
 
-    // Baseline item in ORGA (trust 20, revision 1).
-    const created = await service.commitValidation(ORGA, payload({ orgId: ORGA, candidateId: "c-seed", validationId: "v-seed", memoryId: "m-seed", action: "create_new", sourceTicketIds: ["seed-ticket"], item: baseItem(ORGA, "kA"), expectedRevision: null }), ACTOR);
-    assert.equal(created.knowledgeRevision, 1);
-    let baseline = await loadItem(ORGA, "kA");
-    assert.equal(baseline.trustScore, 20);
-
-    // ---- Case C first (needs a clean committed trust-add to then replay in A/B) ----
-    // Case C: SAME source ticket "T-100", NEW candidate -> trust increases again.
+    // Case C (first): T-100 new -> trust applies (20->25), 1 evidence row.
     const c1 = await trustCommit({ orgId: ORGA, itemId: "kA", suffix: "c1", sourceTicketIds: ["T-100"], profileObj: profA });
-    const afterC = await loadItem(ORGA, "kA");
-    assert.equal(afterC.trustScore, 25, "Case C: first T-100 contribution -> 20->25");
-    report.cases.C_firstContribution = { trust: afterC.trustScore, revision: afterC.revision };
+    assert.equal(c1.res.trustApplied, true, "C1: first T-100 contribution applies trust");
+    assert.equal((await loadItem(ORGA, "kA")).trustScore, 25, "C1: 20->25");
+    assert.equal(await evidenceCount(ORGA, "kA", "T-100"), 1, "C1: one evidence row for T-100");
+    report.cases.C1_firstContribution = { trust: 25, trustApplied: true };
 
-    // Case A: EXACT replay of the c1 commit (same ids, same payload) -> no-op.
+    // Case A: exact replay of C1 -> no-op.
     const replay = await service.commitValidation(ORGA, c1.payload, ACTOR);
-    const afterA = await loadItem(ORGA, "kA");
-    assert.equal(replay.replayed, true, "Case A: exact replay is a no-op");
-    assert.equal(afterA.trustScore, 25, "Case A: replay adds no trust");
-    assert.equal(afterA.revision, afterC.revision, "Case A: replay does not bump revision");
-    report.cases.A_exactReplay = { replayed: replay.replayed, trust: afterA.trustScore, revision: afterA.revision };
+    assert.equal(replay.replayed, true, "A: exact replay is a no-op");
+    assert.equal((await loadItem(ORGA, "kA")).trustScore, 25, "A: replay adds no trust");
+    report.cases.A_exactReplay = { replayed: true, trust: 25 };
 
-    // Case B: SAME candidate id (c-c1), NEW validation id -> conflict.
-    const bPayload = payload({ orgId: ORGA, candidateId: "c-c1", validationId: "v-c1-b", memoryId: "m-c1-b", action: "trust_update_only", sourceTicketIds: ["T-100"], item: { ...afterA, revision: afterA.revision + 1 }, expectedRevision: afterA.revision });
-    await assert.rejects(() => service.commitValidation(ORGA, bPayload, ACTOR), (e) => e.code === "CONFLICT", "Case B: same candidate/new validation must conflict");
-    const afterB = await loadItem(ORGA, "kA");
-    assert.equal(afterB.trustScore, 25, "Case B: conflicting commit adds no trust");
-    report.cases.B_sameCandidateNewValidation = { conflict: true, trust: afterB.trustScore };
+    // Case B: same candidate id (c-c1), new validation id -> conflict.
+    const bp = payload({ orgId: ORGA, candidateId: "c-c1", validationId: "v-c1-b", memoryId: "m-c1-b", action: "trust_update_only", sourceTicketIds: ["T-100"], item: { ...(await loadItem(ORGA, "kA")), revision: 3 }, expectedRevision: 2 });
+    await assert.rejects(() => service.commitValidation(ORGA, bp, ACTOR), (e) => e.code === "CONFLICT", "B: same candidate/new validation conflicts");
+    assert.equal((await loadItem(ORGA, "kA")).trustScore, 25, "B: no trust from conflict");
+    report.cases.B_sameCandidateNewValidation = { conflict: true, trust: 25 };
 
-    // Case C (continued / D): SAME source ticket "T-100" AGAIN via a brand-new candidate
-    // (models a new session; server holds no session state) -> trust increases AGAIN.
+    // Case C (repeat) / D (new session): T-100 again via NEW candidate -> suppressed.
+    const auditBefore = await orgCounts(ORGA);
     const c2 = await trustCommit({ orgId: ORGA, itemId: "kA", suffix: "c2", sourceTicketIds: ["T-100"], profileObj: profA });
     const afterC2 = await loadItem(ORGA, "kA");
-    assert.equal(afterC2.trustScore, 30, "Case C/D: SAME ticket T-100 via a new candidate adds trust AGAIN (25->30) — REPRODUCED");
-    report.cases.C_repeatSameTicket = { trust: afterC2.trustScore, revision: afterC2.revision, note: "same T-100, new candidate -> +5 again (gap reproduced)" };
-    report.cases.D_newSessionSameTicket = { trust: afterC2.trustScore, note: "no server-side session/source-ticket guard; equivalent to Case C" };
+    const auditAfter = await orgCounts(ORGA);
+    assert.equal(c2.res.trustApplied, false, "C2/D: repeated T-100 does NOT apply trust");
+    assert.equal(afterC2.trustScore, 25, "C2/D: trust stays 25 (idempotent)");
+    assert.equal(afterC2.revision, 3, "C2/D: commit still advances revision");
+    assert.equal(await evidenceCount(ORGA, "kA", "T-100"), 1, "C2/D: still exactly one T-100 evidence row");
+    assert.equal(auditAfter.validations, auditBefore.validations + 1, "I: ValidationRecord still written on repeat");
+    assert.equal(auditAfter.memory, auditBefore.memory + 1, "I: MemoryChangeRecord still written on repeat");
+    report.cases.C2_repeatSameTicket = { trust: 25, trustApplied: false, revision: 3 };
+    report.cases.D_newSessionSameTicket = { trust: 25, note: "server-side evidence guard; no session state needed" };
+    report.cases.I_auditHistoryPreserved = { validationsDelta: 1, memoryDelta: 1, note: "repeated review recorded without trust inflation" };
 
-    // Case F: DIFFERENT source ticket -> legitimate new trust increase.
+    // Case F: different ticket T-200 -> trust applies (25->30).
     const f1 = await trustCommit({ orgId: ORGA, itemId: "kA", suffix: "f1", sourceTicketIds: ["T-200"], profileObj: profA });
-    const afterF = await loadItem(ORGA, "kA");
-    assert.equal(afterF.trustScore, 35, "Case F: different ticket T-200 legitimately adds trust (30->35)");
-    report.cases.F_differentTicket = { trust: afterF.trustScore };
+    assert.equal(f1.res.trustApplied, true, "F: different ticket applies trust");
+    assert.equal((await loadItem(ORGA, "kA")).trustScore, 30, "F: 25->30");
+    report.cases.F_differentTicket = { trust: 30, trustApplied: true };
 
-    // Case H: ONE candidate carrying MULTIPLE sourceTicketIds -> single contribution (+5 once).
+    // Case H: one candidate, multiple NEW sourceTicketIds -> ONE delta (30->35), 3 evidence rows.
     const h1 = await trustCommit({ orgId: ORGA, itemId: "kA", suffix: "h1", sourceTicketIds: ["T-300", "T-301", "T-302"], profileObj: profA });
-    const afterH = await loadItem(ORGA, "kA");
-    assert.equal(afterH.trustScore, 40, "Case H: multiple sourceTicketIds in one candidate = one contribution (+5)");
-    report.cases.H_multiSourceTicket = { trust: afterH.trustScore, note: "one candidate = one trust contribution regardless of #sourceTicketIds" };
+    assert.equal(h1.res.trustApplied, true, "H: multi-source applies the event delta once");
+    assert.equal((await loadItem(ORGA, "kA")).trustScore, 35, "H: 30->35 (single +5, not +15)");
+    for (const t of ["T-300", "T-301", "T-302"]) assert.equal(await evidenceCount(ORGA, "kA", t), 1, `H: evidence row for ${t}`);
+    report.cases.H_multiSource = { trust: 35, evidenceRows: 3, note: "one candidate = one +5; each ticket claims its own evidence row" };
 
-    // Case E: CONCURRENT two NEW candidates, SAME source ticket "T-400".
+    // Case E: concurrent two NEW candidates, same ticket T-400 -> exactly one contribution.
     const cur = await loadItem(ORGA, "kA");
     const rE1 = recordResolution(cur, { mode: "human", success: true, at: nextTime() }, profA, []);
     const rE2 = recordResolution(cur, { mode: "human", success: true, at: nextTime() }, profA, []);
@@ -167,36 +164,39 @@ async function main() {
       service.commitValidation(ORGA, payload({ orgId: ORGA, candidateId: "c-e2", validationId: "v-e2", memoryId: "m-e2", action: "trust_update_only", sourceTicketIds: ["T-400"], item: rE2.item, expectedRevision: cur.revision }), ACTOR)
     ]);
     const fulfilled = settled.filter((s) => s.status === "fulfilled").length;
-    const rejected = settled.filter((s) => s.status === "rejected").length;
-    const afterE = await loadItem(ORGA, "kA");
-    assert.equal(fulfilled, 1, "Case E: optimistic revision lets only ONE concurrent commit win");
-    assert.equal(rejected, 1, "Case E: the other concurrent commit conflicts");
-    assert.equal(afterE.trustScore, 45, "Case E: only one +5 applied concurrently (40->45)");
-    report.cases.E_concurrentSameTicket = { fulfilled, rejected, trust: afterE.trustScore, note: "concurrency bounded by optimistic revision, NOT by sourceTicket" };
+    assert.equal(fulfilled, 1, "E: exactly one concurrent commit wins");
+    assert.equal((await loadItem(ORGA, "kA")).trustScore, 40, "E: exactly one +5 applied (35->40)");
+    assert.equal(await evidenceCount(ORGA, "kA", "T-400"), 1, "E: exactly one T-400 evidence row");
+    report.cases.E_concurrentSameTicket = { fulfilled, trust: 40, evidenceRows: 1 };
 
-    // Case G: SAME ticket id "T-100" in ORGB -> isolated; ORGA trust unchanged.
+    // Case G: same ticket id T-100 in ORGB -> independent; ORGA unaffected.
     await service.commitValidation(ORGB, payload({ orgId: ORGB, candidateId: "cb-seed", validationId: "vb-seed", memoryId: "mb-seed", action: "create_new", sourceTicketIds: ["seed-ticket"], item: baseItem(ORGB, "kB"), expectedRevision: null }), ACTOR);
-    await trustCommit({ orgId: ORGB, itemId: "kB", suffix: "g1", sourceTicketIds: ["T-100"], profileObj: profB });
-    const orgAAfterG = await loadItem(ORGA, "kA");
-    const orgBAfterG = await loadItem(ORGB, "kB");
-    assert.equal(orgAAfterG.trustScore, 45, "Case G: cross-org commit does not affect ORGA trust");
-    assert.equal(orgBAfterG.trustScore, 25, "Case G: ORGB tracks its own trust independently");
-    report.cases.G_crossOrg = { orgATrust: orgAAfterG.trustScore, orgBTrust: orgBAfterG.trustScore };
+    const g1 = await trustCommit({ orgId: ORGB, itemId: "kB", suffix: "g1", sourceTicketIds: ["T-100"], profileObj: profB });
+    assert.equal(g1.res.trustApplied, true, "G: ORGB T-100 applies independently");
+    assert.equal((await loadItem(ORGB, "kB")).trustScore, 25, "G: ORGB independent (20->25)");
+    assert.equal((await loadItem(ORGA, "kA")).trustScore, 40, "G: ORGA unaffected by cross-org commit");
+    report.cases.G_crossOrg = { orgATrust: 40, orgBTrust: 25 };
 
-    // Durable-evidence check: is there any record proving "T-100 already counted for kA"?
-    const candidatesForKA = await prisma.knowledgeCandidate.findMany({ where: { organizationId: ORGA }, select: { id: true, sourceTicketIds: true, relatedKnowledgeId: true, proposedAction: true } });
-    const t100Contributions = candidatesForKA.filter((c) => JSON.stringify(c.sourceTicketIds).includes("T-100"));
-    report.durableEvidence = {
-      trustEventRecordExists: false,
-      sourceTicketOnlyOnCandidateJson: true,
-      t100CandidateContributions: t100Contributions.length,
-      note: "No durable record marks a (org,knowledgeItem,sourceTicket) trust event as counted; sourceTicketIds live only as opaque candidate JSON."
-    };
-    assert.ok(t100Contributions.length >= 2, "T-100 produced multiple trust-adding candidates with no idempotency record");
+    // Case J: rollback after evidence claim. New ticket T-500 but STALE revision ->
+    // knowledge upsert conflicts AFTER the evidence claim -> whole tx rolls back.
+    const beforeJ = await loadItem(ORGA, "kA");
+    await assert.rejects(
+      () => trustCommit({ orgId: ORGA, itemId: "kA", suffix: "j1", sourceTicketIds: ["T-500"], profileObj: profA, expectedRevisionOverride: beforeJ.revision + 50 }),
+      (e) => e.code === "CONFLICT",
+      "J: stale-revision commit must fail"
+    );
+    assert.equal((await loadItem(ORGA, "kA")).trustScore, 40, "J: trust unchanged after rollback");
+    assert.equal(await evidenceCount(ORGA, "kA", "T-500"), 0, "J: TrustEvidence rolled back — no orphan row");
+    report.cases.J_rollback = { trust: 40, orphanEvidence: false };
 
-    const finalCounts = await orgCounts(prisma, ORGA);
-    report.finalOrgACounts = finalCounts;
-    console.log("TODO-015 reproduction probe passed (current behavior asserted).");
+    // Case K: retry T-500 with the correct revision -> succeeds, trust applies, evidence present.
+    const k1 = await trustCommit({ orgId: ORGA, itemId: "kA", suffix: "k1", sourceTicketIds: ["T-500"], profileObj: profA });
+    assert.equal(k1.res.trustApplied, true, "K: retry applies trust");
+    assert.equal((await loadItem(ORGA, "kA")).trustScore, 45, "K: 40->45 on valid retry");
+    assert.equal(await evidenceCount(ORGA, "kA", "T-500"), 1, "K: evidence claimable after prior rollback");
+    report.cases.K_retryAfterRollback = { trust: 45, evidenceRows: 1 };
+
+    console.log("TODO-015 idempotency probe passed (fixed behavior verified).");
     console.log(JSON.stringify(report, null, 2));
   } finally {
     await cleanup();

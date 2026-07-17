@@ -732,6 +732,7 @@ export async function resetOrganizationData(organizationId: string): Promise<voi
   const id = organization.id;
   await writeDatabase("organization reset", () =>
     prisma.$transaction(async (tx) => {
+      await tx.trustEvidence.deleteMany({ where: { organizationId: id } });
       await tx.memoryChangeRecord.deleteMany({ where: { organizationId: id } });
       await tx.validationRecord.deleteMany({ where: { organizationId: id } });
       await tx.knowledgeCandidate.deleteMany({ where: { organizationId: id } });
@@ -960,7 +961,19 @@ export interface ValidationCommitPayload {
 export interface ValidationCommitResult {
   replayed: boolean;
   knowledgeRevision: number;
+  /**
+   * TODO-015: whether this commit applied a trust delta. False when the source
+   * ticket had already contributed a trust-adding event to this KnowledgeItem
+   * (the audit records are still written; only the trust delta is withheld).
+   */
+  trustApplied?: boolean;
 }
+
+// TODO-015: the only trust-adding reuse event today is `trust_update_only`
+// (lib/reflection.ts -> lib/trustEngine.ts recordResolution, TRUST_HUMAN_REUSE).
+// create_new establishes initial trust and is intentionally NOT idempotency-guarded.
+const TRUST_ADDING_REUSE_ACTIONS = new Set(["trust_update_only"]);
+const HUMAN_REUSE_TRUST_EVENT = "HUMAN_REUSE";
 
 function validateCommitPayload(organizationId: string, payload: unknown): ValidationCommitPayload {
   const body = payload as Partial<ValidationCommitPayload> | null;
@@ -1036,7 +1049,8 @@ export async function commitValidation(
         });
         return {
           replayed: true,
-          knowledgeRevision: knowledge && knowledge.organizationId === organization.id ? knowledge.revision : 0
+          knowledgeRevision: knowledge && knowledge.organizationId === organization.id ? knowledge.revision : 0,
+          trustApplied: true
         };
       }
 
@@ -1087,13 +1101,59 @@ export async function commitValidation(
         throw error;
       }
 
+      // TODO-015: claim source-ticket trust evidence inside this same transaction.
+      // A trust-adding reuse event applies its delta only if at least one of its
+      // source tickets has not already contributed that event to this KnowledgeItem.
+      // createMany({ skipDuplicates }) is conflict-safe (it never raises a unique
+      // violation), so it cannot abort the surrounding transaction; and because the
+      // claim shares this transaction, a later rollback also removes the evidence.
+      let knowledgeToPersist = payload.knowledgeItem;
+      let trustApplied = true;
+      const sourceTicketIds = [
+        ...new Set(
+          (payload.candidate.sourceTicketIds ?? []).filter(
+            (ticketId): ticketId is string => typeof ticketId === "string" && ticketId.length > 0
+          )
+        )
+      ];
+      if (TRUST_ADDING_REUSE_ACTIONS.has(payload.candidate.proposedAction) && sourceTicketIds.length > 0) {
+        // The stored trust is the authoritative pre-event base (avoids relying on
+        // client-side delta arithmetic or clamping).
+        const stored = await tx.knowledgeItem.findUnique({
+          where: { id: payload.knowledgeItem.id },
+          select: { trustScore: true, organizationId: true }
+        });
+        const storedTrust =
+          stored && stored.organizationId === organization.id
+            ? stored.trustScore ?? 0
+            : payload.knowledgeItem.trustScore ?? 0;
+        const eventDelta = (payload.knowledgeItem.trustScore ?? storedTrust) - storedTrust;
+        const claim = await tx.trustEvidence.createMany({
+          data: sourceTicketIds.map((sourceTicketId) => ({
+            organizationId: organization.id,
+            knowledgeItemId: payload.knowledgeItem.id,
+            sourceTicketId,
+            trustEventType: HUMAN_REUSE_TRUST_EVENT,
+            validationRecordId: payload.validation.id,
+            delta: eventDelta
+          })),
+          skipDuplicates: true
+        });
+        // Apply the event delta once when any source ticket was newly eligible;
+        // otherwise every source ticket already counted -> keep the stored trust.
+        if (claim.count === 0) {
+          trustApplied = false;
+          knowledgeToPersist = { ...payload.knowledgeItem, trustScore: storedTrust };
+        }
+      }
+
       const knowledgeRevision = await upsertKnowledgeItemTx(
         tx,
         organization.id,
-        payload.knowledgeItem,
+        knowledgeToPersist,
         payload.expectedKnowledgeRevision
       );
-      return { replayed: false, knowledgeRevision };
+      return { replayed: false, knowledgeRevision, trustApplied };
     })
   );
 }

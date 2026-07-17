@@ -275,24 +275,29 @@ async function main() {
   assert.equal(durableMemory, 4, "P4: four memory-change records persisted");
   report.phase4 = { revision: durable.revision, template: durable.customerResponseTemplate === R1, versions: durable.knowledgeVersions.length, lessons: durable.lessons.length, trust: durable.trustScore, validationRecords: durableValidations, memoryChangeRecords: durableMemory };
 
-  // ============ PHASE 5: same sourceTicket / NEW candidate ============
-  const REPEAT_TICKET = "todo014-ticket-0004"; // already contributed in Phase 3
+  // ============ PHASE 5: same sourceTicket / NEW candidate (TODO-015 guard) ============
+  // Ticket todo014-ticket-0004 already contributed a HUMAN_REUSE trust event in
+  // Phase 3, so re-processing it through NEW candidates must NOT add trust again,
+  // while the review still commits (revision advances, audit records written).
+  const REPEAT_TICKET = "todo014-ticket-0004";
   let repeatItem = afterP3;
   const repeatTrust = [];
+  const trustAppliedFlags = [];
   for (const n of [1, 2]) {
     const r = recordResolution(repeatItem, { mode: "human", success: true, at: nextTime() }, profile, []);
     const c = await commit({ suffix: `p5-${n}`, action: "trust_update_only", sourceTicketId: REPEAT_TICKET, beforeState: repeatItem, afterState: r.item, expectedRevision: repeatItem.revision });
     const reloaded = await reload();
     repeatTrust.push(reloaded.trustScore);
+    trustAppliedFlags.push(c.res.trustApplied);
     repeatItem = reloaded;
-    assert.equal(c.res.replayed, false, "P5: same sourceTicket with a NEW candidate is not deduplicated");
+    assert.equal(c.res.replayed, false, "P5: same sourceTicket with a NEW candidate still commits (not a replay)");
+    assert.equal(c.res.trustApplied, false, "P5: repeated source ticket must NOT apply trust again (TODO-015)");
   }
-  const validationsForRepeatTicket = await prisma.validationRecord.count({ where: { organizationId: ORG } });
   const afterP5 = await reload();
-  assert.equal(afterP5.trustScore, (trustBeforeP3 + 5) + 10, "P5: same ticket via new candidates added +5 twice more");
-  assert.equal(afterP5.revision, 6, "P5: two more revisions");
-  const p5Classification = afterP5.trustScore > (trustBeforeP3 + 5) ? "TRUST_INFLATION_RISK" : "SAFE_NO_OP";
-  report.phase5 = { repeatTrust, finalTrust: afterP5.trustScore, revision: afterP5.revision, totalValidationRecords: validationsForRepeatTicket, classification: p5Classification };
+  assert.equal(afterP5.trustScore, trustBeforeP3 + 5, "P5: trust stays put — same ticket does not inflate trust");
+  assert.equal(afterP5.revision, 6, "P5: commits still advance revision (audit preserved)");
+  const p5Classification = afterP5.trustScore > (trustBeforeP3 + 5) ? "TRUST_INFLATION_RISK" : "SAFE_IDEMPOTENT";
+  report.phase5 = { repeatTrust, trustAppliedFlags, finalTrust: afterP5.trustScore, revision: afterP5.revision, classification: p5Classification };
 
   // ============ PHASE 6: duplicate lesson content, NEW id ============
   const dupeLessonId = "todo014-lesson-base-dupe";
@@ -315,6 +320,7 @@ async function main() {
   report.matureUnchanged = matureUnchanged;
 
   // ---- Targeted deterministic cleanup: remove only this probe's records ----
+  await prisma.trustEvidence.deleteMany({ where: { organizationId: ORG, knowledgeItemId: TARGET } });
   await prisma.memoryChangeRecord.deleteMany({ where: { organizationId: ORG, id: { startsWith: "todo014-" } } });
   await prisma.validationRecord.deleteMany({ where: { organizationId: ORG, id: { startsWith: "todo014-" } } });
   await prisma.knowledgeCandidate.deleteMany({ where: { organizationId: ORG, id: { startsWith: "todo014-" } } });
@@ -337,6 +343,7 @@ main()
     // Best-effort cleanup so a failed run does not leave probe records behind.
     try {
       const prisma = getPrismaClient();
+      await prisma.trustEvidence.deleteMany({ where: { organizationId: ORG, knowledgeItemId: TARGET } });
       await prisma.memoryChangeRecord.deleteMany({ where: { organizationId: ORG, id: { startsWith: "todo014-" } } });
       await prisma.validationRecord.deleteMany({ where: { organizationId: ORG, id: { startsWith: "todo014-" } } });
       await prisma.knowledgeCandidate.deleteMany({ where: { organizationId: ORG, id: { startsWith: "todo014-" } } });

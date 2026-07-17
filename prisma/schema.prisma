@@ -146,6 +146,7 @@ model Organization {
   validationRecords   ValidationRecord[]
   memoryChangeRecords MemoryChangeRecord[]
   ticketRecords       TicketRecord[]
+  trustEvidence       TrustEvidence[]
   emergingPatterns    EmergingPattern[]
   intelligenceLogs    IntelligenceLog[]
   orgMetrics          OrgMetrics?
@@ -251,6 +252,32 @@ model ValidationRecord {
   @@index([organizationId, knowledgeItemId])
   @@index([organizationId, timestamp])
   @@map("validation_records")
+}
+
+/**
+ * TODO-015 source-ticket trust idempotency. One row records that a given source
+ * ticket has already contributed a trust-adding event to a specific KnowledgeItem.
+ * The unique key makes the trust contribution idempotent: a repeated review of the
+ * same ticket for the same item/event still writes ValidationRecord/MemoryChangeRecord
+ * audit rows, but cannot claim a second trust delta. `delta` records the trust
+ * event's delta (informational; a single validation event applies the delta once
+ * even when multiple source tickets claim rows in the same event).
+ */
+model TrustEvidence {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  knowledgeItemId    String
+  sourceTicketId     String
+  trustEventType     String
+  validationRecordId String
+  delta              Int
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, knowledgeItemId, sourceTicketId, trustEventType])
+  @@index([organizationId, knowledgeItemId])
+  @@map("trust_evidence")
 }
 
 model MemoryChangeRecord {
