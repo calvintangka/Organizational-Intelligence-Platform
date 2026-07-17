@@ -40,6 +40,7 @@ import {
   withCanonicalProblemDefaults
 } from "@/lib/canonicalProblemEngine";
 import { createLogEntry } from "@/lib/intelligenceLog";
+import { TicketRequestGuard } from "@/lib/ticketRequestGuard";
 import {
   hasSpecificCanonicalMatch,
   detectEmergingPattern,
@@ -630,12 +631,22 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRetryingDraft, setIsRetryingDraft] = useState(false);
   const organizationSwitchGeneration = useRef(0);
+  const ticketRequestGuard = useRef(new TicketRequestGuard());
   // The server returns a fresh organization revision after each profile write.
   // Keep that revision outside React state so a successful save does not
   // trigger another save, while later legitimate edits still carry the
   // latest optimistic-concurrency precondition.
   const profileRevisionByOrganization = useRef<Record<string, string>>({});
   const profileSettingsRevisionByOrganization = useRef<Record<string, number>>({});
+
+  function cancelActiveTicketRequest() {
+    ticketRequestGuard.current.cancel();
+    setIsProcessing(false);
+  }
+
+  function ticketRequestIsCurrent(generation?: number): boolean {
+    return generation === undefined || ticketRequestGuard.current.isCurrent(generation);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -881,7 +892,13 @@ export default function Home() {
     setIntelligenceLog((prev) => [...prev, ...entries]);
   }
 
-  function recordAIResults(results: Array<AIProviderResult<unknown>>, advisoryStatus?: AIAdvisoryStatus, agreementPct?: number) {
+  function recordAIResults(
+    results: Array<AIProviderResult<unknown>>,
+    advisoryStatus?: AIAdvisoryStatus,
+    agreementPct?: number,
+    requestGeneration?: number
+  ) {
+    if (!ticketRequestIsCurrent(requestGeneration)) return;
     const count = results.length;
     const successes = results.filter((result) => result.ok).length;
     const failures = count - successes;
@@ -1351,7 +1368,7 @@ export default function Home() {
     });
   }
 
-  async function checkPatternDiscovery(ticket: Ticket, analysis: AIAnalysis) {
+  async function checkPatternDiscovery(ticket: Ticket, analysis: AIAnalysis, requestGeneration?: number) {
     const und = toUnderstanding(analysis);
     if (hasSpecificCanonicalMatch(und, knowledgeItems)) return;
 
@@ -1366,16 +1383,19 @@ export default function Home() {
         deterministicPatternTitle: pattern.title,
         patternSummary: pattern.summary
       });
+      if (!ticketRequestIsCurrent(requestGeneration)) return;
       if (patternResult.ok && patternResult.data) {
-        recordAIResults([patternResult]);
+        recordAIResults([patternResult], undefined, undefined, requestGeneration);
         if (shouldAcceptPatternSuggestion(pattern.title, patternResult.data)) {
           pattern = { ...pattern, title: patternResult.data.title };
           addLogEntries([createLogEntry("AI suggested pattern name accepted", `${result.pattern.title} -> ${pattern.title}`)]);
         }
       } else if (patternResult.error && aiAdapter.config.mode !== "amd") {
-        recordAIResults([patternResult]);
+        recordAIResults([patternResult], undefined, undefined, requestGeneration);
       }
     }
+
+    if (!ticketRequestIsCurrent(requestGeneration)) return;
 
     if (result.isNew) {
       setEmergingPatterns((prev) => [...prev, pattern]);
@@ -1481,6 +1501,7 @@ export default function Home() {
   }
 
   function startDemo(ticket?: Ticket) {
+    cancelActiveTicketRequest();
     resetWorkflowState();
     setSelectedTicket(ticket ?? findTicket(primaryDemoTicketId));
     setCurrentStep(1);
@@ -1492,6 +1513,7 @@ export default function Home() {
 
   /** Reset Session — clears the current workflow only. Org memory persists. */
   function resetSession() {
+    cancelActiveTicketRequest();
     resetWorkflowState();
     setCurrentStep(0);
   }
@@ -1657,6 +1679,7 @@ export default function Home() {
     if (!selectedTicket || !aiAnalysis || isRetryingDraft) return;
     if (aiAdapter.config.mode === "disabled") return;
 
+    const requestGeneration = ticketRequestGuard.current.begin();
     setIsRetryingDraft(true);
     try {
       const und = toUnderstanding(aiAnalysis);
@@ -1665,8 +1688,9 @@ export default function Home() {
       const draft = draftResponse(selectedTicket, und, topMatch, organizationProfile, knowledgeItems.length === 0);
       const aiDraft = await requestDraftAdvisory(
         selectedTicket, und, canonicalProblem.title, topMatch,
-        draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", aiAdvisory
+        draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", aiAdvisory, requestGeneration
       );
+      if (!ticketRequestIsCurrent(requestGeneration)) return;
 
       if (aiDraft.usedAIDraft) {
         setAiAdvisory(aiDraft.advisory);
@@ -1689,6 +1713,7 @@ export default function Home() {
 
   /** Reset Organization — wipes persisted memory and reseeds defaults. */
   async function resetOrganization() {
+    cancelActiveTicketRequest();
     try {
       await persistence.resetOrganization(organizationProfile.id);
     } catch (error) {
@@ -1759,6 +1784,10 @@ export default function Home() {
       }
       return;
     }
+    // Invalidate any in-flight ticket analysis before clearing the outgoing
+    // workspace. Late AI or persistence results must not land in the incoming
+    // organization.
+    cancelActiveTicketRequest();
     const wasHydrated = hydrated;
     setHydrated(false);
     setErrorMessage("");
@@ -2129,7 +2158,8 @@ export default function Home() {
     ticket: Ticket,
     topMatch: KnowledgeMatch,
     deterministicUnderstanding: ReturnType<typeof understandForProfile>,
-    matchedLesson?: LessonMatchResult | null
+    matchedLesson?: LessonMatchResult | null,
+    requestGeneration?: number
   ): Promise<KnowledgeMatch | null> {
     const validatedLessonMatch: LessonMatchResult | null =
       matchedLesson && isStrongLessonMatch(matchedLesson) ? matchedLesson : null;
@@ -2178,7 +2208,8 @@ export default function Home() {
       deterministicUnderstanding
     });
 
-    recordAIResults([result]);
+    if (!ticketRequestIsCurrent(requestGeneration)) return topMatch;
+    recordAIResults([result], undefined, undefined, requestGeneration);
 
     if (result.ok && result.data) {
       const { isDistinctFromMatch, confidence, reasoning } = result.data;
@@ -2222,14 +2253,16 @@ export default function Home() {
   async function requestSemanticCompatibilityFallback(
     ticket: Ticket,
     understanding: ReturnType<typeof understandForProfile>,
-    retrievalMatches: KnowledgeMatch[]
+    retrievalMatches: KnowledgeMatch[],
+    requestGeneration?: number
   ): Promise<{ match: KnowledgeMatch; authorization: SemanticLessonAuthorization } | null> {
     if (aiAdapter.config.mode === "disabled") return null;
     const candidate = retrievalMatches[0];
     if (!candidate) return null;
 
     const evaluation = await evaluateSemanticLessonCompatibility(aiAdapter.provider, ticket, understanding, candidate.item);
-    if (evaluation.aiResults.length > 0) recordAIResults(evaluation.aiResults);
+    if (!ticketRequestIsCurrent(requestGeneration)) return null;
+    if (evaluation.aiResults.length > 0) recordAIResults(evaluation.aiResults, undefined, undefined, requestGeneration);
     if (!evaluation.authorization) {
       // Only log when the fallback actually consulted the LLM; silent
       // ineligibility (compatible/incompatible/unclassified) needs no entry.
@@ -2257,7 +2290,8 @@ export default function Home() {
   async function requestAnalysisAdvisory(
     ticket: Ticket,
     deterministicUnderstanding: ReturnType<typeof understandForProfile>,
-    canonicalProblem: { title: string; problemSummary: string; category: string }
+    canonicalProblem: { title: string; problemSummary: string; category: string },
+    requestGeneration?: number
   ): Promise<AIAdvisory> {
     if (aiAdapter.config.mode === "disabled") {
       return buildAIAdvisory({
@@ -2310,7 +2344,7 @@ export default function Home() {
       diagnostics
     });
 
-    recordAIResults([analysisResult, canonicalResult], advisory.status, advisory.agreementPct);
+    recordAIResults([analysisResult, canonicalResult], advisory.status, advisory.agreementPct, requestGeneration);
     return advisory;
   }
 
@@ -2322,7 +2356,8 @@ export default function Home() {
     deterministicDraft: string,
     deterministicConfidenceNote: string,
     deterministicSource: SuggestedResponse["source"],
-    baseAdvisory: AIAdvisory | null
+    baseAdvisory: AIAdvisory | null,
+    requestGeneration?: number
   ): Promise<{
     advisory: AIAdvisory | null;
     response: SuggestedResponse;
@@ -2410,6 +2445,13 @@ export default function Home() {
           });
 
     const [draftResult, enrichmentResult] = await Promise.all([draftRequest, enrichmentRequest]);
+    if (!ticketRequestIsCurrent(requestGeneration)) {
+      return {
+        advisory: baseAdvisory,
+        response: fallbackResponse,
+        usedAIDraft: false
+      };
+    }
 
     const diagnostics = coalesceDiagnostics(
       [draftResult, enrichmentResult],
@@ -2437,7 +2479,7 @@ export default function Home() {
       diagnostics
     });
 
-    recordAIResults([draftResult, enrichmentResult], nextAdvisory.status, nextAdvisory.agreementPct);
+    recordAIResults([draftResult, enrichmentResult], nextAdvisory.status, nextAdvisory.agreementPct, requestGeneration);
 
     if (draftMode === "lesson_grounded") {
       return {
@@ -2530,6 +2572,7 @@ export default function Home() {
   }
 
   async function analyzeTicket(ticket: Ticket) {
+    const requestGeneration = ticketRequestGuard.current.begin();
     setErrorMessage("");
     setDiscriminationReasoning(null);
     setDiscriminatedMatchTitle(null);
@@ -2574,7 +2617,8 @@ export default function Home() {
       title: canonicalProblem.title,
       problemSummary: canonicalProblem.problemSummary,
       category: canonicalProblem.category
-    });
+    }, requestGeneration);
+    if (!ticketRequestIsCurrent(requestGeneration)) return;
     const enrichedUnderstanding = applyAdvisoryExtractedFields(und, advisory);
     const analysis = understandingToAnalysis(enrichedUnderstanding);
 
@@ -2599,6 +2643,7 @@ export default function Home() {
   }
 
   function findSimilarKnowledge(analysis: AIAnalysis, items: KnowledgeItem[] = knowledgeItems) {
+    const requestGeneration = ticketRequestGuard.current.begin();
     setErrorMessage("");
     const und = toUnderstanding(analysis);
     const canonicalProblem = identifyCanonicalProblem(und, organizationProfile);
@@ -2643,7 +2688,7 @@ export default function Home() {
     updateMetrics({ repeatedIssuesDetected: compatibleMatches.length > 0 ? 1 : 0, memoryRetrievals: 1 });
 
     if (selectedTicket) {
-      void checkPatternDiscovery(selectedTicket, analysis);
+      void checkPatternDiscovery(selectedTicket, analysis, requestGeneration);
     }
 
     setCurrentStep(3);
@@ -3096,6 +3141,7 @@ export default function Home() {
       setErrorMessage("Type a support issue in the text box below to test memory reuse.");
       return;
     }
+    const requestGeneration = ticketRequestGuard.current.begin();
 
     const relevance = assessBusinessRelevanceForProfile(`${second.subject} ${second.description}`, organizationProfile);
     setBusinessRelevance(relevance);
@@ -3129,7 +3175,8 @@ export default function Home() {
       title: canonicalProblem.title,
       problemSummary: canonicalProblem.problemSummary,
       category: canonicalProblem.category
-    });
+    }, requestGeneration);
+    if (!ticketRequestIsCurrent(requestGeneration)) return;
     const enrichedUnderstanding = applyAdvisoryExtractedFields(und, advisory);
     const matches = withPreDiscriminationLessonMatches(
       second,
@@ -3182,7 +3229,8 @@ export default function Home() {
       isStrongLessonMatch(reusedLessonMatch) &&
       !ticketContradictsLesson(second, reusedLessonMatch.lesson)
       ? reusedMatch
-      : await requestMatchDiscrimination(second, reusedMatch, enrichedUnderstanding, reusedLessonMatch ?? undefined);
+      : await requestMatchDiscrimination(second, reusedMatch, enrichedUnderstanding, reusedLessonMatch ?? undefined, requestGeneration);
+    if (!ticketRequestIsCurrent(requestGeneration)) return;
 
     // If discrimination says this is a distinct problem, treat as cold-start (no match)
     if (!effectiveReuseMatch) {
@@ -3211,7 +3259,8 @@ export default function Home() {
     }
 
     const draft = draftResponse(second, enrichedUnderstanding, effectiveReuseMatch, organizationProfile);
-    const aiDraft = await requestDraftAdvisory(second, enrichedUnderstanding, canonicalProblem.title, effectiveReuseMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", advisory);
+    const aiDraft = await requestDraftAdvisory(second, enrichedUnderstanding, canonicalProblem.title, effectiveReuseMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", advisory, requestGeneration);
+    if (!ticketRequestIsCurrent(requestGeneration)) return;
     const draftSource = aiDraft.response.source ?? "deterministic";
     const isUnknownIssue = enrichedUnderstanding.category === "Uncategorized" || enrichedUnderstanding.category === "General";
     const effectiveReuseDecision: TrustDecision =
@@ -3265,7 +3314,8 @@ export default function Home() {
       ]);
     }
 
-    await checkPatternDiscovery(second, secondAnalysis);
+    await checkPatternDiscovery(second, secondAnalysis, requestGeneration);
+    if (!ticketRequestIsCurrent(requestGeneration)) return;
 
     setErrorMessage("");
     setCurrentStep(8);
@@ -3297,12 +3347,15 @@ export default function Home() {
   /** Auto-process a ticket through the full analysis → memory → draft pipeline. */
   async function processTicketPipeline(text: string) {
     if (!text.trim() || isProcessing) return;
+    const requestGeneration = ticketRequestGuard.current.begin();
     setIsProcessing(true);
     setErrorMessage("");
     let tId: string;
     try {
       tId = await persistence.generateTicketId(organizationProfile.id, organizationProfile);
+      if (!ticketRequestIsCurrent(requestGeneration)) return;
     } catch (error) {
+      if (!ticketRequestIsCurrent(requestGeneration)) return;
       reportPersistenceError("generateTicketId", error);
       setIsProcessing(false);
       return;
@@ -3348,7 +3401,8 @@ export default function Home() {
       title: canonicalProblem.title,
       problemSummary: canonicalProblem.problemSummary,
       category: canonicalProblem.category
-    });
+    }, requestGeneration);
+    if (!ticketRequestIsCurrent(requestGeneration)) return;
     const enrichedUnderstanding = applyAdvisoryExtractedFields(und, advisory);
     const analysis = understandingToAnalysis(enrichedUnderstanding);
 
@@ -3418,15 +3472,16 @@ export default function Home() {
         : createLogEntry("Trust evaluation skipped: no match"),
     ]);
     updateMetrics({ memoryRetrievals: 1, repeatedIssuesDetected: compatibleMatches.length > 0 ? 1 : 0 });
-    void checkPatternDiscovery(ticket, analysis);
+    void checkPatternDiscovery(ticket, analysis, requestGeneration);
     setCurrentStep(3);
 
     // Phase 3: Draft generation (with LLM discrimination on the top match)
     setDiscriminationReasoning(null);
     setDiscriminatedMatchTitle(null);
     const effectiveTopMatch = topMatch
-      ? await requestMatchDiscrimination(ticket, topMatch, und, lessonMatchForRecord ?? undefined)
+      ? await requestMatchDiscrimination(ticket, topMatch, und, lessonMatchForRecord ?? undefined, requestGeneration)
       : null;
+    if (!ticketRequestIsCurrent(requestGeneration)) return;
     if (topMatch && !effectiveTopMatch) {
       // Discrimination rejected the retrieval match as a distinct problem.
       // The Organizational Memory panel and pipeline "memory found"/"trust"
@@ -3438,12 +3493,14 @@ export default function Home() {
     // Semantic fallback (TODO-009 Step 2): only when the deterministic gate
     // produced no compatible match at all — never after discrimination rejection.
     const semanticFallback = compatibleMatches.length === 0
-      ? await requestSemanticCompatibilityFallback(ticket, enrichedUnderstanding, matches)
+      ? await requestSemanticCompatibilityFallback(ticket, enrichedUnderstanding, matches, requestGeneration)
       : null;
+    if (!ticketRequestIsCurrent(requestGeneration)) return;
     if (semanticFallback) setSimilarKnowledge([semanticFallback.match]);
     const draftMatch = effectiveTopMatch ?? semanticFallback?.match ?? null;
     const draft = draftResponse(ticket, enrichedUnderstanding, draftMatch, organizationProfile, knowledgeItems.length === 0, semanticFallback?.authorization ?? null);
-    const aiDraft = await requestDraftAdvisory(ticket, enrichedUnderstanding, canonicalProblem.title, draftMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", advisory);
+    const aiDraft = await requestDraftAdvisory(ticket, enrichedUnderstanding, canonicalProblem.title, draftMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", advisory, requestGeneration);
+    if (!ticketRequestIsCurrent(requestGeneration)) return;
     const response = aiDraft.response;
 
     // Update record with draft source and move to in_review
@@ -3481,6 +3538,7 @@ export default function Home() {
     : "complete";
 
   const handleNewTicket = () => {
+    cancelActiveTicketRequest();
     setActiveView("tickets");
     setTicketIntakeMode("single");
     if (currentStep >= 8) resetSession();

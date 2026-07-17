@@ -1,5 +1,12 @@
 # Change Log
 
+## [2026-07-17] TODO-013 Sequential Ticket State Isolation
+
+**Task/Prompt:** Validate sequential ticket state and prevent late async ticket results from overwriting newer tickets or switched organizations.
+
+- Added a small ticket-request generation guard across analysis, retrieval, draft, pattern, retry, reset, and organization-switch paths.
+- Added deterministic coverage for four ticket sequences, cross-organization transient state, durable-memory reuse, and a delayed Ticket A response after Ticket B becomes active.
+
 ## [2026-07-17] Prevent stale organization profile overwrite
 
 **Task/Prompt:** Protect server-authoritative Maesa Tech and FastDrop Logistics profiles from older browser snapshots.
