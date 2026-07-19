@@ -418,6 +418,13 @@ export interface LessonMatchResult {
    *  overlaps ("webhook", "integration") score matches but are not evidence
    *  of the same underlying problem (TODO-009 Step 3). */
   multiTokenMatches: number;
+  /** TODO-019: count of DISTINCT meaningful ticket tokens explained by the
+   *  matched signals — a deterministic measure of how much of THIS ticket's
+   *  evidence the lesson actually accounts for. Used ONLY to rank sibling
+   *  lessons of equal primary score/strength; it never changes whether a
+   *  lesson qualifies as evidence (see isStrongLessonEvidence), so it cannot
+   *  weaken any compatibility, contradiction, or cold-start gate. */
+  ticketEvidenceCoverage: number;
 }
 
 const LESSON_NEGATION_TOKENS = new Set([
@@ -562,6 +569,38 @@ function signalMatchesTicket(signal: string, ticketText: string, ticketTokens: S
   return overlap >= requiredOverlap;
 }
 
+/** Distinct meaningful ticket tokens explained by this lesson's matched signals. */
+function ticketEvidenceCoverageOf(matchedSignals: string[], ticketTokens: Set<string>): number {
+  const explained = new Set<string>();
+  for (const signal of matchedSignals) {
+    for (const token of tokenizeLessonSignal(signal)) {
+      if (ticketTokens.has(token)) explained.add(token);
+    }
+  }
+  return explained.size;
+}
+
+/**
+ * TODO-019: deterministic sibling-lesson relevance ordering. Returns the more
+ * relevant of two matched lessons using intrinsic evidence only — never lesson
+ * array position and never trust. Ordering:
+ *   1. primary match score (number of matched signals)
+ *   2. multi-token matched-signal evidence
+ *   3. ticket-evidence coverage (distinct ticket tokens the lesson explains)
+ *   4. stable, deterministic fallback: lexicographically smallest lesson id
+ * Because every key is an intrinsic property of the lesson/ticket pair, the
+ * winner is independent of the order lessons appear in the array (CASE H), and
+ * genuinely-equal evidence resolves to a stable id rather than position (CASE G).
+ */
+function moreRelevantLesson(a: LessonMatchResult, b: LessonMatchResult): LessonMatchResult {
+  if (a.score !== b.score) return a.score > b.score ? a : b;
+  if (a.multiTokenMatches !== b.multiTokenMatches) return a.multiTokenMatches > b.multiTokenMatches ? a : b;
+  if (a.ticketEvidenceCoverage !== b.ticketEvidenceCoverage) {
+    return a.ticketEvidenceCoverage > b.ticketEvidenceCoverage ? a : b;
+  }
+  return (a.lesson.id ?? "") <= (b.lesson.id ?? "") ? a : b;
+}
+
 export function findMatchingLesson(ticket: Ticket, item: KnowledgeItem): LessonMatchResult | null {
   if (!item.lessons || item.lessons.length === 0) return null;
   const ticketText = normalizeLessonSignalText(`${ticket.subject} ${ticket.description}`).trim();
@@ -574,10 +613,16 @@ export function findMatchingLesson(ticket: Ticket, item: KnowledgeItem): LessonM
       .map((signal) => signal.trim())
       .filter(Boolean);
     const matchedSignals = signals.filter((signal) => signalMatchesTicket(signal, ticketText, ticketTokens));
-    if (matchedSignals.length > 0 && (!best || matchedSignals.length > best.score)) {
-      const multiTokenMatches = matchedSignals.filter((signal) => tokenizeLessonSignal(signal).length >= 2).length;
-      best = { lesson, matchedSignals, score: matchedSignals.length, multiTokenMatches };
-    }
+    if (matchedSignals.length === 0) continue;
+    const multiTokenMatches = matchedSignals.filter((signal) => tokenizeLessonSignal(signal).length >= 2).length;
+    const candidate: LessonMatchResult = {
+      lesson,
+      matchedSignals,
+      score: matchedSignals.length,
+      multiTokenMatches,
+      ticketEvidenceCoverage: ticketEvidenceCoverageOf(matchedSignals, ticketTokens)
+    };
+    best = best ? moreRelevantLesson(best, candidate) : candidate;
   }
   return best;
 }

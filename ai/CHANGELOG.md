@@ -1,5 +1,14 @@
 # Change Log
 
+## [2026-07-19] TODO-019 Sibling-Lesson Ranking Specificity
+
+**Task/Prompt:** When one KnowledgeItem has several compatible sibling lessons of equal primary match score, prefer the lesson with stronger problem-specific evidence instead of resolving the tie by lesson array order.
+
+- `findMatchingLesson` (lib/drafting.ts) now selects the winning sibling lesson with a deterministic comparator using intrinsic evidence only: primary match score → multi-token matched-signal count → distinct ticket-evidence coverage (how many distinct meaningful ticket tokens the matched signals explain) → stable lexicographically-smallest lesson id. Lesson array position and trust are never used as relevance tie-breakers.
+- `LessonMatchResult` carries a new `ticketEvidenceCoverage` field; it only re-ranks already-matched siblings and never changes whether a lesson qualifies as strong evidence, so compatibility, contradiction, and TODO-009 cold-start gates are unaffected.
+- For the audited browser-autofill/device-switch ticket the device-switch lesson now outranks the generic infrequent-use lesson; a genuinely generic forgotten-password ticket still selects the generic lesson on primary score.
+- Added `scripts/todo019-lesson-ranking-probe.cjs` (read-only Maesa + in-memory ambiguity/order cases): CASE A–H all pass. TODO-009, BUG-008 semantic, TODO-011, TODO-012, TODO-013, TODO-016, and BUG-010 probes remain green; tsc clean.
+
 ## [2026-07-17] TODO-013 Sequential Ticket State Isolation
 
 **Task/Prompt:** Validate sequential ticket state and prevent late async ticket results from overwriting newer tickets or switched organizations.
