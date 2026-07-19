@@ -2,7 +2,7 @@
 import type { ExtractedTicketFields, Observation, Understanding, ReasoningSummary, Confidence, BusinessRelevance } from "@/types/oip";
 import type { KnowledgeMatch, OrganizationProfile } from "@/types";
 import { defaultOrganizationProfile } from "@/data/seedOrganizationProfiles";
-import { profileKeywordBank } from "@/lib/organizationProfile";
+import { normalizeOrganizationProfile, profileKeywordBank } from "@/lib/organizationProfile";
 import { containsSignal } from "@/lib/textSignal";
 
 const FALLBACK_PROFILE = defaultOrganizationProfile;
@@ -178,8 +178,9 @@ export function assessBusinessRelevance(ticketText: string): BusinessRelevance {
 
 export function assessBusinessRelevanceForProfile(
   ticketText: string,
-  profile: OrganizationProfile = FALLBACK_PROFILE
+  inputProfile: OrganizationProfile = FALLBACK_PROFILE
 ): BusinessRelevance {
+  const profile = normalizeOrganizationProfile(inputProfile);
   const normalizedText = normalizeForSignalMatching(ticketText);
   const profileSignals = [
     ...profileKeywordBank(profile),
@@ -744,7 +745,8 @@ function categoryAllowedByProfile(rule: { category: string; keywords: string[]; 
     profile.supportedDomains.some((domain) => containsSignal(categoryText, domain));
 }
 
-export function understandForProfile(ticket: Ticket, profile: OrganizationProfile = FALLBACK_PROFILE): Understanding {
+export function understandForProfile(ticket: Ticket, inputProfile: OrganizationProfile = FALLBACK_PROFILE): Understanding {
+  const profile = normalizeOrganizationProfile(inputProfile);
   // Normalize apostrophes so "can't" matches "cant", "I'm" matches "im", etc.
   const fullText = `${ticket.subject} ${ticket.description}`
     .toLowerCase()

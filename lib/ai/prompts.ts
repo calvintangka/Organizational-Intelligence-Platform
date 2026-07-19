@@ -1,4 +1,5 @@
 import type { OrganizationProfile } from "@/types";
+import { normalizeOrganizationProfile } from "@/lib/organizationProfile";
 import type {
   AnalyzeTicketInput,
   CanonicalProblemInput,
@@ -18,17 +19,18 @@ function firstName(value: string): string {
 }
 
 function profileContext(profile: OrganizationProfile, canonicalProblemTitle?: string): string {
+  const normalized = normalizeOrganizationProfile(profile);
   return [
-    `Organization Name: ${profile.name}`,
-    `Industry: ${profile.industry}`,
-    `Description: ${profile.description}`,
-    `Products: ${profile.products.join(", ") || "none"}`,
-    `Services: ${profile.services.join(", ") || "none"}`,
-    `Supported Domains: ${profile.supportedDomains.join(", ") || "none"}`,
-    `Business Vocabulary: ${profile.businessVocabulary.join(", ") || "none"}`,
-    `Supported Issue Types: ${profile.supportedIssueTypes.join(", ") || "none"}`,
-    `Customer Tone: ${profile.customerTone}`,
-    `Support Boundaries: ${profile.supportBoundaries.join(" | ") || "none"}`,
+    `Organization Name: ${normalized.name}`,
+    `Industry: ${normalized.industry}`,
+    `Description: ${normalized.description}`,
+    `Products: ${normalized.products.join(", ") || "none"}`,
+    `Services: ${normalized.services.join(", ") || "none"}`,
+    `Supported Domains: ${normalized.supportedDomains.join(", ") || "none"}`,
+    `Business Vocabulary: ${normalized.businessVocabulary.join(", ") || "none"}`,
+    `Supported Issue Types: ${normalized.supportedIssueTypes.join(", ") || "none"}`,
+    `Customer Tone: ${normalized.customerTone}`,
+    `Support Boundaries: ${normalized.supportBoundaries.join(" | ") || "none"}`,
     canonicalProblemTitle ? `Canonical Problem: ${canonicalProblemTitle}` : ""
   ]
     .filter(Boolean)

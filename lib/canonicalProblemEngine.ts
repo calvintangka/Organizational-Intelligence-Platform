@@ -9,7 +9,7 @@
 } from "@/types";
 import type { Understanding } from "@/types/oip";
 import { defaultOrganizationProfile } from "@/data/seedOrganizationProfiles";
-import { profileKeywordBank } from "@/lib/organizationProfile";
+import { normalizeOrganizationProfile, profileKeywordBank } from "@/lib/organizationProfile";
 import { containsSignal } from "@/lib/textSignal";
 
 export const CANONICAL_MATCH_THRESHOLD = 58;
@@ -848,6 +848,7 @@ export function identifyCanonicalProblem(
   understanding: Understanding,
   profile: OrganizationProfile = defaultOrganizationProfile
 ): CanonicalProblemIdentity {
+  profile = normalizeOrganizationProfile(profile);
   const intent = normalizeIntent(understanding.intent);
   const intentRule = INTENT_CANONICAL_RULES[intent];
   if (intentRule) {

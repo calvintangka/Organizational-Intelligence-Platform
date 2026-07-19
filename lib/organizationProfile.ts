@@ -10,8 +10,12 @@ function hasStorage(): boolean {
   return typeof window !== "undefined" && !!window.localStorage;
 }
 
-function normalizeList(values: string[]): string[] {
-  return values.map((value) => value.trim()).filter(Boolean);
+export function coerceProfileStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 /** Accept #RGB or #RRGGBB; fall back to the brand blue for anything invalid. */
@@ -55,14 +59,14 @@ export function normalizeOrganizationProfile(profile: OrganizationProfile): Orga
   return {
     ...defaultOrganizationProfile,
     ...migratedProfile,
-    products: normalizeList(migratedProfile.products ?? []),
-    services: normalizeList(migratedProfile.services ?? []),
-    supportedDomains: normalizeList(migratedProfile.supportedDomains ?? []),
-    businessVocabulary: normalizeList(migratedProfile.businessVocabulary ?? []),
-    supportedIssueTypes: normalizeList(migratedProfile.supportedIssueTypes ?? []),
-    outOfScopeTopics: normalizeList(migratedProfile.outOfScopeTopics ?? []),
-    supportBoundaries: normalizeList(migratedProfile.supportBoundaries ?? []),
-    escalationRules: normalizeList(migratedProfile.escalationRules ?? []),
+    products: coerceProfileStringArray(migratedProfile.products),
+    services: coerceProfileStringArray(migratedProfile.services),
+    supportedDomains: coerceProfileStringArray(migratedProfile.supportedDomains),
+    businessVocabulary: coerceProfileStringArray(migratedProfile.businessVocabulary),
+    supportedIssueTypes: coerceProfileStringArray(migratedProfile.supportedIssueTypes),
+    outOfScopeTopics: coerceProfileStringArray(migratedProfile.outOfScopeTopics),
+    supportBoundaries: coerceProfileStringArray(migratedProfile.supportBoundaries),
+    escalationRules: coerceProfileStringArray(migratedProfile.escalationRules),
     autoResolutionThreshold: Math.max(0, Math.min(100, Math.round(migratedProfile.autoResolutionThreshold ?? 80))),
     accentColor: normalizeAccentColor(migratedProfile.accentColor),
     logoInitials: normalizeInitials(migratedProfile.logoInitials),
@@ -140,11 +144,12 @@ export function splitProfileField(value: string): string[] {
 }
 
 export function profileKeywordBank(profile: OrganizationProfile): string[] {
+  const normalized = normalizeOrganizationProfile(profile);
   return [
-    ...profile.products,
-    ...profile.services,
-    ...profile.supportedDomains,
-    ...profile.businessVocabulary,
-    ...profile.supportedIssueTypes
+    ...normalized.products,
+    ...normalized.services,
+    ...normalized.supportedDomains,
+    ...normalized.businessVocabulary,
+    ...normalized.supportedIssueTypes
   ];
 }

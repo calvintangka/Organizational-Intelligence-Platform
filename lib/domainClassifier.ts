@@ -1,6 +1,6 @@
 import type { BusinessDomainClassification } from "@/types/oip";
 import type { OrganizationProfile } from "@/types";
-import { profileKeywordBank } from "@/lib/organizationProfile";
+import { normalizeOrganizationProfile, profileKeywordBank } from "@/lib/organizationProfile";
 
 interface DomainRule {
   domain: string;
@@ -218,8 +218,9 @@ function domainAllowedByProfile(rule: DomainRule, profile: OrganizationProfile):
 export function classifyBusinessDomain(
   ticketText: string,
   ticketId: string,
-  profile: OrganizationProfile
+  inputProfile: OrganizationProfile
 ): BusinessDomainClassification {
+  const profile = normalizeOrganizationProfile(inputProfile);
   const text = normalizeText(ticketText);
   const scored: Array<{ domain: string; score: number }> = [];
 

@@ -76,6 +76,7 @@ import {
   syncProfileIntoList,
   initialsFor,
   normalizeAccentColor,
+  normalizeOrganizationProfile,
 } from "@/lib/organizationProfile";
 import {
   createTicketRecord,
@@ -1808,12 +1809,13 @@ export default function Home() {
   }
 
   function changeOrganizationProfile(profile: OrganizationProfile) {
-    setOrganizationProfile(profile);
-    setOrganizationList((list) => syncProfileIntoList(list, profile));
+    const normalizedProfile = normalizeOrganizationProfile(profile);
+    setOrganizationProfile(normalizedProfile);
+    setOrganizationList((list) => syncProfileIntoList(list, normalizedProfile));
     setBusinessRelevance(null);
     setAiAdvisory(null);
     setErrorMessage("");
-    addLogEntries([createLogEntry("Organization profile updated", `Representing ${profile.name} (${profile.industry})`)]);
+    addLogEntries([createLogEntry("Organization profile updated", `Representing ${normalizedProfile.name} (${normalizedProfile.industry})`)]);
   }
 
   async function selectOrganization(
@@ -1908,10 +1910,11 @@ export default function Home() {
   }
 
   async function addOrganization(profile: OrganizationProfile) {
-    const nextList = syncProfileIntoList(organizationList, profile);
+    const normalizedProfile = normalizeOrganizationProfile(profile);
+    const nextList = syncProfileIntoList(organizationList, normalizedProfile);
     setOrganizationList(nextList);
-    if (profile.id === organizationProfile.id) return;
-    await selectOrganization(profile.id, nextList);
+    if (normalizedProfile.id === organizationProfile.id) return;
+    await selectOrganization(normalizedProfile.id, nextList);
   }
 
   async function deleteOrganization(id: string) {
@@ -3430,27 +3433,28 @@ export default function Home() {
     const requestGeneration = ticketRequestGuard.current.begin();
     setIsProcessing(true);
     setErrorMessage("");
-    let tId: string;
+    const profile = normalizeOrganizationProfile(organizationProfile);
     try {
-      tId = await persistence.generateTicketId(organizationProfile.id, organizationProfile);
-      if (!ticketRequestIsCurrent(requestGeneration)) return;
-    } catch (error) {
-      if (!ticketRequestIsCurrent(requestGeneration)) return;
-      reportPersistenceError("generateTicketId", error);
-      setIsProcessing(false);
-      return;
-    }
-    const ticket = makeCustomTicket(text.trim(), tId);
+      let tId: string;
+      try {
+        tId = await persistence.generateTicketId(profile.id, profile);
+        if (!ticketRequestIsCurrent(requestGeneration)) return;
+      } catch (error) {
+        if (!ticketRequestIsCurrent(requestGeneration)) return;
+        reportPersistenceError("generateTicketId", error);
+        return;
+      }
+      const ticket = makeCustomTicket(text.trim(), tId);
     setSelectedTicket(ticket);
     setCurrentStep(1);
 
     // Create ticket record at submission
-    let record = createTicketRecord(tId, organizationProfile.id, text.trim(), ticket.subject);
+    let record = createTicketRecord(tId, profile.id, text.trim(), ticket.subject);
     setActiveTicketRecord(record);
     setTicketRecords((prev) => upsertTicketRecord(prev, record));
 
     // Phase 1: Analysis
-    const relevance = assessBusinessRelevanceForProfile(`${ticket.subject} ${ticket.description}`, organizationProfile);
+    const relevance = assessBusinessRelevanceForProfile(`${ticket.subject} ${ticket.description}`, profile);
     setBusinessRelevance(relevance);
     addLogEntries(createRelevanceLogEntries(relevance));
 
@@ -3459,7 +3463,6 @@ export default function Home() {
       record = { ...record, status: "rejected" };
       setActiveTicketRecord(record);
       setTicketRecords((prev) => upsertTicketRecord(prev, record));
-      setIsProcessing(false);
       return;
     }
 
@@ -3467,7 +3470,7 @@ export default function Home() {
     const domain = classifyBusinessDomain(
       `${ticket.subject} ${ticket.description}`,
       ticket.id,
-      organizationProfile
+      profile
     );
     setDomainClassification(domain);
     addLogEntries([
@@ -3475,8 +3478,8 @@ export default function Home() {
     ]);
 
     const obs = observe(ticket, "manual-demo-input");
-    const und = understandForProfile(ticket, organizationProfile);
-    const canonicalProblem = identifyCanonicalProblem(und, organizationProfile);
+    const und = understandForProfile(ticket, profile);
+    const canonicalProblem = identifyCanonicalProblem(und, profile);
     const advisory = await requestAnalysisAdvisory(ticket, und, {
       title: canonicalProblem.title,
       problemSummary: canonicalProblem.problemSummary,
@@ -3526,7 +3529,7 @@ export default function Home() {
     const lessonMatchForRecord = selectedMatchInfo?.lessonMatch ?? null;
     const newReasoning = buildReasoning(enrichedUnderstanding, topMatch);
     const newConfidence = buildConfidence(enrichedUnderstanding, topMatch);
-    const topTrust = topMatch ? evaluateTrust(topMatch.item, organizationProfile, validationRecords) : null;
+    const topTrust = topMatch ? evaluateTrust(topMatch.item, profile, validationRecords) : null;
 
     record = {
       ...record,
@@ -3578,7 +3581,7 @@ export default function Home() {
     if (!ticketRequestIsCurrent(requestGeneration)) return;
     if (semanticFallback) setSimilarKnowledge([semanticFallback.match]);
     const draftMatch = effectiveTopMatch ?? semanticFallback?.match ?? null;
-    const draft = draftResponse(ticket, enrichedUnderstanding, draftMatch, organizationProfile, knowledgeItems.length === 0, semanticFallback?.authorization ?? null);
+    const draft = draftResponse(ticket, enrichedUnderstanding, draftMatch, profile, knowledgeItems.length === 0, semanticFallback?.authorization ?? null);
     const aiDraft = await requestDraftAdvisory(ticket, enrichedUnderstanding, canonicalProblem.title, draftMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", advisory, requestGeneration);
     if (!ticketRequestIsCurrent(requestGeneration)) return;
     const response = aiDraft.response;
@@ -3602,7 +3605,14 @@ export default function Home() {
     setReviewedResponse(response.source === "no_template" ? "" : response.draftResponse);
     setSelectedTicket({ ...ticket, status: "drafted" });
     setCurrentStep(4);
-    setIsProcessing(false);
+  } catch (error) {
+    if (!ticketRequestIsCurrent(requestGeneration)) return;
+    console.error("Ticket pipeline failed.", error);
+    const detail = error instanceof Error ? error.message : "The ticket could not be analyzed.";
+    setErrorMessage(`Ticket processing failed: ${detail}`);
+  } finally {
+    if (ticketRequestIsCurrent(requestGeneration)) setIsProcessing(false);
+  }
   }
 
 
