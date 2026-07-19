@@ -547,10 +547,10 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
   let fallbackUsed = false;
   // Bug fix: the "Clustered via X" badge must reflect whichever tier actually
   // returned a successful response, not the AI adapter's static chain-level
-  // label (which always names every tier, e.g. "AI Chain (LM Studio → Remote
-  // Gemma → Claude API)" — a string that always contains "Claude" regardless
-  // of whether Claude ever ran or succeeded). Track the most recent genuinely
-  // successful call's own providerLabel instead.
+  // label (which always names every tier, e.g. "AI Chain (LM Studio → NVIDIA
+  // NIM)" — a string that names NVIDIA regardless of whether it ever ran or
+  // succeeded). Track the most recent genuinely successful call's own
+  // providerLabel instead.
   let actualProviderLabel: string | undefined;
   // F-3: track AI call attempts so a single bad response no longer flips the
   // mode to "deterministic_fallback". A majority-failure threshold is applied

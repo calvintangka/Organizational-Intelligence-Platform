@@ -34,9 +34,9 @@ function readTimeoutMs(): number {
   return Math.max(5000, Math.min(Number.isFinite(configured) ? configured : DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS));
 }
 
-function readMode(): "disabled" | "lmstudio" | "amd" {
+function readMode(): "disabled" | "lmstudio" {
   const configured = (process.env.NEXT_PUBLIC_AI_MODE ?? process.env.AI_MODE ?? "disabled").toLowerCase();
-  return configured === "lmstudio" || configured === "amd" ? configured : "disabled";
+  return configured === "lmstudio" ? "lmstudio" : "disabled";
 }
 
 function buildDiagnostics(model: string, proxySucceeded: boolean, fallbackReason?: string) {

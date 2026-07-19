@@ -21,7 +21,7 @@ Use this file to find the minimum source needed for a task. It is written for co
 - `app/globals.css` - Global styling and design tokens used by the prototype UI.
 - `app/page.tsx` - Main client orchestrator; owns pipeline state, profile-first hydration, async persistence wiring, view selection, and all write-path coordination.
 - `app/api/ai/chat/route.ts` - LM Studio proxy route with request validation, timeout, and diagnostic headers.
-- `app/api/ai/claude/route.ts` - Claude API proxy route; translates OpenAI-format requests to Anthropic Messages API, returns OpenAI-compatible responses. Reads `ANTHROPIC_API_KEY` from env (server-side only). Returns 503 if key is missing.
+- `app/api/ai/nvidia/route.ts` - NVIDIA NIM proxy route (fallback tier). OpenAI-compatible passthrough that injects `NVIDIA_API_KEY` (server-side only) and forces thinking off. Returns 503 if key is missing.
 - `app/api/organizations/route.ts` - Organization list endpoint: GET reads, PUT upserts profiles (no deletion via list saves).
 - `app/api/organizations/[organizationId]/route.ts` - Organization profile endpoint: GET, PUT upsert (route id authoritative), DELETE with verified cascade.
 - `app/api/organizations/[organizationId]/[resource]/route.ts` - Scoped resource dispatcher: GET reads for all resources; PUT reconciling writes for knowledge, candidates, metrics, log, patterns, and tickets; audit records reject PUT as append-only (405).
@@ -128,11 +128,10 @@ The application persistence path is now per organization (Batch 5.8). `app/page.
 
 ### AI layer
 
-- `lib/ai/adapter.ts` - Three-tier chain provider: LM Studio → Claude API → deterministic fallback. Selects chain or disabled mode from env config and records per-tier attempt history in diagnostics.
-- `lib/ai/claudeApi.ts` - Claude API provider implementation, session call counter/cap, JSON extraction, and typed response mapping. Uses `/api/ai/claude` proxy.
+- `lib/ai/adapter.ts` - Two-tier chain provider: LM Studio → NVIDIA NIM → deterministic fallback. Selects chain or disabled mode from env config and records per-tier attempt history in diagnostics. The NVIDIA tier reuses the OpenAI-compatible LM Studio client against the `/api/ai/nvidia` proxy.
 - `lib/ai/deterministic.ts` - Advisory agreement scoring, AI draft eligibility checks, fallback status logic, and diagnostics passthrough.
-- `lib/ai/lmStudio.ts` - LM Studio provider implementation, timeout handling, JSON extraction, and typed response mapping.
-- `lib/ai/prompts.ts` - Prompt builders for analysis, canonical suggestion, pattern naming, knowledge enrichment, draft generation, and match discrimination. Provider-agnostic — shared by both LM Studio and Claude API, including validated-lesson context for discrimination.
+- `lib/ai/lmStudio.ts` - OpenAI-compatible provider implementation (LM Studio and NVIDIA NIM), timeout handling, JSON extraction, and typed response mapping.
+- `lib/ai/prompts.ts` - Prompt builders for analysis, canonical suggestion, pattern naming, knowledge enrichment, draft generation, and match discrimination. Provider-agnostic — shared by both tiers, including validated-lesson context for discrimination.
 - `lib/ai/provider.ts` - Provider re-export surface.
 - `lib/ai/types.ts` - Provider contracts and request/response types.
 
@@ -249,14 +248,11 @@ The application persistence path is now per organization (Batch 5.8). `app/page.
 ### `lib/ai/*`
 
 - `createAIAdapter()` - Provider selection from env; builds chain provider when mode is `lmstudio`.
-- `createChainProvider()` - Three-tier chain: LM Studio → Claude API → returns failure for deterministic fallback.
+- `createChainProvider()` - Two-tier chain: LM Studio → NVIDIA NIM → returns failure for deterministic fallback.
 - `buildAIAdvisory()` - Advisory status and diagnostics wrapper.
 - `shouldUseAIDraft()` - Minimum AI draft safety screen.
-- `createLMStudioProvider()` - LM Studio provider factory.
-- `callChatCompletion()` - LM Studio request primitive.
-- `createClaudeAPIProvider()` - Claude API provider factory.
-- `callClaudeCompletion()` - Claude API request primitive with session call counter.
-- `getClaudeSessionCallCount()` - Returns current session Claude API call count.
+- `createLMStudioProvider()` - OpenAI-compatible provider factory (used for both the LM Studio and NVIDIA tiers via `proxyPath`/`extraBody` overrides).
+- `callChatCompletion()` - OpenAI-compatible chat request primitive.
 
 ## Recent Load-Bearing Additions
 
@@ -301,10 +297,10 @@ The application persistence path is now per organization (Batch 5.8). `app/page.
 - LM Studio proxy and timeout handling - `app/api/ai/chat/route.ts` and `lib/ai/lmStudio.ts`
   See `POST()` and `callChatCompletion()`.
 
-- Claude API proxy and timeout handling - `app/api/ai/claude/route.ts` and `lib/ai/claudeApi.ts`
-  See `POST()` and `callClaudeCompletion()`.
+- NVIDIA NIM proxy and timeout handling - `app/api/ai/nvidia/route.ts`
+  See `POST()`.
 
-- Three-tier AI fallback chain - `lib/ai/adapter.ts`
+- Two-tier AI fallback chain - `lib/ai/adapter.ts`
   See `createChainProvider()` and `withFallback()`.
 
 - Human approval gate - `app/page.tsx`

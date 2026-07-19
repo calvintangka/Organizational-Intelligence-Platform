@@ -47,7 +47,7 @@ function confidenceTone(confidence: BulkCluster["confidence"], darkMode: boolean
 
 function analysisModeLabel(mode: BulkAnalysisResult["analysisMode"], providerLabel?: string): string {
   if (mode === "ai_assisted") {
-    if (providerLabel?.includes("Claude")) return "Clustered via Claude";
+    if (providerLabel?.includes("NVIDIA")) return "Clustered via NVIDIA NIM";
     if (providerLabel?.includes("LM Studio")) return "Clustered via local AI";
     return "AI-assisted clustering";
   }

@@ -174,7 +174,7 @@ The important architectural point is that these are advisory grounding modes, no
 The AI stack is split across `lib/ai/*` plus the Next.js proxy route:
 
 - `lib/ai/adapter.ts`
-  Reads env config and selects LM Studio, AMD placeholder, or disabled mode.
+  Reads env config and selects the two-tier chain (LM Studio → NVIDIA NIM) or disabled mode.
 
 - `lib/ai/lmStudio.ts`
   Implements `analyzeTicket`, `suggestCanonicalProblem`, `suggestPatternName`, `enrichKnowledge`, `draftCustomerResponse`, and `discriminateMatch`. Every call uses timeout handling, JSON parsing, and structured failure mapping.

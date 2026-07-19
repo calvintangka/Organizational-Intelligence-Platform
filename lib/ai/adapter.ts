@@ -1,4 +1,3 @@
-import { createClaudeAPIProvider } from "@/lib/ai/claudeApi";
 import { createLMStudioProvider } from "@/lib/ai/lmStudio";
 import type { AIAdapter, AIConfig, AIProvider, AIProviderResult } from "@/lib/ai/types";
 import type { AIDiagnostics } from "@/types";
@@ -8,26 +7,24 @@ const DEFAULT_AI_BASE_URL = "http://127.0.0.1:1234/v1";
 const DEFAULT_AI_MODEL = "google/gemma-4-e4b";
 const DEFAULT_AI_TIMEOUT_MS = 30000;
 const AI_PROXY_PATH = "/api/ai/chat";
+const NVIDIA_PROXY_PATH = "/api/ai/nvidia";
 
-function createDisabledProvider(mode: "disabled" | "amd"): AIProvider {
-  const message =
-    mode === "amd"
-      ? "AMD Cloud placeholder is not implemented yet. Using deterministic Organizational Intelligence."
-      : "AI advisory is disabled. Using deterministic Organizational Intelligence.";
+function createDisabledProvider(): AIProvider {
+  const message = "AI advisory is disabled. Using deterministic Organizational Intelligence.";
 
   async function unavailable<T>() {
     return {
       ok: false,
-      providerMode: mode,
-      providerLabel: mode === "amd" ? "AMD Cloud" : "Disabled",
+      providerMode: "disabled" as const,
+      providerLabel: "Disabled",
       latencyMs: 0,
       error: message
     };
   }
 
   return {
-    mode,
-    label: mode === "amd" ? "AMD Cloud" : "Disabled",
+    mode: "disabled",
+    label: "Disabled",
     analyzeTicket: unavailable,
     suggestCanonicalProblem: unavailable,
     suggestPatternName: unavailable,
@@ -39,35 +36,28 @@ function createDisabledProvider(mode: "disabled" | "amd"): AIProvider {
 
 function createChainProvider(config: AIConfig): AIProvider {
   const lmStudio = createLMStudioProvider(config);
-  // Remote Gemma 31B via ngrok. The proxy route reads REMOTE_GEMMA_BASE_URL
-  // server-side; if unset it returns 503 and the chain falls through to Claude.
-  const remoteGemma = createLMStudioProvider(
+  // FALLBACK tier — NVIDIA NIM (OpenAI-compatible). The /api/ai/nvidia proxy
+  // reads NVIDIA_API_KEY server-side; if unset it returns 503 and the chain
+  // falls through to the deterministic fail-safe. NVIDIA runs remotely, so this
+  // is the only tier that sends ticket data outside the local machine.
+  const nvidia = createLMStudioProvider(
     {
       ...config,
-      proxyPath: "/api/ai/remote-gemma",
-      // Remote Gemma 31B (thinking model) can take 15–27s+ under concurrent load and
-      // emits reasoning tokens before the JSON answer, so we need a larger timeout and
-      // token budget. The client timeout must exceed the proxy->ngrok timeout (90s in
-      // app/api/ai/remote-gemma/route.ts) so the client receives the proxy's structured
-      // error instead of aborting the request itself first.
-      timeoutMs: Math.max(config.timeoutMs, 95000),
-      // Floor applied to every Remote Gemma call. draftCustomerResponse (~650-token
-      // answer) hit finish_reason=length even at 2048 because Gemma 4's thinking phase
-      // consumed the whole budget in ~78s — and raising the cap further would cross the
-      // 90s timeout wall instead of helping. So we disable reasoning below and keep 2048
-      // as generous headroom for the answer alone.
-      minMaxTokens: 2048,
-      // Disable llama-server's chain-of-thought for this tier. reasoning_budget: 0 is the
-      // llama.cpp control; enable_thinking:false covers chat templates that read that kwarg.
-      // Both are ignored by builds that don't support them, so this is safe to always send.
+      proxyPath: NVIDIA_PROXY_PATH,
+      // Nemotron is a large hosted model; give it comfortable headroom above the
+      // local LM Studio timeout. Must exceed the proxy timeout (45s in
+      // app/api/ai/nvidia/route.ts) so the client surfaces the proxy's structured
+      // error instead of aborting first.
+      timeoutMs: Math.max(config.timeoutMs, 50000),
+      // Thinking is disabled so the model returns JSON in `content` directly.
+      // enable_thinking:false is Nemotron's chat-template control; harmless to
+      // builds that ignore it.
       extraBody: {
-        reasoning_budget: 0,
         chat_template_kwargs: { enable_thinking: false }
       }
     },
-    "Remote Gemma"
+    "NVIDIA NIM"
   );
-  const claude = createClaudeAPIProvider();
 
   type Tier<T> = { label: string; call: () => Promise<AIProviderResult<T>> };
 
@@ -93,10 +83,6 @@ function createChainProvider(config: AIConfig): AIProvider {
     const raw = error?.trim() || "Unknown AI failure";
     const lower = raw.toLowerCase();
     const status = raw.match(/\bHTTP\s+(\d{3})\b/i)?.[1];
-
-    if (provider === "Remote Gemma" && (lower.includes("ngrok") || lower.includes("<html") || lower.includes("<!doctype"))) {
-      return "Remote Gemma failed: ngrok endpoint offline.";
-    }
 
     if (lower.includes("<html") || lower.includes("<!doctype")) {
       return `${provider} failed: ${status ? `HTTP ${status} returned` : "received"} an HTML error page.`;
@@ -164,36 +150,30 @@ function createChainProvider(config: AIConfig): AIProvider {
 
   return {
     mode: "lmstudio",
-    label: "AI Chain (LM Studio → Remote Gemma → Claude API)",
+    label: "AI Chain (LM Studio → NVIDIA NIM)",
     analyzeTicket: (input) => withFallback("analyzeTicket", [
-      { label: "Tier 1 (LM Studio)",    call: () => lmStudio.analyzeTicket(input) },
-      { label: "Tier 2 (Remote Gemma)", call: () => remoteGemma.analyzeTicket(input) },
-      { label: "Tier 3 (Claude API)",   call: () => claude.analyzeTicket(input) }
+      { label: "Tier 1 (LM Studio)",  call: () => lmStudio.analyzeTicket(input) },
+      { label: "Tier 2 (NVIDIA NIM)", call: () => nvidia.analyzeTicket(input) }
     ]),
     suggestCanonicalProblem: (input) => withFallback("suggestCanonicalProblem", [
-      { label: "Tier 1 (LM Studio)",    call: () => lmStudio.suggestCanonicalProblem(input) },
-      { label: "Tier 2 (Remote Gemma)", call: () => remoteGemma.suggestCanonicalProblem(input) },
-      { label: "Tier 3 (Claude API)",   call: () => claude.suggestCanonicalProblem(input) }
+      { label: "Tier 1 (LM Studio)",  call: () => lmStudio.suggestCanonicalProblem(input) },
+      { label: "Tier 2 (NVIDIA NIM)", call: () => nvidia.suggestCanonicalProblem(input) }
     ]),
     suggestPatternName: (input) => withFallback("suggestPatternName", [
-      { label: "Tier 1 (LM Studio)",    call: () => lmStudio.suggestPatternName(input) },
-      { label: "Tier 2 (Remote Gemma)", call: () => remoteGemma.suggestPatternName(input) },
-      { label: "Tier 3 (Claude API)",   call: () => claude.suggestPatternName(input) }
+      { label: "Tier 1 (LM Studio)",  call: () => lmStudio.suggestPatternName(input) },
+      { label: "Tier 2 (NVIDIA NIM)", call: () => nvidia.suggestPatternName(input) }
     ]),
     enrichKnowledge: (input) => withFallback("enrichKnowledge", [
-      { label: "Tier 1 (LM Studio)",    call: () => lmStudio.enrichKnowledge(input) },
-      { label: "Tier 2 (Remote Gemma)", call: () => remoteGemma.enrichKnowledge(input) },
-      { label: "Tier 3 (Claude API)",   call: () => claude.enrichKnowledge(input) }
+      { label: "Tier 1 (LM Studio)",  call: () => lmStudio.enrichKnowledge(input) },
+      { label: "Tier 2 (NVIDIA NIM)", call: () => nvidia.enrichKnowledge(input) }
     ]),
     draftCustomerResponse: (input) => withFallback("draftCustomerResponse", [
-      { label: "Tier 1 (LM Studio)",    call: () => lmStudio.draftCustomerResponse(input) },
-      { label: "Tier 2 (Remote Gemma)", call: () => remoteGemma.draftCustomerResponse(input) },
-      { label: "Tier 3 (Claude API)",   call: () => claude.draftCustomerResponse(input) }
+      { label: "Tier 1 (LM Studio)",  call: () => lmStudio.draftCustomerResponse(input) },
+      { label: "Tier 2 (NVIDIA NIM)", call: () => nvidia.draftCustomerResponse(input) }
     ]),
     discriminateMatch: (input) => withFallback("discriminateMatch", [
-      { label: "Tier 1 (LM Studio)",    call: () => lmStudio.discriminateMatch(input) },
-      { label: "Tier 2 (Remote Gemma)", call: () => remoteGemma.discriminateMatch(input) },
-      { label: "Tier 3 (Claude API)",   call: () => claude.discriminateMatch(input) }
+      { label: "Tier 1 (LM Studio)",  call: () => lmStudio.discriminateMatch(input) },
+      { label: "Tier 2 (NVIDIA NIM)", call: () => nvidia.discriminateMatch(input) }
     ])
   };
 }
@@ -201,7 +181,7 @@ function createChainProvider(config: AIConfig): AIProvider {
 export function readAIConfig(): AIConfig {
   const isBrowser = typeof window !== "undefined";
   const modeValue = (process.env.NEXT_PUBLIC_AI_MODE ?? process.env.AI_MODE ?? "disabled").toLowerCase();
-  const mode = modeValue === "lmstudio" || modeValue === "amd" ? modeValue : "disabled";
+  const mode = modeValue === "lmstudio" ? "lmstudio" : "disabled";
   return {
     mode,
     baseUrl: isBrowser ? DEFAULT_AI_BASE_URL : process.env.AI_BASE_URL ?? process.env.NEXT_PUBLIC_AI_BASE_URL ?? DEFAULT_AI_BASE_URL,
@@ -215,7 +195,7 @@ export function createAIAdapter(config: AIConfig = readAIConfig()): AIAdapter {
   const provider =
     config.mode === "lmstudio"
       ? createChainProvider(config)
-      : createDisabledProvider(config.mode as "disabled" | "amd");
+      : createDisabledProvider();
 
   return { config, provider };
 }

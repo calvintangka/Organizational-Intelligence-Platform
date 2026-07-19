@@ -1455,7 +1455,7 @@ export default function Home() {
           pattern = { ...pattern, title: patternResult.data.title };
           addLogEntries([createLogEntry("AI suggested pattern name accepted", `${result.pattern.title} -> ${pattern.title}`)]);
         }
-      } else if (patternResult.error && aiAdapter.config.mode !== "amd") {
+      } else if (patternResult.error) {
         recordAIResults([patternResult], undefined, undefined, requestGeneration);
       }
     }
@@ -1767,7 +1767,7 @@ export default function Home() {
         setAiAdvisory(aiDraft.advisory);
         setSuggestedResponse({
           ...aiDraft.response,
-          fallbackNotice: "Still unavailable — check that LM Studio is running or configure a Claude API key."
+          fallbackNotice: "Still unavailable — check that LM Studio is running or configure an NVIDIA API key."
         });
         addLogEntries([createLogEntry("AI draft retry failed", "All AI tiers unavailable")]);
       }
@@ -1963,9 +1963,6 @@ export default function Home() {
     if (aiAdapter.config.mode === "disabled") {
       return "AI advisory is disabled.";
     }
-    if (aiAdapter.config.mode === "amd") {
-      return "AMD Cloud placeholder is not implemented yet.";
-    }
     return "AI assistant could not be reached.";
   }
 
@@ -2034,7 +2031,7 @@ export default function Home() {
   function summarizeFallbackReason(reason?: string, providerLabel?: string): string {
     const raw = reason?.trim();
     if (!raw) return "AI advisory unavailable.";
-    if (/^(AI assistant unavailable|Still unavailable|AI advisory is disabled|AMD Cloud placeholder)/i.test(raw)) {
+    if (/^(AI assistant unavailable|Still unavailable|AI advisory is disabled)/i.test(raw)) {
       return raw;
     }
     if (/\bfailed:\b/i.test(raw) && raw.length <= 180 && !/[<>]/.test(raw)) {
@@ -2044,10 +2041,6 @@ export default function Home() {
     const normalizedProvider = providerLabel?.replace(/^AI Chain \((.+)\)$/i, "$1") ?? "AI provider";
     const lower = raw.toLowerCase();
     const status = raw.match(/\bHTTP\s+(\d{3})\b/i)?.[1] ?? raw.match(/\bstatus(?: code)?\s*:?\s*(\d{3})\b/i)?.[1];
-
-    if (normalizedProvider.includes("Remote Gemma") && (lower.includes("ngrok") || lower.includes("<html") || lower.includes("<!doctype"))) {
-      return "Remote Gemma failed: ngrok endpoint offline.";
-    }
 
     if (lower.includes("<html") || lower.includes("<!doctype")) {
       return `${normalizedProvider} failed: ${status ? `HTTP ${status} returned an HTML error page.` : "received an HTML error page."}`;
