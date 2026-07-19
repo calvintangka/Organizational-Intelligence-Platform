@@ -18,6 +18,7 @@ import loginIssuesPack from "@/data/packs/login-issues-v1.json";
 import shipmentIssuesPack from "@/data/packs/shipment-issues-v1.json";
 import subscriptionTrialPack from "@/data/packs/subscription-trial-v1.json";
 import { candidateToPackDraft, getKnowledgePackCategoryWarning, parseKnowledgePackText } from "@/lib/knowledgePacks";
+import { formatLastUpdatedDisplay } from "@/lib/knowledgeTimestamps";
 import { MemoryNetworkOverlay } from "@/components/MemoryNetworkOverlay";
 
 interface KnowledgeViewProps {
@@ -672,12 +673,12 @@ export function KnowledgeView({
                 const trust = item.trustScore ?? 20;
                 const versionCount = (item.knowledgeVersions?.length ?? 0) || 1;
                 const tickets = item.exampleTickets?.length ?? 0;
-                const lastUpdated = item.lastUpdated ?? item.lastValidated ?? item.approvedAt ?? item.createdAt;
                 const itemValidations = validationRecords.filter((record) => record.knowledgeId === item.id);
                 const itemChanges = memoryChangeRecords.filter((record) => record.knowledgeId === item.id);
-                const dateStr = lastUpdated
-                  ? new Date(lastUpdated).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
-                  : "-";
+                const dateStr = formatLastUpdatedDisplay(
+                  [item.lastUpdated, item.lastValidated, item.approvedAt, item.createdAt],
+                  "-"
+                );
 
                 return (
                   <div

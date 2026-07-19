@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { KnowledgeItem } from "@/types";
+import { formatLastUpdatedDisplay } from "@/lib/knowledgeTimestamps";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -654,10 +655,10 @@ function InspectorPanel({
   const trust = item.trustScore ?? 20;
   const versionCount = (item.knowledgeVersions?.length ?? 0) || 1;
   const tickets = item.exampleTickets?.length ?? 0;
-  const lastUpdated = item.lastUpdated ?? item.lastValidated ?? item.approvedAt ?? item.createdAt;
-  const dateStr = lastUpdated
-    ? new Date(lastUpdated).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
-    : "—";
+  const dateStr = formatLastUpdatedDisplay(
+    [item.lastUpdated, item.lastValidated, item.approvedAt, item.createdAt],
+    "—"
+  );
 
   return (
     <div

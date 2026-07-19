@@ -1,5 +1,14 @@
 # Change Log
 
+## [2026-07-19] TODO-020 Invalid Epoch "Last Updated" Timestamp Fix
+
+**Task/Prompt:** Stop OIP from displaying sentinel/epoch timestamps (e.g. 1 Jan 1970) as a meaningful "Last Updated" date; fall back to the best legitimate lifecycle timestamp. Display-only; no mature data changed.
+
+- Added `lib/knowledgeTimestamps.ts` with `isLegitimateTimestamp` (rejects null/empty, Invalid Date, and epoch/pre-epoch `getTime() <= 0`, but never rejects merely-old valid dates), `resolveLegitimateTimestamp`, and `formatLastUpdatedDisplay` (neutral "Unknown"/"—" label when no candidate is trustworthy; never fabricates `Date.now()`).
+- `ProvenancePanel`, `MemoryNetworkOverlay`, and `KnowledgeView` now resolve "Last Updated" through the shared helper over `[lastUpdated, lastValidated, approvedAt, createdAt]` instead of a raw `??` chain that could not skip a present-but-epoch value.
+- Maesa `canonical-login-issue` persisted `lastUpdatedAt` (epoch sentinel) is left unchanged; it now displays `15 Jul 2026` from the legitimate `lastValidated` timestamp. No timestamp backfill, no historical audit-record rewrite.
+- Added `scripts/todo020-timestamp-fallback-probe.cjs` (CASE A–H, read-only Maesa + FastDrop). TODO-014 lifecycle and TODO-019 ranking probes remain green; tsc clean.
+
 ## [2026-07-19] TODO-019 Sibling-Lesson Ranking Specificity
 
 **Task/Prompt:** When one KnowledgeItem has several compatible sibling lessons of equal primary match score, prefer the lesson with stronger problem-specific evidence instead of resolving the tie by lesson array order.

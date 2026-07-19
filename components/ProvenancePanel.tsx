@@ -1,5 +1,6 @@
 import type { KnowledgeMatch, SuggestedResponse, Ticket } from "@/types";
 import { findMatchingLesson } from "@/lib/drafting";
+import { formatLastUpdatedDisplay } from "@/lib/knowledgeTimestamps";
 
 interface ProvenancePanelProps {
   topMatch: KnowledgeMatch | null;
@@ -101,7 +102,7 @@ export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized
   const versionCount = versions.length || 1;
   const latestVersion = versions[versions.length - 1];
   const exampleTickets = item.exampleTickets ?? [];
-  const lastUpdated = item.lastUpdated ?? item.lastValidated ?? item.approvedAt ?? item.createdAt;
+  const lastUpdatedDisplay = formatLastUpdatedDisplay([item.lastUpdated, item.lastValidated, item.approvedAt, item.createdAt]);
 
   return (
     <section className="rounded-3xl border border-blue-100 bg-blue-50/40 p-5 shadow-soft">
@@ -165,7 +166,7 @@ export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized
         <div className="rounded-2xl border border-blue-100 bg-white p-3">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Last Updated</p>
           <p className="mt-1 text-sm font-semibold text-ink">
-            {lastUpdated ? new Date(lastUpdated).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "-"}
+            {lastUpdatedDisplay}
           </p>
           <p className="mt-0.5 text-xs text-slate-500">{item.timesSeen ?? 1} ticket{(item.timesSeen ?? 1) !== 1 ? "s" : ""} seen</p>
         </div>
