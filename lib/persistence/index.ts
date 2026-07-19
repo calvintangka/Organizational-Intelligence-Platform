@@ -1,6 +1,7 @@
 import { LocalStorageAdapter } from "@/lib/persistence/localStorageAdapter";
 import type { PersistenceAdapter, PersistencePreparationResult, ValidationCommitRequest } from "@/lib/persistence/adapter";
 import { ServerPersistenceAdapter } from "@/lib/persistence/serverPersistenceAdapter";
+export { ServerPersistenceAdapterError } from "@/lib/persistence/serverPersistenceAdapter";
 import {
   globalPersistenceMode,
   resolveOrganizationAuthority,

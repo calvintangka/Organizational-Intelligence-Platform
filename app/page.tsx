@@ -66,6 +66,7 @@ import {
   activatePersistenceOrganization,
   getPersistenceAdapterForOrganization,
   migrationWarningForMode,
+  ServerPersistenceAdapterError,
 } from "@/lib/persistence";
 import {
   LEGACY_MEMORY_FALLBACK_WARNING,
@@ -589,6 +590,8 @@ export default function Home() {
   const [hydrated, setHydrated] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [migrationWarning, setMigrationWarning] = useState("");
+  // BUG-009: non-blocking notice shown after stale-profile conflict recovery.
+  const [profileConflictNotice, setProfileConflictNotice] = useState("");
   const [lastApprovedSourceTicketId, setLastApprovedSourceTicketId] = useState<string | null>(null);
   const [reusedKnowledgeSourceTicketId, setReusedKnowledgeSourceTicketId] = useState<string | null>(null);
 
@@ -642,6 +645,11 @@ export default function Home() {
   // latest optimistic-concurrency precondition.
   const profileRevisionByOrganization = useRef<Record<string, string>>({});
   const profileSettingsRevisionByOrganization = useRef<Record<string, number>>({});
+  // BUG-009: distinguishes a server-loaded profile replacement (hydration,
+  // organization switch, or stale-conflict recovery) from a genuine user edit.
+  // The profile autosave effect consumes this flag to skip the echo write that
+  // would otherwise churn _profileRevision and make other open browsers stale.
+  const suppressNextProfileSave = useRef(false);
 
   function cancelActiveTicketRequest() {
     ticketRequestGuard.current.cancel();
@@ -745,6 +753,10 @@ export default function Home() {
 
         if (cancelled) return;
 
+        // BUG-009: this is a server-authoritative load, not a user edit. Suppress
+        // the autosave it would otherwise trigger so hydration never PUTs the
+        // profile back and bumps the revision for other open browsers.
+        suppressNextProfileSave.current = true;
         setOrganizationProfile(loadedProfile);
         profileRevisionByOrganization.current[orgId] = loadedProfile.updatedAt;
         profileSettingsRevisionByOrganization.current[orgId] = loadedProfile.profileRevision ?? 0;
@@ -785,6 +797,45 @@ export default function Home() {
     void operation.catch((error) => {
       reportPersistenceError(scope, error);
     });
+  }
+
+  /**
+   * BUG-009: recover from a rejected stale organization-profile write.
+   *
+   * The server correctly rejects a stale profile PUT with 409 CONFLICT. Instead
+   * of surfacing that as a persistence error and stranding the browser on an old
+   * revision, load the server-authoritative profile, replace React state, and
+   * refresh revision tracking so the next legitimate edit succeeds. The rejected
+   * stale payload is NOT retried and conflicting edits are NOT auto-merged.
+   */
+  async function recoverFromStaleProfileConflict(error: unknown, savingOrgId: string, generation: number) {
+    const isStaleConflict =
+      error instanceof ServerPersistenceAdapterError && (error.status === 409 || error.code === "CONFLICT");
+    if (!isStaleConflict) {
+      reportPersistenceError("saveOrganizationProfile", error);
+      return;
+    }
+    try {
+      const latest = await persistence.loadOrganizationProfile();
+      // Race safety: abandon recovery if the user switched organizations while
+      // the fetch was in flight, or if the authoritative profile no longer
+      // belongs to the organization whose write was rejected. This prevents a
+      // late recovery for Organization A from overwriting Organization B.
+      if (generation !== organizationSwitchGeneration.current) return;
+      if (latest.id !== savingOrgId) return;
+      // The replacement is a server-authoritative load, not a user edit; suppress
+      // the autosave it would otherwise trigger.
+      suppressNextProfileSave.current = true;
+      setOrganizationProfile(latest);
+      profileRevisionByOrganization.current[latest.id] = latest.updatedAt;
+      profileSettingsRevisionByOrganization.current[latest.id] = latest.profileRevision ?? 0;
+      setProfileConflictNotice(
+        "This organization profile was updated in another session. The latest version has been loaded. Please re-apply your change."
+      );
+    } catch (recoveryError) {
+      if (generation !== organizationSwitchGeneration.current) return;
+      reportPersistenceError("saveOrganizationProfile", recoveryError);
+    }
   }
 
   async function persistOrganizationState(orgId: string): Promise<void> {
@@ -864,18 +915,28 @@ export default function Home() {
 
   useEffect(() => {
     if (!hydrated) return;
+    // BUG-009: skip the echo write caused by a server-authoritative profile
+    // replacement (hydration, organization switch, or conflict recovery). Only
+    // genuine user edits fall through to the save below.
+    if (suppressNextProfileSave.current) {
+      suppressNextProfileSave.current = false;
+      return;
+    }
     const snapshot = {
       ...organizationProfile,
       updatedAt: profileRevisionByOrganization.current[organizationProfile.id] ?? organizationProfile.updatedAt,
       profileRevision: profileSettingsRevisionByOrganization.current[organizationProfile.id] ?? organizationProfile.profileRevision ?? 0
     };
+    const savingOrgId = snapshot.id;
+    const generation = organizationSwitchGeneration.current;
     void persistence.saveOrganizationProfile(snapshot)
       .then((saved) => {
         profileRevisionByOrganization.current[saved.id] = saved.updatedAt;
         profileSettingsRevisionByOrganization.current[saved.id] = saved.profileRevision ?? 0;
+        setProfileConflictNotice("");
       })
       .catch((error) => {
-        reportPersistenceError("saveOrganizationProfile", error);
+        void recoverFromStaleProfileConflict(error, savingOrgId, generation);
       });
   }, [organizationProfile, hydrated]);
 
@@ -1795,6 +1856,7 @@ export default function Home() {
     const wasHydrated = hydrated;
     setHydrated(false);
     setErrorMessage("");
+    setProfileConflictNotice("");
     resetWorkflowState();
     try {
       // Finish the OUTGOING organization's resource writes through ITS OWN
@@ -1811,6 +1873,9 @@ export default function Home() {
       const loaded = await loadOrganizationState(found.id);
       if (generation !== organizationSwitchGeneration.current) return;
       const incomingProfile = authorizedProfile && authorizedProfile.id === found.id ? authorizedProfile : found;
+      // BUG-009: switching organizations replaces the profile from a
+      // server-authoritative load; suppress the echo autosave it would trigger.
+      suppressNextProfileSave.current = true;
       setOrganizationProfile(incomingProfile);
       profileRevisionByOrganization.current[found.id] = incomingProfile.updatedAt;
       profileSettingsRevisionByOrganization.current[found.id] = incomingProfile.profileRevision ?? 0;
@@ -3621,6 +3686,20 @@ export default function Home() {
         {migrationWarning && (
           <div className={`mx-4 mb-3 rounded-xl border px-4 py-3 text-sm md:mx-6 ${darkMode ? "border-amber-700/50 bg-amber-900/20 text-amber-200" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
             <strong>Storage migration notice:</strong> {migrationWarning}
+          </div>
+        )}
+
+        {profileConflictNotice && (
+          <div className={`mx-4 mb-3 flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm md:mx-6 ${darkMode ? "border-sky-700/50 bg-sky-900/20 text-sky-200" : "border-sky-200 bg-sky-50 text-sky-800"}`}>
+            <span><strong>Profile updated elsewhere:</strong> {profileConflictNotice}</span>
+            <button
+              type="button"
+              onClick={() => setProfileConflictNotice("")}
+              className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${darkMode ? "hover:bg-sky-800/40" : "hover:bg-sky-100"}`}
+              aria-label="Dismiss profile update notice"
+            >
+              Dismiss
+            </button>
           </div>
         )}
 
