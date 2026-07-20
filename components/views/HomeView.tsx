@@ -31,8 +31,6 @@ const TIMELINE_COLORS: Record<string, string> = {
 
 export function HomeView({ knowledgeItems, orgMetrics, emergingPatterns, orgName, darkMode, onNavigate, onNewTicket }: HomeViewProps) {
   const autoResolved = orgMetrics.autoResolutions ?? 0;
-  const totalResolved = (orgMetrics.autoResolutions ?? 0) + (orgMetrics.humanResolutions ?? 0);
-  const reuseRate = totalResolved > 0 ? Math.round(((orgMetrics.knowledgeReused ?? 0) / totalResolved) * 100) : 0;
   const trustGrowth = knowledgeItems.length > 0 ? Math.round(knowledgeItems.reduce((sum, k) => sum + (k.trustScore ?? 20), 0) / knowledgeItems.length) : 0;
 
   // Learning timeline events derived from actual state

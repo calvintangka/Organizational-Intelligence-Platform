@@ -66,14 +66,11 @@ class RoutingPersistenceAdapter implements PersistenceAdapter {
   private readonly shellAdapter: PersistenceAdapter = persistenceAdapterForAuthority(globalPersistenceMode());
   private activeResourceAdapter: PersistenceAdapter = this.shellAdapter;
   private currentAuthority: PersistenceAuthority = globalPersistenceMode();
-  private activeOrganizationId: string | null = null;
-
   /** Resolve and select the adapter for one organization. */
   async activateOrganization(organizationId: string): Promise<PersistenceAuthority> {
     const authority = await resolveOrganizationAuthority(organizationId);
     this.currentAuthority = authority;
     this.activeResourceAdapter = persistenceAdapterForAuthority(authority);
-    this.activeOrganizationId = organizationId;
     return authority;
   }
 

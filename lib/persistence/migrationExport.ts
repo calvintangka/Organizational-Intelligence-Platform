@@ -5,7 +5,6 @@ import {
 import {
   hasRuntimeLegacyFallback,
   normalizePersistedKnowledgeSnapshot,
-  ORGANIZATION_ISOLATION_MIGRATION_KEY,
   readMigrationStateForExport,
   type OrganizationMigrationResource,
   type OrganizationMigrationState
@@ -24,8 +23,6 @@ import type {
 } from "@/types";
 import type {
   BlockedMigrationExport,
-  LOCAL_STORAGE_EXPORT_FORMAT,
-  LOCAL_STORAGE_EXPORT_VERSION,
   MigrationExportMigrationState,
   MigrationExportOwnershipEvidence,
   MigrationExportPackage,

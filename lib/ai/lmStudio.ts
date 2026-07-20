@@ -28,13 +28,6 @@ import type {
   MatchDiscriminationResult
 } from "@/types";
 
-interface ChatCompletionPayload {
-  model: string;
-  messages: Array<{ role: "system" | "user"; content: string }>;
-  temperature: number;
-  max_tokens: number;
-}
-
 interface ChatCompletionOptions {
   maxTokens?: number;
   /**

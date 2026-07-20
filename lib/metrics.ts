@@ -21,5 +21,3 @@ export const defaultMetrics: Metrics = {
   aiFailures: 0,
   aiFallbacks: 0
 };
-
-export const staticDemoMetrics = defaultMetrics;

@@ -8,7 +8,6 @@ import type {
   AIPatternSuggestion,
   AIProviderMode,
   MatchDiscriminationResult,
-  KnowledgeItem,
   KnowledgeMatch,
   OrganizationProfile,
   Ticket

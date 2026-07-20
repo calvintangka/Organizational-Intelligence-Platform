@@ -18,7 +18,10 @@ pnpm-debug.log*
 graphify-out/
 generated/prisma/
 
-tmp/audit/
+# Session-generated artifacts (kept out of version control)
+tmp/
+outputs/
+.codex-screenshots/
 
 # Generated investor artifacts (kept out of version control)
 OIP_Investor_One_Pager*

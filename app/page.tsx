@@ -17,7 +17,7 @@ import { defaultOrganizationProfile, seedOrganizationProfiles } from "@/data/see
 import { createAIAdapter } from "@/lib/ai/adapter";
 import { buildAIAdvisory, shouldAcceptPatternSuggestion } from "@/lib/ai/deterministic";
 import type { AIProviderResult } from "@/lib/ai/types";
-import { assessBusinessRelevanceForProfile, observe, understandForProfile, buildReasoning, buildConfidence } from "@/lib/analyzer";
+import { assessBusinessRelevanceForProfile, understandForProfile } from "@/lib/analyzer";
 import { classifyBusinessDomain } from "@/lib/domainClassifier";
 import { analyzeBulkEntries, prepareBulkClusterCommit } from "@/lib/bulkUpload";
 import { retrieveMemory } from "@/lib/memory";
@@ -26,8 +26,7 @@ import type { LessonMatchResult, SemanticLessonAuthorization } from "@/lib/draft
 import { evaluateSemanticLessonCompatibility } from "@/lib/ai/semanticCompatibility";
 import {
   buildKnowledgeItemFromPackCandidate,
-  buildPackCandidateContent,
-  candidateToPackDraft
+  buildPackCandidateContent
 } from "@/lib/knowledgePacks";
 import { generateReflection } from "@/lib/reflection";
 import {
@@ -55,8 +54,6 @@ import { defaultMetrics } from "@/lib/metrics";
 import {
   recordResolution,
   evaluateTrust,
-  decisionLabel,
-  getTrustDecision,
   TRUST_INITIAL
 } from "@/lib/trustEngine";
 import {
@@ -97,9 +94,6 @@ import type {
   ReflectionDecision,
   SuggestedResponse,
   Ticket,
-  Observation,
-  ReasoningSummary,
-  Confidence,
   BusinessRelevance,
   IntelligenceLogEntry,
   TrustDecision,
@@ -202,19 +196,6 @@ interface DraftSafetyContext {
   groundingContent: string;
   organizationName: string;
 }
-
-const steps = [
-  "Start",
-  "First Ticket",
-  "Analysis",
-  "Memory Retrieval",
-  "Draft Response",
-  "Human Review",
-  "Resolution Approved",
-  "Reflection",
-  "Organizational Memory Updated",
-  "Metrics"
-];
 
 interface MatchWithLesson {
   match: KnowledgeMatch;
@@ -593,13 +574,8 @@ export default function Home() {
   const [migrationWarning, setMigrationWarning] = useState("");
   // BUG-009: non-blocking notice shown after stale-profile conflict recovery.
   const [profileConflictNotice, setProfileConflictNotice] = useState("");
-  const [lastApprovedSourceTicketId, setLastApprovedSourceTicketId] = useState<string | null>(null);
-  const [reusedKnowledgeSourceTicketId, setReusedKnowledgeSourceTicketId] = useState<string | null>(null);
 
   // OIP engine state
-  const [observation, setObservation] = useState<Observation | null>(null);
-  const [reasoning, setReasoning] = useState<ReasoningSummary | null>(null);
-  const [confidence, setConfidence] = useState<Confidence | null>(null);
   const [businessRelevance, setBusinessRelevance] = useState<BusinessRelevance | null>(null);
   const [domainClassification, setDomainClassification] = useState<BusinessDomainClassification | null>(null);
   const [aiAdvisory, setAiAdvisory] = useState<AIAdvisory | null>(null);
@@ -1539,17 +1515,12 @@ export default function Home() {
     setSimilarKnowledge([]);
     setSuggestedResponse(null);
     setReviewedResponse("");
-    setObservation(null);
-    setReasoning(null);
-    setConfidence(null);
     setBusinessRelevance(null);
     setDomainClassification(null);
     setAiAdvisory(null);
     setSessionCreatedIds(new Set());
     setCustomSecondText("");
     setLastDraftUsedAI(false);
-    setLastApprovedSourceTicketId(null);
-    setReusedKnowledgeSourceTicketId(null);
     setReuseMatchId(null);
     setReuseDecision(null);
     setReuseResponseText("");
@@ -1564,17 +1535,6 @@ export default function Home() {
     setDiscriminatedMatchTitle(null);
     setActiveTicketRecord(null);
     setIsRetryingDraft(false);
-  }
-
-  function startDemo(ticket?: Ticket) {
-    cancelActiveTicketRequest();
-    resetWorkflowState();
-    setSelectedTicket(ticket ?? findTicket(primaryDemoTicketId));
-    setCurrentStep(1);
-  }
-
-  function startCustomDemo(text: string) {
-    startDemo(makeCustomTicket(text));
   }
 
   /** Reset Session — clears the current workflow only. Org memory persists. */
@@ -1713,15 +1673,10 @@ export default function Home() {
     setSimilarKnowledge(reconstructedSimilarKnowledge);
     setSuggestedResponse(reconstructedResponse);
     setReviewedResponse(reviewedText);
-    setObservation(null);
-    setReasoning(null);
-    setConfidence(null);
     setBusinessRelevance(null);
     setDomainClassification(null);
     setAiAdvisory(null);
     setLastDraftUsedAI(false);
-    setLastApprovedSourceTicketId(null);
-    setReusedKnowledgeSourceTicketId(null);
     setReuseMatchId(null);
     setReuseDecision(null);
     setReuseResponseText("");
@@ -2200,19 +2155,6 @@ export default function Home() {
     return getAIDraftRejectionReason(understanding, result, context) === null;
   }
 
-  function createAIStatusLogEntry(advisory: AIAdvisory): IntelligenceLogEntry {
-    const detail = [
-      `${advisory.providerLabel}: ${advisory.status} · Agreement ${advisory.agreementPct}%`,
-      `Mode ${advisory.diagnostics.mode}`,
-      `Proxy ${advisory.diagnostics.proxyPath}`,
-      `Base ${advisory.diagnostics.serverBaseUrl ?? "server-configured"}`,
-      advisory.diagnostics.proxySucceeded === true ? "Proxy succeeded" : advisory.diagnostics.proxySucceeded === false ? "Proxy failed" : "",
-      advisory.diagnostics.fallbackReason ? `Fallback: ${advisory.diagnostics.fallbackReason}` : ""
-    ].filter(Boolean).join(" · ");
-
-    return createLogEntry("AI advisory status", detail);
-  }
-
   /**
    * Ask the LLM whether the ticket describes the SAME problem as the candidate memory
    * match or a DISTINCT one. Returns the effective top match to use for drafting:
@@ -2636,187 +2578,6 @@ export default function Home() {
     };
   }
 
-  async function analyzeTicket(ticket: Ticket) {
-    const requestGeneration = ticketRequestGuard.current.begin();
-    setErrorMessage("");
-    setDiscriminationReasoning(null);
-    setDiscriminatedMatchTitle(null);
-    const source = ticket.id.startsWith("ticket-custom") ? "manual-demo-input" : "seed-ticket";
-    const relevance = assessBusinessRelevanceForProfile(`${ticket.subject} ${ticket.description}`, organizationProfile);
-    setBusinessRelevance(relevance);
-
-    if (!relevance.isRelevant && relevance.status === "out_of_scope") {
-      setObservation(null);
-      setAiAnalysis(null);
-      setSimilarKnowledge([]);
-      setSuggestedResponse(null);
-      setReviewedResponse("");
-      setReasoning(null);
-      setConfidence(null);
-      setAiAdvisory(null);
-      setDomainClassification(null);
-      setLastDraftUsedAI(false);
-      setSelectedTicket({ ...ticket, status: "new" });
-      addLogEntries(createRelevanceLogEntries(relevance));
-      updateMetrics({ outOfScopeDismissals: 1 });
-      setErrorMessage(`Rejected by Business Relevance Guardrail: ${relevance.reason}`);
-      setCurrentStep(1);
-      return;
-    }
-
-    // Business Domain Classification
-    const domain = classifyBusinessDomain(
-      `${ticket.subject} ${ticket.description}`,
-      ticket.id,
-      organizationProfile
-    );
-    setDomainClassification(domain);
-    addLogEntries([
-      createLogEntry("Business domain classified", `Primary: ${domain.primaryDomain} · All: ${domain.domains.join(", ")} (${domain.confidence} confidence)`)
-    ]);
-
-    const obs = observe(ticket, source);
-    const und = understandForProfile(ticket, organizationProfile);
-    const canonicalProblem = identifyCanonicalProblem(und, organizationProfile);
-    const advisory = await requestAnalysisAdvisory(ticket, und, {
-      title: canonicalProblem.title,
-      problemSummary: canonicalProblem.problemSummary,
-      category: canonicalProblem.category
-    }, requestGeneration);
-    if (!ticketRequestIsCurrent(requestGeneration)) return;
-    const enrichedUnderstanding = applyAdvisoryExtractedFields(und, advisory);
-    const analysis = understandingToAnalysis(enrichedUnderstanding);
-
-    const logEntries = [
-      ...createRelevanceLogEntries(relevance),
-      createLogEntry("Observed ticket input", `Source: ${source} · Ticket: ${ticket.id}`),
-      createLogEntry(`Extracted category: ${enrichedUnderstanding.category}`, `Urgency: ${enrichedUnderstanding.urgency} · Tags: ${enrichedUnderstanding.tags.join(", ")}`),
-      createLogEntry("Canonical problem proposed", `${canonicalProblem.title} · ${canonicalProblem.problemSummary}`),
-      enrichedUnderstanding.detectedSignals.length > 0
-        ? createLogEntry(`Detected signals: ${enrichedUnderstanding.detectedSignals.join(", ")}`)
-        : createLogEntry("Signal detection: no strong signals found")
-    ];
-
-    setObservation(obs);
-    setAiAnalysis(analysis);
-    setAiAdvisory(advisory);
-    setSelectedTicket({ ...ticket, status: "analyzed" });
-    addLogEntries(logEntries);
-    addLogEntries([createAIStatusLogEntry(advisory)]);
-    updateMetrics({ ticketsProcessed: 1 });
-    setCurrentStep(2);
-  }
-
-  function findSimilarKnowledge(analysis: AIAnalysis, items: KnowledgeItem[] = knowledgeItems) {
-    const requestGeneration = ticketRequestGuard.current.begin();
-    setErrorMessage("");
-    const und = toUnderstanding(analysis);
-    const canonicalProblem = identifyCanonicalProblem(und, organizationProfile);
-    const matches = withPreDiscriminationLessonMatches(
-      selectedTicket ?? makeCustomTicket(analysis.summary, analysis.ticketId),
-      und,
-      retrieveMemory(und, items, sessionCreatedIds),
-      items,
-      canonicalProblem.title
-    );
-    const lookupTicket = selectedTicket ?? makeCustomTicket(analysis.summary, analysis.ticketId);
-    const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(und, m.item, lookupTicket));
-    const selectedMatchInfo =
-      compatibleMatches.length > 0
-        ? selectPreferredMatch(lookupTicket, compatibleMatches)
-        : null;
-    const topMatch = selectedMatchInfo?.match ?? (compatibleMatches.length > 0 ? compatibleMatches[0] : null);
-    const newReasoning = buildReasoning(und, topMatch);
-    const newConfidence = buildConfidence(und, topMatch);
-
-    const topTrust = topMatch ? evaluateTrust(topMatch.item, organizationProfile, validationRecords) : null;
-
-    const logEntries = [
-      createLogEntry(
-        `Retrieved ${matches.length} memory candidate${matches.length !== 1 ? "s" : ""}`,
-        topMatch ? `Top match: "${topMatch.item.title}" (${topMatch.matchScore}% similarity)` : "No knowledge matches found"
-      ),
-      topTrust
-        ? createLogEntry(
-            `Evaluated trust: ${topTrust.score}/100 → ${topTrust.decisionLabel}`,
-            `Maturity: ${topTrust.maturity}`
-          )
-        : createLogEntry("Trust evaluation skipped", "No matched knowledge to evaluate"),
-      createLogEntry("Generated reasoning summary", newReasoning.relevantMemory ? `Relevant memory: ${newReasoning.relevantMemory}` : "No relevant memory"),
-      createLogEntry(`Confidence level: ${newConfidence.level} (${newConfidence.score}/100)`, `Basis: ${newConfidence.basis.join("; ")}`)
-    ];
-
-    setSimilarKnowledge(topMatch ? moveMatchToFront(compatibleMatches, topMatch.item.id) : []);
-    setReasoning(newReasoning);
-    setConfidence(newConfidence);
-    addLogEntries(logEntries);
-    updateMetrics({ repeatedIssuesDetected: compatibleMatches.length > 0 ? 1 : 0, memoryRetrievals: 1 });
-
-    if (selectedTicket) {
-      void checkPatternDiscovery(selectedTicket, analysis, requestGeneration);
-    }
-
-    setCurrentStep(3);
-    return matches;
-  }
-
-  async function generateSuggestedResponse(ticket: Ticket, analysis: AIAnalysis, matches: KnowledgeMatch[]) {
-    setErrorMessage("");
-    const und = toUnderstanding(analysis);
-    const canonicalProblem = identifyCanonicalProblem(und, organizationProfile);
-    const lessonAwareMatches = withPreDiscriminationLessonMatches(ticket, und, matches, knowledgeItems, canonicalProblem.title);
-    const compatibleMatches = lessonAwareMatches.filter((m) => isCompatibleForDrafting(und, m.item, ticket));
-    const selectedMatchInfo = compatibleMatches.length > 0 ? selectPreferredMatch(ticket, compatibleMatches) : null;
-    const topMatch = selectedMatchInfo?.match ?? null;
-    const lessonMatch = selectedMatchInfo?.lessonMatch ?? null;
-
-    // LLM discrimination: confirm the top match describes the same problem, not a distinct one
-    setDiscriminationReasoning(null);
-    setDiscriminatedMatchTitle(null);
-    const effectiveTopMatch = topMatch
-      ? await requestMatchDiscrimination(ticket, topMatch, und, lessonMatch ?? undefined)
-      : null;
-    // Semantic fallback runs ONLY when the deterministic gate produced no
-    // compatible match at all (the "unknown" paraphrase case) — never after a
-    // discrimination rejection of a deterministically compatible match.
-    const semanticFallback = compatibleMatches.length === 0
-      ? await requestSemanticCompatibilityFallback(ticket, und, lessonAwareMatches)
-      : null;
-    const resolvedMatches = effectiveTopMatch
-      ? moveMatchToFront(compatibleMatches, effectiveTopMatch.item.id)
-      : semanticFallback
-      ? [semanticFallback.match]
-      : topMatch
-      ? stripRejectedMatch(compatibleMatches, topMatch.item.id)
-      : [];
-
-    const draftMatch = effectiveTopMatch ?? semanticFallback?.match ?? null;
-    const draft = draftResponse(ticket, und, draftMatch, organizationProfile, knowledgeItems.length === 0, semanticFallback?.authorization ?? null);
-    const aiDraft = await requestDraftAdvisory(ticket, und, canonicalProblem.title, draftMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", aiAdvisory);
-    const response = aiDraft.response;
-
-    addLogEntries([
-      createLogEntry(
-        "Generated draft response",
-        response.source === "ai_advisory"
-          ? "Draft informed by AI advisory and kept under OIP human review"
-          : draft.basedOnKnowledgeIds.length > 0
-          ? "Draft informed by matched knowledge"
-          : knowledgeItems.length === 0
-          ? "No approved knowledge exists — cold-start response requires human authoring"
-          : "No compatible knowledge match — cold-start response requires human authoring"
-      )
-    ]);
-
-    setAiAdvisory(aiDraft.advisory);
-    setLastDraftUsedAI(aiDraft.usedAIDraft);
-    setSimilarKnowledge(resolvedMatches);
-    setSuggestedResponse(response);
-    setReviewedResponse(response.source === "no_template" ? "" : response.draftResponse);
-    setSelectedTicket({ ...ticket, status: "drafted" });
-    setCurrentStep(4);
-  }
-
   function updateReviewedResponse(value: string) {
     setReviewedResponse(value);
   }
@@ -2987,7 +2748,6 @@ export default function Home() {
       const committedItem = commitValidatedMemoryChange(candidate, null, newItem, reflectionDecision.rationale);
       committedItemForReflection = committedItem;
       setSessionCreatedIds((prev) => new Set([...prev, committedItem.id]));
-      setLastApprovedSourceTicketId(selectedTicket.id);
       setLastSavedKnowledgeId(committedItem.id);
       recordOrgResolution("human", { createdKnowledge: true });
       updateMetrics({ knowledgeItemsCreated: 1, humanApprovedResponses: 1, canonicalProblemsTouched: 1, knowledgeVersionsCreated: 1 });
@@ -3019,7 +2779,6 @@ export default function Home() {
         const committedItem = commitValidatedMemoryChange(candidate, target, merged, reflectionDecision.rationale);
         committedItemForReflection = committedItem;
         setSessionCreatedIds((prev) => new Set([...prev, committedItem.id]));
-        setLastApprovedSourceTicketId(selectedTicket.id);
         setLastSavedKnowledgeId(committedItem.id);
         setOrgMetrics((prev) => ({
           ...prev,
@@ -3096,7 +2855,6 @@ export default function Home() {
         const committedItem = commitValidatedMemoryChange(candidate, target, evolved, reflectionDecision.versionReason ?? reflectionDecision.rationale);
         committedItemForReflection = committedItem;
         setSessionCreatedIds((prev) => new Set([...prev, committedItem.id]));
-        setLastApprovedSourceTicketId(selectedTicket.id);
         setLastSavedKnowledgeId(committedItem.id);
         if (updatesGenericTemplate) {
           setOrgMetrics((prev) => ({
@@ -3161,7 +2919,6 @@ export default function Home() {
           recordOrgResolution("human");
         }
       }
-      setLastApprovedSourceTicketId(selectedTicket.id);
       updateMetrics({ humanApprovedResponses: 1 });
       addLogEntries([
         createLogEntry("Reflection confirmed: trust update", reflectionDecision.existingItemTitle ?? "existing knowledge"),
@@ -3356,7 +3113,6 @@ export default function Home() {
     setAiAnalysis(secondAnalysis);
     setAiAdvisory(aiDraft.advisory ?? advisory);
     setSimilarKnowledge(moveMatchToFront(compatibleMatches, effectiveReuseMatch.item.id));
-    setReusedKnowledgeSourceTicketId(effectiveReuseMatch.item.sourceTicketId);
     setReuseMatchId(effectiveReuseMatch.item.id);
     setReuseDecision(effectiveReuseDecision);
     setReuseResponseText(aiDraft.response.draftResponse);
@@ -3415,18 +3171,6 @@ export default function Home() {
     addLogEntries([createLogEntry("Human approved reuse", "Knowledge confirmed correct — trust increased")]);
   }
 
-  function goNext() {
-    if (currentStep === 0) {
-      startDemo();
-      return;
-    }
-    setCurrentStep((step) => Math.min(step + 1, steps.length - 1));
-  }
-
-  function goBack() {
-    setCurrentStep((step) => Math.max(step - 1, 0));
-  }
-
   /** Auto-process a ticket through the full analysis → memory → draft pipeline. */
   async function processTicketPipeline(text: string) {
     if (!text.trim() || isProcessing) return;
@@ -3477,7 +3221,6 @@ export default function Home() {
       createLogEntry("Business domain classified", `Primary: ${domain.primaryDomain} · All: ${domain.domains.join(", ")} (${domain.confidence} confidence)`)
     ]);
 
-    const obs = observe(ticket, "manual-demo-input");
     const und = understandForProfile(ticket, profile);
     const canonicalProblem = identifyCanonicalProblem(und, profile);
     const advisory = await requestAnalysisAdvisory(ticket, und, {
@@ -3503,7 +3246,6 @@ export default function Home() {
     setActiveTicketRecord(record);
     setTicketRecords((prev) => upsertTicketRecord(prev, record));
 
-    setObservation(obs);
     setAiAnalysis(analysis);
     setAiAdvisory(advisory);
     setSelectedTicket({ ...ticket, status: "analyzed" });
@@ -3527,8 +3269,6 @@ export default function Home() {
     const selectedMatchInfo = compatibleMatches.length > 0 ? selectPreferredMatch(ticket, compatibleMatches) : null;
     const topMatch = selectedMatchInfo?.match ?? null;
     const lessonMatchForRecord = selectedMatchInfo?.lessonMatch ?? null;
-    const newReasoning = buildReasoning(enrichedUnderstanding, topMatch);
-    const newConfidence = buildConfidence(enrichedUnderstanding, topMatch);
     const topTrust = topMatch ? evaluateTrust(topMatch.item, profile, validationRecords) : null;
 
     record = {
@@ -3543,8 +3283,6 @@ export default function Home() {
     setTicketRecords((prev) => upsertTicketRecord(prev, record));
 
     setSimilarKnowledge(topMatch ? moveMatchToFront(compatibleMatches, topMatch.item.id) : []);
-    setReasoning(newReasoning);
-    setConfidence(newConfidence);
     addLogEntries([
       createLogEntry(
         `Retrieved ${matches.length} memory candidate${matches.length !== 1 ? "s" : ""}`,
@@ -3786,7 +3524,7 @@ export default function Home() {
               ticketRecords={ticketRecords}
               knowledgeItems={knowledgeItems}
               darkMode={darkMode}
-              onNavigateToKnowledge={(knowledgeId) => {
+              onNavigateToKnowledge={() => {
                 setActiveView("knowledge");
               }}
               onNavigate={setActiveView}

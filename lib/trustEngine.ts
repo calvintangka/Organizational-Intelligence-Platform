@@ -38,7 +38,7 @@ function requiresHumanReview(item: KnowledgeItem, profile: OrganizationProfile):
  * Fill in sensible defaults for any learning metadata that is missing.
  * Used when reading older knowledge items (e.g. seeds without trust fields).
  */
-export function withLearningDefaults(item: KnowledgeItem, autoResolutionThreshold = AUTO_THRESHOLD): KnowledgeItem {
+export function withLearningDefaults(item: KnowledgeItem, _autoResolutionThreshold = AUTO_THRESHOLD): KnowledgeItem {
   const timesReused = item.timesReused ?? 0;
   const successfulResolutions = item.successfulResolutions ?? timesReused;
   const failedResolutions = item.failedResolutions ?? 0;

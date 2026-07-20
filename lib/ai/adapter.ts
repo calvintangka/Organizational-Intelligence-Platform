@@ -12,7 +12,7 @@ const NVIDIA_PROXY_PATH = "/api/ai/nvidia";
 function createDisabledProvider(): AIProvider {
   const message = "AI advisory is disabled. Using deterministic Organizational Intelligence.";
 
-  async function unavailable<T>() {
+  async function unavailable<T>(): Promise<AIProviderResult<T>> {
     return {
       ok: false,
       providerMode: "disabled" as const,

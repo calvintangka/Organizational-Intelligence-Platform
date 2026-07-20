@@ -1,5 +1,17 @@
 # Change Log
 
+## [2026-07-20] TODO-022 Dead Code & Repository Hygiene Cleanup
+
+**Task/Prompt:** Remove audit-confirmed dead code and clean repository hygiene without changing OIP behavior. No architectural refactors; page.tsx glue extraction deferred to TODO-023, seedKnowledge contract to TODO-024.
+
+- Deleted 16 zero-reference demo-era components (AIAdvisoryPanel, AIAnalysisPanel, DemoScenarioSelector, EmergingPatternsPanel, IntelligenceLogPanel, KnowledgeBaseList, MetricsDashboard, OrgMetricsDashboard, OrganizationProfilePanel, ReasoningPanel, RelevanceGuardrailPanel, ResetDemoButton, SimilarKnowledgeList, StepNavigation, SuggestedResponsePanel, TicketCard) and the dead lib chain (lib/demoState.ts, lib/matching.ts, data/seedResponses.ts, lib/oipEngine.ts, lib/ai/provider.ts, staticDemoMetrics).
+- Removed the dead pre-pipeline step flow from app/page.tsx (startCustomDemo, analyzeTicket, findSimilarKnowledge, generateSuggestedResponse, goNext, goBack, startDemo, createAIStatusLogEntry, the steps array) plus five write-only state variables and their setter calls (lastApprovedSourceTicketId, reusedKnowledgeSourceTicketId, observation, reasoning, confidence). page.tsx: 3,926 → 3,664 lines.
+- Cleared all 38 `tsc --noUnusedLocals --noUnusedParameters` findings (now 0); interface-contract parameters kept with underscore prefixes instead of signature changes (withLearningDefaults, mergeLessonIntoExisting, markResourceFailed, targetKnowledge).
+- Replaced stale hardcoded "Gemma"/"Claude" copy in ProvenancePanel and HumanReviewEditor with the dynamic providerLabel.
+- package.json: added probe:bug008-retrieval, probe:bug008-semantic, probe:todo011-billing-fallback, probe:todo019-lesson-ranking, probe:todo020-timestamp-fallback, restore:maesa-profile-vocabulary.
+- Untracked session-generated artifacts (.codex-screenshots/, tmp/, outputs/ — files kept on disk) and gitignored them; Design Example/ kept tracked as an intentional design reference. .env.example now documents the NEXT_PUBLIC_ aliases for AI_* variables.
+- Verification: tsc clean, strict-unused clean, next build clean, all 17 probes green (BUG-008×2, TODO-011–016, 019, 020, BUG-009 with dev server on :3000, BUG-010, authentication, membership, active-organization, organization-switching, persistence-boundary); UI renders with zero console errors. No mature data touched.
+
 ## [2026-07-19] TODO-020 Invalid Epoch "Last Updated" Timestamp Fix
 
 **Task/Prompt:** Stop OIP from displaying sentinel/epoch timestamps (e.g. 1 Jan 1970) as a meaningful "Last Updated" date; fall back to the best legitimate lifecycle timestamp. Display-only; no mature data changed.

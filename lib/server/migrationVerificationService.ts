@@ -49,10 +49,6 @@ function arrayValue(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
-}
-
 function iso(value: unknown): string {
   const date = value instanceof Date ? value : new Date(String(value));
   return date.toISOString();
@@ -147,7 +143,7 @@ function sourceKnowledge(item: KnowledgeItem, organizationId: string): JsonRecor
   };
 }
 
-function targetKnowledge(row: JsonRecord, source: KnowledgeItem, organizationId: string): JsonRecord {
+function targetKnowledge(row: JsonRecord, source: KnowledgeItem, _organizationId: string): JsonRecord {
   const content = asRecord(row.content);
   return {
     id: row.id,
@@ -460,10 +456,6 @@ async function collectionResult(
     sourceCoverageMatch: missing.length === 0 && conflicting.length === 0,
     notes
   };
-}
-
-function emptyDigestValue(): JsonRecord[] {
-  return [];
 }
 
 async function buildVerificationReport(

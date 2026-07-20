@@ -112,7 +112,7 @@ export function DashboardView({ orgMetrics, metrics, knowledgeItems, emergingPat
           <TrustGrowthChart items={knowledgeItems} darkMode={darkMode} />
           {knowledgeItems.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-3">
-              {knowledgeItems.slice(0, 4).map((item, i) => (
+              {knowledgeItems.slice(0, 4).map((item) => (
                 <div key={item.id} className="flex items-center gap-1.5">
                   <div className="w-2 h-2 rounded-full bg-[#2563EB]" />
                   <span className={`text-xs ${darkMode ? "text-slate-400" : "text-[#667085]"}`}>

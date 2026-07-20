@@ -298,7 +298,7 @@ function parseJsonEntries(
   if (rows.every((row) => typeof row === "string")) {
     return {
       entries: rows
-        .map((row, index) => normalizeWhitespace(row))
+        .map((row) => normalizeWhitespace(row))
         .filter(Boolean)
         .map((message, index) => ({
           id: makeEntryId("json", index),

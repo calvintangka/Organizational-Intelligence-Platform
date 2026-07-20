@@ -1430,7 +1430,7 @@ function mergeLessons(
 export function mergeLessonIntoExisting(
   existingLessons: Lesson[],
   incoming: Lesson,
-  canonicalProblemId = "lesson-dedup"
+  _canonicalProblemId = "lesson-dedup"
 ): { lessons: Lesson[]; matchedLessonId: string | null } {
   const normalizedIncoming = normalizeLessonAliases(incoming);
   const match = existingLessons.find((lesson) => lessonsHaveEquivalentCore(lesson, normalizedIncoming));

@@ -26,8 +26,7 @@ import type {
   ValidationRecord
 } from "@/types";
 import type {
-  MigrationExportPackage,
-  MigrationExportResources
+  MigrationExportPackage
 } from "@/types/migrationExport";
 import {
   sha256,
@@ -74,10 +73,6 @@ function invalidExecution(message: string): never {
   throw new MigrationImportServiceError("INVALID_RESOURCE", message);
 }
 
-function blockedExecution(message: string): never {
-  throw new MigrationImportServiceError("CONFLICT", message);
-}
-
 function asRecord(value: unknown, field: string): JsonRecord {
   if (!value || typeof value !== "object" || Array.isArray(value)) invalidExecution(`${field} must be an object.`);
   return value as JsonRecord;
@@ -122,10 +117,6 @@ function jsonValue(value: unknown): Prisma.InputJsonValue {
 
 function nullableJson(value: unknown): Prisma.InputJsonValue | typeof Prisma.DbNull {
   return value === undefined || value === null ? Prisma.DbNull : jsonValue(value);
-}
-
-function normalizedDate(value: unknown, field: string): string {
-  return dateValue(value, field).toISOString();
 }
 
 function resourceDigest(exportPackage: MigrationExportPackage, resourceType: MigrationImportResourceType): string {
@@ -976,7 +967,7 @@ async function startResource(
   });
 }
 
-async function markResourceFailed(organizationId: string, batchId: string, resourceType: RunnableResourceType, error: unknown): Promise<void> {
+async function markResourceFailed(_organizationId: string, batchId: string, resourceType: RunnableResourceType, error: unknown): Promise<void> {
   const prisma = getPrismaClient();
   const message = error instanceof MigrationImportServiceError ? error.message : "The historical resource transaction failed.";
   await prisma.$transaction(async (tx) => {

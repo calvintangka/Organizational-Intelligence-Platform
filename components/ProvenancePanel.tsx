@@ -28,7 +28,7 @@ function responseGroundingCopy(
         : `AI draft grounded in validated lesson: ${response.groundingLabel ?? lessonMatch?.lesson.title ?? lessonMatch?.lesson.rootCause ?? "matched lesson"}`,
       body: response.fallbackNotice
         ? "OIP kept the matched lesson's validated customer response because the AI assistant could not be reached. Human review remains required before sending or learning."
-        : "Gemma adapted the matched lesson's approved customer response to this customer's wording. Human review remains required before sending or learning."
+        : `${response.providerLabel ?? "The AI assistant"} adapted the matched lesson's approved customer response to this customer's wording. Human review remains required before sending or learning.`
     };
   }
 
@@ -48,7 +48,7 @@ function responseGroundingCopy(
     return {
       title: "AI draft grounded in organizational memory",
       body:
-        "Gemma personalized the validated customer response template from organizational memory. The raw template remains available for comparison in human review."
+        `${response.providerLabel ?? "The AI assistant"} personalized the validated customer response template from organizational memory. The raw template remains available for comparison in human review.`
     };
   }
 

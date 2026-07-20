@@ -38,7 +38,7 @@ export function HumanReviewEditor({
   onRetryAIDraft,
 }: HumanReviewEditorProps) {
   const showComparison = isAIDraft && deterministicDraft && deterministicDraft.trim() !== reviewedResponse.trim();
-  const aiLabel = aiProviderLabel?.includes("Claude") ? "Drafted via Claude" : aiProviderLabel?.includes("LM Studio") ? "Drafted locally (Gemma)" : "AI advisory";
+  const aiLabel = aiProviderLabel ? `Drafted via ${aiProviderLabel}` : "AI advisory";
   const sourceBadge = isNoTemplate ? "No template available" : isAIDraft ? aiLabel : "Standard template";
   const sourceBadgeClass = isNoTemplate
     ? "bg-blue-50 text-[#2563EB]"
