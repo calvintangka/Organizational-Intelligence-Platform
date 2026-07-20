@@ -7,11 +7,11 @@
  * READ-ONLY from PostgreSQL. Nothing is written: only loadKnowledge and
  * getOrganizationProfile are called.
  *
- * The page-level selection glue (isStrongLessonMatch, selectPreferredMatch,
- * withPreDiscriminationLessonMatches, isLessonSearchCandidate) is copied
- * verbatim from app/page.tsx (lines ~211-342) because it lives inside the page
- * component module; every underlying matching decision still comes from the
- * real lib functions.
+ * The selection glue (isStrongLessonMatch, selectPreferredMatch,
+ * withPreDiscriminationLessonMatches) is imported from the authoritative
+ * production module lib/lessonSelection.ts (TODO-023) — the same
+ * implementation app/page.tsx uses — so this probe fails if production
+ * lesson-selection behavior regresses.
  *
  * Exit code: non-zero only when a SAFETY case (weak overlap / contradiction /
  * ambiguous / cold start) misbehaves. The paraphrase case reports
@@ -20,58 +20,21 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const Module = require("node:module");
-const ts = require("typescript");
 
-const root = path.resolve(__dirname, "..");
-require("dotenv").config({ path: path.join(root, ".env.local") });
-require("dotenv").config({ path: path.join(root, ".env") });
+const { installProbeHarness } = require("./lib/probe-harness.cjs");
+const { root } = installProbeHarness();
 
 if (!process.env.DATABASE_URL) {
   console.error("DATABASE_URL is not configured; the read-only Maesa retrieval probe cannot run.");
   process.exit(1);
 }
 
-const originalResolveFilename = Module._resolveFilename;
-Module._resolveFilename = function resolveProjectAlias(request, parent, isMain, options) {
-  if (request === "server-only") {
-    return path.join(__dirname, "stubs", "server-only.cjs");
-  }
-  if (request.startsWith("@/")) {
-    const mapped = path.join(root, request.slice(2));
-    if (fs.existsSync(`${mapped}.ts`)) return `${mapped}.ts`;
-    if (fs.existsSync(`${mapped}.tsx`)) return `${mapped}.tsx`;
-    if (fs.existsSync(path.join(mapped, "index.ts"))) return path.join(mapped, "index.ts");
-  }
-  return originalResolveFilename.call(this, request, parent, isMain, options);
-};
-
-for (const extension of [".ts", ".tsx"]) {
-  require.extensions[extension] = function transpileTypeScript(module, filename) {
-    const source = fs.readFileSync(filename, "utf8");
-    const output = ts.transpileModule(source, {
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2020,
-        jsx: ts.JsxEmit.ReactJSX,
-        esModuleInterop: true,
-      },
-      fileName: filename,
-    });
-    const compiled = output.outputText.replace(
-      /import\.meta\.url/g,
-      "require('node:url').pathToFileURL(__filename).href"
-    );
-    module._compile(compiled, filename);
-  };
-}
 
 const { understandForProfile } = require(path.join(root, "lib", "analyzer.ts"));
 const { retrieveMemory } = require(path.join(root, "lib", "memory.ts"));
 const {
   draftResponse,
   isCompatibleForDrafting,
-  isStrongLessonEvidence,
   findMatchingLesson,
   assessRootCauseCompatibility
 } = require(path.join(root, "lib", "drafting.ts"));
@@ -79,88 +42,12 @@ const { identifyCanonicalProblem } = require(path.join(root, "lib", "canonicalPr
 const { seedOrganizationProfiles } = require(path.join(root, "data", "seedOrganizationProfiles.ts"));
 const service = require(path.join(root, "lib", "server", "persistenceService.ts"));
 
+const {
+  selectPreferredMatch,
+  withPreDiscriminationLessonMatches
+} = require(path.join(root, "lib", "lessonSelection.ts"));
+
 const MAESA = "profile-maesa-tech";
-
-/* ------- page.tsx selection glue, copied verbatim (app/page.tsx:211-342) ------- */
-
-// TODO-009 Step 3: strength requires multi-token signal evidence (shared rule).
-function isStrongLessonMatch(lessonMatch) {
-  return isStrongLessonEvidence(lessonMatch);
-}
-
-function selectPreferredMatch(ticket, matches) {
-  if (matches.length === 0) return null;
-  const annotated = matches.map((match) => ({
-    match,
-    lessonMatch: findMatchingLesson(ticket, match.item)
-  }));
-  const lessonBacked = annotated.filter((entry) => isStrongLessonMatch(entry.lessonMatch));
-  const pool = lessonBacked.length > 0 ? lessonBacked : annotated;
-  const topScore = Math.max(...pool.map((entry) => entry.match.matchScore));
-  const relevantCluster = pool.filter((entry) => entry.match.matchScore >= topScore - 10);
-  return relevantCluster.reduce((best, current) => {
-    const bestTrust = best.match.item.trustScore ?? 0;
-    const currentTrust = current.match.item.trustScore ?? 0;
-    if (currentTrust !== bestTrust) return currentTrust > bestTrust ? current : best;
-    const bestLessonScore = best.lessonMatch?.score ?? 0;
-    const currentLessonScore = current.lessonMatch?.score ?? 0;
-    if (currentLessonScore !== bestLessonScore) return currentLessonScore > bestLessonScore ? current : best;
-    if (current.match.matchScore !== best.match.matchScore) return current.match.matchScore > best.match.matchScore ? current : best;
-    return current;
-  }, relevantCluster[0]);
-}
-
-function normalizeLessonSearchText(value) {
-  return value.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").split(/\s+/).filter((token) => token.length > 2);
-}
-
-function isLessonSearchCandidate(ticket, understanding, item, canonicalProblemTitle) {
-  if (!item.lessons?.length) return false;
-  if (!isCompatibleForDrafting(understanding, item, ticket)) return false;
-  const targetTokens = new Set(normalizeLessonSearchText(`${canonicalProblemTitle} ${understanding.category}`));
-  const itemTokens = normalizeLessonSearchText(
-    `${item.canonicalProblemTitle ?? ""} ${item.title} ${item.category} ${item.tags.join(" ")}`
-  );
-  return itemTokens.some((token) => targetTokens.has(token));
-}
-
-function moveMatchToFront(matches, matchId) {
-  if (!matchId) return matches;
-  return [
-    ...matches.filter((match) => match.item.id === matchId),
-    ...matches.filter((match) => match.item.id !== matchId)
-  ];
-}
-
-function withPreDiscriminationLessonMatches(ticket, understanding, matches, items, canonicalProblemTitle) {
-  const lessonMatches = items
-    .filter((item) => isLessonSearchCandidate(ticket, understanding, item, canonicalProblemTitle))
-    .map((item) => ({ item, lessonMatch: findMatchingLesson(ticket, item) }))
-    .filter((entry) => isStrongLessonMatch(entry.lessonMatch));
-  if (lessonMatches.length === 0) return matches;
-  const best = lessonMatches.reduce((winner, current) => {
-    if (current.lessonMatch.score !== winner.lessonMatch.score) {
-      return current.lessonMatch.score > winner.lessonMatch.score ? current : winner;
-    }
-    const currentTrust = current.item.trustScore ?? 0;
-    const winnerTrust = winner.item.trustScore ?? 0;
-    return currentTrust > winnerTrust ? current : winner;
-  }, lessonMatches[0]);
-  const existing = matches.find((match) => match.item.id === best.item.id);
-  const lessonLabel = best.lessonMatch.lesson.title ?? best.lessonMatch.lesson.rootCause;
-  const lessonBackedMatch = {
-    item: best.item,
-    matchScore: Math.max(existing?.matchScore ?? 0, 95),
-    matchReason: `Validated lesson match - "${lessonLabel}" matched before AI discrimination via signals: ${best.lessonMatch.matchedSignals.join(", ")}.`,
-    matchedTags: existing?.matchedTags ?? [],
-    matchedKeywords: best.lessonMatch.matchedSignals.slice(0, 4),
-    matchedCategory: best.item.category
-  };
-  return moveMatchToFront(
-    [lessonBackedMatch, ...matches.filter((match) => match.item.id !== best.item.id)],
-    best.item.id
-  );
-}
 
 /* ------------------------------- probe harness ------------------------------- */
 

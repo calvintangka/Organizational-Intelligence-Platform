@@ -1,5 +1,14 @@
 # Change Log
 
+## [2026-07-20] TODO-023 Production Lesson-Selection Extraction & Probe Harness Consolidation
+
+**Task/Prompt:** Make the production lesson-selection implementation the single source of truth (imported by both app/page.tsx and the BUG-008 regression probe), and consolidate the duplicated probe infrastructure. Behavior-preserving; no ranking/safety/persistence changes.
+
+- New `lib/lessonSelection.ts`: the pure selection glue moved verbatim out of app/page.tsx (MatchWithLesson, isStrongLessonMatch, buildDiscriminationLessonPayload, selectPreferredMatch, withPreDiscriminationLessonMatches, moveMatchToFront, stripRejectedMatch, plus private isLessonSearchCandidate/normalizeLessonSearchText). page.tsx now imports it (3,664 → 3,548 lines); React orchestration, TicketRequestGuard, and AI failover untouched.
+- `scripts/bug008-retrieval-probe.cjs` no longer carries a copied selection algorithm — it requires `lib/lessonSelection.ts` directly, so the probe fails if production selection regresses. The semantic probe already imported production functions and is unchanged.
+- New `scripts/lib/probe-harness.cjs` (installProbeHarness): shared dotenv + server-only stub + "@/" alias + TS transpile loader. 16 probes migrated mechanically (4 with `loadEnv:false` to preserve their exact env behavior). The three client-boundary probes (persistence-boundary, migration-export, server-persistence) are deliberately NOT migrated — omitting the server-only stub is part of their assertion.
+- TODO-019 ranking comparator and all TODO-009 safety gates untouched. Verification: tsc + strict-unused clean, build clean, 18 probes green (incl. every migrated probe and BUG-009 over a live dev server); bug008-retrieval case-level output byte-identical pre/post refactor. No mature data touched.
+
 ## [2026-07-20] TODO-022 Dead Code & Repository Hygiene Cleanup
 
 **Task/Prompt:** Remove audit-confirmed dead code and clean repository hygiene without changing OIP behavior. No architectural refactors; page.tsx glue extraction deferred to TODO-023, seedKnowledge contract to TODO-024.

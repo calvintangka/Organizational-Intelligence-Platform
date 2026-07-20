@@ -2,35 +2,9 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const Module = require("node:module");
-const ts = require("typescript");
 
-const root = path.resolve(__dirname, "..");
-const originalResolveFilename = Module._resolveFilename;
-Module._resolveFilename = function resolveProjectAlias(request, parent, isMain, options) {
-  if (request === "server-only") return path.join(__dirname, "stubs", "server-only.cjs");
-  if (request.startsWith("@/")) {
-    const mapped = path.join(root, request.slice(2));
-    if (fs.existsSync(`${mapped}.ts`)) return `${mapped}.ts`;
-    if (fs.existsSync(`${mapped}.tsx`)) return `${mapped}.tsx`;
-    if (fs.existsSync(path.join(mapped, "index.ts"))) return path.join(mapped, "index.ts");
-  }
-  return originalResolveFilename.call(this, request, parent, isMain, options);
-};
-for (const extension of [".ts", ".tsx"]) {
-  require.extensions[extension] = function transpileTypeScript(module, filename) {
-    const output = ts.transpileModule(fs.readFileSync(filename, "utf8"), {
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2020,
-        jsx: ts.JsxEmit.ReactJSX,
-        esModuleInterop: true
-      },
-      fileName: filename
-    });
-    module._compile(output.outputText, filename);
-  };
-}
+const { installProbeHarness } = require("./lib/probe-harness.cjs");
+const { root } = installProbeHarness({ loadEnv: false });
 
 const { seedOrganizationProfiles } = require(path.join(root, "data", "seedOrganizationProfiles.ts"));
 const {

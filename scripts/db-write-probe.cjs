@@ -20,54 +20,15 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const Module = require("node:module");
-const ts = require("typescript");
 
-const root = path.resolve(__dirname, "..");
-require("dotenv").config({ path: path.join(root, ".env.local") });
-require("dotenv").config({ path: path.join(root, ".env") });
+const { installProbeHarness } = require("./lib/probe-harness.cjs");
+const { root } = installProbeHarness();
 
 if (!process.env.DATABASE_URL) {
   console.error("DATABASE_URL is not configured; the live database probe cannot run.");
   process.exit(1);
 }
 
-const originalResolveFilename = Module._resolveFilename;
-Module._resolveFilename = function resolveProjectAlias(request, parent, isMain, options) {
-  if (request === "server-only") {
-    return path.join(__dirname, "stubs", "server-only.cjs");
-  }
-  if (request.startsWith("@/")) {
-    const mapped = path.join(root, request.slice(2));
-    if (fs.existsSync(`${mapped}.ts`)) return `${mapped}.ts`;
-    if (fs.existsSync(`${mapped}.tsx`)) return `${mapped}.tsx`;
-    if (fs.existsSync(path.join(mapped, "index.ts"))) return path.join(mapped, "index.ts");
-  }
-  return originalResolveFilename.call(this, request, parent, isMain, options);
-};
-
-for (const extension of [".ts", ".tsx"]) {
-  require.extensions[extension] = function transpileTypeScript(module, filename) {
-    const source = fs.readFileSync(filename, "utf8");
-    const output = ts.transpileModule(source, {
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2020,
-        jsx: ts.JsxEmit.ReactJSX,
-        esModuleInterop: true,
-      },
-      fileName: filename,
-    });
-    // The generated Prisma client references import.meta.url, which cannot be
-    // lowered to CommonJS by transpileModule; rewrite it so Node does not
-    // misdetect the transpiled output as an ES module.
-    const compiled = output.outputText.replace(
-      /import\.meta\.url/g,
-      "require('node:url').pathToFileURL(__filename).href"
-    );
-    module._compile(compiled, filename);
-  };
-}
 
 const service = require(path.join(root, "lib", "server", "persistenceService.ts"));
 const { getPrismaClient } = require(path.join(root, "lib", "server", "prisma.ts"));

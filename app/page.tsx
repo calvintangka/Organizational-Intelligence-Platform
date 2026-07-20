@@ -21,8 +21,16 @@ import { assessBusinessRelevanceForProfile, understandForProfile } from "@/lib/a
 import { classifyBusinessDomain } from "@/lib/domainClassifier";
 import { analyzeBulkEntries, prepareBulkClusterCommit } from "@/lib/bulkUpload";
 import { retrieveMemory } from "@/lib/memory";
-import { draftResponse, findMatchingLesson, isCompatibleForDrafting, isStrongLessonEvidence, ticketContradictsLesson } from "@/lib/drafting";
+import { draftResponse, findMatchingLesson, isCompatibleForDrafting, ticketContradictsLesson } from "@/lib/drafting";
 import type { LessonMatchResult, SemanticLessonAuthorization } from "@/lib/drafting";
+import {
+  buildDiscriminationLessonPayload,
+  isStrongLessonMatch,
+  moveMatchToFront,
+  selectPreferredMatch,
+  stripRejectedMatch,
+  withPreDiscriminationLessonMatches
+} from "@/lib/lessonSelection";
 import { evaluateSemanticLessonCompatibility } from "@/lib/ai/semanticCompatibility";
 import {
   buildKnowledgeItemFromPackCandidate,
@@ -197,11 +205,6 @@ interface DraftSafetyContext {
   organizationName: string;
 }
 
-interface MatchWithLesson {
-  match: KnowledgeMatch;
-  lessonMatch: LessonMatchResult | null;
-}
-
 function createInitialMetrics(): Metrics {
   return { ...defaultMetrics };
 }
@@ -223,125 +226,6 @@ function makeCustomTicket(description: string, ticketId?: string): Ticket {
     status: "new",
     createdAt: new Date().toISOString()
   };
-}
-
-// TODO-009 Step 3: strength now requires multi-token signal evidence — see
-// isStrongLessonEvidence in lib/drafting.ts. Generic one-word overlaps
-// ("webhook", "integration") no longer count as a strong lesson match.
-function isStrongLessonMatch(lessonMatch: LessonMatchResult | null | undefined): lessonMatch is LessonMatchResult {
-  return isStrongLessonEvidence(lessonMatch);
-}
-
-function buildDiscriminationLessonPayload(lessonMatch: LessonMatchResult) {
-  return {
-    title: lessonMatch.lesson.title,
-    rootCause: lessonMatch.lesson.rootCause,
-    signals: lessonMatch.matchedSignals,
-    customerResponse: lessonMatch.lesson.customerResponse
-  };
-}
-
-function selectPreferredMatch(ticket: Ticket, matches: KnowledgeMatch[]): MatchWithLesson | null {
-  if (matches.length === 0) return null;
-
-  const annotated = matches.map((match) => ({
-    match,
-    lessonMatch: findMatchingLesson(ticket, match.item)
-  }));
-  const lessonBacked = annotated.filter((entry) => isStrongLessonMatch(entry.lessonMatch));
-  const pool = lessonBacked.length > 0 ? lessonBacked : annotated;
-  const topScore = Math.max(...pool.map((entry) => entry.match.matchScore));
-  const relevantCluster = pool.filter((entry) => entry.match.matchScore >= topScore - 10);
-
-  return relevantCluster.reduce((best, current) => {
-    const bestTrust = best.match.item.trustScore ?? 0;
-    const currentTrust = current.match.item.trustScore ?? 0;
-    if (currentTrust !== bestTrust) return currentTrust > bestTrust ? current : best;
-
-    const bestLessonScore = best.lessonMatch?.score ?? 0;
-    const currentLessonScore = current.lessonMatch?.score ?? 0;
-    if (currentLessonScore !== bestLessonScore) return currentLessonScore > bestLessonScore ? current : best;
-
-    if (current.match.matchScore !== best.match.matchScore) return current.match.matchScore > best.match.matchScore ? current : best;
-    return current;
-  }, relevantCluster[0]);
-}
-
-function normalizeLessonSearchText(value: string): string[] {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, " ")
-    .split(/\s+/)
-    .filter((token) => token.length > 2);
-}
-
-function isLessonSearchCandidate(
-  ticket: Ticket,
-  understanding: Understanding,
-  item: KnowledgeItem,
-  canonicalProblemTitle: string
-): boolean {
-  if (!item.lessons?.length) return false;
-  if (!isCompatibleForDrafting(understanding, item, ticket)) return false;
-
-  const targetTokens = new Set(normalizeLessonSearchText(`${canonicalProblemTitle} ${understanding.category}`));
-  const itemTokens = normalizeLessonSearchText(
-    `${item.canonicalProblemTitle ?? ""} ${item.title} ${item.category} ${item.tags.join(" ")}`
-  );
-  return itemTokens.some((token) => targetTokens.has(token));
-}
-
-function withPreDiscriminationLessonMatches(
-  ticket: Ticket,
-  understanding: Understanding,
-  matches: KnowledgeMatch[],
-  items: KnowledgeItem[],
-  canonicalProblemTitle: string
-): KnowledgeMatch[] {
-  const lessonMatches = items
-    .filter((item) => isLessonSearchCandidate(ticket, understanding, item, canonicalProblemTitle))
-    .map((item) => ({ item, lessonMatch: findMatchingLesson(ticket, item) }))
-    .filter((entry): entry is { item: KnowledgeItem; lessonMatch: LessonMatchResult } => isStrongLessonMatch(entry.lessonMatch));
-
-  if (lessonMatches.length === 0) return matches;
-
-  const best = lessonMatches.reduce((winner, current) => {
-    if (current.lessonMatch.score !== winner.lessonMatch.score) {
-      return current.lessonMatch.score > winner.lessonMatch.score ? current : winner;
-    }
-    const currentTrust = current.item.trustScore ?? 0;
-    const winnerTrust = winner.item.trustScore ?? 0;
-    return currentTrust > winnerTrust ? current : winner;
-  }, lessonMatches[0]);
-
-  const existing = matches.find((match) => match.item.id === best.item.id);
-  const lessonLabel = best.lessonMatch.lesson.title ?? best.lessonMatch.lesson.rootCause;
-  const lessonBackedMatch: KnowledgeMatch = {
-    item: best.item,
-    matchScore: Math.max(existing?.matchScore ?? 0, 95),
-    matchReason: `Validated lesson match - "${lessonLabel}" matched before AI discrimination via signals: ${best.lessonMatch.matchedSignals.join(", ")}.`,
-    matchedTags: existing?.matchedTags ?? [],
-    matchedKeywords: best.lessonMatch.matchedSignals.slice(0, 4),
-    matchedCategory: best.item.category
-  };
-
-  return moveMatchToFront(
-    [lessonBackedMatch, ...matches.filter((match) => match.item.id !== best.item.id)],
-    best.item.id
-  );
-}
-
-function moveMatchToFront(matches: KnowledgeMatch[], matchId?: string): KnowledgeMatch[] {
-  if (!matchId) return matches;
-  return [
-    ...matches.filter((match) => match.item.id === matchId),
-    ...matches.filter((match) => match.item.id !== matchId)
-  ];
-}
-
-function stripRejectedMatch(matches: KnowledgeMatch[], matchId?: string): KnowledgeMatch[] {
-  if (!matchId) return matches;
-  return matches.filter((match) => match.item.id !== matchId);
 }
 
 function understandingToAnalysis(und: ReturnType<typeof understandForProfile>): AIAnalysis {
