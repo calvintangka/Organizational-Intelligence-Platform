@@ -102,6 +102,7 @@ export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized
   const versionCount = versions.length || 1;
   const latestVersion = versions[versions.length - 1];
   const exampleTickets = item.exampleTickets ?? [];
+  const provenance = item.provenance;
   const lastUpdatedDisplay = formatLastUpdatedDisplay([item.lastUpdated, item.lastValidated, item.approvedAt, item.createdAt]);
 
   return (
@@ -185,6 +186,18 @@ export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized
               <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-500">+{exampleTickets.length - 6} more</span>
             )}
           </div>
+        </div>
+      )}
+
+      {provenance && (
+        <div className="mt-3 rounded-2xl border border-blue-100 bg-white p-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Historical Provenance</p>
+          <p className="mt-1 text-xs leading-5 text-slate-600">
+            Source ticket {provenance.sourceTicketId} · created by {provenance.createdBy} on {provenance.createdAt.slice(0, 10)} · validated by {provenance.validatedBy} on {provenance.validatedAt.slice(0, 10)}
+          </p>
+          <p className="mt-0.5 text-xs leading-5 text-slate-500">
+            {provenance.validationBasis} · {provenance.validationScope}
+          </p>
         </div>
       )}
     </section>

@@ -51,6 +51,7 @@
     "probe:todo027-canonical-specificity": "node scripts/todo027-canonical-specificity-probe.cjs",
     "probe:todo028-sibling-specificity": "node scripts/todo028-sibling-specificity-probe.cjs",
     "probe:todo032-category-compatibility": "node scripts/todo032-category-compatibility-probe.cjs",
+    "probe:todo025g-curated-scenarios": "node scripts/todo025g-curated-scenarios-probe.cjs",
     "restore:maesa-profile-vocabulary": "node scripts/restore-maesa-profile-vocabulary.cjs",
     "seed:test-organization": "node scripts/seed-test-organization.cjs",
     "seed:developer-demo-foundation": "node scripts/seed-developer-demo-foundation.cjs",

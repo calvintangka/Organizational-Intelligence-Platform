@@ -124,6 +124,7 @@ import type {
   KnowledgePack,
   KnowledgePackCandidateDraft,
 } from "@/types";
+import type { CuratedDeveloperDemoScenario } from "@/data/developerDemoScenarios";
 
 const aiAdapter = createAIAdapter();
 const EMAIL_RECOVERY_FORBIDDEN_DRAFT_TERMS = [
@@ -3050,7 +3051,7 @@ export default function Home() {
   }
 
   /** Auto-process a ticket through the full analysis → memory → draft pipeline. */
-  async function processTicketPipeline(text: string) {
+  async function processTicketPipeline(text: string, curatedScenario?: CuratedDeveloperDemoScenario) {
     if (!text.trim() || isProcessing) return;
     const requestGeneration = ticketRequestGuard.current.begin();
     setIsProcessing(true);
@@ -3066,7 +3067,13 @@ export default function Home() {
         reportPersistenceError("generateTicketId", error);
         return;
       }
-      const ticket = makeCustomTicket(text.trim(), tId);
+      const ticket = curatedScenario
+        ? {
+            ...makeCustomTicket(curatedScenario.ticketBody, tId),
+            subject: curatedScenario.ticketSubject,
+            description: curatedScenario.ticketBody,
+          }
+        : makeCustomTicket(text.trim(), tId);
     setSelectedTicket(ticket);
     setCurrentStep(1);
 
@@ -3368,7 +3375,7 @@ export default function Home() {
                   lastSavedKnowledgeId={lastSavedKnowledgeId}
                   discriminationReasoning={discriminationReasoning}
                   discriminatedMatchTitle={discriminatedMatchTitle}
-                  onSubmitTicket={(text) => { void processTicketPipeline(text); }}
+                  onSubmitTicket={(text, scenario) => { void processTicketPipeline(text, scenario); }}
                   onUpdateReviewedResponse={updateReviewedResponse}
                   onApproveResponse={approveResponse}
                   onViewReflection={() => setCurrentStep(7)}

@@ -1,6 +1,12 @@
 ﻿"use client";
 
 import { useState } from "react";
+import {
+  curatedDeveloperDemoScenarios,
+  curatedScenarioText,
+  isCuratedDeveloperDemoOrganization,
+  type CuratedDeveloperDemoScenario,
+} from "@/data/developerDemoScenarios";
 import type {
   AIAnalysis,
   AIAdvisory,
@@ -64,7 +70,7 @@ interface TicketWorkspaceProps {
   aiModeEnabled: boolean;
   isRetryingDraft: boolean;
   // Callbacks
-  onSubmitTicket: (text: string) => void;
+  onSubmitTicket: (text: string, scenario?: CuratedDeveloperDemoScenario) => void;
   onUpdateReviewedResponse: (text: string) => void;
   onApproveResponse: () => void;
   onViewReflection: () => void;
@@ -412,7 +418,11 @@ export function TicketWorkspace({
 
             {ticketPhase === "idle" ? (
               /* Ticket input form */
-              <TicketInputForm darkMode={darkMode} onSubmit={onSubmitTicket} />
+              <TicketInputForm
+                darkMode={darkMode}
+                onSubmit={onSubmitTicket}
+                organizationId={organizationProfile.id}
+              />
             ) : (
               /* Submitted ticket (read-only) */
               <div>
@@ -720,7 +730,7 @@ export function TicketWorkspace({
               <div className="mt-3">
                 <p className={`text-xs font-bold ${darkMode ? "text-slate-400" : "text-slate-500"}`}>Why this answer?</p>
                 <p className={`mt-1 text-xs ${darkMode ? "text-slate-400" : "text-[#667085]"}`}>
-                  Knowledge ID {topMatch.item.id.slice(0, 10)}... * Version {(topMatch.item.knowledgeVersions?.length ?? 0) || 1} * Last reviewed today
+                  Knowledge ID {topMatch.item.id.slice(0, 10)}... * Version {(topMatch.item.knowledgeVersions?.length ?? 0) || 1}
                 </p>
               </div>
             </div>
@@ -756,11 +766,64 @@ export function TicketWorkspace({
 }
 
 /* Ticket input form -- left column idle state */
-function TicketInputForm({ darkMode, onSubmit }: { darkMode: boolean; onSubmit: (text: string) => void }) {
+function TicketInputForm({
+  darkMode,
+  onSubmit,
+  organizationId,
+}: {
+  darkMode: boolean;
+  onSubmit: (text: string, scenario?: CuratedDeveloperDemoScenario) => void;
+  organizationId: string;
+}) {
   const [text, setText] = useState("");
+  const [scenarioId, setScenarioId] = useState("");
+  const scenarios = isCuratedDeveloperDemoOrganization(organizationId)
+    ? curatedDeveloperDemoScenarios
+    : [];
+  const selectedScenario = scenarios.find((scenario) => scenario.id === scenarioId);
+
+  const selectScenario = (nextScenarioId: string) => {
+    setScenarioId(nextScenarioId);
+    const scenario = scenarios.find((candidate) => candidate.id === nextScenarioId);
+    if (scenario) setText(curatedScenarioText(scenario));
+  };
 
   return (
     <div>
+      {scenarios.length > 0 ? (
+        <div className={`mb-4 rounded-xl border p-3 ${darkMode ? "border-cyan-900/70 bg-cyan-950/30" : "border-cyan-100 bg-cyan-50/60"}`}>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <label className={`text-xs font-semibold ${darkMode ? "text-cyan-100" : "text-cyan-900"}`} htmlFor="curated-demo-scenario">
+              Developer demo scenario
+            </label>
+            <select
+              className={`min-w-0 flex-1 rounded-md border px-2 py-1.5 text-sm ${darkMode ? "border-slate-700 bg-slate-950 text-slate-100" : "border-cyan-200 bg-white text-slate-900"}`}
+              id="curated-demo-scenario"
+              onChange={(event) => selectScenario(event.target.value)}
+              value={scenarioId}
+            >
+              <option value="">Choose a curated scenario</option>
+              {scenarios.map((scenario) => (
+                <option key={scenario.id} value={scenario.id}>
+                  {scenario.title}
+                </option>
+              ))}
+            </select>
+            {selectedScenario ? (
+              <button
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold ${darkMode ? "bg-cyan-400 text-slate-950" : "bg-cyan-700 text-white"}`}
+                onClick={() => onSubmit(curatedScenarioText(selectedScenario), selectedScenario)}
+                type="button"
+              >
+                Run scenario
+              </button>
+            ) : null}
+          </div>
+          <p className={`mt-2 text-xs ${darkMode ? "text-cyan-100/75" : "text-cyan-900/75"}`}>
+            Loads a support-shaped ticket into the normal retrieval, ranking, authorization, and explanation path.
+          </p>
+        </div>
+      ) : null}
       <p className={`text-xs font-semibold mb-1.5 ${darkMode ? "text-slate-400" : "text-slate-500"}`}>Customer issue</p>
       <textarea
         value={text}
