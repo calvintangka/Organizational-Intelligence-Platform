@@ -68,12 +68,12 @@ async function main() {
       true,
       "A generated event crossed organization ownership."
     );
+    // The in-memory simulator must never touch PostgreSQL: the full foundation
+    // snapshot (including business counts) is identical before and after two
+    // simulate() calls, whether the developer-demo org is still empty or has
+    // since been create-only seeded by TODO-025D.
     assert.deepEqual(after, before, "PostgreSQL changed during in-memory simulation.");
-    assert.equal(after.counts.knowledgeItem, 0);
-    assert.equal(after.counts.ticketRecord, 0);
-    assert.equal(after.counts.validationRecord, 0);
-    assert.equal(after.counts.memoryChangeRecord, 0);
-    assert.equal(after.counts.trustEvidence, 0);
+    assert.deepEqual(after.counts, before.counts, "Simulation must not change any developer-demo row counts.");
 
     console.log(JSON.stringify({
       cases: {
@@ -86,7 +86,7 @@ async function main() {
         G_alternateSeedIntegrity: "PASS",
         H_organizationIsolation: "PASS",
         I_noPostgreSQLWrites: "PASS",
-        J_foundationRemainsEmpty: "PASS"
+        J_simulationLeavesDatabaseUnchanged: "PASS"
       },
       defaultDigestRun1: first.digest,
       defaultDigestRun2: second.digest,
