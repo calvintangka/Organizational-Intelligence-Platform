@@ -85,6 +85,14 @@ const CANONICAL_RULES: Array<{
     summary: "Customers cannot complete two-factor authentication because their OTP, verification code, or authenticator app code is rejected or unavailable."
   },
   {
+    id: "canonical-authentication-infrastructure",
+    title: "Authentication Infrastructure Issue",
+    category: "Authentication",
+    signals: ["single sign-on", "sso", "saml", "identity provider", "idp", "identity metadata", "certificate rotation", "signing certificate", "authentication certificate", "redirect loop"],
+    tags: ["authentication", "sso", "identity-provider"],
+    summary: "Customers report an identity-provider, SSO, federation, or authentication certificate problem rather than an ordinary password login issue."
+  },
+  {
     id: "canonical-login-issue",
     title: "Login Issue",
     category: "Login",
@@ -99,6 +107,14 @@ const CANONICAL_RULES: Array<{
     signals: ["account", "locked", "blocked", "password", "login", "log in", "access"],
     tags: ["account", "locked", "login", "password", "access"],
     summary: "Customers cannot access their account because login, password, lock, or account status prevents access."
+  },
+  {
+    id: "canonical-permissions-access",
+    title: "Permissions & Access Issue",
+    category: "Permissions & Access",
+    signals: ["permission inheritance", "permissions inheritance", "permission", "permissions", "role inheritance", "role assignment", "effective permissions", "access grant", "administrator approval"],
+    tags: ["permissions", "role", "access-control"],
+    summary: "Customers report a role, permission, inheritance, grant, or other access-control administration issue."
   },
   {
     id: "canonical-payment-authorization",

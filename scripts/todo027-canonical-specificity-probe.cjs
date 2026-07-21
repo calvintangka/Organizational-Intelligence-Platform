@@ -95,8 +95,10 @@ async function main() {
   check("G cross-domain delivery item cannot outrank exact permission canonical",
     permission.rawMatches.findIndex((match) => match.item.id === permissionId)
       < permission.rawMatches.findIndex((match) => match.item.id === "demo-ki-webhook-delivery-replay"));
-  check("H M16 still fails later at category compatibility", permission.understanding.category === "Delivery"
-    && permission.topMatch === null && permission.draft.source === "no_template");
+  check("H M16 category and compatibility now authorize the exact permission lesson",
+    permission.understanding.category === "Permissions & Access"
+      && permission.topMatch?.item.id === permissionId
+      && permission.draft.basedOnKnowledgeIds.includes(permissionId));
 
   // B — trust-only changes leave raw canonical ordering and scores identical.
   const permissionUnderstanding = understandForProfile(permissionTicket, profile);
@@ -148,10 +150,11 @@ async function main() {
   );
   const m02 = pipeline(m02Ticket, profile, items);
   const heroId = "demo-ki-sso-certificate-redirect-loop";
-  check("H M02 correct canonical enters retrieval but remains category-incompatible",
+  check("H M02 correct canonical is classified and authorized as Authentication",
     m02.rawMatches.some((match) => match.item.id === heroId)
-      && m02.understanding.category === "Login"
-      && m02.topMatch === null);
+      && m02.understanding.category === "Authentication"
+      && m02.topMatch?.item.id === heroId
+      && m02.draft.basedOnKnowledgeIds.includes(heroId));
   for (const [id, description] of [
     ["M03", "Certificate validity or signing metadata no longer matches. authentication certificate redirect timeline root cause 04 sso-certificate-redirect-loop"],
     ["M05", "Certificate signing metadata does not match after rotation. authentication certificate redirect timeline root cause 04 sso-certificate-redirect-loop"]

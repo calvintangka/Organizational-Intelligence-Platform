@@ -281,6 +281,18 @@ const CATEGORY_RULES: Array<{ category: string; keywords: string[]; tags: string
     tags: ["2fa", "two-factor", "otp", "mfa"]
   },
   {
+    // Authentication infrastructure is distinct from an end user's ordinary
+    // password/login problem. Keep this vocabulary deliberately specific so a
+    // generic "sign in" ticket still follows the Login rule below.
+    category: "Authentication",
+    keywords: [
+      "single sign-on", "sso", "saml", "identity provider", "idp",
+      "identity metadata", "certificate rotation", "signing certificate",
+      "authentication certificate", "redirect loop"
+    ],
+    tags: ["authentication", "sso", "identity-provider"]
+  },
+  {
     category: "Login",
     keywords: [
       "login", "log in", "sign in", "signin",
@@ -318,6 +330,18 @@ const CATEGORY_RULES: Array<{ category: string; keywords: string[]; tags: string
     category: "Account Access",
     keywords: ["account", "locked", "blocked", "suspended", "banned", "lock", "cannot access account", "account blocked"],
     tags: ["account", "locked", "access"]
+  },
+  {
+    // Access-control administration has distinct evidence from delivery
+    // timing: permission and inheritance terms must not be classified by an
+    // incidental word such as "delay".
+    category: "Permissions & Access",
+    keywords: [
+      "permission inheritance", "permissions inheritance", "permission", "permissions",
+      "role inheritance", "role assignment", "role", "access grant",
+      "effective permissions", "administrator approval"
+    ],
+    tags: ["permissions", "role", "access-control"]
   },
   {
     category: "Delivery",
@@ -461,6 +485,18 @@ const CATEGORY_WEIGHTS: Record<string, Array<[string, number]>> = {
     ["verification code", 6],
     ["authenticator", 4]
   ],
+  Authentication: [
+    ["single sign-on", 9],
+    ["sso", 9],
+    ["saml", 9],
+    ["identity provider", 9],
+    ["idp", 9],
+    ["identity metadata", 8],
+    ["certificate rotation", 8],
+    ["signing certificate", 8],
+    ["authentication certificate", 7],
+    ["redirect loop", 7]
+  ],
   // TODO-011: strong problem-specific Billing/Refund phrases must outrank
   // incidental Subscription vocabulary ("subscription", "renewal", "plan")
   // so validated billing lessons stay reachable. Base keywords keep weight 1.
@@ -556,6 +592,19 @@ const CATEGORY_WEIGHTS: Record<string, Array<[string, number]>> = {
     ["suspended", 5],
     ["banned", 5],
     ["account", 1]
+  ],
+  "Permissions & Access": [
+    ["permission inheritance", 10],
+    ["permissions inheritance", 10],
+    ["role inheritance", 9],
+    ["effective permissions", 9],
+    ["role assignment", 8],
+    ["access grant", 8],
+    ["administrator approval", 7],
+    ["permissions", 5],
+    ["permission", 5],
+    ["role", 3],
+    ["inheritance", 6]
   ],
   Delivery: [
     ["delivery", 1],
@@ -683,11 +732,13 @@ const URGENCY_LOW_WORDS = ["whenever", "not urgent", "no rush", "at some point",
 const CORE_PROBLEM_MAP: Record<string, string> = {
   Activation: "Customer cannot activate product after purchase",
   "Two-Factor Auth": "Customer cannot complete two-factor authentication to access the account",
+  Authentication: "Customer has an authentication infrastructure issue",
   Login: "Customer cannot log in to the account",
   Billing: "Customer has a payment or billing issue",
   Refund: "Customer is requesting a refund",
   Subscription: "Customer needs help with subscription management",
   "Account Access": "Customer cannot access their account",
+  "Permissions & Access": "Customer has a permissions or access-control issue",
   Delivery: "Customer has a delivery or shipping issue",
   "Delivery Delay": "Customer reports a delayed delivery or stale tracking update",
   "Package Tracking": "Customer needs package tracking support",
