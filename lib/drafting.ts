@@ -685,6 +685,24 @@ export function draftResponse(
 
   const lessonMatch = compatibleMatch ? lessonSignalMatch ?? findMatchingLesson(ticket, compatibleMatch.item) : null;
 
+  // TODO-030: compatibility makes a canonical candidate worth considering; it
+  // does not make every coincidental lesson-signal overlap safe for drafting.
+  // Re-apply the existing strong-evidence gate at the final authorization
+  // boundary so a generic signal such as "billing invoice" cannot turn a
+  // broadly compatible canonical item into a lesson-informed response. Do not
+  // fall through to the canonical template in this case: a selected lesson was
+  // considered, but its evidence was insufficient, so the conservative result
+  // is no_template. This gate is independent of trust and runs before semantic
+  // authorization, so neither can rescue weak deterministic evidence.
+  if (lessonMatch && compatibleMatch && !isStrongLessonEvidence(lessonMatch, isTicketCategoryClassified(understanding))) {
+    return {
+      draftResponse: UNCATEGORIZED_PLACEHOLDER,
+      basedOnKnowledgeIds: [],
+      confidenceNote: `A possible lesson overlap was rejected because its matched signals were not strong enough to authorize drafting. Human review must author the response and capture the correct root cause in Reflection.`,
+      source: "no_template"
+    };
+  }
+
   if (lessonMatch && compatibleMatch) {
     draft = renderLessonResponse(lessonMatch.lesson, ticket, profile, understanding);
     draft = appendTicketReferenceIfNeeded(draft, ticket.ticketId);
