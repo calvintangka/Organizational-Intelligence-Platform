@@ -42,9 +42,11 @@
     "probe:todo019-lesson-ranking": "node scripts/todo019-lesson-ranking-probe.cjs",
     "probe:todo020-timestamp-fallback": "node scripts/todo020-timestamp-fallback-probe.cjs",
     "probe:developer-demo-foundation": "node scripts/developer-demo-foundation-probe.cjs",
+    "probe:developer-demo-simulator": "node scripts/developer-demo/determinism-probe.cjs",
     "restore:maesa-profile-vocabulary": "node scripts/restore-maesa-profile-vocabulary.cjs",
     "seed:test-organization": "node scripts/seed-test-organization.cjs",
     "seed:developer-demo-foundation": "node scripts/seed-developer-demo-foundation.cjs",
+    "simulate:developer-demo": "node scripts/developer-demo/simulate.cjs",
     "seed:development-memberships": "node scripts/seed-development-memberships.cjs",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate"
