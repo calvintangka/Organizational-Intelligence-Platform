@@ -495,7 +495,7 @@ function normalizeLessonSignalToken(token: string): string {
   return lower;
 }
 
-function normalizeLessonSignalText(value: string): string {
+export function normalizeLessonSignalText(value: string): string {
   return value
     .toLowerCase()
     .replace(/can't/g, "cannot")
@@ -505,6 +505,21 @@ function normalizeLessonSignalText(value: string): string {
     .replace(/won't/g, "will not")
     .replace(/wont/g, "will not")
     .replace(/[^a-z0-9\s-]/g, " ");
+}
+
+/**
+ * Root-cause ordinals are compact, structured evidence in mature lessons
+ * (for example, "root cause 04"). They must retain their identity even
+ * though ordinary two-character tokens are intentionally excluded from broad
+ * signal matching. This parser is used only to reject a conflicting ordinal;
+ * it never makes an otherwise weak signal match on its own.
+ */
+function rootCauseReferences(value: string): Set<string> {
+  const references = new Set<string>();
+  for (const match of normalizeLessonSignalText(value).matchAll(/\broot\s+cause\s+0*(\d+)\b/g)) {
+    references.add(String(Number(match[1])));
+  }
+  return references;
 }
 
 function tokenizeLessonSignal(value: string): string[] {
@@ -560,6 +575,19 @@ function signalMatchesTicket(signal: string, ticketText: string, ticketTokens: S
   const normalizedSignal = normalizeLessonSignalText(signal).trim();
   if (!normalizedSignal) return false;
   if (ticketText.includes(normalizedSignal)) return true;
+
+  // TODO-028: the generic-overlap fallback below deliberately tolerates
+  // partial phrasing. It cannot, however, turn "root cause 01" into
+  // "root cause 04": those are competing structured explanations, not
+  // interchangeable generic tokens. A ticket with no root-cause ordinal still
+  // reaches the existing generic comparison, so specificity is never an
+  // automatic preference.
+  const signalRootCauseReferences = rootCauseReferences(normalizedSignal);
+  const ticketRootCauseReferences = rootCauseReferences(ticketText);
+  if (signalRootCauseReferences.size > 0 && ticketRootCauseReferences.size > 0) {
+    const hasSharedReference = [...signalRootCauseReferences].some((reference) => ticketRootCauseReferences.has(reference));
+    if (!hasSharedReference) return false;
+  }
 
   const signalTokens = tokenizeLessonSignal(normalizedSignal);
   if (signalTokens.length === 0) return false;
