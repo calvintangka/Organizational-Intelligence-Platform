@@ -12,7 +12,6 @@ import { DashboardView } from "@/components/views/DashboardView";
 import { OrganizationView } from "@/components/views/OrganizationView";
 import { AccentPicker } from "@/components/AccentPicker";
 import { AccountWorkspaceMenu } from "@/components/AccountWorkspaceMenu";
-import { primaryDemoTicketId, secondDemoTicketId, seedTickets } from "@/data/seedTickets";
 import { defaultOrganizationProfile, seedOrganizationProfiles } from "@/data/seedOrganizationProfiles";
 import { createAIAdapter } from "@/lib/ai/adapter";
 import { buildAIAdvisory, shouldAcceptPatternSuggestion } from "@/lib/ai/deterministic";
@@ -207,11 +206,6 @@ interface DraftSafetyContext {
 
 function createInitialMetrics(): Metrics {
   return { ...defaultMetrics };
-}
-
-function findTicket(ticketId: string): Ticket | null {
-  if (!ticketId) return null;
-  return seedTickets.find((item) => item.id === ticketId) ?? null;
 }
 
 function makeCustomTicket(description: string, ticketId?: string): Ticket {
@@ -1393,7 +1387,7 @@ export default function Home() {
   }
 
   function resetWorkflowState() {
-    setSelectedTicket(findTicket(primaryDemoTicketId));
+    setSelectedTicket(null);
     setSecondTicket(null);
     setAiAnalysis(null);
     setSimilarKnowledge([]);
@@ -2860,7 +2854,7 @@ export default function Home() {
     const second =
       customText && customText.trim().length >= 5
         ? makeCustomTicket(customText.trim())
-        : secondTicket ?? findTicket(secondDemoTicketId);
+        : secondTicket;
     if (!second) {
       setErrorMessage("Type a support issue in the text box below to test memory reuse.");
       return;

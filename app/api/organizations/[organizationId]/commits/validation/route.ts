@@ -1,43 +1,27 @@
 import { NextResponse } from "next/server";
-import {
-  commitValidation,
-  toSafePersistenceError,
-  validateOrganizationId
-} from "@/lib/server/persistenceService";
-import { requireOrganizationMembership } from "@/lib/server/authorization";
+import { commitValidation } from "@/lib/server/persistenceService";
+import { withOrganizationRoute } from "@/lib/server/organizationRoute";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-interface CommitRouteContext {
-  params: Promise<{ organizationId: string }>;
-}
 
 /**
  * Transactional Human Validation / Reflection commit. The candidate lifecycle
  * update, ValidationRecord, MemoryChangeRecord, and knowledge item write
  * (including trust and version data) commit together or not at all.
  */
-export async function POST(request: Request, context: CommitRouteContext) {
+export const POST = withOrganizationRoute(async ({ request, organizationId, user }) => {
+  // The authenticated session user is the only trusted actor identity; the
+  // request body can never control validation attribution.
+  let body: unknown;
   try {
-    const { organizationId } = await context.params;
-    validateOrganizationId(organizationId);
-    // The authenticated session user is the only trusted actor identity; the
-    // request body can never control validation attribution.
-    const { user } = await requireOrganizationMembership(organizationId);
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json(
-        { error: { code: "INVALID_REQUEST", message: "The request body must be valid JSON." } },
-        { status: 400 }
-      );
-    }
-    const result = await commitValidation(organizationId, body, { id: user.id, name: user.name });
-    return NextResponse.json({ data: result }, { status: 200 });
-  } catch (error) {
-    const safe = toSafePersistenceError(error);
-    return NextResponse.json({ error: { code: safe.code, message: safe.message } }, { status: safe.status });
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: { code: "INVALID_REQUEST", message: "The request body must be valid JSON." } },
+      { status: 400 }
+    );
   }
-}
+  const result = await commitValidation(organizationId, body, { id: user.id, name: user.name });
+  return NextResponse.json({ data: result }, { status: 200 });
+});
