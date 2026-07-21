@@ -30,16 +30,13 @@ export function retrieveMemory(
       const matchedKeywords = itemKeywords.filter((kw) => analysisKeywords.has(kw));
       const isSessionCreated = sessionCreatedIds.has(item.id);
       const reuseBoost = Math.min(item.timesReused * 2, 8);
-      // Trusted, mature knowledge surfaces above brand-new candidates of equal similarity.
-      const trustBoost = Math.min(Math.round((item.trustScore ?? 0) * 0.1), 10);
 
       const matchScore =
         (categoryMatch ? 55 : 0) +
         Math.min(matchedTags.length * 10, 30) +
         Math.min(matchedKeywords.length * 3, 12) +
         (isSessionCreated ? 8 : 0) +
-        reuseBoost +
-        trustBoost;
+        reuseBoost;
 
       const reasonParts = [
         categoryMatch ? `category match: "${item.category}"` : "",
@@ -78,19 +75,18 @@ export function retrieveMemory(
     }
   }
 
-  return [...byId.values()].sort((a, b) => b.matchScore - a.matchScore);
+  return [...byId.values()].sort((a, b) =>
+    b.matchScore - a.matchScore || a.item.id.localeCompare(b.item.id)
+  );
 }
 
 /**
- * "Better" means: higher similarity, then higher trust, then more usage
- * (timesSeen / timesReused), then most recently used or updated.
+ * "Better" means: higher intrinsic similarity, then more usage
+ * (timesSeen / timesReused), then most recently used or updated. Trust remains
+ * confidence metadata and is intentionally excluded from relevance (TODO-029).
  */
 function isBetterMatch(candidate: KnowledgeMatch, current: KnowledgeMatch): boolean {
   if (candidate.matchScore !== current.matchScore) return candidate.matchScore > current.matchScore;
-
-  const ct = candidate.item.trustScore ?? 0;
-  const rt = current.item.trustScore ?? 0;
-  if (ct !== rt) return ct > rt;
 
   const cUse = (candidate.item.timesSeen ?? 0) + (candidate.item.timesReused ?? 0);
   const rUse = (current.item.timesSeen ?? 0) + (current.item.timesReused ?? 0);

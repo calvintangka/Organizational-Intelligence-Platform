@@ -53,17 +53,24 @@ export function selectPreferredMatch(ticket: Ticket, matches: KnowledgeMatch[]):
   const topScore = Math.max(...pool.map((entry) => entry.match.matchScore));
   const relevantCluster = pool.filter((entry) => entry.match.matchScore >= topScore - 10);
 
+  // TODO-029 relevance order: lesson signal count, multi-token specificity,
+  // ticket-evidence coverage, canonical retrieval strength, stable item id.
+  // Trust is confidence in the winner and must never participate here.
   return relevantCluster.reduce((best, current) => {
-    const bestTrust = best.match.item.trustScore ?? 0;
-    const currentTrust = current.match.item.trustScore ?? 0;
-    if (currentTrust !== bestTrust) return currentTrust > bestTrust ? current : best;
-
     const bestLessonScore = best.lessonMatch?.score ?? 0;
     const currentLessonScore = current.lessonMatch?.score ?? 0;
     if (currentLessonScore !== bestLessonScore) return currentLessonScore > bestLessonScore ? current : best;
 
+    const bestMultiToken = best.lessonMatch?.multiTokenMatches ?? 0;
+    const currentMultiToken = current.lessonMatch?.multiTokenMatches ?? 0;
+    if (currentMultiToken !== bestMultiToken) return currentMultiToken > bestMultiToken ? current : best;
+
+    const bestCoverage = best.lessonMatch?.ticketEvidenceCoverage ?? 0;
+    const currentCoverage = current.lessonMatch?.ticketEvidenceCoverage ?? 0;
+    if (currentCoverage !== bestCoverage) return currentCoverage > bestCoverage ? current : best;
+
     if (current.match.matchScore !== best.match.matchScore) return current.match.matchScore > best.match.matchScore ? current : best;
-    return current;
+    return current.match.item.id.localeCompare(best.match.item.id) < 0 ? current : best;
   }, relevantCluster[0]);
 }
 
@@ -105,13 +112,19 @@ export function withPreDiscriminationLessonMatches(
 
   if (lessonMatches.length === 0) return matches;
 
+  // The pre-discrimination winner uses the same intrinsic lesson evidence and
+  // stable identity fallback as the final selector; trust is deliberately absent.
   const best = lessonMatches.reduce((winner, current) => {
     if (current.lessonMatch.score !== winner.lessonMatch.score) {
       return current.lessonMatch.score > winner.lessonMatch.score ? current : winner;
     }
-    const currentTrust = current.item.trustScore ?? 0;
-    const winnerTrust = winner.item.trustScore ?? 0;
-    return currentTrust > winnerTrust ? current : winner;
+    if (current.lessonMatch.multiTokenMatches !== winner.lessonMatch.multiTokenMatches) {
+      return current.lessonMatch.multiTokenMatches > winner.lessonMatch.multiTokenMatches ? current : winner;
+    }
+    if (current.lessonMatch.ticketEvidenceCoverage !== winner.lessonMatch.ticketEvidenceCoverage) {
+      return current.lessonMatch.ticketEvidenceCoverage > winner.lessonMatch.ticketEvidenceCoverage ? current : winner;
+    }
+    return current.item.id.localeCompare(winner.item.id) < 0 ? current : winner;
   }, lessonMatches[0]);
 
   const existing = matches.find((match) => match.item.id === best.item.id);
