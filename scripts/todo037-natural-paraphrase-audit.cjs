@@ -239,7 +239,17 @@ async function main() {
   safety.weakOverlapBlocked = weak && !weak.authorized;
 
   const aiCalls = [];
-  const semanticTicket = ticket(fixture.genuineParaphrases[0], "TODO037-AI");
+  // TODO-040: the original harness input (genuineParaphrases[0]) now carries
+  // STRONG deterministic lesson evidence, so the bounded semantic fallback
+  // correctly refuses to run for it (it may only resolve state "unknown").
+  // Use a purpose-built vague-SSO ticket whose deterministic evidence is still
+  // insufficient so this case keeps verifying the same property: the controlled
+  // semantic path can authorize within its boundary when determinism cannot.
+  const semanticTicket = ticket({
+    id: "AI-SEMANTIC-UNKNOWN",
+    subject: "Enterprise identity trouble after maintenance",
+    description: "Staff using the corporate identity service describe intermittent trouble completing enterprise workspace access after a scheduled maintenance window. We have no clear symptom details yet."
+  }, "TODO037-AI");
   const semanticUnderstanding = understandForProfile(semanticTicket, profile);
   const semanticEvaluation = await evaluateSemanticLessonCompatibility(mockSemanticProvider(aiCalls), semanticTicket, semanticUnderstanding, hero);
   const semanticDraft = draftResponse(semanticTicket, semanticUnderstanding, {

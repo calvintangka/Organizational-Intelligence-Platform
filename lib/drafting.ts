@@ -571,7 +571,97 @@ export function ticketContradictsLesson(ticket: Ticket, lesson: Lesson): boolean
   return lessonRequiresLoginFailure(lesson) && ticketHasExplicitLoginContradiction(ticketText);
 }
 
-function signalMatchesTicket(signal: string, ticketText: string, ticketTokens: Set<string>): boolean {
+// TODO-040: bounded deterministic semantic concept groups. Each set collects
+// tokens that express the SAME support/identity concept, so naturally worded
+// tickets can satisfy a validated multi-token lesson signal without copying its
+// exact stored phrase. Kept concept-level (not fixture phrases) so it
+// generalizes; it never lowers the multi-token/score gate and is vetoed by
+// proximity negation, preserving weak-overlap and contradiction safety.
+const CONCEPT_SYNONYMS: ReadonlyArray<ReadonlySet<string>> = [
+  // Federated-identity / SSO anchor.
+  new Set([
+    "authentication", "authenticate", "authenticating", "authenticated", "authentications",
+    "sso", "saml", "idp", "federation", "federated", "identity", "provider", "providers",
+    "assertion", "assertions", "sign-on"
+  ]),
+  // Signing certificate / trust material.
+  new Set([
+    "certificate", "certificates", "cert", "signing", "credential", "credentials",
+    "material", "metadata", "trust", "key", "keys"
+  ]),
+  // Redirect / sign-in loop symptom.
+  new Set([
+    "redirect", "redirects", "redirected", "redirecting", "redirection", "loop", "loops",
+    "looping", "bounce", "bounces", "bouncing", "cycle", "cycles", "cycling", "handoff",
+    "hand-off", "handshake", "circle", "circles", "repeat", "repeats", "repeating",
+    "repeatedly", "alternate", "alternates", "alternating", "endless", "stuck", "round",
+    "timeline", "returned", "return", "returns", "returning", "again", "restart",
+    "restarts", "restarted", "restarting"
+  ])
+];
+
+// Tokens that negate an adjacent concept ("no certificate", "not redirected",
+// "certificate has not changed", "sign-in works normally", "redirects are
+// unrelated"). Includes contraction stems produced by normalizeLessonSignalText
+// (apostrophes become spaces: "hasn't" -> "hasn").
+const CONCEPT_NEGATION_TOKENS = new Set([
+  "no", "not", "never", "cannot", "cant", "dont", "wont", "without", "none",
+  "unchanged", "unrelated", "unaffected", "normally",
+  "hasn", "havent", "haven", "hadn", "didn", "doesn", "wasn", "weren", "isn", "aren",
+  "couldn", "wouldn", "shouldn"
+]);
+
+function conceptIndexOf(token: string): number {
+  for (let index = 0; index < CONCEPT_SYNONYMS.length; index += 1) {
+    if (CONCEPT_SYNONYMS[index].has(token)) return index;
+  }
+  return -1;
+}
+
+/**
+ * Concept indices the ticket expresses AFFIRMATIVELY. The raw (punctuated) text
+ * is split into clauses; inside a clause a concept is negated when a negation
+ * token appears earlier in the clause (forward scope: "no observed bounce,
+ * failed handoff, ... or certificate evidence") or within two tokens after it
+ * (trailing predicate: "redirects are unrelated", "certificate has not
+ * changed"). Meaning-bearing negations in other clauses ("never admitted to the
+ * application") do not suppress a concept, so genuine paraphrases keep their
+ * evidence while explicit denials fail closed.
+ */
+function affirmativeConceptsOf(rawText: string): Set<number> {
+  const affirmative = new Set<number>();
+  const clauses = rawText
+    .toLowerCase()
+    .split(/[.!?;\n]+|\bbut\b|\bhowever\b|\balthough\b|\bwhereas\b|\byet\b/);
+  for (const clause of clauses) {
+    // Keep every word (not tokenizeLessonSignal, which drops stopwords like
+    // "again") so concept and negation tokens are detected in true position.
+    const tokens = normalizeLessonSignalText(clause).split(/\s+/).filter(Boolean);
+    let negationEarlier = false;
+    for (let index = 0; index < tokens.length; index += 1) {
+      const concept = conceptIndexOf(tokens[index]);
+      if (concept >= 0 && !affirmative.has(concept)) {
+        // Trailing window of three tokens catches predicate negations such as
+        // "signing certificate has not changed" without suppressing concepts
+        // whose clause carries a distant, unrelated negation.
+        const trailingNegation =
+          CONCEPT_NEGATION_TOKENS.has(tokens[index + 1] ?? "") ||
+          CONCEPT_NEGATION_TOKENS.has(tokens[index + 2] ?? "") ||
+          CONCEPT_NEGATION_TOKENS.has(tokens[index + 3] ?? "");
+        if (!negationEarlier && !trailingNegation) affirmative.add(concept);
+      }
+      if (CONCEPT_NEGATION_TOKENS.has(tokens[index])) negationEarlier = true;
+    }
+  }
+  return affirmative;
+}
+
+function signalMatchesTicket(
+  signal: string,
+  ticketText: string,
+  ticketTokens: Set<string>,
+  affirmativeConcepts: Set<number> = affirmativeConceptsOf(ticketText)
+): boolean {
   const normalizedSignal = normalizeLessonSignalText(signal).trim();
   if (!normalizedSignal) return false;
   if (ticketText.includes(normalizedSignal)) return true;
@@ -594,7 +684,18 @@ function signalMatchesTicket(signal: string, ticketText: string, ticketTokens: S
   if (signalPolarityContradictsTicket(signalTokens, ticketTokens)) return false;
   const overlap = signalTokens.filter((token) => ticketTokens.has(token)).length;
   const requiredOverlap = signalTokens.length <= 2 ? signalTokens.length : Math.max(2, Math.ceil(signalTokens.length * 0.6));
-  return overlap >= requiredOverlap;
+  if (overlap >= requiredOverlap) return true;
+
+  // TODO-040: deterministic semantic concept coverage. A signal token is
+  // satisfied by an affirmatively-present equivalent concept; tokens without a
+  // concept still require an exact ticket token. The same requiredOverlap gate
+  // applies, so a single generic concept overlap can never satisfy a multi-token
+  // signal, and negated concepts contribute nothing.
+  const conceptCovered = signalTokens.filter((token) => {
+    const concept = conceptIndexOf(token);
+    return concept >= 0 ? affirmativeConcepts.has(concept) : ticketTokens.has(token);
+  }).length;
+  return conceptCovered >= requiredOverlap;
 }
 
 /** Distinct meaningful ticket tokens explained by this lesson's matched signals. */
@@ -633,6 +734,9 @@ export function findMatchingLesson(ticket: Ticket, item: KnowledgeItem): LessonM
   if (!item.lessons || item.lessons.length === 0) return null;
   const ticketText = normalizeLessonSignalText(`${ticket.subject} ${ticket.description}`).trim();
   const ticketTokens = new Set(tokenizeLessonSignal(ticketText));
+  // Subject and description are separate clauses: a negation in one ("cannot
+  // complete sign-in") must not scope forward into the other.
+  const affirmativeConcepts = affirmativeConceptsOf(`${ticket.subject}. ${ticket.description}`);
   let best: LessonMatchResult | null = null;
   for (const lesson of item.lessons) {
     if (ticketContradictsLesson(ticket, lesson)) continue;
@@ -640,7 +744,7 @@ export function findMatchingLesson(ticket: Ticket, item: KnowledgeItem): LessonM
       .flatMap((signal) => signal.split(","))
       .map((signal) => signal.trim())
       .filter(Boolean);
-    const matchedSignals = signals.filter((signal) => signalMatchesTicket(signal, ticketText, ticketTokens));
+    const matchedSignals = signals.filter((signal) => signalMatchesTicket(signal, ticketText, ticketTokens, affirmativeConcepts));
     if (matchedSignals.length === 0) continue;
     const multiTokenMatches = matchedSignals.filter((signal) => tokenizeLessonSignal(signal).length >= 2).length;
     const candidate: LessonMatchResult = {
