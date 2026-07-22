@@ -3,6 +3,7 @@ import type {
   IntelligenceLogEntry,
   KnowledgeCandidate,
   KnowledgeItem,
+  KnowledgeHistory,
   MemoryChangeRecord,
   OrgMetrics,
   OrganizationProfile,
@@ -44,7 +45,7 @@ import {
   saveTicketRecords as saveLocalStorageTicketRecords
 } from "@/lib/ticketRecords";
 import { requireOrganizationId } from "@/lib/organizationId";
-import type { PersistenceAdapter } from "@/lib/persistence/adapter";
+import type { PersistenceAdapter, ValidationCommitRequest } from "@/lib/persistence/adapter";
 
 /**
  * Thin localStorage implementation. All migration, fallback, quota, reset,
@@ -100,6 +101,17 @@ export class LocalStorageAdapter implements PersistenceAdapter {
     return loadMemoryChangeRecords(organizationId);
   }
 
+  async loadKnowledgeHistory(organizationId: string, knowledgeId: string): Promise<KnowledgeHistory> {
+    const [validationRecords, memoryChangeRecords] = await Promise.all([
+      loadValidationRecords(organizationId),
+      loadMemoryChangeRecords(organizationId)
+    ]);
+    return {
+      validationRecords: validationRecords.filter((record) => record.knowledgeId === knowledgeId),
+      memoryChangeRecords: memoryChangeRecords.filter((record) => record.knowledgeId === knowledgeId)
+    };
+  }
+
   saveMemoryChangeRecords(organizationId: string, records: MemoryChangeRecord[]): Promise<void> {
     return saveMemoryChangeRecords(organizationId, records);
   }
@@ -146,13 +158,22 @@ export class LocalStorageAdapter implements PersistenceAdapter {
     return generateTicketIds(profile, count);
   }
 
-  /**
-   * Local mode persists validated memory changes through the existing
-   * per-resource snapshot saves; the commit operation itself is a no-op so
-   * the hardened localStorage behavior stays byte-identical to Batch 3.
-   */
-  async commitValidatedMemoryChange(organizationId: string): Promise<void> {
-    requireOrganizationId(organizationId, "Validated memory change commit");
+  async commitValidatedMemoryChange(organizationId: string, request: ValidationCommitRequest): Promise<void> {
+    const id = requireOrganizationId(organizationId, "Validated memory change commit");
+    const [validations, memoryChanges] = await Promise.all([
+      loadValidationRecords(id),
+      loadMemoryChangeRecords(id)
+    ]);
+    const nextValidations = validations.some((record) => record.id === request.validation.id)
+      ? validations
+      : [...validations, request.validation];
+    const nextMemoryChanges = memoryChanges.some((record) => record.id === request.memoryChange.id)
+      ? memoryChanges
+      : [...memoryChanges, request.memoryChange];
+    await Promise.all([
+      saveValidationRecords(id, nextValidations),
+      saveMemoryChangeRecords(id, nextMemoryChanges)
+    ]);
   }
 
   async resetOrganization(organizationId: string): Promise<void> {

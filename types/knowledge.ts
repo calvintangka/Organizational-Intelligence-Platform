@@ -79,6 +79,11 @@ export interface MemoryChangeRecord {
   timestamp: string;
 }
 
+export interface KnowledgeHistory {
+  validationRecords: ValidationRecord[];
+  memoryChangeRecords: MemoryChangeRecord[];
+}
+
 export interface CanonicalProblemExample {
   ticketId: string;
   customerName: string;

@@ -34,6 +34,7 @@ export type {
   KnowledgeCandidateStatus,
   ValidationRecord,
   MemoryChangeRecord,
+  KnowledgeHistory,
   TrustDecision,
   ResolutionMode,
   TrustEvaluation,

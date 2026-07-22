@@ -6,6 +6,7 @@ import type {
   EmergingPattern,
   IntelligenceLogEntry,
   KnowledgeCandidate,
+  KnowledgeHistory,
   KnowledgeItem,
   MemoryChangeRecord,
   OrgMetrics,
@@ -362,6 +363,35 @@ export async function loadMemoryChangeRecords(organizationId: string): Promise<M
   const organization = await requireOrganization(organizationId);
   const rows = await readDatabase("memory-change records", () => prisma.memoryChangeRecord.findMany({ where: { organizationId: organization.id }, orderBy: { timestamp: "asc" } }));
   return rows.map(mapMemoryChange);
+}
+
+export async function loadKnowledgeHistory(organizationId: string, knowledgeId: string): Promise<KnowledgeHistory> {
+  const organization = await requireOrganization(organizationId);
+  const normalizedKnowledgeId = typeof knowledgeId === "string" ? knowledgeId.trim() : "";
+  if (!normalizedKnowledgeId) {
+    throw new PersistenceServiceError("INVALID_REQUEST", "knowledgeId must be a non-empty string.", 400);
+  }
+  const knowledge = await readDatabase("knowledge history ownership", () => prisma.knowledgeItem.findFirst({
+    where: { id: normalizedKnowledgeId, organizationId: organization.id },
+    select: { id: true }
+  }));
+  if (!knowledge) {
+    throw new PersistenceServiceError("RESOURCE_NOT_FOUND", "The requested knowledge history was not found.", 404);
+  }
+  const [validations, memoryChanges] = await Promise.all([
+    readDatabase("knowledge validation history", () => prisma.validationRecord.findMany({
+      where: { organizationId: organization.id, knowledgeItemId: knowledge.id },
+      orderBy: [{ timestamp: "asc" }, { id: "asc" }]
+    })),
+    readDatabase("knowledge memory-change history", () => prisma.memoryChangeRecord.findMany({
+      where: { organizationId: organization.id, knowledgeItemId: knowledge.id },
+      orderBy: [{ timestamp: "asc" }, { id: "asc" }]
+    }))
+  ]);
+  return {
+    validationRecords: validations.map(mapValidation),
+    memoryChangeRecords: memoryChanges.map(mapMemoryChange)
+  };
 }
 
 export async function loadOrgMetrics(organizationId: string): Promise<OrgMetrics | null> {

@@ -95,6 +95,7 @@ import type {
   AIDiagnostics,
   AIKnowledgeEnrichment,
   KnowledgeItem,
+  KnowledgeHistory,
   KnowledgeMatch,
   Metrics,
   OrgMetrics,
@@ -145,6 +146,14 @@ const EMAIL_RECOVERY_VALIDATION_TERMS = [
   "login email",
   "account email"
 ];
+
+type KnowledgeHistoryLoadState = "not_loaded" | "loading" | "loaded" | "error";
+
+function mergeRecordsById<T extends { id: string }>(current: T[], incoming: T[]): T[] {
+  const merged = new Map(current.map((record) => [record.id, record]));
+  for (const record of incoming) merged.set(record.id, record);
+  return [...merged.values()];
+}
 const ACTIVATION_REQUIRED_DRAFT_TERMS = [
   "activation code",
   "purchase email",
@@ -443,6 +452,7 @@ export default function Home() {
   const [knowledgeCandidates, setKnowledgeCandidates] = useState<KnowledgeCandidate[]>([]);
   const [validationRecords, setValidationRecords] = useState<ValidationRecord[]>([]);
   const [memoryChangeRecords, setMemoryChangeRecords] = useState<MemoryChangeRecord[]>([]);
+  const [historyLoadState, setHistoryLoadState] = useState<Record<string, { state: KnowledgeHistoryLoadState; error?: string }>>({});
   const [organizationProfile, setOrganizationProfile] = useState<OrganizationProfile>(defaultOrganizationProfile);
   const [organizationList, setOrganizationList] = useState<OrganizationProfile[]>(seedOrganizationProfiles);
   const [authorizedOrganizations, setAuthorizedOrganizations] = useState<OrganizationProfile[]>([]);
@@ -495,6 +505,8 @@ export default function Home() {
   const [isRetryingDraft, setIsRetryingDraft] = useState(false);
   const organizationSwitchGeneration = useRef(0);
   const ticketRequestGuard = useRef(new TicketRequestGuard());
+  const knowledgeHistoryCache = useRef<Record<string, KnowledgeHistory>>({});
+  const knowledgeHistoryRequests = useRef<Record<string, Promise<KnowledgeHistory>>>({});
   // The server returns a fresh organization revision after each profile write.
   // Keep that revision outside React state so a successful save does not
   // trigger another save, while later legitimate edits still carry the
@@ -514,6 +526,47 @@ export default function Home() {
 
   function ticketRequestIsCurrent(generation?: number): boolean {
     return generation === undefined || ticketRequestGuard.current.isCurrent(generation);
+  }
+
+  function clearKnowledgeHistoryCache() {
+    knowledgeHistoryCache.current = {};
+    knowledgeHistoryRequests.current = {};
+    setHistoryLoadState({});
+  }
+
+  async function ensureKnowledgeHistory(organizationId: string, knowledgeId: string): Promise<KnowledgeHistory> {
+    const key = `${organizationId}:${knowledgeId}`;
+    const cached = knowledgeHistoryCache.current[key];
+    if (cached) return cached;
+    const pending = knowledgeHistoryRequests.current[key];
+    if (pending) return pending;
+
+    const generation = organizationSwitchGeneration.current;
+    setHistoryLoadState((current) => ({ ...current, [knowledgeId]: { state: "loading" } }));
+    const request = persistence.loadKnowledgeHistory(organizationId, knowledgeId);
+    knowledgeHistoryRequests.current[key] = request;
+    try {
+      const history = await request;
+      if (generation !== organizationSwitchGeneration.current) return history;
+      knowledgeHistoryCache.current[key] = history;
+      setValidationRecords((current) => mergeRecordsById(current, history.validationRecords));
+      setMemoryChangeRecords((current) => mergeRecordsById(current, history.memoryChangeRecords));
+      setHistoryLoadState((current) => ({ ...current, [knowledgeId]: { state: "loaded" } }));
+      return history;
+    } catch (error) {
+      if (generation === organizationSwitchGeneration.current) {
+        setHistoryLoadState((current) => ({
+          ...current,
+          [knowledgeId]: {
+            state: "error",
+            error: error instanceof Error ? error.message : "Unable to load knowledge history."
+          }
+        }));
+      }
+      throw error;
+    } finally {
+      if (knowledgeHistoryRequests.current[key] === request) delete knowledgeHistoryRequests.current[key];
+    }
   }
 
   useEffect(() => {
@@ -599,8 +652,8 @@ export default function Home() {
           persistence.loadOrganizationList(),
           persistence.loadKnowledge(orgId),
           persistence.loadKnowledgeCandidates(orgId),
-          persistence.loadValidationRecords(orgId),
-          persistence.loadMemoryChangeRecords(orgId),
+          Promise.resolve([] as ValidationRecord[]),
+          Promise.resolve([] as MemoryChangeRecord[]),
           persistence.loadOrgMetrics(orgId),
           persistence.loadOrgLog(orgId),
           persistence.loadEmergingPatterns(orgId),
@@ -619,6 +672,7 @@ export default function Home() {
         setOrganizationList(syncProfileIntoList(loadedOrganizationList, loadedProfile));
         setKnowledgeItems(loadedKnowledge);
         setKnowledgeCandidates(loadedCandidates);
+        clearKnowledgeHistoryCache();
         setValidationRecords(loadedValidationRecords);
         setMemoryChangeRecords(loadedMemoryChangeRecords);
         setOrgMetrics({
@@ -698,8 +752,6 @@ export default function Home() {
     await Promise.all([
       persistence.saveKnowledge(orgId, knowledgeItems),
       persistence.saveKnowledgeCandidates(orgId, knowledgeCandidates),
-      persistence.saveValidationRecords(orgId, validationRecords),
-      persistence.saveMemoryChangeRecords(orgId, memoryChangeRecords),
       persistence.saveOrgMetrics(orgId, orgMetrics),
       persistence.saveOrgLog(orgId, intelligenceLog),
       persistence.saveEmergingPatterns(orgId, emergingPatterns),
@@ -711,8 +763,8 @@ export default function Home() {
     const [knowledge, candidates, validations, changes, loadedMetrics, log, patterns, tickets] = await Promise.all([
       persistence.loadKnowledge(orgId),
       persistence.loadKnowledgeCandidates(orgId),
-      persistence.loadValidationRecords(orgId),
-      persistence.loadMemoryChangeRecords(orgId),
+      Promise.resolve([] as ValidationRecord[]),
+      Promise.resolve([] as MemoryChangeRecord[]),
       persistence.loadOrgMetrics(orgId),
       persistence.loadOrgLog(orgId),
       persistence.loadEmergingPatterns(orgId),
@@ -733,10 +785,8 @@ export default function Home() {
     };
   }
 
-  // Server mode note: knowledge, validation records, and memory change records
-  // never persist through these snapshot saves — their durable writes happen
-  // exclusively inside the transactional validation commit so the audit chain
-  // (validation -> memory change -> knowledge/trust) can never partially land.
+  // Validation and memory-change history persist through the validated-memory
+  // commit boundary, never through partial client snapshots.
   useEffect(() => {
     if (hydrated && activePersistenceMode() === "local") queuePersistenceSave("saveKnowledge", persistence.saveKnowledge(organizationProfile.id, knowledgeItems));
   }, [knowledgeItems, organizationProfile.id, hydrated]);
@@ -744,14 +794,6 @@ export default function Home() {
   useEffect(() => {
     if (hydrated) queuePersistenceSave("saveKnowledgeCandidates", persistence.saveKnowledgeCandidates(organizationProfile.id, knowledgeCandidates));
   }, [knowledgeCandidates, organizationProfile.id, hydrated]);
-
-  useEffect(() => {
-    if (hydrated && activePersistenceMode() === "local") queuePersistenceSave("saveValidationRecords", persistence.saveValidationRecords(organizationProfile.id, validationRecords));
-  }, [validationRecords, organizationProfile.id, hydrated]);
-
-  useEffect(() => {
-    if (hydrated && activePersistenceMode() === "local") queuePersistenceSave("saveMemoryChangeRecords", persistence.saveMemoryChangeRecords(organizationProfile.id, memoryChangeRecords));
-  }, [memoryChangeRecords, organizationProfile.id, hydrated]);
 
   useEffect(() => {
     if (hydrated) queuePersistenceSave("saveOrgMetrics", persistence.saveOrgMetrics(organizationProfile.id, orgMetrics));
@@ -1007,6 +1049,14 @@ export default function Home() {
         ? prev.map((item) => (item.id === validatedCandidate.id ? validatedCandidate : item))
         : [...prev, validatedCandidate];
     });
+    const historyKey = `${organizationId}:${validatedItem.id}`;
+    const cachedHistory = knowledgeHistoryCache.current[historyKey];
+    if (cachedHistory) {
+      knowledgeHistoryCache.current[historyKey] = {
+        validationRecords: mergeRecordsById(cachedHistory.validationRecords, [validation]),
+        memoryChangeRecords: mergeRecordsById(cachedHistory.memoryChangeRecords, [memoryChange])
+      };
+    }
     setValidationRecords((prev) => [...prev, validation]);
     setMemoryChangeRecords((prev) => [...prev, memoryChange]);
     setKnowledgeItems((prev) => upsertCanonicalProblem(prev, validatedItem));
@@ -1624,6 +1674,7 @@ export default function Home() {
     }
     setKnowledgeItems(persistence.seedKnowledge().map((item) => ({ ...item, organizationId: organizationProfile.id })));
     setKnowledgeCandidates([]);
+    clearKnowledgeHistoryCache();
     setValidationRecords([]);
     setMemoryChangeRecords([]);
     setOrgMetrics(persistence.seedOrgMetrics(organizationProfile.id));
@@ -1691,6 +1742,7 @@ export default function Home() {
     // workspace. Late AI or persistence results must not land in the incoming
     // organization.
     cancelActiveTicketRequest();
+    clearKnowledgeHistoryCache();
     const wasHydrated = hydrated;
     setHydrated(false);
     setErrorMessage("");
@@ -2945,7 +2997,14 @@ export default function Home() {
       setCurrentStep(8);
       return;
     }
-    const trust = evaluateTrust(reusedMatch.item, organizationProfile, validationRecords);
+    let reuseValidationHistory: ValidationRecord[] = [];
+    try {
+      reuseValidationHistory = (await ensureKnowledgeHistory(organizationProfile.id, reusedMatch.item.id)).validationRecords;
+    } catch (error) {
+      reportPersistenceError("loadKnowledgeHistory", error);
+    }
+    if (!ticketRequestIsCurrent(requestGeneration)) return;
+    const trust = evaluateTrust(reusedMatch.item, organizationProfile, reuseValidationHistory);
     // LLM discrimination on the reuse candidate — prevents false-positive memory reuse
     setDiscriminationReasoning(null);
     setDiscriminatedMatchTitle(null);
@@ -3160,7 +3219,16 @@ export default function Home() {
     const selectedMatchInfo = compatibleMatches.length > 0 ? selectPreferredMatch(ticket, compatibleMatches) : null;
     const topMatch = selectedMatchInfo?.match ?? null;
     const lessonMatchForRecord = selectedMatchInfo?.lessonMatch ?? null;
-    const topTrust = topMatch ? evaluateTrust(topMatch.item, profile, validationRecords) : null;
+    let topValidationHistory: ValidationRecord[] = [];
+    if (topMatch) {
+      try {
+        topValidationHistory = (await ensureKnowledgeHistory(profile.id, topMatch.item.id)).validationRecords;
+      } catch (error) {
+        reportPersistenceError("loadKnowledgeHistory", error);
+      }
+      if (!ticketRequestIsCurrent(requestGeneration)) return;
+    }
+    const topTrust = topMatch ? evaluateTrust(topMatch.item, profile, topValidationHistory) : null;
 
     record = {
       ...record,
@@ -3430,12 +3498,16 @@ export default function Home() {
               emergingPatterns={emergingPatterns}
               validationRecords={validationRecords}
               memoryChangeRecords={memoryChangeRecords}
+              historyLoadState={historyLoadState}
               darkMode={darkMode}
               orgId={organizationProfile.id}
               onPromote={promotePattern}
               onImportPack={importKnowledgePack}
               onValidatePackCandidate={validateKnowledgePackCandidate}
               onRejectPackCandidate={rejectKnowledgePackCandidate}
+              onLoadHistory={async (knowledgeId) => {
+                await ensureKnowledgeHistory(organizationProfile.id, knowledgeId);
+              }}
             />
           )}
 

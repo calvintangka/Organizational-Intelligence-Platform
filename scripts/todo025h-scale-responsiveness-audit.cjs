@@ -175,18 +175,18 @@ async function main() {
   const measurements = [];
   for (const [name, read, count] of resources) measurements.push((await measure(name, read, count)).result);
 
-  const hydrate = await measure("full organization hydration resource set", async () => Promise.all([
+  const hydrate = await measure("initial organization hydration resource set (lazy history)", async () => Promise.all([
     persistence.listOrganizationProfiles(), persistence.loadKnowledge(DEMO), persistence.loadKnowledgeCandidates(DEMO),
-    persistence.loadValidationRecords(DEMO), persistence.loadMemoryChangeRecords(DEMO), persistence.loadOrgMetrics(DEMO),
-    persistence.loadIntelligenceLog(DEMO), persistence.loadEmergingPatterns(DEMO), persistence.loadTicketRecords(DEMO)
+    persistence.loadOrgMetrics(DEMO), persistence.loadIntelligenceLog(DEMO), persistence.loadEmergingPatterns(DEMO),
+    persistence.loadTicketRecords(DEMO)
   ]), (value) => value.reduce((total, resource) => total + (Array.isArray(resource) ? resource.length : resource ? 1 : 0), 0));
   measurements.push(hydrate.result);
 
   for (const [from, to] of [["profile-maesa-tech", DEMO], [DEMO, "profile-fastdrop-logistics"], ["profile-fastdrop-logistics", DEMO]]) {
     const switchMeasure = await measure(`read-only switch preload ${from} → ${to}`, async () => Promise.all([
       persistence.getOrganizationProfile(to), persistence.loadKnowledge(to), persistence.loadKnowledgeCandidates(to),
-      persistence.loadValidationRecords(to), persistence.loadMemoryChangeRecords(to), persistence.loadOrgMetrics(to),
-      persistence.loadIntelligenceLog(to), persistence.loadEmergingPatterns(to), persistence.loadTicketRecords(to)
+      persistence.loadOrgMetrics(to), persistence.loadIntelligenceLog(to), persistence.loadEmergingPatterns(to),
+      persistence.loadTicketRecords(to)
     ]), (value) => value.reduce((total, resource) => total + (Array.isArray(resource) ? resource.length : resource ? 1 : 0), 0));
     measurements.push(switchMeasure.result);
   }

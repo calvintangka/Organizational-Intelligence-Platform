@@ -130,6 +130,10 @@ class RoutingPersistenceAdapter implements PersistenceAdapter {
     return this.activeResourceAdapter.loadMemoryChangeRecords(organizationId);
   }
 
+  loadKnowledgeHistory(organizationId: string, knowledgeId: string) {
+    return this.activeResourceAdapter.loadKnowledgeHistory(organizationId, knowledgeId);
+  }
+
   saveMemoryChangeRecords(organizationId: string, records: MemoryChangeRecord[]): Promise<void> {
     return this.activeResourceAdapter.saveMemoryChangeRecords(organizationId, records);
   }

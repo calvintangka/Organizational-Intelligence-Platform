@@ -3,6 +3,7 @@ import type {
   IntelligenceLogEntry,
   KnowledgeCandidate,
   KnowledgeItem,
+  KnowledgeHistory,
   MemoryChangeRecord,
   OrgMetrics,
   OrganizationProfile,
@@ -52,6 +53,7 @@ export interface PersistenceAdapter {
   loadValidationRecords(organizationId: string): Promise<ValidationRecord[]>;
   saveValidationRecords(organizationId: string, records: ValidationRecord[]): Promise<void>;
   loadMemoryChangeRecords(organizationId: string): Promise<MemoryChangeRecord[]>;
+  loadKnowledgeHistory(organizationId: string, knowledgeId: string): Promise<KnowledgeHistory>;
   saveMemoryChangeRecords(organizationId: string, records: MemoryChangeRecord[]): Promise<void>;
   loadOrgMetrics(organizationId: string): Promise<OrgMetrics | null>;
   saveOrgMetrics(organizationId: string, metrics: OrgMetrics): Promise<void>;

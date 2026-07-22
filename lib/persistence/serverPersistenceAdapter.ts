@@ -3,6 +3,7 @@ import type {
   IntelligenceLogEntry,
   KnowledgeCandidate,
   KnowledgeItem,
+  KnowledgeHistory,
   MemoryChangeRecord,
   OrgMetrics,
   OrganizationProfile,
@@ -73,6 +74,13 @@ export class ServerPersistenceAdapter implements PersistenceAdapter {
 
   async loadMemoryChangeRecords(organizationId: string): Promise<MemoryChangeRecord[]> {
     return this.requestResource<MemoryChangeRecord[]>(organizationId, "memory-change-records");
+  }
+
+  async loadKnowledgeHistory(organizationId: string, knowledgeId: string): Promise<KnowledgeHistory> {
+    const id = this.rememberOrganization(organizationId);
+    return this.requestData<KnowledgeHistory>(
+      `${this.organizationPath(id)}/knowledge/${encodeURIComponent(knowledgeId)}/history`
+    );
   }
 
   async loadOrgMetrics(organizationId: string): Promise<OrgMetrics | null> {

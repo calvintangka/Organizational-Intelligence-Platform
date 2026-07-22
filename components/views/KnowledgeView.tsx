@@ -27,12 +27,14 @@ interface KnowledgeViewProps {
   emergingPatterns: EmergingPattern[];
   validationRecords: ValidationRecord[];
   memoryChangeRecords: MemoryChangeRecord[];
+  historyLoadState: Record<string, { state: "not_loaded" | "loading" | "loaded" | "error"; error?: string }>;
   darkMode: boolean;
   orgId: string;
   onPromote: (patternId: string) => void;
   onImportPack: (pack: KnowledgePack) => void;
   onValidatePackCandidate: (candidateId: string, draft: KnowledgePackCandidateDraft) => KnowledgeItem | null | Promise<KnowledgeItem | null>;
   onRejectPackCandidate: (candidateId: string) => void;
+  onLoadHistory: (knowledgeId: string) => Promise<void>;
 }
 
 function TrustBadge({ score, darkMode }: { score: number; darkMode: boolean }) {
@@ -162,12 +164,14 @@ export function KnowledgeView({
   emergingPatterns,
   validationRecords,
   memoryChangeRecords,
+  historyLoadState,
   darkMode,
   orgId,
   onPromote,
   onImportPack,
   onValidatePackCandidate,
-  onRejectPackCandidate
+  onRejectPackCandidate,
+  onLoadHistory
 }: KnowledgeViewProps) {
   const [networkOpen, setNetworkOpen] = useState(false);
   const [preview, setPreview] = useState<KnowledgePackPreview | null>(null);
@@ -675,6 +679,7 @@ export function KnowledgeView({
                 const tickets = item.exampleTickets?.length ?? 0;
                 const itemValidations = validationRecords.filter((record) => record.knowledgeId === item.id);
                 const itemChanges = memoryChangeRecords.filter((record) => record.knowledgeId === item.id);
+                const itemHistoryState = historyLoadState[item.id] ?? { state: "not_loaded" as const };
                 const dateStr = formatLastUpdatedDisplay(
                   [item.lastUpdated, item.lastValidated, item.approvedAt, item.createdAt],
                   "-"
@@ -710,7 +715,14 @@ export function KnowledgeView({
                     </p>
 
                     {item.customerResponseTemplate && (
-                      <details className="mt-3">
+                      <details
+                        className="mt-3"
+                        onToggle={(event) => {
+                          if (event.currentTarget.open && itemHistoryState.state === "not_loaded") {
+                            void onLoadHistory(item.id).catch(() => undefined);
+                          }
+                        }}
+                      >
                         <summary className={`cursor-pointer text-xs font-semibold ${darkMode ? "text-blue-400" : "text-[#2563EB]"} hover:underline`}>
                           View knowledge details
                         </summary>
@@ -744,7 +756,16 @@ export function KnowledgeView({
                           )}
                           <div>
                             <p className={`mb-1 text-xs font-bold uppercase tracking-wide ${darkMode ? "text-slate-400" : "text-slate-500"}`}>Validation history</p>
-                            {itemValidations.length === 0 ? (
+                            {itemHistoryState.state === "loading" || itemHistoryState.state === "not_loaded" ? (
+                              <p className={`rounded-lg p-3 text-xs ${darkMode ? "bg-[#111827] text-slate-400" : "bg-slate-50 text-slate-500"}`}>
+                                Loading validation history…
+                              </p>
+                            ) : itemHistoryState.state === "error" ? (
+                              <div className={`rounded-lg p-3 text-xs ${darkMode ? "bg-red-950/30 text-red-300" : "bg-red-50 text-red-700"}`}>
+                                <p>{itemHistoryState.error ?? "Unable to load validation history."}</p>
+                                <button className="mt-2 font-semibold underline" onClick={() => void onLoadHistory(item.id).catch(() => undefined)} type="button">Retry</button>
+                              </div>
+                            ) : itemValidations.length === 0 ? (
                               <p className={`rounded-lg p-3 text-xs ${darkMode ? "bg-[#111827] text-slate-400" : "bg-slate-50 text-slate-500"}`}>
                                 No validation records found for this item.
                               </p>
@@ -764,7 +785,15 @@ export function KnowledgeView({
                           </div>
                           <div>
                             <p className={`mb-1 text-xs font-bold uppercase tracking-wide ${darkMode ? "text-slate-400" : "text-slate-500"}`}>Memory change history</p>
-                            {itemChanges.length === 0 ? (
+                            {itemHistoryState.state === "loading" || itemHistoryState.state === "not_loaded" ? (
+                              <p className={`rounded-lg p-3 text-xs ${darkMode ? "bg-[#111827] text-slate-400" : "bg-slate-50 text-slate-500"}`}>
+                                Loading memory change history…
+                              </p>
+                            ) : itemHistoryState.state === "error" ? (
+                              <p className={`rounded-lg p-3 text-xs ${darkMode ? "bg-red-950/30 text-red-300" : "bg-red-50 text-red-700"}`}>
+                                History is unavailable until the request succeeds.
+                              </p>
+                            ) : itemChanges.length === 0 ? (
                               <p className={`rounded-lg p-3 text-xs ${darkMode ? "bg-[#111827] text-slate-400" : "bg-slate-50 text-slate-500"}`}>
                                 No memory change records found for this item.
                               </p>
