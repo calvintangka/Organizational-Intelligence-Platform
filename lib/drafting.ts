@@ -823,18 +823,28 @@ function affirmativeConceptsOf(rawText: string): Set<number> {
     result.add(12);
     result.add(13);
   }
+  // reporting-surface(14) covers any report/dashboard/export context.
   if (/\b(?:csv|spreadsheet|export|download|downloaded|file|output|import|imported|report|dashboard|text|characters|symbols)\b/.test(normalizedRaw)) {
     result.add(14);
+  }
+  // TODO-049: export-surface(15) requires genuine EXPORT/file evidence. A
+  // dashboard-viewing or report-verb complaint ("the total on our dashboard is
+  // off") is not an export, so "report"/"dashboard"/"text" alone must not
+  // fabricate export evidence and let an unrelated ticket match export lessons.
+  if (/\b(?:csv|spreadsheet|exports?|exported|download|downloaded|downloads|file|files|output|outputs|import|imports|imported)\b/.test(normalizedRaw)) {
     result.add(15);
   }
-  // Encoding lessons describe the observable corruption, not just the export
-  // surface. Keep this bounded to reporting/export language so a generic
-  // timing or status complaint cannot acquire encoding evidence.
-  const encodingFailure = /\b(?:breaks?|broken|corrupt(?:ed|ion)?|garbled|unreadable|mangles?|accented|diacritics?|incorrect(?:ly)?|odd|misread|different|changes?|loses?|lost|fidelity|wrong|substitutions?|strange)\b/.test(normalizedRaw)
+  // Encoding lessons describe observable CHARACTER corruption, not just the
+  // export surface. TODO-049: generic value-mismatch words ("different",
+  // "wrong", "changes", "incorrect", "odd", "lost", "fidelity") describe a
+  // totals/data discrepancy, not character encoding, and must not fabricate
+  // encoding evidence (they remain in the negation veto below). The surface
+  // requirement likewise excludes bare "report"/"data".
+  const encodingFailure = /\b(?:breaks?|broken|corrupt(?:ed|ion)?|garbled|unreadable|mangles?|accented|diacritics?|misread|substitutions?|strange)\b/.test(normalizedRaw)
     && !/\b(?:not|no|without)\s+(?:any\s+)?(?:break|broken|corrupt(?:ion)?|garbled|unreadable|mangling|accented|diacritics?|incorrect|odd|misread|difference|changes?|loss|fidelity|wrong|substitution|strangeness)\b/.test(normalizedRaw)
     && !(/\b(?:encoding|characters?|symbols?|files?|text|export)\b[^.!?]{0,30}\b(?:normal|correct|fine|works?|working|unaffected|preserve|preserved)\b/.test(normalizedRaw)
-      && !/\b(?:breaks?|broken|corrupt(?:ed|ion)?|garbled|unreadable|mangles?|accented|diacritics?|incorrect(?:ly)?|odd|misread|substitutions?|strange)\b/.test(normalizedRaw));
-  if (encodingFailure && /\b(?:export|download|file|csv|spreadsheet|report|data|text)\b/.test(normalizedRaw)) {
+      && !/\b(?:breaks?|broken|corrupt(?:ed|ion)?|garbled|unreadable|mangles?|accented|diacritics?|misread|substitutions?|strange)\b/.test(normalizedRaw));
+  if (encodingFailure && /\b(?:exports?|exported|download|downloaded|file|files|csv|spreadsheet|characters?|symbols?|encoding)\b/.test(normalizedRaw)) {
     result.add(16);
     result.add(17);
   }
@@ -851,6 +861,21 @@ function affirmativeConceptsOf(rawText: string): Set<number> {
       && !/\b(?:no|not|without)\b[^.!?]{0,24}\b(?:key rotation|certificate rotation|signing material|certificate|credential)\b/.test(normalizedRaw)) result.add(1);
   return result;
 }
+
+// TODO-049: non-discriminating "category-level" concepts. reporting-surface(14)
+// is shared by every reporting lesson ("reporting <surface>" / "<surface>
+// timeline" signals), and the pure timing concepts (billing/integration/
+// workspace/reporting/mobile/notification timing) are activated by generic
+// temporal words like "when"/"after". A purely-SEMANTIC signal match explained
+// ONLY by these concepts (no literal token evidence, no discriminating concept
+// such as export-surface/encoding/signature/redirect) is evidence that the
+// ticket is *in the domain*, not that it describes the lesson's specific root
+// cause. Authorizing on that alone let an unrelated "dashboard totals" ticket
+// match a CSV-encoding/column-order lesson. This extends the TODO-030 principle
+// ("generic overlaps are not evidence") to semantic concept coverage. Every
+// discriminating domain signal also carries a non-generic surface/meaning
+// concept, so it is never a subset of this set and is unaffected.
+const GENERIC_SURFACE_TIMING_CONCEPTS = new Set([5, 9, 13, 14, 17, 21, 24]);
 
 interface SignalMatchEvidence {
   matchType: "literal" | "semantic";
@@ -897,12 +922,22 @@ function signalMatchEvidence(
     return concepts.length > 0 ? concepts.some((concept) => affirmativeConcepts.has(concept)) : ticketTokens.has(token);
   });
   if (conceptCoveredTokens.length < requiredOverlap) return null;
+  const coveringConcepts = [...new Set(conceptCoveredTokens
+    .flatMap((token) => conceptIndicesOf(token))
+    .filter((concept) => affirmativeConcepts.has(concept)))];
+  // TODO-049: a semantic match carried entirely by generic surface/timing
+  // concepts (and no literal token evidence) is category-level, not root-cause
+  // evidence — reject it so a generic reporting ticket cannot authorize an
+  // unrelated reporting lesson via shared "reporting/dashboard/timeline" words.
+  const hasLiteralTokenEvidence = conceptCoveredTokens.some((token) => conceptIndicesOf(token).length === 0);
+  if (!hasLiteralTokenEvidence
+      && coveringConcepts.length > 0
+      && coveringConcepts.every((concept) => GENERIC_SURFACE_TIMING_CONCEPTS.has(concept))) {
+    return null;
+  }
   return {
     matchType: "semantic",
-    matchedConcepts: [...new Set(conceptCoveredTokens
-      .flatMap((token) => conceptIndicesOf(token))
-      .filter((concept) => affirmativeConcepts.has(concept))
-      .map((concept) => CONCEPT_NAMES[concept] ?? `concept-${concept}`))]
+    matchedConcepts: coveringConcepts.map((concept) => CONCEPT_NAMES[concept] ?? `concept-${concept}`)
   };
 }
 
