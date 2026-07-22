@@ -9,6 +9,11 @@ import {
   resolveLessonIdForItem
 } from "@/lib/canonicalProblemEngine";
 import { defaultOrganizationProfile } from "@/data/seedOrganizationProfiles";
+import {
+  assessRootCauseEvidenceState,
+  applyRootCauseSafeLanguage,
+  rootCauseEvidenceNote
+} from "@/lib/rootCauseSafety";
 
 const UNCATEGORIZED_CATEGORY = "Uncategorized";
 const UNCATEGORIZED_PLACEHOLDER = "This issue type is new to the organization. Please write a response below and teach OIP through the Reflection step.";
@@ -1029,7 +1034,12 @@ export function findMatchingLesson(ticket: Ticket, item: KnowledgeItem): LessonM
 }
 
 function renderLessonResponse(lesson: Lesson, ticket: Ticket, profile: OrganizationProfile, understanding: Understanding): string {
-  return renderCustomerTemplateForTicket(lesson.customerResponse, ticket, profile, understanding);
+  const rendered = renderCustomerTemplateForTicket(lesson.customerResponse, ticket, profile, understanding);
+  // TODO-048: a matched lesson proves similarity, not that its historical root
+  // cause is confirmed for THIS ticket. Soften any "We found that <cause>"
+  // assertion to a possibility unless the current ticket independently
+  // establishes the cause. Investigation/resolution guidance is preserved.
+  return applyRootCauseSafeLanguage(rendered, assessRootCauseEvidenceState(ticket, lesson));
 }
 
 function tonePrefix(profile: OrganizationProfile, ticket: Ticket, understanding: Understanding): string {
@@ -1108,7 +1118,8 @@ export function draftResponse(
     draft = renderLessonResponse(lessonMatch.lesson, ticket, profile, understanding);
     draft = appendTicketReferenceIfNeeded(draft, ticket.ticketId);
     const lessonLabel = lessonMatch.lesson.title ?? lessonMatch.lesson.rootCause;
-    confidenceNote = `Lesson-informed draft: "${lessonLabel}" (matched signals: ${lessonMatch.matchedSignals.join(", ")}). Root cause: ${lessonMatch.lesson.rootCause}. Solution: ${lessonMatch.lesson.solution}. Human review is still required unless trust allows auto-resolution.`;
+    const evidence = assessRootCauseEvidenceState(ticket, lessonMatch.lesson);
+    confidenceNote = `Lesson-informed draft: "${lessonLabel}" (matched signals: ${lessonMatch.matchedSignals.join(", ")}). ${rootCauseEvidenceNote(evidence)} Guidance used: ${lessonMatch.lesson.solution}. Human review is still required unless trust allows auto-resolution.`;
     basedOnKnowledgeIds.push(compatibleMatch.item.id);
     return { draftResponse: draft, basedOnKnowledgeIds, confidenceNote, source: "deterministic" };
   }
@@ -1125,7 +1136,8 @@ export function draftResponse(
     draft = renderLessonResponse(semanticLesson, ticket, profile, understanding);
     draft = appendTicketReferenceIfNeeded(draft, ticket.ticketId);
     const lessonLabel = semanticLesson.title ?? semanticLesson.rootCause;
-    confidenceNote = `Lesson-informed draft (semantic match): "${lessonLabel}". Deterministic root-cause evidence was insufficient, and the AI discrimination layer confirmed with high confidence that this ticket describes the same underlying problem. Reasoning: ${semanticAuthorization?.reasoning ?? "n/a"}. Root cause: ${semanticLesson.rootCause}. Solution: ${semanticLesson.solution}. Human review is still required unless trust allows auto-resolution.`;
+    const evidence = assessRootCauseEvidenceState(ticket, semanticLesson);
+    confidenceNote = `Lesson-informed draft (semantic match): "${lessonLabel}". Deterministic root-cause evidence was insufficient, and the AI discrimination layer confirmed with high confidence that this ticket describes the same underlying problem. Reasoning: ${semanticAuthorization?.reasoning ?? "n/a"}. ${rootCauseEvidenceNote(evidence)} Guidance used: ${semanticLesson.solution}. Human review is still required unless trust allows auto-resolution.`;
     basedOnKnowledgeIds.push(topMatch.item.id);
     return { draftResponse: draft, basedOnKnowledgeIds, confidenceNote, source: "deterministic" };
   }
