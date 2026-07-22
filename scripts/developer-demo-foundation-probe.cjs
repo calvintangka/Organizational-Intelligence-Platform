@@ -69,9 +69,18 @@ async function loadOrganization(cookie, organizationId) {
 
   const resources = {};
   for (const name of RESOURCE_NAMES) {
-    const response = await request(`/api/organizations/${organizationId}/${name}`, { headers: { cookie } });
+    const suffix = name === "tickets" ? "?page=1&pageSize=100" : "";
+    const response = await request(`/api/organizations/${organizationId}/${name}${suffix}`, { headers: { cookie } });
     assert.equal(response.status, 200, `${name} must load for ${organizationId}.`);
-    resources[name] = (await response.json()).data;
+    const data = (await response.json()).data;
+    if (name === "tickets") {
+      assert.equal(data.page, 1, "Ticket isolation read must use the requested first page.");
+      assert.equal(data.pageSize, 100, "Ticket isolation read must remain bounded.");
+      assert.ok(data.tickets.length <= 100, "Ticket isolation read must not hydrate every mature ticket.");
+      resources[name] = data.tickets;
+    } else {
+      resources[name] = data;
+    }
   }
   const authorityResponse = await request(`/api/organizations/${organizationId}/persistence-authority`, { headers: { cookie } });
   assert.equal(authorityResponse.status, 200);

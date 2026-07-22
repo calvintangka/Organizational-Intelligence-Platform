@@ -3,7 +3,11 @@ const { Client } = require("pg");
 require("dotenv").config({ path: ".env.local" });
 
 const email = process.env.AUTH_DEVELOPMENT_USER_EMAIL?.trim().toLowerCase();
-const organizationIds = ["profile-maesa-tech", "profile-fastdrop-logistics"];
+const organizationIds = [
+  "profile-maesa-tech",
+  "profile-fastdrop-logistics",
+  "profile-oip-developer-demo"
+];
 
 async function main() {
   if (!email) throw new Error("AUTH_DEVELOPMENT_USER_EMAIL must identify the existing development user.");
