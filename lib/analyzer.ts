@@ -1270,6 +1270,7 @@ export function understandForProfile(ticket: Ticket, inputProfile: OrganizationP
 
  return {
     ticketId: ticket.id,
+    originalText: `${ticket.subject} ${ticket.description}`,
     summary,
     coreProblem,
  

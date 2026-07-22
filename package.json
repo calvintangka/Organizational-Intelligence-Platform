@@ -61,6 +61,7 @@
     "probe:todo036-resolution-mode-reseed": "node scripts/todo036-resolution-mode-reseed-probe.cjs",
     "probe:todo043-provenance": "node scripts/todo043-provenance-regression-probe.cjs",
     "probe:todo046": "node scripts/todo046-weak-fallback-safety-probe.cjs",
+    "probe:todo047": "node scripts/todo047-canonical-ranking-probe.cjs",
     "probe:todo044": "node scripts/todo044-classification-probe.cjs",
     "probe:todo037-natural-paraphrase": "node scripts/todo037-natural-paraphrase-audit.cjs",
     "probe:todo039-classification": "node scripts/todo039-classification-probe.cjs",

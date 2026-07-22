@@ -226,4 +226,14 @@ export interface KnowledgeMatch {
   matchedTags?: string[];
   matchedKeywords?: string[];
   matchedCategory?: string | null;
+  relevanceEvidence?: {
+    categoryPoints: number;
+    tagPoints: number;
+    keywordPoints: number;
+    conceptPoints: number;
+    phrasePoints: number;
+    sessionPoints: number;
+    reusePoints: number;
+    conceptMatches: string[];
+  };
 }

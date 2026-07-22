@@ -17,6 +17,8 @@ export interface ExtractedTicketFields {
 
 export interface Understanding {
   ticketId: string;
+  /** Original subject/description retained for deterministic relevance scoring. */
+  originalText?: string;
   summary: string;
   coreProblem: string;
   category: string;
