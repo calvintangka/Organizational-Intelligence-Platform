@@ -24,7 +24,7 @@ export interface SuggestedResponse {
   groundingLabel?: string;
   fallbackNotice?: string;
   fallbackTechnicalDetails?: string;
-  /** Which AI provider produced this draft (e.g. "LM Studio", "NVIDIA NIM"). */
+  /** Which AI provider produced this draft (e.g. "LM Studio", "Claude API"). */
   providerLabel?: string;
   /** Raw validated template used as the grounding input for the AI-personalized draft.
    *  Present only when source === "ai_advisory" so human review can compare both. */
@@ -37,7 +37,7 @@ export interface MatchDiscriminationResult {
   reasoning: string;
 }
 
-export type AIProviderMode = "disabled" | "lmstudio" | "nvidia";
+export type AIProviderMode = "disabled" | "lmstudio" | "claude";
 export type AIAdvisoryStatus = "verified" | "advisory_only" | "needs_human_review" | "unavailable" | "disabled";
 
 export interface AIChainAttempt {

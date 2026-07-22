@@ -181,8 +181,8 @@ async function aiAdapterAudit(profile, knowledgeItems) {
     const unavailable = await run(["fail", "fail"]);
     const malformed = await run(["malformed", "fail"]);
     const checks = [
-      ["LM success skips NVIDIA", lm.result.ok && lm.calls.length === 1 && lm.calls[0] === "/api/ai/chat"],
-      ["LM failure invokes NVIDIA", fallback.result.ok && fallback.calls.join("|") === "/api/ai/chat|/api/ai/nvidia"],
+      ["LM success skips Claude", lm.result.ok && lm.calls.length === 1 && lm.calls[0] === "/api/ai/chat"],
+      ["LM failure invokes Claude", fallback.result.ok && fallback.result.providerLabel === "Claude API" && fallback.calls.join("|") === "/api/ai/chat|/api/ai/claude"],
       ["both unavailable fail closed", !unavailable.result.ok && unavailable.calls.length === 2],
       ["malformed AI fails closed", !malformed.result.ok && malformed.calls.length === 2]
     ];

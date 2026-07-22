@@ -216,7 +216,7 @@ Three-tier AI fallback chain implemented: LM Studio (local Gemma) → Claude API
   Raw HTTP diagnostics never render in user-facing UI. The fallback notice shows "AI assistant unavailable — showing standard draft instead." with a collapsible "Technical details" disclosure for debugging.
 
 - Two-tier AI fallback chain
-  LM Studio (local Gemma 4 E4B) → NVIDIA NIM (cloud Nemotron) → Deterministic. Implemented in `lib/ai/adapter.ts` as a chain provider. Each tier's failure is logged with the reason. The NVIDIA tier uses `app/api/ai/nvidia/route.ts` as a server-side proxy (API key never exposed to client) and runs with thinking disabled so the model returns JSON directly. NVIDIA is the only tier that sends ticket data off the local machine.
+  LM Studio (local Gemma 4 E4B) → Claude API → Deterministic. Implemented in `lib/ai/adapter.ts` as a chain provider. Each tier's failure is logged with the reason. Claude uses `app/api/ai/claude/route.ts` as a server-side proxy, so `ANTHROPIC_API_KEY` is never exposed to the browser. Claude is the only active tier that sends ticket data off the local machine.
 
 - LM Studio proxy and advisory flow
   Browser AI calls route through `app/api/ai/chat/route.ts`, with diagnostics, timeout handling, and deterministic fallback behavior.
@@ -235,9 +235,9 @@ Three-tier AI fallback chain implemented: LM Studio (local Gemma) → Claude API
 - AI mode is configured in `.env.local` as `NEXT_PUBLIC_AI_MODE=lmstudio`.
 - LM Studio base URL is `http://127.0.0.1:1234/v1`.
 - Current local model is `google/gemma-4-e4b`.
-- Current cloud fallback model is `nvidia/nemotron-3-super-120b-a12b` (configurable via `NVIDIA_MODEL`).
-- Current timeout is `AI_TIMEOUT_MS=30000` (LM Studio); the NVIDIA proxy defaults to 45s (`NVIDIA_TIMEOUT_MS`).
-- The NVIDIA tier requires `NVIDIA_API_KEY` in `.env.local`. When missing, the proxy returns 503 and the chain falls through to the deterministic fail-safe.
+- Current cloud fallback model is `claude-haiku-4-5-20251001` (configurable server-side via `CLAUDE_MODEL`).
+- Current timeout is `AI_TIMEOUT_MS=30000` (LM Studio); the Claude proxy defaults to 30s (`CLAUDE_TIMEOUT_MS`).
+- The Claude tier requires server-only `ANTHROPIC_API_KEY` in `.env.local`. When missing, the proxy returns 503 and the chain falls through to the deterministic fail-safe.
 - If Next.js starts behaving strangely after edits, clear the build cache by deleting `.next` and restart the dev server.
 - The in-app browser can reach `http://localhost:3000`, but longer automated UI verification remains somewhat flaky around reloads and JavaScript confirm dialogs.
 - Despite the browser flakiness, the shipment pack import flow was completed live this session: preview -> import as candidates -> validate -> reload persistence, followed by two clean ticket spot-checks in FastDrop.

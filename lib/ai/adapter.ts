@@ -1,3 +1,4 @@
+import { createClaudeAPIProvider } from "@/lib/ai/claudeApi";
 import { createLMStudioProvider } from "@/lib/ai/lmStudio";
 import type { AIAdapter, AIConfig, AIProvider, AIProviderResult } from "@/lib/ai/types";
 import type { AIDiagnostics } from "@/types";
@@ -7,7 +8,6 @@ const DEFAULT_AI_BASE_URL = "http://127.0.0.1:1234/v1";
 const DEFAULT_AI_MODEL = "google/gemma-4-e4b";
 const DEFAULT_AI_TIMEOUT_MS = 30000;
 const AI_PROXY_PATH = "/api/ai/chat";
-const NVIDIA_PROXY_PATH = "/api/ai/nvidia";
 
 function createDisabledProvider(): AIProvider {
   const message = "AI advisory is disabled. Using deterministic Organizational Intelligence.";
@@ -36,28 +36,7 @@ function createDisabledProvider(): AIProvider {
 
 function createChainProvider(config: AIConfig): AIProvider {
   const lmStudio = createLMStudioProvider(config);
-  // FALLBACK tier — NVIDIA NIM (OpenAI-compatible). The /api/ai/nvidia proxy
-  // reads NVIDIA_API_KEY server-side; if unset it returns 503 and the chain
-  // falls through to the deterministic fail-safe. NVIDIA runs remotely, so this
-  // is the only tier that sends ticket data outside the local machine.
-  const nvidia = createLMStudioProvider(
-    {
-      ...config,
-      proxyPath: NVIDIA_PROXY_PATH,
-      // Nemotron is a large hosted model; give it comfortable headroom above the
-      // local LM Studio timeout. Must exceed the proxy timeout (45s in
-      // app/api/ai/nvidia/route.ts) so the client surfaces the proxy's structured
-      // error instead of aborting first.
-      timeoutMs: Math.max(config.timeoutMs, 50000),
-      // Thinking is disabled so the model returns JSON in `content` directly.
-      // enable_thinking:false is Nemotron's chat-template control; harmless to
-      // builds that ignore it.
-      extraBody: {
-        chat_template_kwargs: { enable_thinking: false }
-      }
-    },
-    "NVIDIA NIM"
-  );
+  const claude = createClaudeAPIProvider();
 
   type Tier<T> = { label: string; call: () => Promise<AIProviderResult<T>> };
 
@@ -150,30 +129,30 @@ function createChainProvider(config: AIConfig): AIProvider {
 
   return {
     mode: "lmstudio",
-    label: "AI Chain (LM Studio → NVIDIA NIM)",
+    label: "AI Chain (LM Studio → Claude API)",
     analyzeTicket: (input) => withFallback("analyzeTicket", [
       { label: "Tier 1 (LM Studio)",  call: () => lmStudio.analyzeTicket(input) },
-      { label: "Tier 2 (NVIDIA NIM)", call: () => nvidia.analyzeTicket(input) }
+      { label: "Tier 2 (Claude API)", call: () => claude.analyzeTicket(input) }
     ]),
     suggestCanonicalProblem: (input) => withFallback("suggestCanonicalProblem", [
       { label: "Tier 1 (LM Studio)",  call: () => lmStudio.suggestCanonicalProblem(input) },
-      { label: "Tier 2 (NVIDIA NIM)", call: () => nvidia.suggestCanonicalProblem(input) }
+      { label: "Tier 2 (Claude API)", call: () => claude.suggestCanonicalProblem(input) }
     ]),
     suggestPatternName: (input) => withFallback("suggestPatternName", [
       { label: "Tier 1 (LM Studio)",  call: () => lmStudio.suggestPatternName(input) },
-      { label: "Tier 2 (NVIDIA NIM)", call: () => nvidia.suggestPatternName(input) }
+      { label: "Tier 2 (Claude API)", call: () => claude.suggestPatternName(input) }
     ]),
     enrichKnowledge: (input) => withFallback("enrichKnowledge", [
       { label: "Tier 1 (LM Studio)",  call: () => lmStudio.enrichKnowledge(input) },
-      { label: "Tier 2 (NVIDIA NIM)", call: () => nvidia.enrichKnowledge(input) }
+      { label: "Tier 2 (Claude API)", call: () => claude.enrichKnowledge(input) }
     ]),
     draftCustomerResponse: (input) => withFallback("draftCustomerResponse", [
       { label: "Tier 1 (LM Studio)",  call: () => lmStudio.draftCustomerResponse(input) },
-      { label: "Tier 2 (NVIDIA NIM)", call: () => nvidia.draftCustomerResponse(input) }
+      { label: "Tier 2 (Claude API)", call: () => claude.draftCustomerResponse(input) }
     ]),
     discriminateMatch: (input) => withFallback("discriminateMatch", [
       { label: "Tier 1 (LM Studio)",  call: () => lmStudio.discriminateMatch(input) },
-      { label: "Tier 2 (NVIDIA NIM)", call: () => nvidia.discriminateMatch(input) }
+      { label: "Tier 2 (Claude API)", call: () => claude.discriminateMatch(input) }
     ])
   };
 }

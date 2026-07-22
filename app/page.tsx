@@ -1668,7 +1668,7 @@ export default function Home() {
         setAiAdvisory(aiDraft.advisory);
         setSuggestedResponse({
           ...aiDraft.response,
-          fallbackNotice: "Still unavailable — check that LM Studio is running or configure an NVIDIA API key."
+          fallbackNotice: "Still unavailable — check that LM Studio is running or configure a Claude API key."
         });
         addLogEntries([createLogEntry("AI draft retry failed", "All AI tiers unavailable")]);
       }

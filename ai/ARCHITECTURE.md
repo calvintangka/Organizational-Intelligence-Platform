@@ -169,15 +169,18 @@ The prototype has three explicit AI grounding modes, all set in `requestDraftAdv
 
 The important architectural point is that these are advisory grounding modes, not authorization modes. Human review remains the gate.
 
-## AI Layer and LM Studio Proxy
+## AI Layer and Provider Proxies
 
 The AI stack is split across `lib/ai/*` plus the Next.js proxy route:
 
 - `lib/ai/adapter.ts`
-  Reads env config and selects the two-tier chain (LM Studio → NVIDIA NIM) or disabled mode.
+  Reads env config and selects the two-tier chain (LM Studio → Claude API) or disabled mode.
 
 - `lib/ai/lmStudio.ts`
   Implements `analyzeTicket`, `suggestCanonicalProblem`, `suggestPatternName`, `enrichKnowledge`, `draftCustomerResponse`, and `discriminateMatch`. Every call uses timeout handling, JSON parsing, and structured failure mapping.
+
+- `lib/ai/claudeApi.ts` and `app/api/ai/claude/route.ts`
+  Reuse the provider's prompt/result validation while translating the fallback request to Anthropic's Messages API. `ANTHROPIC_API_KEY` is read only by the server route.
 
 - `lib/ai/prompts.ts`
   Builds prompt bundles for analysis, canonical problem suggestion, knowledge enrichment, response drafting, and match discrimination. Draft prompts now explicitly enforce organization tone, greeting/acknowledgment/body/closing structure, and the named no-unvalidated-commitments rule across all grounding modes.

@@ -547,8 +547,8 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
   let fallbackUsed = false;
   // Bug fix: the "Clustered via X" badge must reflect whichever tier actually
   // returned a successful response, not the AI adapter's static chain-level
-  // label (which always names every tier, e.g. "AI Chain (LM Studio → NVIDIA
-  // NIM)" — a string that names NVIDIA regardless of whether it ever ran or
+  // label (which always names every tier, e.g. "AI Chain (LM Studio → Claude
+  // API)" — a string that names Claude regardless of whether it ever ran or
   // succeeded). Track the most recent genuinely successful call's own
   // providerLabel instead.
   let actualProviderLabel: string | undefined;

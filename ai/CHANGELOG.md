@@ -1,5 +1,14 @@
 # Change Log
 
+## [2026-07-22] TODO-038 Claude API Failover
+
+**Task/Prompt:** Replace the operationally unavailable NVIDIA NIM/Nemotron fallback with the repository's established Claude API pattern while preserving all deterministic authorization boundaries.
+
+- Active chain is now LM Studio → Claude API → deterministic fail-safe. Claude calls route through server-only `/api/ai/claude`, using `ANTHROPIC_API_KEY`, configurable `CLAUDE_MODEL`, and the Anthropic Messages API; provider results and diagnostics identify the successful tier as `Claude API` / `claude`.
+- Reused the existing prompt, JSON-validation, timeout, typed-result, and 200-call session-cap behavior rather than introducing a parallel AI architecture. Malformed, unavailable, rate-limited, and timed-out Claude responses return failure for the existing deterministic path.
+- Removed the dead NVIDIA proxy and active NVIDIA/Nemotron configuration, labels, tests, and documentation. `.env.example` contains placeholders only; the key name and configured key are absent from client bundles.
+- Added `probe:todo038-claude-failover` for LM short-circuit, Claude fallback, total failure, malformed output, proxy translation, provider labels, secret-safe logs, and dead-path checks. TODO-025F remains 23/23; TODO-025G, TODO-030, TODO-032, BUG-008, BUG-010, TypeScript, strict-unused, and production build pass.
+
 ## [2026-07-20] TODO-023 Production Lesson-Selection Extraction & Probe Harness Consolidation
 
 **Task/Prompt:** Make the production lesson-selection implementation the single source of truth (imported by both app/page.tsx and the BUG-008 regression probe), and consolidate the duplicated probe infrastructure. Behavior-preserving; no ranking/safety/persistence changes.

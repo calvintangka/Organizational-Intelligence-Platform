@@ -171,13 +171,15 @@ const lmSuccess = await providerScenario([true]);
 assert.equal(lmSuccess.result.ok, true);
 assert.deepEqual(lmSuccess.calls, ["/api/ai/chat"]);
 
-const nvidiaFallback = await providerScenario([false, true]);
-assert.equal(nvidiaFallback.result.ok, true);
-assert.deepEqual(nvidiaFallback.calls, ["/api/ai/chat", "/api/ai/nvidia"]);
+const claudeFallback = await providerScenario([false, true]);
+assert.equal(claudeFallback.result.ok, true);
+assert.equal(claudeFallback.result.providerMode, "claude");
+assert.equal(claudeFallback.result.providerLabel, "Claude API");
+assert.deepEqual(claudeFallback.calls, ["/api/ai/chat", "/api/ai/claude"]);
 
 const bothFail = await providerScenario([false, false]);
 assert.equal(bothFail.result.ok, false);
-assert.deepEqual(bothFail.calls, ["/api/ai/chat", "/api/ai/nvidia"]);
+assert.deepEqual(bothFail.calls, ["/api/ai/chat", "/api/ai/claude"]);
 
 global.window = originalWindow;
 global.fetch = originalFetch;
