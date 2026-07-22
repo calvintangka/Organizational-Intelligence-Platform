@@ -9,6 +9,7 @@
 } from "@/types";
 import type { Understanding } from "@/types/oip";
 import { defaultOrganizationProfile } from "@/data/seedOrganizationProfiles";
+import { ticketReferenceId } from "@/lib/knowledgeProvenance";
 import { normalizeOrganizationProfile, profileKeywordBank } from "@/lib/organizationProfile";
 import { containsSignal } from "@/lib/textSignal";
 
@@ -1008,6 +1009,7 @@ export function createCanonicalProblem(
   createdAt = new Date().toISOString(),
   identityOverride?: { id?: string; title?: string; problemSummary?: string; category?: string; tags?: string[] }
 ): KnowledgeItem {
+  const sourceTicketId = ticketReferenceId(ticket);
   const baseIdentity = identifyCanonicalProblem(understanding, profile);
   const title = identityOverride?.title?.trim() || baseIdentity.title;
   const category = identityOverride?.category?.trim() || baseIdentity.category;
@@ -1027,7 +1029,7 @@ export function createCanonicalProblem(
     approvedAnswer: customerResponseTemplate,
     category: identity.category,
     tags: identity.tags,
-    sourceTicketId: ticket.id,
+    sourceTicketId,
     timesReused: 0,
     createdAt,
     approvedAt: createdAt,
@@ -1049,7 +1051,7 @@ export function createCanonicalProblem(
     automaticResolutionCount: 0,
     exampleTickets: [
       {
-        ticketId: ticket.id,
+        ticketId: sourceTicketId,
         customerName: ticket.customerName,
         originalIssue: ticket.description,
         createdAt: ticket.createdAt,
@@ -1061,7 +1063,7 @@ export function createCanonicalProblem(
         versionId: `${identity.id}-v1`,
         createdAt,
         changeReason: "Created from first validated ticket",
-        sourceTicketId: ticket.id
+        sourceTicketId
       }
     ],
     learningHistory: [
@@ -1084,13 +1086,14 @@ export function mergeIntoCanonicalProblem(
   at = new Date().toISOString()
 ): KnowledgeItem {
   const base = withCanonicalProblemDefaults(item);
-  const existingExample = base.exampleTickets?.some((example) => example.ticketId === ticket.id);
+  const sourceTicketId = ticketReferenceId(ticket);
+  const existingExample = base.exampleTickets?.some((example) => example.ticketId === sourceTicketId);
   const exampleTickets = existingExample
     ? base.exampleTickets ?? []
     : [
         ...(base.exampleTickets ?? []),
         {
-          ticketId: ticket.id,
+          ticketId: sourceTicketId,
           customerName: ticket.customerName,
           originalIssue: ticket.description,
           createdAt: ticket.createdAt,
@@ -1106,7 +1109,7 @@ export function mergeIntoCanonicalProblem(
           versionId: `${base.canonicalProblemId}-v${(base.knowledgeVersions?.length ?? 0) + 1}`,
           createdAt: at,
           changeReason: "Human review strengthened internal guidance",
-          sourceTicketId: ticket.id
+          sourceTicketId
         }
       ]
     : base.knowledgeVersions ?? [];

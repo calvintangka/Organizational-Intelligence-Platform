@@ -63,6 +63,7 @@ import {
   evaluateTrust,
   TRUST_INITIAL
 } from "@/lib/trustEngine";
+import { ticketReferenceId, withStableValidationProvenance } from "@/lib/knowledgeProvenance";
 import {
   persistence,
   persistenceMode,
@@ -969,19 +970,13 @@ export default function Home() {
     candidate: KnowledgeCandidate,
     validation: ValidationRecord
   ): KnowledgeItem {
-    const sourceTicketId = candidate.sourceTicketIds[0] ?? item.sourceTicketId;
     return {
-      ...item,
-      provenance: {
-        sourceTicketId,
-        contributingTicketIds: candidate.sourceTicketIds,
-        createdBy: item.provenance?.createdBy ?? "oip_prototype",
-        createdAt: item.provenance?.createdAt ?? item.createdAt,
-        validatedBy: validation.actor,
-        validatedAt: validation.timestamp,
-        validationBasis: validation.rationale ?? candidate.rationale,
-        validationScope: `Prototype ${candidate.proposedAction} validation`
-      },
+      ...withStableValidationProvenance(item, candidate.sourceTicketIds, {
+        actor: validation.actor,
+        timestamp: validation.timestamp,
+        rationale: validation.rationale ?? candidate.rationale,
+        scope: `Prototype ${candidate.proposedAction} validation`
+      }),
       validation: {
         validatedBy: validation.actor,
         validatedAt: validation.timestamp,
@@ -2670,7 +2665,7 @@ export default function Home() {
       const canonicalCustomerResponse = lessonDraft?.customerResponse?.trim() || reviewedResponse;
       const candidate = createCandidate({
         action: "create_new",
-        sourceTicketIds: [selectedTicket.id],
+        sourceTicketIds: [ticketReferenceId(selectedTicket)],
         solution: lessonDraft?.rootCause ?? und.coreProblem,
         customerResponseTemplate: canonicalCustomerResponse,
         internalGuidance: lessonDraft?.solution ?? und.summary,
@@ -2694,7 +2689,7 @@ export default function Home() {
             }
           : undefined
       );
-      if (lessonDraft) newItem = applyLessonToItem(newItem, { ...lessonDraft, mode: "new" }, selectedTicket.id, now);
+      if (lessonDraft) newItem = applyLessonToItem(newItem, { ...lessonDraft, mode: "new" }, ticketReferenceId(selectedTicket), now);
       const committedItem = commitValidatedMemoryChange(candidate, null, newItem, reflectionDecision.rationale);
       committedItemForReflection = committedItem;
       setSessionCreatedIds((prev) => new Set([...prev, committedItem.id]));
@@ -2714,7 +2709,7 @@ export default function Home() {
         const base = withCanonicalProblemDefaults(target);
         const candidate = createCandidate({
           action: "merge_existing",
-          sourceTicketIds: [selectedTicket.id],
+            sourceTicketIds: [ticketReferenceId(selectedTicket)],
           solution: und.coreProblem,
           customerResponseTemplate: base.customerResponseTemplate ?? base.approvedAnswer,
           internalGuidance: base.internalGuidance ?? und.summary,
@@ -2725,7 +2720,7 @@ export default function Home() {
           createdAt: now
         });
         let merged = mergeIntoCanonicalProblem(target, selectedTicket, und, undefined, "human", now);
-        if (lessonDraft) merged = applyLessonToItem(merged, lessonDraft, selectedTicket.id, now);
+        if (lessonDraft) merged = applyLessonToItem(merged, lessonDraft, ticketReferenceId(selectedTicket), now);
         const committedItem = commitValidatedMemoryChange(candidate, target, merged, reflectionDecision.rationale);
         committedItemForReflection = committedItem;
         setSessionCreatedIds((prev) => new Set([...prev, committedItem.id]));
@@ -2757,7 +2752,7 @@ export default function Home() {
         const newVersionNum = (base.knowledgeVersions?.length ?? 0) + 1;
         const candidate = createCandidate({
           action: "create_version",
-          sourceTicketIds: [selectedTicket.id],
+          sourceTicketIds: [ticketReferenceId(selectedTicket)],
           solution: und.coreProblem,
           customerResponseTemplate: updatesGenericTemplate ? reviewedResponse : (base.customerResponseTemplate ?? base.approvedAnswer),
           internalGuidance: base.internalGuidance ?? und.summary,
@@ -2775,7 +2770,7 @@ export default function Home() {
           exampleTickets: [
             ...(base.exampleTickets ?? []),
             {
-              ticketId: selectedTicket.id,
+              ticketId: ticketReferenceId(selectedTicket),
               customerName: selectedTicket.customerName,
               originalIssue: selectedTicket.description,
               createdAt: selectedTicket.createdAt,
@@ -2790,7 +2785,7 @@ export default function Home() {
                   version: newVersionNum,
                   createdAt: now,
                   changeReason: reflectionDecision.versionReason ?? "Human review introduced an improved response",
-                  sourceTicketId: selectedTicket.id,
+                  sourceTicketId: ticketReferenceId(selectedTicket),
                   summary: `v${newVersionNum}: Updated customer response template`
                 }
               ]
@@ -2801,7 +2796,7 @@ export default function Home() {
           lastValidated: now,
           lastValidatedAt: now
         };
-        if (lessonDraft) evolved = applyLessonToItem(evolved, lessonDraft, selectedTicket.id, now);
+        if (lessonDraft) evolved = applyLessonToItem(evolved, lessonDraft, ticketReferenceId(selectedTicket), now);
         const committedItem = commitValidatedMemoryChange(candidate, target, evolved, reflectionDecision.versionReason ?? reflectionDecision.rationale);
         committedItemForReflection = committedItem;
         setSessionCreatedIds((prev) => new Set([...prev, committedItem.id]));
@@ -2843,7 +2838,7 @@ export default function Home() {
           const result = recordResolution(targetWithEvidence, { mode: "human", success: true, at: now }, organizationProfile, validationRecords);
           const candidate = createCandidate({
             action: "trust_update_only",
-            sourceTicketIds: [selectedTicket.id],
+            sourceTicketIds: [ticketReferenceId(selectedTicket)],
             solution: result.item.problemSummary ?? result.item.problem,
             customerResponseTemplate: result.item.customerResponseTemplate ?? result.item.approvedAnswer,
             internalGuidance: result.item.internalGuidance ?? result.item.problem,
@@ -2854,7 +2849,7 @@ export default function Home() {
             createdAt: now
           });
           let trustItem = result.item;
-          if (lessonDraft) trustItem = applyLessonToItem(trustItem, lessonDraft, selectedTicket.id, now);
+          if (lessonDraft) trustItem = applyLessonToItem(trustItem, lessonDraft, ticketReferenceId(selectedTicket), now);
           const committedItem = commitValidatedMemoryChange(candidate, target, trustItem, reflectionDecision.rationale);
           committedItemForReflection = committedItem;
           setLastTrustDelta(result.trustDelta);
@@ -2904,7 +2899,7 @@ export default function Home() {
         },
         validationRecordIds: validationRecords
           .filter((v) => v.candidateId && knowledgeCandidates.some(
-            (c) => c.id === v.candidateId && c.sourceTicketIds.includes(selectedTicket.id)
+            (c) => c.id === v.candidateId && c.sourceTicketIds.includes(ticketReferenceId(selectedTicket))
           ))
           .map((v) => v.id),
         status: "resolved",

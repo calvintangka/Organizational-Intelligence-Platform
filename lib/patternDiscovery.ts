@@ -2,6 +2,7 @@ import type { EmergingPattern } from "@/types/patterns";
 import type { Understanding } from "@/types/oip";
 import type { Ticket, KnowledgeItem } from "@/types";
 import { withCanonicalProblemDefaults } from "@/lib/canonicalProblemEngine";
+import { ticketReferenceId } from "@/lib/knowledgeProvenance";
 
 const PATTERN_MERGE_THRESHOLD = 40;
 const CONTENT_MATCH_THRESHOLD = 45;
@@ -169,7 +170,7 @@ export function detectEmergingPattern(
     keywords: [...new Set(ticketTokens.filter((t) => !STOP_WORDS.has(t)))],
     exampleTickets: [
       {
-        ticketId: ticket.id,
+        ticketId: ticketReferenceId(ticket),
         customerName: ticket.customerName,
         originalIssue: ticket.description,
         createdAt: ticket.createdAt
@@ -199,7 +200,7 @@ export function upsertEmergingPattern(
   const newKeywords = ticketTokens.filter((t) => !STOP_WORDS.has(t));
 
   const alreadySeen = matchedPattern.exampleTickets.some(
-    (e) => e.ticketId === ticket.id
+    (e) => e.ticketId === ticketReferenceId(ticket)
   );
 
   const updated: EmergingPattern = {
@@ -211,7 +212,7 @@ export function upsertEmergingPattern(
       : [
           ...matchedPattern.exampleTickets,
           {
-            ticketId: ticket.id,
+            ticketId: ticketReferenceId(ticket),
             customerName: ticket.customerName,
             originalIssue: ticket.description,
             createdAt: ticket.createdAt

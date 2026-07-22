@@ -7,6 +7,7 @@ import {
   withCanonicalProblemDefaults
 } from "@/lib/canonicalProblemEngine";
 import { findMatchingLesson } from "@/lib/drafting";
+import { ticketReferenceId } from "@/lib/knowledgeProvenance";
 import type {
   BulkAnalyzedQuery,
   BulkAnalysisProgress,
@@ -511,9 +512,9 @@ function mergeClusterEvidence(item: KnowledgeItem, cluster: BulkCluster, at: str
   const base = withCanonicalProblemDefaults(item);
   const existingIds = new Set((base.exampleTickets ?? []).map((example) => example.ticketId));
   const addedExamples = cluster.items
-    .filter((entry) => !existingIds.has(entry.ticket.id))
+    .filter((entry) => !existingIds.has(ticketReferenceId(entry.ticket)))
     .map((entry) => ({
-      ticketId: entry.ticket.id,
+      ticketId: ticketReferenceId(entry.ticket),
       customerName: entry.ticket.customerName,
       originalIssue: entry.ticket.description,
       createdAt: entry.ticket.createdAt,
@@ -800,7 +801,7 @@ export function prepareBulkClusterCommit(
   if (!responseTemplate) {
     throw new Error("A validated response template is required before this cluster can be committed.");
   }
-  const sourceTicketIds = cluster.items.map((item) => item.ticket.id);
+  const sourceTicketIds = cluster.items.map((item) => ticketReferenceId(item.ticket));
 
   if (cluster.proposedAction === "create_new") {
     const created = createCanonicalProblem(representative.ticket, representative.understanding, responseTemplate, organizationProfile, at);
@@ -822,7 +823,7 @@ export function prepareBulkClusterCommit(
         approvedAnswer: responseTemplate,
         customerResponseTemplate: responseTemplate,
         exampleTickets: cluster.items.map((item) => ({
-          ticketId: item.ticket.id,
+          ticketId: ticketReferenceId(item.ticket),
           customerName: item.ticket.customerName,
           originalIssue: item.ticket.description,
           createdAt: item.ticket.createdAt,
@@ -836,7 +837,7 @@ export function prepareBulkClusterCommit(
             version: 1,
             createdAt: at,
             changeReason: `Created from validated bulk cluster (${cluster.count} uploaded queries)`,
-            sourceTicketId: representative.ticket.id,
+            sourceTicketId: ticketReferenceId(representative.ticket),
             summary: "Initial validated bulk-cluster response"
           }
         ],
@@ -900,7 +901,7 @@ export function prepareBulkClusterCommit(
           version: versionNumber,
           createdAt: at,
           changeReason: `Validated bulk cluster introduced a stronger shared response across ${cluster.count} uploaded queries`,
-          sourceTicketId: representative.ticket.id,
+          sourceTicketId: ticketReferenceId(representative.ticket),
           summary: `v${versionNumber}: bulk cluster response refinement`
         }
       ]

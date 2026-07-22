@@ -59,6 +59,7 @@
     "probe:todo034-ticket-pagination": "node scripts/todo034-ticket-pagination-probe.cjs",
     "probe:todo035-knowledge-derivations": "node scripts/todo035-knowledge-derivation-probe.cjs",
     "probe:todo036-resolution-mode-reseed": "node scripts/todo036-resolution-mode-reseed-probe.cjs",
+    "probe:todo043-provenance": "node scripts/todo043-provenance-regression-probe.cjs",
     "probe:todo037-natural-paraphrase": "node scripts/todo037-natural-paraphrase-audit.cjs",
     "probe:todo039-classification": "node scripts/todo039-classification-probe.cjs",
     "probe:todo040-semantic-lesson": "node scripts/todo040-semantic-lesson-probe.cjs",

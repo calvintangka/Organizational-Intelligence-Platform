@@ -33,6 +33,7 @@ import type {
 import { formatTicketIdRange, organizationTicketPrefix, ticketDateStamp } from "@/lib/ticketIdFormat";
 import { AuthorizationError } from "@/lib/server/authorization";
 import { dedupeLessonCollection, dedupeNewLessonProposals } from "@/lib/canonicalProblemEngine";
+import { withStableValidationProvenance } from "@/lib/knowledgeProvenance";
 
 export type PersistenceServiceErrorCode =
   | "UNAUTHENTICATED"
@@ -1198,6 +1199,17 @@ export async function commitValidation(
         ? mapKnowledge(existingKnowledgeRow)
         : null;
       const normalizedKnowledgeItem = normalizeValidationKnowledgeItem(payload.knowledgeItem, storedKnowledge);
+      const stableKnowledgeItem = withStableValidationProvenance(
+        normalizedKnowledgeItem,
+        payload.candidate.sourceTicketIds ?? [],
+        {
+          actor: payload.validation.actor ?? actor.name,
+          timestamp: payload.validation.timestamp,
+          rationale: payload.validation.rationale ?? payload.candidate.rationale,
+          scope: `Prototype ${payload.candidate.proposedAction} validation`
+        },
+        storedKnowledge
+      );
 
       await upsertCandidateTx(tx, organization.id, { ...payload.candidate, status: "validated" });
 
@@ -1252,7 +1264,7 @@ export async function commitValidation(
       // createMany({ skipDuplicates }) is conflict-safe (it never raises a unique
       // violation), so it cannot abort the surrounding transaction; and because the
       // claim shares this transaction, a later rollback also removes the evidence.
-      let knowledgeToPersist = normalizedKnowledgeItem;
+      let knowledgeToPersist = stableKnowledgeItem;
       let trustApplied = true;
       const sourceTicketIds = [
         ...new Set(
