@@ -4,6 +4,7 @@ import type { KnowledgeMatch, OrganizationProfile } from "@/types";
 import { defaultOrganizationProfile } from "@/data/seedOrganizationProfiles";
 import { normalizeOrganizationProfile, profileKeywordBank } from "@/lib/organizationProfile";
 import { containsSignal } from "@/lib/textSignal";
+import { extractCustomerContext } from "@/lib/customerContext";
 
 const FALLBACK_PROFILE = defaultOrganizationProfile;
 
@@ -116,59 +117,18 @@ function emptyExtractedTicketFields(): ExtractedTicketFields {
   };
 }
 
-// Self-introduction patterns ("This is Grace Adeyemi", "my name is Sarah",
-// "I'm Sarah Johnson") — mirrors the equivalent patterns in
-// `extractSenderNameForResume` (app/page.tsx) so a fresh ticket gets the same
-// quality of deterministic name extraction as a resumed one.
-const SELF_INTRODUCTION_PATTERNS: RegExp[] = [
-  /\bmy name is\s+([A-Z][A-Za-z .'-]{1,80}?)(?:\s+from|\.|,|\n|$)/,
-  /\bthis is\s+([A-Z][A-Za-z .'-]{1,80}?)(?:\s+from|\.|,|\n|writing|calling|\n|$)/i,
-  /\bI'?m\s+([A-Z][A-Za-z .'-]{1,80}?)(?:\s+from|\.|,|\n|$)/
-];
-
-// Closing salutation, name on the same line ("Best, Grace Adeyemi",
-// "Regards, Sarah") — a single-paragraph message has no line break between
-// the sign-off word and the name, unlike the multi-line case below.
-const SAME_LINE_SIGNOFF_PATTERN =
-  /\b(?:best regards|kind regards|warm regards|many thanks|regards|sincerely|thanks|thank you|best)[,!]?\s+([A-Z][A-Za-z .'-]{1,80}?)(?:\.|,|\n|$)/;
-
-function extractSenderNameFromSignature(text: string): string | null {
-  const lines = text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index].toLowerCase();
-    if (/^(best regards|regards|kind regards|sincerely|thanks|thank you|warm regards|many thanks)[,!]?$/.test(line)) {
-      const nextLine = lines[index + 1]?.trim();
-      if (nextLine && /^[A-Za-z][A-Za-z .'-]{1,80}$/.test(nextLine) && !/@/.test(nextLine)) {
-        return nextLine;
-      }
-    }
-  }
-
-  for (const pattern of SELF_INTRODUCTION_PATTERNS) {
-    const match = text.match(pattern);
-    const candidate = match?.[1]?.trim();
-    if (candidate && candidate.length >= 3 && !/@/.test(candidate)) {
-      return candidate;
-    }
-  }
-
-  const sameLineMatch = text.match(SAME_LINE_SIGNOFF_PATTERN);
-  const sameLineCandidate = sameLineMatch?.[1]?.trim();
-  if (sameLineCandidate && sameLineCandidate.length >= 3 && !/@/.test(sameLineCandidate)) {
-    return sameLineCandidate;
-  }
-
-  return null;
-}
-
+// TODO-050: deterministic sender/company/role extraction lives in
+// lib/customerContext.ts. It only accepts identity from clear self-introduction
+// / affiliation / explicit-role statements and validates that the captured span
+// looks like a name — so arbitrary issue text ("This is causing duplicate
+// records.") can never become the sender.
 function extractFallbackTicketFields(ticket: Ticket): ExtractedTicketFields {
+  const context = extractCustomerContext(ticket.description);
   return {
     ...emptyExtractedTicketFields(),
-    senderName: extractSenderNameFromSignature(ticket.description)
+    senderName: context.senderName,
+    companyName: context.companyName,
+    senderRole: context.senderRole
   };
 }
 

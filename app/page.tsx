@@ -17,6 +17,7 @@ import { createAIAdapter } from "@/lib/ai/adapter";
 import { buildAIAdvisory, shouldAcceptPatternSuggestion } from "@/lib/ai/deterministic";
 import type { AIProviderResult } from "@/lib/ai/types";
 import { assessBusinessRelevanceForProfile, understandForProfile } from "@/lib/analyzer";
+import { extractCustomerContext, isLikelyPersonName, textHasExplicitRole } from "@/lib/customerContext";
 import { classifyBusinessDomain } from "@/lib/domainClassifier";
 import { analyzeBulkEntries, prepareBulkClusterCommit } from "@/lib/bulkUpload";
 import { retrieveMemory } from "@/lib/memory";
@@ -280,25 +281,6 @@ function emptyExtractedTicketFields(): ExtractedTicketFields {
  * Johnson" or similar. This helper extends coverage so the F-2 greeting fix
  * still works after a resume. Returns null when nothing matches.
  */
-function extractSenderNameForResume(rawMessage: string): string | null {
-  const patterns: RegExp[] = [
-    /\bmy name is\s+([A-Z][A-Za-z .'-]{1,80}?)(?:\s+from|\.|,|\n|$)/,
-    /\bthis is\s+([A-Z][A-Za-z .'-]{1,80}?)(?:\s+from|\.|,|\n|$)/,
-    /\bI'?m\s+([A-Z][A-Za-z .'-]{1,80}?)(?:\s+from|\.|,|\n|$)/,
-    /^[ \t]*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})[ \t]*$/
-  ];
-  for (const pattern of patterns) {
-    const match = rawMessage.match(pattern);
-    if (match && match[1]) {
-      const candidate = match[1].trim();
-      if (candidate.length >= 3 && !/@/.test(candidate)) {
-        return candidate;
-      }
-    }
-  }
-  return null;
-}
-
 /**
  * F-7: Deterministic post-processing guard so every customer-facing draft,
  * from every code path, ends with the same ticket reference line. Mirrors the
@@ -360,16 +342,25 @@ function personalizeAIDraftGreeting(
   return draft;
 }
 
+// TODO-050: identity (name/role/company) is deterministic-first. Explicit
+// deterministic identity wins; the AI advisory may only FILL a null field, and
+// even then a name must pass isLikelyPersonName and a role is accepted only when
+// the ticket text explicitly states one — so hallucinated or issue-text AI
+// identity can never overwrite or invent a customer identity. Non-identity
+// fields (deadline, sub-issues, urgency) keep the prior AI-preferred behavior.
 function mergeExtractedTicketFields(
   base: ExtractedTicketFields,
-  advisoryFields?: ExtractedTicketFields
+  advisoryFields?: ExtractedTicketFields,
+  sourceText = ""
 ): ExtractedTicketFields {
   if (!advisoryFields) return base;
+  const aiName = isLikelyPersonName(advisoryFields.senderName) ? advisoryFields.senderName : null;
+  const aiRole = advisoryFields.senderRole && textHasExplicitRole(sourceText) ? advisoryFields.senderRole : null;
 
   return {
-    senderName: advisoryFields.senderName ?? base.senderName,
-    senderRole: advisoryFields.senderRole ?? base.senderRole,
-    companyName: advisoryFields.companyName ?? base.companyName,
+    senderName: base.senderName ?? aiName,
+    senderRole: base.senderRole ?? aiRole,
+    companyName: base.companyName ?? advisoryFields.companyName,
     deadline: advisoryFields.deadline ?? base.deadline,
     subIssues: advisoryFields.subIssues.length > 0 ? advisoryFields.subIssues : base.subIssues,
     urgencyIndicators: advisoryFields.urgencyIndicators.length > 0 ? advisoryFields.urgencyIndicators : base.urgencyIndicators
@@ -384,7 +375,8 @@ function applyAdvisoryExtractedFields(
     ...understanding,
     extractedFields: mergeExtractedTicketFields(
       understanding.extractedFields ?? emptyExtractedTicketFields(),
-      advisory?.analysisSuggestion?.extractedFields
+      advisory?.analysisSuggestion?.extractedFields,
+      understanding.originalText ?? ""
     )
   };
 }
@@ -1538,9 +1530,10 @@ export default function Home() {
     }
 
     const subject = record.subject ?? record.rawMessage.slice(0, 80);
-    // F-1: extract sender name from the persisted message so the F-2 greeting
-    // safety net has something real to substitute.
-    const extractedName = extractSenderNameForResume(record.rawMessage);
+    // F-1 / TODO-050: extract customer context from the persisted message so the
+    // F-2 greeting safety net has a real (validated) name to substitute.
+    const resumeContext = extractCustomerContext(record.rawMessage);
+    const extractedName = resumeContext.senderName;
     const reconstructedTicket: Ticket = {
       id: record.ticketId,
       ticketId: record.ticketId,
@@ -1566,7 +1559,9 @@ export default function Home() {
       detectedSignals: [],
       extractedFields: {
         ...emptyExtractedTicketFields(),
-        senderName: extractedName
+        senderName: extractedName,
+        companyName: resumeContext.companyName,
+        senderRole: resumeContext.senderRole
       }
     };
 
