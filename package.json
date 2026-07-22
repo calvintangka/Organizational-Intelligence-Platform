@@ -60,6 +60,7 @@
     "probe:todo035-knowledge-derivations": "node scripts/todo035-knowledge-derivation-probe.cjs",
     "probe:todo036-resolution-mode-reseed": "node scripts/todo036-resolution-mode-reseed-probe.cjs",
     "probe:todo037-natural-paraphrase": "node scripts/todo037-natural-paraphrase-audit.cjs",
+    "probe:todo039-classification": "node scripts/todo039-classification-probe.cjs",
     "probe:todo038-claude-failover": "node scripts/todo038-claude-failover-probe.cjs",
     "restore:maesa-profile-vocabulary": "node scripts/restore-maesa-profile-vocabulary.cjs",
     "seed:test-organization": "node scripts/seed-test-organization.cjs",

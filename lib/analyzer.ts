@@ -288,7 +288,17 @@ const CATEGORY_RULES: Array<{ category: string; keywords: string[]; tags: string
     keywords: [
       "single sign-on", "sso", "saml", "identity provider", "idp",
       "identity metadata", "certificate rotation", "signing certificate",
-      "authentication certificate", "redirect loop"
+      "authentication certificate", "redirect loop",
+      // TODO-039: federated-identity vocabulary so naturally worded SSO problems
+      // classify as Authentication without requiring the exact stored phrases.
+      // Every term here is SSO/federation-specific — never a bare generic word.
+      "federated", "federation", "federated login", "federated authentication",
+      "federated access", "federated sign-in", "external authentication",
+      "identity service", "identity platform", "identity system",
+      "corporate identity", "enterprise identity",
+      "saml assertion", "assertions",
+      "signing material", "signing key", "signing credential",
+      "trust material", "trust certificate", "federation key", "federation credential"
     ],
     tags: ["authentication", "sso", "identity-provider"]
   },
@@ -495,7 +505,32 @@ const CATEGORY_WEIGHTS: Record<string, Array<[string, number]>> = {
     ["certificate rotation", 8],
     ["signing certificate", 8],
     ["authentication certificate", 7],
-    ["redirect loop", 7]
+    ["redirect loop", 7],
+    // TODO-039: federated-identity SSO vocabulary. These are SSO/federation-
+    // specific (not bare "certificate"/"redirect"/"login"/"access"), so a strong
+    // combination — or a single specific SSO term — outranks the generic Login
+    // rule for naturally worded SSO problems while generic tickets stay Login.
+    ["federated authentication", 9],
+    ["federated login", 9],
+    ["federated sign-in", 9],
+    ["federated access", 9],
+    ["federated", 7],
+    ["federation", 7],
+    ["identity service", 8],
+    ["identity platform", 8],
+    ["identity system", 7],
+    ["corporate identity", 8],
+    ["enterprise identity", 8],
+    ["external authentication", 7],
+    ["saml assertion", 8],
+    ["assertions", 4],
+    ["signing material", 6],
+    ["signing key", 5],
+    ["signing credential", 6],
+    ["trust material", 6],
+    ["trust certificate", 6],
+    ["federation key", 8],
+    ["federation credential", 8]
   ],
   // TODO-011: strong problem-specific Billing/Refund phrases must outrank
   // incidental Subscription vocabulary ("subscription", "renewal", "plan")
