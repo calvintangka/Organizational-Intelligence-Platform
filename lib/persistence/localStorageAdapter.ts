@@ -7,6 +7,8 @@ import type {
   MemoryChangeRecord,
   OrgMetrics,
   OrganizationProfile,
+  TicketPage,
+  TicketPageRequest,
   TicketRecord,
   ValidationRecord
 } from "@/types";
@@ -41,6 +43,7 @@ import {
 import {
   generateTicketId,
   generateTicketIds,
+  loadTicketPage as loadLocalStorageTicketPage,
   loadTicketRecords as loadLocalStorageTicketRecords,
   saveTicketRecords as saveLocalStorageTicketRecords
 } from "@/lib/ticketRecords";
@@ -144,8 +147,21 @@ export class LocalStorageAdapter implements PersistenceAdapter {
     return loadLocalStorageTicketRecords(organizationId);
   }
 
+  loadTicketPage(organizationId: string, request: TicketPageRequest): Promise<TicketPage> {
+    return loadLocalStorageTicketPage(organizationId, request);
+  }
+
   saveTicketRecords(organizationId: string, records: TicketRecord[]): Promise<void> {
     return saveLocalStorageTicketRecords(organizationId, records);
+  }
+
+  async saveTicketRecord(organizationId: string, record: TicketRecord): Promise<void> {
+    const records = await loadLocalStorageTicketRecords(organizationId);
+    const index = records.findIndex((item) => item.ticketId === record.ticketId);
+    const next = [...records];
+    if (index >= 0) next[index] = record;
+    else next.push(record);
+    await saveLocalStorageTicketRecords(organizationId, next);
   }
 
   async generateTicketId(organizationId: string, profile: OrganizationProfile): Promise<string> {

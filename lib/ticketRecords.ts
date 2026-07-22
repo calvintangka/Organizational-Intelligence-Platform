@@ -1,4 +1,11 @@
-import type { OrganizationProfile, TicketRecord, TicketRecordStatus } from "@/types";
+import type {
+  OrganizationProfile,
+  TicketPage,
+  TicketPageRequest,
+  TicketRecord,
+  TicketRecordFilter,
+  TicketRecordStatus
+} from "@/types";
 import { hasRuntimeLegacyFallback } from "@/lib/orgMemory";
 import { organizationTicketPrefix, ticketDateStamp, formatTicketId } from "@/lib/ticketIdFormat";
 import { requireOrganizationId } from "@/lib/organizationId";
@@ -247,7 +254,7 @@ export function searchTicketRecords(
     .reverse();
 }
 
-export type CaseFilterChip = "all" | "heavily_edited" | "cold_start" | "uncategorized" | "rejected" | "discarded";
+export type CaseFilterChip = TicketRecordFilter;
 
 export function filterTicketRecords(
   records: TicketRecord[],
@@ -274,6 +281,37 @@ export function filterTicketRecords(
     default:
       return records;
   }
+}
+
+/** Local-mode implementation of the same bounded page contract as the server. */
+export async function loadTicketPage(
+  organizationId: string,
+  request: TicketPageRequest
+): Promise<TicketPage> {
+  requireOrganizationId(organizationId, "loadTicketPage");
+  if (!Number.isInteger(request.page) || request.page < 1) {
+    throw new Error("Ticket page must be a positive integer.");
+  }
+  if (!Number.isInteger(request.pageSize) || request.pageSize < 1 || request.pageSize > 100) {
+    throw new Error("Ticket page size must be an integer between 1 and 100.");
+  }
+  if ((request.search?.trim().length ?? 0) > 200) {
+    throw new Error("Ticket search must not exceed 200 characters.");
+  }
+  const page = request.page;
+  const pageSize = request.pageSize;
+  const filtered = filterTicketRecords(
+    searchTicketRecords(await loadTicketRecords(organizationId), request.search ?? ""),
+    request.filter ?? "all"
+  );
+  const total = filtered.length;
+  return {
+    tickets: filtered.slice((page - 1) * pageSize, page * pageSize),
+    page,
+    pageSize,
+    total,
+    totalPages: total === 0 ? 0 : Math.ceil(total / pageSize)
+  };
 }
 
 export function computeEditDistance(original: string, edited: string): string | null {

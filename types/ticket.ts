@@ -61,3 +61,26 @@ export interface TicketRecord {
    */
   resolutionMode?: "human" | "automatic" | null;
 }
+
+export type TicketRecordFilter =
+  | "all"
+  | "heavily_edited"
+  | "cold_start"
+  | "uncategorized"
+  | "rejected"
+  | "discarded";
+
+export interface TicketPageRequest {
+  page: number;
+  pageSize: number;
+  search?: string;
+  filter?: TicketRecordFilter;
+}
+
+export interface TicketPage {
+  tickets: TicketRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}

@@ -56,6 +56,7 @@
     "probe:todo025g-curated-scenarios": "node scripts/todo025g-curated-scenarios-probe.cjs",
     "probe:todo025h-scale-responsiveness": "node scripts/todo025h-scale-responsiveness-audit.cjs",
     "probe:todo033-lazy-history": "node scripts/todo033-lazy-history-probe.cjs",
+    "probe:todo034-ticket-pagination": "node scripts/todo034-ticket-pagination-probe.cjs",
     "restore:maesa-profile-vocabulary": "node scripts/restore-maesa-profile-vocabulary.cjs",
     "seed:test-organization": "node scripts/seed-test-organization.cjs",
     "seed:developer-demo-foundation": "node scripts/seed-developer-demo-foundation.cjs",

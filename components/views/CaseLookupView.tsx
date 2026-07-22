@@ -1,20 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import type { TicketRecord, KnowledgeItem } from "@/types";
-import type { ActiveView } from "@/components/maesa/Sidebar";
-import {
-  searchTicketRecords,
-  filterTicketRecords,
-  type CaseFilterChip,
-} from "@/lib/ticketRecords";
+import { useEffect, useState } from "react";
+import type { KnowledgeItem, TicketPage, TicketPageRequest, TicketRecord } from "@/types";
+import type { CaseFilterChip } from "@/lib/ticketRecords";
 
 interface CaseLookupViewProps {
-  ticketRecords: TicketRecord[];
+  organizationId: string;
   knowledgeItems: KnowledgeItem[];
   darkMode: boolean;
+  loadTicketPage: (organizationId: string, request: TicketPageRequest) => Promise<TicketPage>;
   onNavigateToKnowledge: (knowledgeId: string) => void;
-  onNavigate: (view: ActiveView) => void;
   onResumeTicket?: (record: TicketRecord) => void;
 }
 
@@ -69,16 +64,56 @@ function formatDate(iso: string): string {
 }
 
 export function CaseLookupView({
-  ticketRecords,
+  organizationId,
   knowledgeItems,
   darkMode,
+  loadTicketPage,
   onNavigateToKnowledge,
   onResumeTicket,
 }: CaseLookupViewProps) {
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [activeChip, setActiveChip] = useState<CaseFilterChip>("all");
   const [selectedCase, setSelectedCase] = useState<TicketRecord | null>(null);
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [page, setPage] = useState(1);
+  const [result, setResult] = useState<TicketPage>({
+    tickets: [], page: 1, pageSize: PAGE_SIZE, total: 0, totalPages: 0
+  });
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    setPage(1);
+    setSelectedCase(null);
+    setResult({ tickets: [], page: 1, pageSize: PAGE_SIZE, total: 0, totalPages: 0 });
+  }, [organizationId, debouncedQuery, activeChip]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError("");
+    void loadTicketPage(organizationId, {
+      page,
+      pageSize: PAGE_SIZE,
+      search: debouncedQuery,
+      filter: activeChip
+    }).then((next) => {
+      if (!cancelled) setResult(next);
+    }).catch((error) => {
+      if (!cancelled) {
+        setResult({ tickets: [], page, pageSize: PAGE_SIZE, total: 0, totalPages: 0 });
+        setLoadError(error instanceof Error ? error.message : "Cases could not be loaded.");
+      }
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [organizationId, page, debouncedQuery, activeChip, loadTicketPage]);
 
   const card = darkMode
     ? "rounded-2xl border border-[#2d3f52] bg-[#1a2b3c]"
@@ -88,12 +123,6 @@ export function CaseLookupView({
   const subCard = darkMode
     ? "rounded-xl border border-[#2d3f52] bg-[#111827] p-3"
     : "rounded-xl border border-slate-100 bg-slate-50 p-3";
-
-  const filtered = filterTicketRecords(
-    searchTicketRecords(ticketRecords, query),
-    activeChip
-  );
-  const visible = filtered.slice(0, visibleCount);
 
   if (selectedCase) {
     return (
@@ -126,7 +155,7 @@ export function CaseLookupView({
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
-            setVisibleCount(PAGE_SIZE);
+            setPage(1);
           }}
           placeholder="Search by ticket ID, text, or category..."
           className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-blue-200 ${
@@ -147,7 +176,7 @@ export function CaseLookupView({
               type="button"
               onClick={() => {
                 setActiveChip(chip.id);
-                setVisibleCount(PAGE_SIZE);
+                setPage(1);
               }}
               className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
                 active
@@ -167,17 +196,22 @@ export function CaseLookupView({
 
       {/* Results count */}
       <p className={`mt-3 text-xs ${mutedCls}`}>
-        {filtered.length} case{filtered.length !== 1 ? "s" : ""} found
+        {loading ? "Loading cases..." : `${result.total} case${result.total !== 1 ? "s" : ""} found`}
       </p>
 
       {/* Case list */}
       <div className="mt-3 space-y-2">
-        {visible.length === 0 && (
+        {!loading && loadError && (
+          <div className={`${card} p-6 text-center`}>
+            <p className={darkMode ? "text-red-300" : "text-red-600"}>{loadError}</p>
+          </div>
+        )}
+        {!loading && !loadError && result.tickets.length === 0 && (
           <div className={`${card} p-6 text-center`}>
             <p className={mutedCls}>No cases match your search.</p>
           </div>
         )}
-        {visible.map((record) => (
+        {!loading && result.tickets.map((record) => (
           <button
             key={record.ticketId}
             type="button"
@@ -251,19 +285,32 @@ export function CaseLookupView({
         ))}
       </div>
 
-      {/* Load more */}
-      {visibleCount < filtered.length && (
-        <button
-          type="button"
-          onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
-          className={`mt-4 w-full rounded-xl py-2.5 text-sm font-semibold transition-colors ${
-            darkMode
-              ? "bg-[#1e3048] text-slate-300 hover:bg-[#2d3f52]"
-              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-          }`}
-        >
-          Load more ({filtered.length - visibleCount} remaining)
-        </button>
+      {!loading && !loadError && result.totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            disabled={page <= 1}
+            onClick={() => setPage((value) => Math.max(1, value - 1))}
+            className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+              darkMode ? "bg-[#1e3048] text-slate-300" : "bg-slate-100 text-slate-600"
+            }`}
+          >
+            Previous
+          </button>
+          <span className={`text-xs ${mutedCls}`}>
+            Page {result.page} of {result.totalPages}
+          </span>
+          <button
+            type="button"
+            disabled={page >= result.totalPages}
+            onClick={() => setPage((value) => Math.min(result.totalPages, value + 1))}
+            className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+              darkMode ? "bg-[#1e3048] text-slate-300" : "bg-slate-100 text-slate-600"
+            }`}
+          >
+            Next
+          </button>
+        </div>
       )}
     </div>
   );

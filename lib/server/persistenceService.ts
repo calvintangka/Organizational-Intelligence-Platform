@@ -11,7 +11,10 @@ import type {
   MemoryChangeRecord,
   OrgMetrics,
   OrganizationProfile,
+  TicketPage,
+  TicketPageRequest,
   TicketRecord,
+  TicketRecordFilter,
   ValidationRecord
 } from "@/types";
 import { Prisma } from "@/generated/prisma/client";
@@ -416,6 +419,84 @@ export async function loadTicketRecords(organizationId: string): Promise<TicketR
   const organization = await requireOrganization(organizationId);
   const rows = await readDatabase("ticket records", () => prisma.ticketRecord.findMany({ where: { organizationId: organization.id }, orderBy: { createdAt: "asc" } }));
   return rows.map(mapTicket);
+}
+
+const TICKET_PAGE_SIZE_MAX = 100;
+const TICKET_SEARCH_LENGTH_MAX = 200;
+
+export async function loadTicketPage(
+  organizationId: string,
+  request: TicketPageRequest
+): Promise<TicketPage> {
+  const organization = await requireOrganization(organizationId);
+  const page = request.page;
+  const pageSize = request.pageSize;
+  const search = request.search?.trim() ?? "";
+  const filter: TicketRecordFilter = request.filter ?? "all";
+  if (!Number.isInteger(page) || page < 1) throw invalidRequest("Ticket page must be a positive integer.");
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > TICKET_PAGE_SIZE_MAX) {
+    throw invalidRequest(`Ticket page size must be an integer between 1 and ${TICKET_PAGE_SIZE_MAX}.`);
+  }
+  if (search.length > TICKET_SEARCH_LENGTH_MAX) {
+    throw invalidRequest(`Ticket search must not exceed ${TICKET_SEARCH_LENGTH_MAX} characters.`);
+  }
+
+  const filters: Prisma.TicketRecordWhereInput[] = [];
+  if (search) {
+    filters.push({
+      OR: [
+        { ticketId: { contains: search, mode: "insensitive" } },
+        { rawMessage: { contains: search, mode: "insensitive" } },
+        { subject: { contains: search, mode: "insensitive" } },
+        { classification: { path: ["category"], string_contains: search, mode: "insensitive" } },
+        { classification: { path: ["canonicalProblem"], string_contains: search, mode: "insensitive" } }
+      ]
+    });
+  }
+  switch (filter) {
+    case "heavily_edited":
+      filters.push({ resolution: { path: ["humanEdited"], equals: true } });
+      break;
+    case "cold_start":
+      filters.push({ OR: [
+        { memoryMatch: { path: ["matchType"], equals: "none" } },
+        { draftSource: "no_template" }
+      ] });
+      break;
+    case "uncategorized":
+      filters.push({ OR: [
+        { classification: { path: ["classifiedBy"], equals: "llm_fallback" } },
+        { classification: { path: ["category"], equals: "Uncategorized" } },
+        { classification: { path: ["category"], equals: "General" } }
+      ] });
+      break;
+    case "rejected":
+      filters.push({ status: "rejected" });
+      break;
+    case "discarded":
+      filters.push({ status: "discarded" });
+      break;
+  }
+  const where: Prisma.TicketRecordWhereInput = {
+    organizationId: organization.id,
+    ...(filters.length > 0 ? { AND: filters } : {})
+  };
+  const [total, rows] = await readDatabase("ticket page", () => prisma.$transaction([
+    prisma.ticketRecord.count({ where }),
+    prisma.ticketRecord.findMany({
+      where,
+      orderBy: [{ createdAt: "desc" }, { ticketId: "desc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize
+    })
+  ]));
+  return {
+    tickets: rows.map(mapTicket),
+    page,
+    pageSize,
+    total,
+    totalPages: total === 0 ? 0 : Math.ceil(total / pageSize)
+  };
 }
 
 export async function loadTicketSequence(organizationId: string): Promise<{ organizationId: string; counter: number; updatedAt: string | null } | null> {

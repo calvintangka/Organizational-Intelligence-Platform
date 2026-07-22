@@ -63,7 +63,7 @@ function ordered(records) {
   });
 }
 
-async function hydration(includeHistory) {
+async function hydration(includeHistory, includeTickets) {
   return Promise.all([
     persistence.listOrganizationProfiles(),
     persistence.loadKnowledge(DEMO),
@@ -72,7 +72,7 @@ async function hydration(includeHistory) {
     persistence.loadOrgMetrics(DEMO),
     persistence.loadIntelligenceLog(DEMO),
     persistence.loadEmergingPatterns(DEMO),
-    persistence.loadTicketRecords(DEMO)
+    ...(includeTickets ? [persistence.loadTicketRecords(DEMO)] : [])
   ]);
 }
 
@@ -108,8 +108,8 @@ async function measureHistory(label, knowledgeId) {
 async function main() {
   const beforeSnapshot = await snapshots();
   const [beforeHydration, afterHydration] = await Promise.all([
-    timed(() => hydration(true)),
-    timed(() => hydration(false))
+    timed(() => hydration(true, true)),
+    timed(() => hydration(false, false))
   ]);
   const fullValidations = await persistence.loadValidationRecords(DEMO);
   const fullMemory = await persistence.loadMemoryChangeRecords(DEMO);
@@ -145,6 +145,7 @@ async function main() {
   const pageSource = fs.readFileSync(path.join(root, "app", "page.tsx"), "utf8");
   const routeSource = fs.readFileSync(path.join(root, "app", "api", "organizations", "[organizationId]", "knowledge", "[knowledgeId]", "history", "route.ts"), "utf8");
   check("initial hydration does not invoke full-history readers", !pageSource.includes("persistence.loadValidationRecords(orgId)") && !pageSource.includes("persistence.loadMemoryChangeRecords(orgId)"));
+  check("initial hydration does not invoke the full ticket reader", !pageSource.includes("persistence.loadTicketRecords(orgId)"));
   check("client cache is generation-safe and organization-keyed", pageSource.includes("knowledgeHistoryCache") && pageSource.includes("organizationSwitchGeneration.current") && pageSource.includes("`${organizationId}:${knowledgeId}`"));
   check("history API uses membership-protected organization route", routeSource.includes("withOrganizationRoute<KnowledgeHistoryRouteParams>"));
 

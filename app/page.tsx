@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Sidebar } from "@/components/maesa/Sidebar";
 import type { ActiveView } from "@/components/maesa/Sidebar";
 import { HomeView } from "@/components/views/HomeView";
@@ -84,7 +84,6 @@ import {
 } from "@/lib/organizationProfile";
 import {
   createTicketRecord,
-  upsertTicketRecord,
   computeEditDistance,
 } from "@/lib/ticketRecords";
 import { CaseLookupView } from "@/components/views/CaseLookupView";
@@ -102,6 +101,7 @@ import type {
   ReflectionDecision,
   SuggestedResponse,
   Ticket,
+  TicketPageRequest,
   BusinessRelevance,
   IntelligenceLogEntry,
   TrustDecision,
@@ -486,7 +486,7 @@ export default function Home() {
   const [emergingPatterns, setEmergingPatterns] = useState<EmergingPattern[]>([]);
 
   // Ticket records (first-class persisted case records)
-  const [ticketRecords, setTicketRecords] = useState<TicketRecord[]>([]);
+  const ticketSaveChains = useRef<Record<string, Promise<void>>>({});
   const [activeTicketRecord, setActiveTicketRecord] = useState<TicketRecord | null>(null);
 
   // LLM match discrimination — reasoning surfaced in the analysis step
@@ -646,8 +646,7 @@ export default function Home() {
           loadedMemoryChangeRecords,
           loadedOrgMetrics,
           loadedIntelligenceLog,
-          loadedPatterns,
-          loadedTicketRecords
+          loadedPatterns
         ] = await Promise.all([
           persistence.loadOrganizationList(),
           persistence.loadKnowledge(orgId),
@@ -656,8 +655,7 @@ export default function Home() {
           Promise.resolve([] as MemoryChangeRecord[]),
           persistence.loadOrgMetrics(orgId),
           persistence.loadOrgLog(orgId),
-          persistence.loadEmergingPatterns(orgId),
-          persistence.loadTicketRecords(orgId)
+          persistence.loadEmergingPatterns(orgId)
         ]);
 
         if (cancelled) return;
@@ -681,7 +679,6 @@ export default function Home() {
         });
         setIntelligenceLog(loadedIntelligenceLog);
         setEmergingPatterns(loadedPatterns);
-        setTicketRecords(loadedTicketRecords);
         setDarkMode(window.localStorage.getItem("maesa-theme") === "dark");
         setHydrated(true);
       } catch (error) {
@@ -708,6 +705,30 @@ export default function Home() {
       reportPersistenceError(scope, error);
     });
   }
+
+  function persistTicketRecord(record: TicketRecord) {
+    const organizationId = record.orgId;
+    const previous = ticketSaveChains.current[organizationId] ?? Promise.resolve();
+    const operation = previous
+      .catch(() => undefined)
+      .then(() => persistence.saveTicketRecord(organizationId, record));
+    ticketSaveChains.current[organizationId] = operation;
+    queuePersistenceSave("saveTicketRecord", operation);
+  }
+
+  function persistTicketRecords(records: TicketRecord[]) {
+    for (const record of records) persistTicketRecord(record);
+  }
+
+  async function flushTicketSaves(organizationId: string): Promise<void> {
+    await ticketSaveChains.current[organizationId]?.catch(() => undefined);
+  }
+
+  const loadCasePage = useCallback(
+    (organizationId: string, request: TicketPageRequest) =>
+      persistence.loadTicketPage(organizationId, request),
+    []
+  );
 
   /**
    * BUG-009: recover from a rejected stale organization-profile write.
@@ -754,21 +775,19 @@ export default function Home() {
       persistence.saveKnowledgeCandidates(orgId, knowledgeCandidates),
       persistence.saveOrgMetrics(orgId, orgMetrics),
       persistence.saveOrgLog(orgId, intelligenceLog),
-      persistence.saveEmergingPatterns(orgId, emergingPatterns),
-      persistence.saveTicketRecords(orgId, ticketRecords)
+      persistence.saveEmergingPatterns(orgId, emergingPatterns)
     ]);
   }
 
   async function loadOrganizationState(orgId: string) {
-    const [knowledge, candidates, validations, changes, loadedMetrics, log, patterns, tickets] = await Promise.all([
+    const [knowledge, candidates, validations, changes, loadedMetrics, log, patterns] = await Promise.all([
       persistence.loadKnowledge(orgId),
       persistence.loadKnowledgeCandidates(orgId),
       Promise.resolve([] as ValidationRecord[]),
       Promise.resolve([] as MemoryChangeRecord[]),
       persistence.loadOrgMetrics(orgId),
       persistence.loadOrgLog(orgId),
-      persistence.loadEmergingPatterns(orgId),
-      persistence.loadTicketRecords(orgId)
+      persistence.loadEmergingPatterns(orgId)
     ]);
     return {
       knowledge,
@@ -780,8 +799,7 @@ export default function Home() {
         organizationId: loadedMetrics?.organizationId ?? orgId
       },
       log,
-      patterns,
-      tickets
+      patterns
     };
   }
 
@@ -806,10 +824,6 @@ export default function Home() {
   useEffect(() => {
     if (hydrated) queuePersistenceSave("saveEmergingPatterns", persistence.saveEmergingPatterns(organizationProfile.id, emergingPatterns));
   }, [emergingPatterns, organizationProfile.id, hydrated]);
-
-  useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveTicketRecords", persistence.saveTicketRecords(organizationProfile.id, ticketRecords));
-  }, [ticketRecords, organizationProfile.id, hydrated]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -1290,7 +1304,7 @@ export default function Home() {
       };
     });
     if (bulkRecords.length > 0) {
-      setTicketRecords((prev) => [...prev, ...bulkRecords]);
+      persistTicketRecords(bulkRecords);
     }
 
     addLogEntries([
@@ -1485,7 +1499,7 @@ export default function Home() {
     if (!confirmed) return;
 
     const updated: TicketRecord = { ...activeTicketRecord, status: "discarded" };
-    setTicketRecords((prev) => upsertTicketRecord(prev, updated));
+    persistTicketRecord(updated);
     addLogEntries([
       createLogEntry("Ticket discarded", `${activeTicketRecord.ticketId} discarded by user before reflection commit`)
     ]);
@@ -1667,6 +1681,7 @@ export default function Home() {
   async function resetOrganization() {
     cancelActiveTicketRequest();
     try {
+      await flushTicketSaves(organizationProfile.id);
       await persistence.resetOrganization(organizationProfile.id);
     } catch (error) {
       reportPersistenceError("resetOrganization", error);
@@ -1680,7 +1695,6 @@ export default function Home() {
     setOrgMetrics(persistence.seedOrgMetrics(organizationProfile.id));
     setIntelligenceLog([]);
     setEmergingPatterns(persistence.seedEmergingPatterns());
-    setTicketRecords([]);
     setActiveTicketRecord(null);
     resetWorkflowState();
     setCurrentStep(0);
@@ -1749,6 +1763,7 @@ export default function Home() {
     setProfileConflictNotice("");
     resetWorkflowState();
     try {
+      await flushTicketSaves(organizationProfile.id);
       // Finish the OUTGOING organization's resource writes through ITS OWN
       // authority before any new organization can become active. The outgoing
       // authority is still active here (activation for the incoming org happens
@@ -1777,7 +1792,6 @@ export default function Home() {
       setOrgMetrics(loaded.metrics);
       setIntelligenceLog(loaded.log);
       setEmergingPatterns(loaded.patterns);
-      setTicketRecords(loaded.tickets);
       setBusinessRelevance(null);
       setAiAdvisory(null);
       // Recompute the legacy-storage notice for the INCOMING organization so a
@@ -1810,6 +1824,7 @@ export default function Home() {
     const nextList = organizationList.filter((org) => org.id !== id);
     if (nextList.length === organizationList.length) return;
     try {
+      await flushTicketSaves(id);
       if (activePersistenceMode() === "local" && id === organizationProfile.id && hydrated) {
         await persistOrganizationState(id);
       }
@@ -2580,7 +2595,7 @@ export default function Home() {
         resolutionMode: "human",
       };
       setActiveTicketRecord(updated);
-      setTicketRecords((prev) => upsertTicketRecord(prev, updated));
+      persistTicketRecord(updated);
     }
 
     addLogEntries([
@@ -2897,7 +2912,7 @@ export default function Home() {
         resolutionMode: "human",
       };
       setActiveTicketRecord(updated);
-      setTicketRecords((prev) => upsertTicketRecord(prev, updated));
+      persistTicketRecord(updated);
     }
 
     setErrorMessage("");
@@ -3145,7 +3160,7 @@ export default function Home() {
     // Create ticket record at submission
     let record = createTicketRecord(tId, profile.id, text.trim(), ticket.subject);
     setActiveTicketRecord(record);
-    setTicketRecords((prev) => upsertTicketRecord(prev, record));
+    persistTicketRecord(record);
 
     // Phase 1: Analysis
     const relevance = assessBusinessRelevanceForProfile(`${ticket.subject} ${ticket.description}`, profile);
@@ -3156,7 +3171,7 @@ export default function Home() {
       setErrorMessage(`Rejected by Business Relevance Guardrail: ${relevance.reason}`);
       record = { ...record, status: "rejected" };
       setActiveTicketRecord(record);
-      setTicketRecords((prev) => upsertTicketRecord(prev, record));
+      persistTicketRecord(record);
       return;
     }
 
@@ -3194,7 +3209,7 @@ export default function Home() {
       },
     };
     setActiveTicketRecord(record);
-    setTicketRecords((prev) => upsertTicketRecord(prev, record));
+    persistTicketRecord(record);
 
     setAiAnalysis(analysis);
     setAiAdvisory(advisory);
@@ -3239,7 +3254,7 @@ export default function Home() {
       },
     };
     setActiveTicketRecord(record);
-    setTicketRecords((prev) => upsertTicketRecord(prev, record));
+    persistTicketRecord(record);
 
     setSimilarKnowledge(topMatch ? moveMatchToFront(compatibleMatches, topMatch.item.id) : []);
     addLogEntries([
@@ -3290,7 +3305,7 @@ export default function Home() {
       status: "in_review",
     };
     setActiveTicketRecord(record);
-    setTicketRecords((prev) => upsertTicketRecord(prev, record));
+    persistTicketRecord(record);
 
     addLogEntries([
       createLogEntry("Generated draft response", response.source === "ai_advisory" ? "AI advisory draft" : "Deterministic draft")
@@ -3480,13 +3495,13 @@ export default function Home() {
 
           {activeView === "cases" && (
             <CaseLookupView
-              ticketRecords={ticketRecords}
+              organizationId={organizationProfile.id}
               knowledgeItems={knowledgeItems}
               darkMode={darkMode}
+              loadTicketPage={loadCasePage}
               onNavigateToKnowledge={() => {
                 setActiveView("knowledge");
               }}
-              onNavigate={setActiveView}
               onResumeTicket={resumeTicketFromRecord}
             />
           )}

@@ -7,6 +7,8 @@ import type {
   MemoryChangeRecord,
   OrgMetrics,
   OrganizationProfile,
+  TicketPage,
+  TicketPageRequest,
   TicketRecord,
   ValidationRecord
 } from "@/types";
@@ -96,7 +98,19 @@ export class ServerPersistenceAdapter implements PersistenceAdapter {
   }
 
   async loadTicketRecords(organizationId: string): Promise<TicketRecord[]> {
-    return this.requestResource<TicketRecord[]>(organizationId, "tickets");
+    const id = this.rememberOrganization(organizationId);
+    return this.requestData<TicketRecord[]>(`${this.organizationPath(id)}/tickets?full=true`);
+  }
+
+  async loadTicketPage(organizationId: string, request: TicketPageRequest): Promise<TicketPage> {
+    const id = this.rememberOrganization(organizationId);
+    const search = new URLSearchParams({
+      page: String(request.page),
+      pageSize: String(request.pageSize),
+      filter: request.filter ?? "all"
+    });
+    if (request.search?.trim()) search.set("search", request.search.trim());
+    return this.requestData<TicketPage>(`${this.organizationPath(id)}/tickets?${search.toString()}`);
   }
 
   async saveOrganizationProfile(profile: OrganizationProfile): Promise<OrganizationProfile> {
@@ -138,6 +152,10 @@ export class ServerPersistenceAdapter implements PersistenceAdapter {
 
   async saveTicketRecords(organizationId: string, records: TicketRecord[]): Promise<void> {
     await this.writeResource(organizationId, "tickets", records);
+  }
+
+  async saveTicketRecord(organizationId: string, record: TicketRecord): Promise<void> {
+    await this.writeResource(organizationId, "tickets", [record]);
   }
 
   async generateTicketId(organizationId: string, profile: OrganizationProfile): Promise<string> {

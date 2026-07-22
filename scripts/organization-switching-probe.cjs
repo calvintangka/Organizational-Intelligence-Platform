@@ -51,9 +51,16 @@ async function loadOrganization(id, cookie) {
 
   const values = {};
   for (const resource of resources) {
-    const response = await request(`/api/organizations/${id}/${resource}`, { headers: { cookie } });
+    const suffix = resource === "tickets" ? "?page=1&pageSize=20" : "";
+    const response = await request(`/api/organizations/${id}/${resource}${suffix}`, { headers: { cookie } });
     assert.equal(response.status, 200, `${resource} load must succeed for ${id}`);
-    values[resource] = (await response.json()).data;
+    const data = (await response.json()).data;
+    values[resource] = resource === "tickets" ? data.tickets : data;
+    if (resource === "tickets") {
+      assert.equal(data.page, 1, "ticket page response must preserve the requested page");
+      assert.equal(data.pageSize, 20, "ticket page response must preserve the bounded page size");
+      assert.ok(data.tickets.length <= 20, "ticket page must remain bounded");
+    }
     if (resource === "metrics") {
       if (values[resource]) assert.equal(values[resource].organizationId, id, `${resource} must belong to ${id}`);
     } else {

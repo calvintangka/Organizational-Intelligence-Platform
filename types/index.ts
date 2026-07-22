@@ -6,7 +6,10 @@
   TicketRecordClassification,
   TicketRecordMemoryMatch,
   TicketRecordResolution,
-  TicketRecordReflection
+  TicketRecordReflection,
+  TicketRecordFilter,
+  TicketPageRequest,
+  TicketPage
 } from "./ticket";
 export type {
   AIAnalysis,

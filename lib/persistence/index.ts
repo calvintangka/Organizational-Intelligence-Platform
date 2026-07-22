@@ -15,6 +15,8 @@ import type {
   MemoryChangeRecord,
   OrgMetrics,
   OrganizationProfile,
+  TicketPage,
+  TicketPageRequest,
   TicketRecord,
   ValidationRecord
 } from "@/types";
@@ -166,8 +168,16 @@ class RoutingPersistenceAdapter implements PersistenceAdapter {
     return this.activeResourceAdapter.loadTicketRecords(organizationId);
   }
 
+  loadTicketPage(organizationId: string, request: TicketPageRequest): Promise<TicketPage> {
+    return this.activeResourceAdapter.loadTicketPage(organizationId, request);
+  }
+
   saveTicketRecords(organizationId: string, records: TicketRecord[]): Promise<void> {
     return this.activeResourceAdapter.saveTicketRecords(organizationId, records);
+  }
+
+  saveTicketRecord(organizationId: string, record: TicketRecord): Promise<void> {
+    return this.activeResourceAdapter.saveTicketRecord(organizationId, record);
   }
 
   generateTicketId(organizationId: string, profile: OrganizationProfile): Promise<string> {

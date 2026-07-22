@@ -7,6 +7,8 @@ import type {
   MemoryChangeRecord,
   OrgMetrics,
   OrganizationProfile,
+  TicketPage,
+  TicketPageRequest,
   TicketRecord,
   ValidationRecord
 } from "@/types";
@@ -62,7 +64,9 @@ export interface PersistenceAdapter {
   loadEmergingPatterns(organizationId: string): Promise<EmergingPattern[]>;
   saveEmergingPatterns(organizationId: string, patterns: EmergingPattern[]): Promise<void>;
   loadTicketRecords(organizationId: string): Promise<TicketRecord[]>;
+  loadTicketPage(organizationId: string, request: TicketPageRequest): Promise<TicketPage>;
   saveTicketRecords(organizationId: string, records: TicketRecord[]): Promise<void>;
+  saveTicketRecord(organizationId: string, record: TicketRecord): Promise<void>;
 
   generateTicketId(organizationId: string, profile: OrganizationProfile): Promise<string>;
   generateTicketIds(organizationId: string, profile: OrganizationProfile, count: number): Promise<string[]>;

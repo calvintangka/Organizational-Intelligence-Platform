@@ -41,7 +41,7 @@ async function main() {
     const knowledge = await get(`/api/organizations/${ORG}/knowledge`);
     assert.equal(knowledge.response.status, 200);
     assert.equal(knowledge.body.data[0].id, "import-knowledge-1");
-    const tickets = await get(`/api/organizations/${ORG}/tickets`);
+    const tickets = await get(`/api/organizations/${ORG}/tickets?full=true`);
     assert.equal(tickets.body.data[0].ticketId, "MT-20260715-0015");
 
     const retry = await post(`/api/organizations/${ORG}/migration-import/${intake.body.data.batchId}/execute`);
