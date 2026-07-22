@@ -58,6 +58,7 @@
     "probe:todo033-lazy-history": "node scripts/todo033-lazy-history-probe.cjs",
     "probe:todo034-ticket-pagination": "node scripts/todo034-ticket-pagination-probe.cjs",
     "probe:todo035-knowledge-derivations": "node scripts/todo035-knowledge-derivation-probe.cjs",
+    "probe:todo036-resolution-mode-reseed": "node scripts/todo036-resolution-mode-reseed-probe.cjs",
     "restore:maesa-profile-vocabulary": "node scripts/restore-maesa-profile-vocabulary.cjs",
     "seed:test-organization": "node scripts/seed-test-organization.cjs",
     "seed:developer-demo-foundation": "node scripts/seed-developer-demo-foundation.cjs",
