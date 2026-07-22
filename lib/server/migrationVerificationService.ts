@@ -278,6 +278,7 @@ function sourceTicket(ticket: TicketRecord, organizationId: string): JsonRecord 
     reflection: ticket.reflection ?? {},
     validationRecordIds: ticket.validationRecordIds ?? [],
     actorId: null,
+    resolutionMode: ticket.resolutionMode === "human" || ticket.resolutionMode === "automatic" ? ticket.resolutionMode : null,
     createdAt: iso(ticket.createdAt)
   };
 }
@@ -296,6 +297,7 @@ function targetTicket(row: JsonRecord): JsonRecord {
     reflection: row.reflection,
     validationRecordIds: row.validationRecordIds,
     actorId: row.actorId,
+    resolutionMode: row.resolutionMode ?? null,
     createdAt: iso(row.createdAt)
   };
 }

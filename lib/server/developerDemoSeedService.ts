@@ -220,6 +220,9 @@ function ticketRow(ticket: SimulatedTicketRecord): Prisma.TicketRecordCreateMany
     reflection: jsonValue(ticket.reflection ?? {}),
     validationRecordIds: jsonValue(ticket.validationRecordIds ?? []),
     actorId: ticket.actorId,
+    // TODO-026: persist the simulator's deterministic resolution mode so a fresh
+    // reseed makes the auto-vs-human split durably reconstructable.
+    resolutionMode: ticket.resolutionMode === "human" || ticket.resolutionMode === "automatic" ? ticket.resolutionMode : null,
     createdAt: new Date(ticket.createdAt)
   };
 }
@@ -494,6 +497,13 @@ async function verifyPersisted(
     "faithful.tickets.withActorId",
     digest(resources.tickets.map(expectedTicket)) === digest(ticketRows.map(actualTicket))
   );
+  // TODO-026 forward-compatible: a persisted resolutionMode must equal the
+  // simulator's mode; null rows (a pre-TODO-026 seed, or genuinely unresolved
+  // tickets) are accepted as unknown and never forced to match.
+  const simTicketMode = new Map(resources.tickets.map((t) => [t.ticketId, t.resolutionMode ?? null]));
+  const modeMismatch = ticketRows.filter((row) => row.resolutionMode !== null && row.resolutionMode !== simTicketMode.get(row.ticketId)).length;
+  const nullModeRows = ticketRows.filter((row) => row.resolutionMode === null).length;
+  record("faithful.tickets.resolutionMode", modeMismatch === 0, `mismatch=${modeMismatch}, nullMode=${nullModeRows}`);
   record(
     "faithful.candidates",
     digest(resources.candidates.map(expectedCandidate)) === digest(candidateRows.map(actualCandidate))

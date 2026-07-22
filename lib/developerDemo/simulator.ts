@@ -291,7 +291,7 @@ function buildTicketRecords(config: DeveloperDemoSimulationConfig, intents: Tick
     const completed = intent.status === "resolved" || intent.status === "rejected";
     const automatic = intent.reservedOutcome?.kind === "automatic"
       || (!intent.reservedOutcome && intent.status === "resolved" && intent.at >= "2025-01-01T00:00:00.000Z" && rng.integer(100) < 24);
-    const resolutionMode = completed ? (automatic ? "automatic" : "human") : "none";
+    const resolutionMode: "human" | "automatic" | null = completed ? (automatic ? "automatic" : "human") : null;
     const durationMinutes = completed ? 20 + rng.integer(intent.status === "rejected" ? 4_200 : 1_420) : 0;
     const resolvedAt = completed ? addMilliseconds(intent.at, durationMinutes * 60_000) : null;
     const opener = rng.pick(intent.arc.content.ticketOpeners);

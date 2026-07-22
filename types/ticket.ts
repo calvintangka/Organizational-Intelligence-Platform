@@ -54,4 +54,10 @@ export interface TicketRecord {
   reflection: TicketRecordReflection;
   validationRecordIds: string[];
   status: TicketRecordStatus;
+  /**
+   * TODO-026: durable auto-vs-human auditability of a completed resolution.
+   * `null`/absent means unresolved or a historical row whose mode was never
+   * captured — it must never be treated as a human resolution.
+   */
+  resolutionMode?: "human" | "automatic" | null;
 }

@@ -39,6 +39,14 @@ enum EmergingPatternLifecycle {
   dismissed
 }
 
+// TODO-026: durable auto-vs-human auditability. A completed resolution records
+// whether a human had to resolve/approve the case. NULL means unresolved or a
+// historical row whose mode was never captured — never silently "human".
+enum TicketResolutionMode {
+  human
+  automatic
+}
+
 enum MigrationImportBatchStatus {
   pending
   validating
@@ -317,6 +325,9 @@ model TicketRecord {
   reflection          Json
   validationRecordIds Json
   actorId             String?
+  // TODO-026: nullable so existing rows and unresolved tickets stay distinct
+  // from a genuine human resolution. Backfill only via an approved migration.
+  resolutionMode      TicketResolutionMode?
   createdAt           DateTime              @db.Timestamptz(6)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

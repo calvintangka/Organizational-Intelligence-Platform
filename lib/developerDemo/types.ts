@@ -72,7 +72,9 @@ export interface SimulatedTicketRecord extends TicketRecord {
   actorId: string;
   arcId: string;
   knowledgeId: string;
-  resolutionMode: "human" | "automatic" | "none";
+  // TODO-026: null for unresolved tickets (was "none"); persisted verbatim so a
+  // future reseed makes the auto-vs-human split durably reconstructable.
+  resolutionMode: "human" | "automatic" | null;
 }
 
 export interface SimulatedValidationRecord extends ValidationRecord {

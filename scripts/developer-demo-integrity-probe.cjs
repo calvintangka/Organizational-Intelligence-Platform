@@ -440,9 +440,20 @@ function auditMetrics(data) {
     compare("emergingPatternsDetected", derived.emergingPatternsDetected),
     compare("promotedPatterns", derived.emergingPatternsDetected)
   ];
-  // auto/human split is NOT derivable: TicketRecord has no durable resolution-mode field.
-  finding("MODEL_LIMITATION", "medium", "J", "OrgMetrics.autoResolutions / humanResolutions are not independently reconstructable: TicketRecord has no durable resolution-mode field. Persisted split (auto=" + metrics?.autoResolutions + ", human=" + metrics?.humanResolutions + ") cannot be justified from durable records.", { autoResolutions: metrics?.autoResolutions, humanResolutions: metrics?.humanResolutions, sum: (metrics?.autoResolutions ?? 0) + (metrics?.humanResolutions ?? 0), resolutionsCount: metrics?.resolutionsCount });
-  summary.metrics = { derivableFields: rows, autoHumanDerivable: false };
+  // TODO-026: TicketRecord.resolutionMode now makes auto/human reconstructable
+  // where present. Reconstruct independently; null rows are unknown (never human).
+  const completed = tickets.filter((t) => (t.status === "resolved" || t.status === "rejected") && t.resolution?.resolvedAt);
+  const modeAuto = completed.filter((t) => t.resolutionMode === "automatic").length;
+  const modeHuman = completed.filter((t) => t.resolutionMode === "human").length;
+  const modeUnknown = completed.filter((t) => t.resolutionMode !== "automatic" && t.resolutionMode !== "human").length;
+  const reconstructable = modeUnknown === 0;
+  if (reconstructable) {
+    if (metrics?.autoResolutions !== modeAuto) finding("DATA_CORRUPTION", "medium", "J", `OrgMetrics.autoResolutions ${metrics?.autoResolutions} != reconstructed ${modeAuto}.`, { modeAuto });
+    if (metrics?.humanResolutions !== modeHuman) finding("DATA_CORRUPTION", "medium", "J", `OrgMetrics.humanResolutions ${metrics?.humanResolutions} != reconstructed ${modeHuman}.`, { modeHuman });
+  } else {
+    finding("AUDITABILITY_GAP", "medium", "J", `${modeUnknown} completed resolutions have null resolutionMode (historical rows predating TODO-026). The durable TicketRecord.resolutionMode field now exists, but the persisted auto/human split (auto=${metrics?.autoResolutions}, human=${metrics?.humanResolutions}) is not reconstructable for these rows until an explicitly approved reseed/backfill. Null is NOT counted as human.`, { autoResolutions: metrics?.autoResolutions, humanResolutions: metrics?.humanResolutions, modeUnknown, modeAuto, modeHuman });
+  }
+  summary.metrics = { derivableFields: rows, resolutionMode: { automatic: modeAuto, human: modeHuman, unknownNull: modeUnknown }, autoHumanReconstructable: reconstructable };
 }
 
 function auditSequence(data) {
@@ -554,7 +565,7 @@ async function main() {
   try {
     const { simulateDeveloperDemo } = require(path.join(root, "lib", "developerDemo", "simulator.ts"));
     const sim = simulateDeveloperDemo();
-    simulatorCrossCheck = sim.digest === "3d75a34468b14d711a3b3663fd3554a1435505a2483e13ac858de8fee26766bd"
+    simulatorCrossCheck = sim.digest === "d0ed2d9d5045548bfcaf3203463542843c2b02a752020cf2b0a3df11996df34b"
       && sim.resources.knowledgeItems.length === data.knowledge.length
       && sim.resources.tickets.length === data.tickets.length
         ? "counts+digest match (secondary only)" : "MISMATCH";

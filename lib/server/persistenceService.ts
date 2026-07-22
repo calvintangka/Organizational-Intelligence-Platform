@@ -281,6 +281,7 @@ function mapTicket(row: PrismaTicketRecord): TicketRecord {
     reflection: asRecord(row.reflection) as unknown as TicketRecord["reflection"],
     validationRecordIds: stringArray(row.validationRecordIds),
     status: row.status,
+    resolutionMode: row.resolutionMode ?? null,
   };
 }
 
@@ -534,6 +535,12 @@ function narrowEnum<T extends string>(value: unknown, allowed: readonly T[], fal
   return allowed.includes(value as T) ? value as T : fallback;
 }
 
+// TODO-026: only the two real modes persist; anything else (unresolved,
+// unknown, legacy) resolves to null and is never coerced to a human resolution.
+function narrowResolutionMode(value: unknown): "human" | "automatic" | null {
+  return value === "human" || value === "automatic" ? value : null;
+}
+
 function knowledgeContent(item: KnowledgeItem): Prisma.InputJsonValue {
   return json({
     problem: item.problem,
@@ -657,6 +664,7 @@ function toTicketColumns(record: TicketRecord): Omit<Prisma.TicketRecordUnchecke
     resolution: json(record.resolution ?? {}),
     reflection: json(record.reflection ?? {}),
     validationRecordIds: json(record.validationRecordIds ?? []),
+    resolutionMode: narrowResolutionMode(record.resolutionMode),
     createdAt: parseDate(record.createdAt, "ticket record createdAt")
   };
 }

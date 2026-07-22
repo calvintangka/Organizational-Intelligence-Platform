@@ -46,6 +46,7 @@
     "probe:developer-demo-mature": "node scripts/developer-demo-mature-probe.cjs",
     "probe:developer-demo-integrity": "node scripts/developer-demo-integrity-probe.cjs",
     "probe:developer-demo-reset": "node scripts/developer-demo-reset-probe.cjs",
+    "probe:todo026-resolution-mode": "node scripts/todo026-resolution-mode-probe.cjs",
     "probe:developer-demo-mature-retrieval": "node scripts/developer-demo-mature-retrieval-probe.cjs",
     "probe:todo030-weak-overlap": "node scripts/todo030-weak-overlap-probe.cjs",
     "probe:todo029-trust-independent-selection": "node scripts/todo029-trust-independent-selection-probe.cjs",

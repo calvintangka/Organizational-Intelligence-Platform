@@ -163,6 +163,8 @@ export function createTicketRecord(
     },
     validationRecordIds: [],
     status: "open",
+    // TODO-026: unresolved on creation. Set to a real mode only when resolved.
+    resolutionMode: null,
   };
 }
 

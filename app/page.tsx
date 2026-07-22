@@ -1235,6 +1235,8 @@ export default function Home() {
         },
         validationRecordIds: [result.validation.id],
         status: "resolved" as const,
+        // TODO-026: bulk clusters are committed through human validation.
+        resolutionMode: "human" as const,
       };
     });
     if (bulkRecords.length > 0) {
@@ -2522,6 +2524,8 @@ export default function Home() {
           editDistanceNote: editNote,
           resolvedAt: new Date().toISOString(),
         },
+        // TODO-026: a human reviewer approved this response (edited or not).
+        resolutionMode: "human",
       };
       setActiveTicketRecord(updated);
       setTicketRecords((prev) => upsertTicketRecord(prev, updated));
@@ -2837,6 +2841,8 @@ export default function Home() {
           ))
           .map((v) => v.id),
         status: "resolved",
+        // TODO-026: the primary review workspace resolves through human approval.
+        resolutionMode: "human",
       };
       setActiveTicketRecord(updated);
       setTicketRecords((prev) => upsertTicketRecord(prev, updated));

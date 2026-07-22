@@ -392,6 +392,9 @@ function ticketData(record: TicketRecord, organizationId: string) {
     reflection: jsonValue(record.reflection ?? {}),
     validationRecordIds: jsonValue(record.validationRecordIds ?? []),
     actorId: null,
+    // TODO-026: preserve a durable resolution mode; legacy packages omit it and
+    // import as null. Only the two real modes are accepted.
+    resolutionMode: record.resolutionMode === "human" || record.resolutionMode === "automatic" ? record.resolutionMode : null,
     createdAt: dateValue(record.createdAt, "ticketRecord.createdAt")
   };
 }
@@ -415,6 +418,7 @@ function targetTicketProjection(row: JsonRecord): JsonRecord {
     reflection: row.reflection,
     validationRecordIds: row.validationRecordIds,
     actorId: row.actorId,
+    resolutionMode: row.resolutionMode ?? null,
     createdAt: (row.createdAt as Date).toISOString()
   };
 }
