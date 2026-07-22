@@ -63,6 +63,7 @@
     "probe:todo037-natural-paraphrase": "node scripts/todo037-natural-paraphrase-audit.cjs",
     "probe:todo039-classification": "node scripts/todo039-classification-probe.cjs",
     "probe:todo040-semantic-lesson": "node scripts/todo040-semantic-lesson-probe.cjs",
+    "probe:todo041-cross-domain": "node scripts/todo041-cross-domain-audit.cjs",
     "probe:todo038-claude-failover": "node scripts/todo038-claude-failover-probe.cjs",
     "restore:maesa-profile-vocabulary": "node scripts/restore-maesa-profile-vocabulary.cjs",
     "seed:test-organization": "node scripts/seed-test-organization.cjs",

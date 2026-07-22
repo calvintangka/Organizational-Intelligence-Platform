@@ -1,0 +1,178 @@
+{
+  "domains": [
+    {
+      "id": "billing-duplicate-invoice",
+      "domain": "Billing",
+      "expectedCategory": "Billing",
+      "expectedCanonicalId": "demo-ki-duplicate-invoice-seat-change",
+      "expectedLessonId": "demo-les-duplicate-invoice-seat-change-001",
+      "oneSignal": "invoice billing",
+      "manySignals": "billing duplicate invoice timeline root cause 01 duplicate-invoice-seat-change",
+      "paraphrases": [
+        {"id":"B01","subject":"The latest statement counts part of our seats twice","description":"We cut the workspace headcount during the month, but the next charge includes the old and new allocation for the same period."},
+        {"id":"B02","subject":"One subscription change produced two amounts","description":"After removing several licenses, finance saw a second charge for those seats instead of a single adjusted total."},
+        {"id":"B03","subject":"Our renewal math looks doubled","description":"The annual bill appears to include a portion of the previous seat level as well as the current one."},
+        {"id":"B04","subject":"We paid twice for seats we changed","description":"A mid-cycle reduction was followed by a statement that repeats the charge for the seats that were removed."},
+        {"id":"B05","subject":"Duplicate money taken after downsizing","description":"The account was reduced before billing closed, yet two line items cover the same group of users."},
+        {"id":"B06","subject":"The invoice repeats a license block","description":"Our administrator lowered capacity and the resulting document contains the old seat block and its replacement."},
+        {"id":"B07","subject":"Seat adjustment did not replace the old total","description":"The ledger shows both versions of the subscription quantity after we changed the plan during the cycle."},
+        {"id":"B08","subject":"Why is this period charged twice?","description":"The workspace has fewer users now, but the bill still collects the earlier quantity alongside the new quantity."},
+        {"id":"B09","subject":"Finance found a repeated subscription amount","description":"A license change near the close of the period seems to have generated overlapping charges for one billing window."},
+        {"id":"B10","subject":"Downward seat change created an extra bill","description":"We removed seats and expected a credit, but the statement instead contains a second amount for those same seats."}
+      ]
+    },
+    {
+      "id": "integrations-webhook-signature",
+      "domain": "API & Integrations",
+      "expectedCategory": "API & Integrations",
+      "expectedCanonicalId": "demo-ki-webhook-signature-secret-rotation",
+      "expectedLessonId": "demo-les-webhook-signature-secret-rotation-001",
+      "oneSignal": "integrations webhook",
+      "manySignals": "integrations webhook signature timeline root cause 01 webhook-signature-secret-rotation",
+      "paraphrases": [
+        {"id":"I01","subject":"Our event receiver rejects every callback","description":"The sender was given a new signing value and now our endpoint treats otherwise normal event messages as untrusted."},
+        {"id":"I02","subject":"Partner notifications no longer pass verification","description":"We rotated the shared secret yesterday; deliveries arrive, but the signature check fails for all of them."},
+        {"id":"I03","subject":"Webhook requests look forged after maintenance","description":"Nothing changed in the payload handler except the credential rollout, and our service now discards each callback."},
+        {"id":"I04","subject":"Callbacks are reaching us but cannot be accepted","description":"The integration provider sends events successfully, yet our verifier says the proof attached to every request is wrong after a secret replacement."},
+        {"id":"I05","subject":"The integration broke when its private value changed","description":"All incoming event attempts fail authentication since we updated the value used to validate the sender."},
+        {"id":"I06","subject":"Every delivery is marked invalid","description":"Our listener still receives traffic, but the authenticity test fails across the board following a credential change on the provider side."},
+        {"id":"I07","subject":"Event signatures stopped matching","description":"A new shared secret was deployed and now the digest calculated by our webhook consumer differs from the sender's digest."},
+        {"id":"I08","subject":"Automations are silent after a connector credential update","description":"The provider reports successful deliveries while our endpoint refuses them because the attached proof no longer validates."},
+        {"id":"I09","subject":"Inbound integration traffic is being refused","description":"The only recent change was replacing the secret used by the event source; every callback is now rejected as unauthenticated."},
+        {"id":"I10","subject":"Our callback trust check failed overnight","description":"After the partner refreshed its private signing value, none of the event messages pass the receiver's authenticity check."}
+      ]
+    },
+    {
+      "id": "permissions-guest-workspace",
+      "domain": "Permissions & Access",
+      "expectedCategory": "Permissions & Access",
+      "expectedCanonicalId": "demo-ki-guest-workspace-access",
+      "expectedLessonId": "demo-les-guest-workspace-access-001",
+      "oneSignal": "permissions workspace",
+      "manySignals": "permissions guest workspace timeline root cause 01 guest-workspace-access",
+      "paraphrases": [
+        {"id":"P01","subject":"A guest can enter the org but not its project","description":"The external collaborator is visible at the organization level, yet the workspace that was shared with them remains unavailable."},
+        {"id":"P02","subject":"Invited partner sees no workspace","description":"The guest accepted the invitation and can see the company shell, but the target team area is missing from their navigation."},
+        {"id":"P03","subject":"External reviewer is blocked from the shared area","description":"We granted a contractor access to a workspace; they still receive an access denied message while administrators can open it."},
+        {"id":"P04","subject":"Guest membership has not reached the project","description":"The person appears in our directory but the permission change is not visible on the workspace they need to review."},
+        {"id":"P05","subject":"Collaborator sees the tenant, not the room","description":"A temporary user can enter the organization landing page but cannot open the specific workspace included in the invitation."},
+        {"id":"P06","subject":"Shared workspace remains hidden for a vendor","description":"The vendor is listed as an external member, although the project selector contains none of the areas we assigned."},
+        {"id":"P07","subject":"A new outside user cannot open the team space","description":"The invitation completed successfully; only the intended workspace rejects the guest while internal roles continue to work."},
+        {"id":"P08","subject":"Guest access stops at the organization boundary","description":"Our consultant can identify the organization but the workspace resource itself is not available after the share was made."},
+        {"id":"P09","subject":"The project invite did not take effect","description":"The external account is active in the directory, but selecting the shared workspace produces a permission error."},
+        {"id":"P10","subject":"Partner membership is visible in the wrong place","description":"The guest appears in the organization roster yet cannot reach the project they were supposed to inspect."}
+      ]
+    },
+    {
+      "id": "reporting-csv-encoding",
+      "domain": "Reporting & Exports",
+      "expectedCategory": "Reporting & Exports",
+      "expectedCanonicalId": "demo-ki-csv-export-encoding",
+      "expectedLessonId": "demo-les-csv-export-encoding-001",
+      "oneSignal": "reporting export",
+      "manySignals": "encoding timeline reporting export root cause 01 csv-export-encoding",
+      "paraphrases": [
+        {"id":"R01","subject":"Downloaded rows contain garbled accents","description":"Names and labels look correct on the dashboard but become unreadable characters after opening the downloaded table."},
+        {"id":"R02","subject":"The spreadsheet export changes letters","description":"Our customers' accented names are replaced with symbols in the file, although the on-screen report is fine."},
+        {"id":"R03","subject":"CSV output is not in the format our tools expect","description":"The report downloads successfully, but text imported into our finance system has broken characters and punctuation."},
+        {"id":"R04","subject":"Exported names are corrupted","description":"Only the file produced by the report has strange substitutions for non-English letters; the source records remain readable."},
+        {"id":"R05","subject":"Data looks different outside the dashboard","description":"When we open the downloaded comma-separated file, several customer names and symbols are displayed incorrectly."},
+        {"id":"R06","subject":"Our analytics import mangles text","description":"The export itself completes, yet the receiving spreadsheet shows replacement marks where international characters should be."},
+        {"id":"R07","subject":"Report download loses character fidelity","description":"English values survive, but names containing accents change when the report is saved and opened in a desktop spreadsheet."},
+        {"id":"R08","subject":"The file has unreadable symbols","description":"The web report is normal; its downloaded rows contain corrupted text for several customers from outside the US."},
+        {"id":"R09","subject":"CSV from the dashboard is misread","description":"Our import job sees odd characters in otherwise valid columns after consuming the latest report file."},
+        {"id":"R10","subject":"International text breaks on export","description":"The application displays the values correctly but the downloaded data does not preserve accented names."}
+      ]
+    },
+    {
+      "id": "mobile-offline-sync",
+      "domain": "Mobile Application",
+      "expectedCategory": "Mobile Application",
+      "expectedCanonicalId": "demo-ki-mobile-offline-sync-conflict",
+      "expectedLessonId": "demo-les-mobile-offline-sync-conflict-001",
+      "oneSignal": "mobile offline",
+      "manySignals": "mobile offline sync timeline root cause 01 mobile-offline-sync-conflict",
+      "paraphrases": [
+        {"id":"M01","subject":"Phone edits collide when signal returns","description":"A technician changed records without reception; after reconnecting, the app says the server has a newer copy and will not combine the work."},
+        {"id":"M02","subject":"Offline work disappears during reconnect","description":"The mobile app lets us edit while travelling, but synchronization refuses the update once the device is online again."},
+        {"id":"M03","subject":"Field changes cannot be merged","description":"A record was updated on the handset out of coverage and now the server version wins when the connection is restored."},
+        {"id":"M04","subject":"Reconnection reports a newer record","description":"The app queues changes in the field, then flags a conflict instead of uploading them after the phone gets service."},
+        {"id":"M05","subject":"Mobile queue is rejected after being offline","description":"Edits made on a tablet during a flight are still pending; on landing, the sync screen says the item changed elsewhere."},
+        {"id":"M06","subject":"Two versions of a field record appear","description":"The device was disconnected while a teammate edited the same record, and the next sync cannot reconcile the two revisions."},
+        {"id":"M07","subject":"Work captured without coverage will not upload","description":"The app stored our changes locally, but reconnecting produces a revision conflict instead of sending the queued update."},
+        {"id":"M08","subject":"The handset is behind the workspace","description":"After working offline, the phone reports that its copy is older than the cloud copy and leaves the change unresolved."},
+        {"id":"M09","subject":"Sync stops at a record conflict","description":"A mobile user completed edits with no network; once online, the server rejects the batch because the record advanced meanwhile."},
+        {"id":"M10","subject":"Offline notes cannot be reconciled","description":"The app reconnects normally but refuses to merge notes recorded in the field with the newer workspace version."}
+      ]
+    },
+    {
+      "id": "notifications-email-suppression",
+      "domain": "Notifications & Email",
+      "expectedCategory": "Notifications & Email",
+      "expectedCanonicalId": "demo-ki-email-notification-suppression",
+      "expectedLessonId": "demo-les-email-notification-suppression-001",
+      "oneSignal": "notifications email",
+      "manySignals": "notifications email notification timeline root cause 01 email-notification-suppression",
+      "paraphrases": [
+        {"id":"N01","subject":"Messages stopped reaching one recipient","description":"A customer mailbox previously bounced and now remains skipped even though later sends report no new error."},
+        {"id":"N02","subject":"The alert system silently omits an address","description":"One contact no longer receives workspace updates after an earlier delivery failure; other recipients still get them."},
+        {"id":"N03","subject":"Email is being withheld after a bounce","description":"The mailbox recovered, but notification sends continue to leave that address out of the delivery list."},
+        {"id":"N04","subject":"Only some users receive notices","description":"A recipient who had a temporary rejection is no longer sent messages while the rest of the team receives the same alerts."},
+        {"id":"N05","subject":"Recovered mailbox gets no product mail","description":"The address is valid again, yet the notification service appears to remember an old failure and suppresses new updates."},
+        {"id":"N06","subject":"One contact is missing from every alert","description":"After a previous non-delivery, this recipient is silently excluded from otherwise successful notification campaigns."},
+        {"id":"N07","subject":"Notifications resume for everyone except one address","description":"The mailbox had bounced last week and still receives nothing despite successful sends to the other subscribers."},
+        {"id":"N08","subject":"A past delivery problem has a lasting effect","description":"The customer fixed their inbox, but our application continues to skip the address whenever an event notification is generated."},
+        {"id":"N09","subject":"The subscriber is not on the outgoing list","description":"One email was rejected earlier; since then the platform does not attempt delivery even though the user remains subscribed."},
+        {"id":"N10","subject":"Event mail is missing for a single customer","description":"A prior bounce seems to have put the address in a quiet state while all other notification recipients are successful."}
+      ]
+    },
+    {
+      "id": "authentication-sso-control",
+      "domain": "Authentication / SSO",
+      "expectedCategory": "Authentication",
+      "expectedCanonicalId": "demo-ki-sso-certificate-redirect-loop",
+      "expectedLessonId": "demo-les-sso-certificate-redirect-loop-001",
+      "oneSignal": "authentication certificate",
+      "manySignals": "authentication certificate redirect timeline root cause 01 sso-certificate-redirect-loop",
+      "control": true,
+      "paraphrases": [
+        {"id":"S01","subject":"Federated sign-in keeps sending staff back","description":"We replaced the trust credential at the identity provider and employees now bounce between the application and provider instead of entering the workspace."},
+        {"id":"S02","subject":"The enterprise sign-on handshake never completes","description":"The new provider key was installed yesterday; the browser returns to the login screen repeatedly for SAML users."},
+        {"id":"S03","subject":"Authentication circles after the federation change","description":"People authenticate upstream but are sent back to our sign-in page after changing the federation signing material."},
+        {"id":"S04","subject":"Company login bounces between two services","description":"Our workforce is trapped in a repeating hand-off between the product and corporate identity service after the provider credential update."},
+        {"id":"S05","subject":"Users return to login after the IdP update","description":"The provider hands the browser back, and the product sends it straight back again following the signing-key replacement."},
+        {"id":"S06","subject":"SAML authentication never reaches the workspace","description":"The identity platform accepts the account, but the application restarts sign-in after the public signing credential changed."},
+        {"id":"S07","subject":"A new federation credential causes endless handoff","description":"Users are shuttled from our app to the corporate identity service and back; the only recent change was replacing the verification credential."},
+        {"id":"S08","subject":"Login flow repeats after identity maintenance","description":"After the provider's signing material was renewed, the browser alternates between the two authentication endpoints."},
+        {"id":"S09","subject":"Workforce access fails at the final federation step","description":"People prove who they are at the company identity service, then the product asks them to authenticate again after the federation key change."},
+        {"id":"S10","subject":"Corporate authentication is stuck in a bounce","description":"Users are passed from the application to the identity platform and back without a session after a replacement of the provider signing key."}
+      ]
+    }
+  ],
+  "controls": [
+    {"id":"C01","domain":"Billing","label":"same-invoice-vat-review","subject":"A tax document is still under review","description":"The finance team needs the status of an exemption document; there are no repeated charges or seat changes."},
+    {"id":"C02","domain":"Billing","label":"same-category-tax-rounding","subject":"Small difference in tax total","description":"The invoice has a rounding difference on tax, not a repeated charge and not a change in the number of seats."},
+    {"id":"C03","domain":"API & Integrations","label":"same-webhook-pagination","subject":"The integration cursor expired","description":"A data sync cannot continue from an old page marker; webhook authenticity and signing secrets are working normally."},
+    {"id":"C04","domain":"API & Integrations","label":"cross-domain-permission-webhook","subject":"A callback endpoint is hidden from a guest","description":"The issue is a workspace permission for a collaborator, not whether event signatures validate."},
+    {"id":"C05","domain":"Permissions & Access","label":"same-category-custom-role","subject":"A custom role omits a report permission","description":"The role definition is missing one capability; the user is not an external guest and the workspace boundary is correct."},
+    {"id":"C06","domain":"Permissions & Access","label":"generic-access-question","subject":"How do access settings work?","description":"This is a general policy question without a denied workspace, invitation, role change, or observed symptom."},
+    {"id":"C07","domain":"Reporting & Exports","label":"same-reporting-timezone","subject":"Scheduled report arrives at the wrong hour","description":"The report timing is wrong for a timezone boundary; the downloaded characters and file encoding are normal."},
+    {"id":"C08","domain":"Reporting & Exports","label":"cross-domain-report-notification","subject":"A report email was not delivered","description":"The problem is delivery of the notification message, not corruption of rows in a downloaded report."},
+    {"id":"C09","domain":"Mobile Application","label":"same-mobile-biometric","subject":"Face unlock was reset","description":"The phone's biometric enrollment disappeared after an operating-system update; there is no offline record conflict."},
+    {"id":"C10","domain":"Mobile Application","label":"generic-offline-question","subject":"Can the mobile app work without signal?","description":"This is a capability question with no failed upload, competing revision, or rejected synchronization."},
+    {"id":"C11","domain":"Notifications & Email","label":"same-notification-locale","subject":"Alerts use the wrong language","description":"The recipient receives messages, but the locale fallback is incorrect; no previous bounce or suppression is reported."},
+    {"id":"C12","domain":"Notifications & Email","label":"cross-domain-notification-access","subject":"A guest cannot see notification settings","description":"The blocked action is a permission boundary for a guest, not a mail delivery or recipient suppression issue."},
+    {"id":"C13","domain":"Authentication / SSO","label":"generic-login","subject":"I cannot sign in","description":"The ordinary login form fails; there is no external identity service, federation, credential deployment, or repeating handoff."},
+    {"id":"C14","domain":"Authentication / SSO","label":"sso-provisioning-sibling","subject":"A newly added SSO user is pending","description":"Directory provisioning has not completed for a new employee; users are not bouncing and no signing material changed."},
+    {"id":"C15","domain":"Cross-domain","label":"billing-plus-access","subject":"Invoice access is denied","description":"A billing administrator cannot open the invoice page because of a role restriction; this is not a duplicate charge."},
+    {"id":"C16","domain":"Cross-domain","label":"login-plus-invoice","subject":"The invoice page returns to login","description":"The user has an ordinary session timeout on a billing page, not a federated redirect loop after a provider change."},
+    {"id":"C17","domain":"Cross-domain","label":"webhook-plus-permission","subject":"Webhook access is denied","description":"An administrator removed a connector permission; there is no signature failure or secret rotation."},
+    {"id":"C18","domain":"Cross-domain","label":"mobile-plus-authentication","subject":"Mobile sign-in is rejected","description":"The phone has an ordinary password problem; no offline queue, federation, certificate, or provider handoff is involved."},
+    {"id":"C19","domain":"Cross-domain","label":"report-plus-notification","subject":"The emailed report is late","description":"The scheduled notification arrived late but its report rows and downloaded encoding are correct."},
+    {"id":"C20","domain":"Cross-domain","label":"certificate-plus-api","subject":"The API endpoint certificate expired","description":"The HTTPS certificate on an integration endpoint needs renewal; event signatures and identity-provider login are unaffected."},
+    {"id":"C21","domain":"Cross-domain","label":"weak-overlap","subject":"Something about workspace data","description":"No concrete symptom, category, root cause, or evidence is supplied."},
+    {"id":"C22","domain":"Cross-domain","label":"contradiction","subject":"The duplicate invoice is not happening","description":"We reduced seats and the bill is correct; there is no repeated charge and no billing defect to investigate."},
+    {"id":"C23","domain":"Cross-domain","label":"negation","subject":"No webhook signature problem","description":"Callbacks validate normally and no secret was changed; we need help with an unrelated integration setting."},
+    {"id":"C24","domain":"Cross-domain","label":"unknown-problem","subject":"A new issue appeared","description":"The customer cannot yet describe what changed or which product area is affected."}
+  ]
+}
