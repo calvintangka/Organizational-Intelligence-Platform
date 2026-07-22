@@ -565,7 +565,7 @@ async function main() {
   try {
     const { simulateDeveloperDemo } = require(path.join(root, "lib", "developerDemo", "simulator.ts"));
     const sim = simulateDeveloperDemo();
-    simulatorCrossCheck = sim.digest === "d0ed2d9d5045548bfcaf3203463542843c2b02a752020cf2b0a3df11996df34b"
+    simulatorCrossCheck = sim.digest === "569930520f5ee6804664ddc766c959ce1709b32da38bd4c55dd0fdc5a741a463"
       && sim.resources.knowledgeItems.length === data.knowledge.length
       && sim.resources.tickets.length === data.tickets.length
         ? "counts+digest match (secondary only)" : "MISMATCH";

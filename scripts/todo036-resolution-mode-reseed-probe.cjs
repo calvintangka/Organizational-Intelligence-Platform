@@ -34,7 +34,7 @@ const PROTECTED = [
   "profile-pramana-consulting",
   "test-oip-regression"
 ];
-const EXPECTED_DIGEST = "d0ed2d9d5045548bfcaf3203463542843c2b02a752020cf2b0a3df11996df34b";
+const EXPECTED_DIGEST = "569930520f5ee6804664ddc766c959ce1709b32da38bd4c55dd0fdc5a741a463";
 
 function digest(value) {
   return crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");

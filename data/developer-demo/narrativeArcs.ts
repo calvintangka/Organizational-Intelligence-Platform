@@ -231,6 +231,512 @@ const INCIDENT_MONTHS: Record<DemoDomain, string[]> = {
   notifications: ["2023-11", "2024-03", "2024-11", "2025-03", "2025-11", "2026-05"]
 };
 
+// TODO-052: canonical-specific lesson content. Each canonical defines its OWN
+// coherent root causes and solution paths so that every generated lesson
+// describes a valid cause/resolution for THAT canonical problem — replacing the
+// TODO-049 domain-level pooling that let a timezone root cause attach to the CSV
+// Encoding canonical. Array sizing (with the buildLesson `index % length` cycle)
+// yields distinct lesson content per canonical: HERO 5 causes x 2 solutions
+// (10 lessons), high-frequency 3 x 2 (6), medium 2 x 3 (<=4), long-tail 2 x 2
+// (<=2). Solution steps also drive version guidance, so they are coherent
+// resolution refinements for the same canonical.
+interface CanonicalContent { rootCauses: string[]; solutionSteps: string[]; }
+const CANONICAL_CONTENT: Record<string, CanonicalContent> = {
+  // ---- Authentication ----
+  "sso-certificate-redirect-loop": {
+    rootCauses: [
+      "the identity provider signing certificate was rotated without updating the service provider metadata",
+      "cached SAML assertions retained the previous signing key after the certificate change",
+      "the assertion consumer service kept redirecting because the new certificate chain was incomplete",
+      "browser session cookies preserved a stale authentication state across the certificate rotation",
+      "identity-provider and service-provider clocks drifted so freshly signed assertions were rejected"
+    ],
+    solutionSteps: [
+      "compare the service provider metadata with the identity provider's current signing certificate and re-import it",
+      "clear the affected authentication session and replay a single federated sign-in in a private window"
+    ]
+  },
+  "mfa-device-clock-drift": {
+    rootCauses: [
+      "the device clock drifted so time-based one-time codes fell outside the validation window",
+      "the authenticator app time was not synced automatically after a timezone change",
+      "the server and device disagreed on the current time step for the rotating code"
+    ],
+    solutionSteps: [
+      "confirm the device clock is set to automatic sync and retry a freshly generated code",
+      "re-enroll the authenticator using a synced device clock and verify one live code"
+    ]
+  },
+  "scim-delayed-provisioning": {
+    rootCauses: [
+      "SCIM provisioning had not completed before the user's first sign-in attempt",
+      "the directory sync queued the new user behind a large batch and delayed account creation",
+      "the provisioning connector retried after a transient error and the account appeared late"
+    ],
+    solutionSteps: [
+      "confirm the SCIM sync status and wait for the provisioning job to finish before retrying",
+      "trigger a targeted directory resync for the affected user and verify the account exists"
+    ]
+  },
+  "passwordless-link-expiry": {
+    rootCauses: [
+      "the passwordless sign-in link expired before the user opened it",
+      "an email delivery delay pushed the link past its short validity window"
+    ],
+    solutionSteps: [
+      "issue a fresh passwordless link and ask the user to open it immediately",
+      "confirm the mailbox provider is not deferring the message so the link arrives in time",
+      "verify the link validity window against the user's open time"
+    ]
+  },
+  "session-cookie-samesite": {
+    rootCauses: [
+      "the browser SameSite cookie policy dropped the session cookie during the embedded sign-in redirect",
+      "a third-party cookie restriction blocked the session from returning to the embedded frame"
+    ],
+    solutionSteps: [
+      "confirm the embedded flow uses SameSite=None; Secure cookies and retry",
+      "test the sign-in outside the embedded frame to confirm the cookie-policy cause",
+      "verify the browser is not blocking third-party cookies for the workspace domain"
+    ]
+  },
+  "sso-domain-verification": {
+    rootCauses: [
+      "the SSO connection stayed pending because the organization domain was not yet verified",
+      "the domain verification DNS record was missing or had not propagated"
+    ],
+    solutionSteps: [
+      "confirm the domain verification DNS record is published and has propagated",
+      "re-run the SSO domain verification once the record resolves",
+      "verify the connection activates after the domain shows verified"
+    ]
+  },
+  "saml-nameid-case": {
+    rootCauses: [
+      "the SAML NameID differed in letter case between the provider and the workspace",
+      "identifier normalization treated the same user as two distinct principals"
+    ],
+    solutionSteps: [
+      "align the NameID casing and normalization between the identity provider and workspace",
+      "verify the affected user resolves to a single principal after alignment"
+    ]
+  },
+  "mfa-recovery-code-exhaustion": {
+    rootCauses: [
+      "every saved MFA recovery code had already been consumed",
+      "the recovery codes were regenerated elsewhere, invalidating the saved set"
+    ],
+    solutionSteps: [
+      "verify identity, regenerate recovery codes, and confirm one factor works",
+      "confirm the new recovery code set is stored before closing"
+    ]
+  },
+  // ---- API & Integrations ----
+  "webhook-signature-secret-rotation": {
+    rootCauses: [
+      "the webhook signing secret was rotated before every sender was updated to the new value",
+      "a subset of senders kept signing payloads with the previous secret after rotation",
+      "the receiver validated against only the new secret during the rotation overlap window",
+      "the secret rotation skipped one integration environment, so its signatures failed",
+      "clock skew made the signature timestamp fall outside the receiver's tolerance after rotation"
+    ],
+    solutionSteps: [
+      "confirm both the old and new signing secrets are accepted during the rotation window and replay one signed request",
+      "verify every sender uses the current secret, then retire the previous one after a controlled test"
+    ]
+  },
+  "api-rate-limit-burst": {
+    rootCauses: [
+      "a synchronization burst exceeded the API rate limit without sufficient backoff",
+      "concurrent workers issued requests faster than the rate-limit budget allowed",
+      "the retry policy replayed rejected requests immediately instead of backing off"
+    ],
+    solutionSteps: [
+      "apply bounded exponential backoff and a concurrency cap, then resume the sync",
+      "spread the batch across the rate-limit window and confirm requests succeed"
+    ]
+  },
+  "oauth-refresh-token-revoked": {
+    rootCauses: [
+      "the OAuth refresh token was revoked during an administrator change",
+      "a password or admin reset invalidated the integration's refresh token",
+      "the refresh token reached its maximum lifetime and required re-authorization"
+    ],
+    solutionSteps: [
+      "re-authorize the integration to mint a new refresh token and verify one API call",
+      "confirm the connector's OAuth grant is active before resuming the sync"
+    ]
+  },
+  "webhook-delivery-replay": {
+    rootCauses: [
+      "a replayed webhook delivered a dependent event before the event it depends on",
+      "out-of-order retry delivery placed an update ahead of its create event"
+    ],
+    solutionSteps: [
+      "buffer and reorder dependent webhook events before processing",
+      "confirm the create event is processed before its dependent update",
+      "replay the affected sequence in dependency order and verify"
+    ]
+  },
+  "api-pagination-cursor": {
+    rootCauses: [
+      "a pagination cursor became invalid after the underlying result set changed",
+      "records added or removed mid-scan invalidated the next-page cursor"
+    ],
+    solutionSteps: [
+      "restart pagination from a stable snapshot and confirm the full set is retrieved",
+      "use a stable sort key for the cursor and re-run the page request",
+      "verify no records are skipped after the cursor is refreshed"
+    ]
+  },
+  "connector-field-mapping": {
+    rootCauses: [
+      "a source schema change removed the field the connector mapping referenced",
+      "the connector kept mapping a renamed field and skipped it silently"
+    ],
+    solutionSteps: [
+      "update the connector field mapping to the current source schema and re-sync one record",
+      "confirm the previously skipped field now populates after remapping",
+      "verify the mapping against the latest source schema version"
+    ]
+  },
+  "webhook-ipv6-allowlist": {
+    rootCauses: [
+      "the receiver allowlist omitted a newly advertised IPv6 delivery range",
+      "IPv6 delivery attempts timed out because the range was not allowlisted"
+    ],
+    solutionSteps: [
+      "add the new IPv6 delivery range to the allowlist and confirm delivery",
+      "verify webhook delivery succeeds over the added IPv6 range"
+    ]
+  },
+  "api-idempotency-collision": {
+    rootCauses: [
+      "two distinct write operations reused the same idempotency key",
+      "a shared idempotency key returned a prior operation's result"
+    ],
+    solutionSteps: [
+      "assign unique idempotency keys per operation and replay one controlled write",
+      "confirm unique keys resolve the collision"
+    ]
+  },
+  // ---- Billing ----
+  "duplicate-invoice-seat-change": {
+    rootCauses: [
+      "a seat change crossed the invoice calculation boundary and produced overlapping charges",
+      "seats added near the billing close generated a second invoice line for the same period",
+      "the proration for the seat change was billed alongside the base invoice",
+      "a mid-cycle seat adjustment re-ran invoice generation before the first invoice settled",
+      "the seat-change credit and the replacement charge posted out of order on the same invoice"
+    ],
+    solutionSteps: [
+      "reconstruct the billing timeline from seat, plan, and invoice events before any correction",
+      "compare the overlapping line-item dates and issue a single scoped adjustment if warranted"
+    ]
+  },
+  "invoice-tax-rounding": {
+    rootCauses: [
+      "tax was rounded independently on each prorated line item",
+      "per-line tax rounding summed to a small difference from the invoice total",
+      "the tax rate applied to a fractional proration produced a rounding remainder"
+    ],
+    solutionSteps: [
+      "recompute the tax at the invoice level and compare against the per-line sum",
+      "explain the rounding difference and correct only if the ledger is inconsistent"
+    ]
+  },
+  "proration-credit-mismatch": {
+    rootCauses: [
+      "the replacement charge posted before its matching proration credit was visible",
+      "the plan-change credit and charge completed out of order",
+      "the credit for the downgraded plan lagged the upgrade charge"
+    ],
+    solutionSteps: [
+      "confirm the proration credit and charge both posted and reconcile the net",
+      "explain the ordering and verify the final balance is correct"
+    ]
+  },
+  "invoice-pdf-stale-address": {
+    rootCauses: [
+      "the invoice PDF retained billing details captured before the profile was updated",
+      "a cached invoice document showed the previous billing address"
+    ],
+    solutionSteps: [
+      "regenerate the invoice PDF after confirming the current billing profile",
+      "clear the cached invoice document and verify the new address renders",
+      "compare the stored profile with the PDF before reissuing"
+    ]
+  },
+  "failed-card-retry-schedule": {
+    rootCauses: [
+      "a scheduled retry after a failed payment looked like a second unexpected charge",
+      "the automatic dunning retry overlapped the next collection date"
+    ],
+    solutionSteps: [
+      "explain the scheduled retry timeline and confirm only one successful capture",
+      "verify no duplicate capture occurred across the retry schedule",
+      "reconcile the failed attempt and the successful retry"
+    ]
+  },
+  "annual-renewal-seat-count": {
+    rootCauses: [
+      "the annual renewal used a seat snapshot taken before a recent reduction",
+      "seats removed shortly before renewal were still counted on the renewal invoice"
+    ],
+    solutionSteps: [
+      "reconcile the renewal seat count against the current active seats",
+      "reissue the renewal with the corrected seat snapshot if warranted",
+      "verify the seat reduction is reflected before renewal"
+    ]
+  },
+  "invoice-currency-display": {
+    rootCauses: [
+      "the invoice display currency differed from the settlement currency",
+      "the presentment currency symbol did not match the card's settled amount"
+    ],
+    solutionSteps: [
+      "explain the display-versus-settlement currency and confirm the settled amount",
+      "verify the settled amount matches the card statement"
+    ]
+  },
+  "vat-exemption-review": {
+    rootCauses: [
+      "tax appeared because the VAT exemption evidence was still under review at invoice finalization",
+      "the exemption had not been approved when the invoice was generated"
+    ],
+    solutionSteps: [
+      "confirm the exemption review status and reissue once approved",
+      "hold the tax line pending the exemption decision and reissue"
+    ]
+  },
+  // ---- Permissions & Access ----
+  "permission-inheritance-delay": {
+    rootCauses: [
+      "the new role assignment had not yet propagated to the target workspace",
+      "role inheritance lagged so the resource stayed denied shortly after assignment",
+      "the effective-permission cache had not refreshed after the role change"
+    ],
+    solutionSteps: [
+      "compare effective permissions at organization, workspace, and resource levels",
+      "refresh authorization claims and confirm the intended role is now effective"
+    ]
+  },
+  "custom-role-cache": {
+    rootCauses: [
+      "cached authorization claims predated the recent custom-role change",
+      "the active session retained old claims after the custom role was edited",
+      "the permission cache served a stale custom-role definition"
+    ],
+    solutionSteps: [
+      "refresh the session claims and re-evaluate the custom role",
+      "confirm the updated custom role takes effect after the cache refresh"
+    ]
+  },
+  "guest-workspace-access": {
+    rootCauses: [
+      "an organization-wide policy limited the guest's access to the shared resource",
+      "the guest could see the workspace but lacked an explicit grant on the linked resource"
+    ],
+    solutionSteps: [
+      "grant the guest the explicit resource permission within policy",
+      "confirm the organization guest policy allows the required access",
+      "verify the guest can reach the linked resource after the grant"
+    ]
+  },
+  "audit-log-visibility": {
+    rootCauses: [
+      "audit visibility was restricted to a narrower administrative scope than the admin held",
+      "the administrator's scope excluded organization-wide audit events"
+    ],
+    solutionSteps: [
+      "confirm the administrator's audit scope and widen it within policy",
+      "verify the expected audit events appear after the scope change",
+      "compare the admin scope against the audit visibility requirement"
+    ]
+  },
+  "delegated-admin-approval": {
+    rootCauses: [
+      "the delegated administrator action remained pending organization approval",
+      "the delegated action was visible but blocked on an approval step"
+    ],
+    solutionSteps: [
+      "route the delegated action for organization approval and confirm completion",
+      "confirm the approval completes the delegated action"
+    ]
+  },
+  // ---- Reporting & Exports ----
+  "scheduled-report-timezone": {
+    rootCauses: [
+      "the report timezone differed from the viewer's workspace timezone",
+      "the scheduled report evaluated the date boundary before timezone conversion",
+      "the daily boundary shifted because the schedule used the account timezone"
+    ],
+    solutionSteps: [
+      "reproduce the report with explicit timezone and filter boundaries",
+      "align the schedule timezone with the workspace and verify the boundary"
+    ]
+  },
+  "csv-export-encoding": {
+    rootCauses: [
+      "the CSV encoding did not match the consuming spreadsheet locale",
+      "the exported file lacked a byte-order mark so accented characters were misread",
+      "the delimiter and character encoding differed from the spreadsheet's expectations"
+    ],
+    solutionSteps: [
+      "export with UTF-8 and a byte-order mark, then reopen with the matching locale",
+      "confirm the delimiter and character encoding match the consuming spreadsheet"
+    ]
+  },
+  "dashboard-filter-persistence": {
+    rootCauses: [
+      "a saved dashboard reopened with a stale or missing filter selection",
+      "navigation reset one saved filter so the totals changed"
+    ],
+    solutionSteps: [
+      "re-save the dashboard filters and confirm they persist across navigation",
+      "verify the filter selection is restored on reopen",
+      "compare the saved view against the reopened dashboard"
+    ]
+  },
+  "large-export-timeout": {
+    rootCauses: [
+      "the large export exceeded the synchronous processing window and appeared to fail",
+      "the export job timed out before a downloadable file was ready"
+    ],
+    solutionSteps: [
+      "run the export asynchronously and confirm the file completes",
+      "reduce the export scope or use the async job and verify the download",
+      "confirm the job finishes outside the synchronous window"
+    ]
+  },
+  "report-column-order-migration": {
+    rootCauses: [
+      "a report migration reset the saved export column order",
+      "the saved export layout lost its column order during a report migration"
+    ],
+    solutionSteps: [
+      "restore the saved column order and confirm the export layout",
+      "verify the export layout matches the saved order"
+    ]
+  },
+  // ---- Mobile Application ----
+  "mobile-offline-sync-conflict": {
+    rootCauses: [
+      "an offline edit conflicted with a newer server revision when the device reconnected",
+      "the offline mutation could not merge because the server copy had advanced",
+      "two revisions competed after connectivity returned and blocked the merge"
+    ],
+    solutionSteps: [
+      "confirm app version and pending offline changes, then reconcile against the server revision",
+      "preserve the unsent edit and merge it after resolving the newer revision"
+    ]
+  },
+  "mobile-push-token-stale": {
+    rootCauses: [
+      "push notifications targeted an obsolete device token after a phone migration",
+      "the replacement device registered a new token while the old token stayed subscribed"
+    ],
+    solutionSteps: [
+      "re-register the current device token and confirm a test push arrives",
+      "retire the stale token and verify delivery to the new device",
+      "confirm the active token matches the current device"
+    ]
+  },
+  "biometric-unlock-reset": {
+    rootCauses: [
+      "an operating-system update invalidated the app's stored biometric credential",
+      "the biometric key was reset by the device security update"
+    ],
+    solutionSteps: [
+      "re-enroll biometric unlock in the app after the security update",
+      "verify biometric unlock works once re-enrolled"
+    ]
+  },
+  "mobile-deep-link-workspace": {
+    rootCauses: [
+      "the deep link retained the previously active workspace identifier",
+      "the mobile link opened the record in the wrong workspace context"
+    ],
+    solutionSteps: [
+      "confirm the deep link carries the target workspace and re-open the record",
+      "verify the record opens in the intended workspace"
+    ]
+  },
+  "cellular-attachment-resume": {
+    rootCauses: [
+      "a resumed cellular upload used an expired attachment session",
+      "switching from Wi-Fi to cellular invalidated the in-progress upload session"
+    ],
+    solutionSteps: [
+      "restart the attachment upload on a stable connection and confirm completion",
+      "verify the attachment finishes after the session is refreshed"
+    ]
+  },
+  "mobile-offline-export-filters": {
+    rootCauses: [
+      "an offline mobile export used date filters captured before the latest selection",
+      "the offline export serialized filters before the latest selection was applied"
+    ],
+    solutionSteps: [
+      "refresh the offline filters and re-run the export within the selected range",
+      "confirm the export honors the current filter range"
+    ]
+  },
+  // ---- Notifications & Email ----
+  "email-notification-suppression": {
+    rootCauses: [
+      "the recipient remained on the suppression list after an earlier delivery failure",
+      "a prior bounce placed the recipient in suppression despite valid settings",
+      "the suppression from a past hard bounce was never cleared"
+    ],
+    solutionSteps: [
+      "confirm the recipient and sender configuration, then remove the suppression if safe",
+      "send one controlled notification and verify delivery before restoring volume"
+    ]
+  },
+  "digest-email-timezone": {
+    rootCauses: [
+      "the digest schedule used the account timezone instead of the workspace timezone",
+      "the digest arrived on the wrong local-day boundary due to a timezone mismatch"
+    ],
+    solutionSteps: [
+      "align the digest schedule with the workspace timezone",
+      "verify the digest arrives on the correct local-day boundary",
+      "compare the schedule timezone against the workspace setting"
+    ]
+  },
+  "email-dmarc-alignment": {
+    rootCauses: [
+      "the custom sender domain failed DMARC alignment after a DNS change",
+      "SPF or DKIM alignment broke when the sender domain configuration changed"
+    ],
+    solutionSteps: [
+      "restore SPF and DKIM alignment for the sender domain and send one test message",
+      "verify DMARC alignment passes after the DNS records are corrected"
+    ]
+  },
+  "notification-locale-fallback": {
+    rootCauses: [
+      "an incomplete locale template produced an empty notification body",
+      "the locale fallback selected an untranslated template variant"
+    ],
+    solutionSteps: [
+      "complete the locale template or fix the fallback and verify one notification",
+      "confirm the notification body renders in the recipient's locale"
+    ]
+  },
+  "notification-digest-duplication": {
+    rootCauses: [
+      "a campaign event entered two digest delivery partitions",
+      "duplicate campaign events produced the same digest twice"
+    ],
+    solutionSteps: [
+      "de-duplicate the digest partitions and confirm a single delivery",
+      "verify each recipient receives the digest only once"
+    ]
+  }
+};
+
 function tagsFor(blueprint: ArcBlueprint): string[] {
   const words = blueprint.slug.split("-");
   return [...new Set([blueprint.domain, ...words.filter((word) => word.length > 3)])].slice(0, 7);
@@ -243,6 +749,8 @@ function materializeArc(
   targets: NarrativeArc["targets"]
 ): NarrativeArc {
   const domain = DOMAIN_CONTENT[blueprint.domain];
+  const canonicalContent = CANONICAL_CONTENT[blueprint.slug];
+  if (!canonicalContent) throw new Error(`Missing canonical-specific content for ${blueprint.slug}.`);
   return {
     id: `demo-arc-${blueprint.slug}`,
     arcClass,
@@ -257,10 +765,12 @@ function materializeArc(
     },
     content: {
       symptom: blueprint.symptom,
-      initialGuidance: `Confirm the affected workspace and timeline, then ${domain.solutionSteps[0]}. Preserve the observed evidence before changing configuration.`,
+      // TODO-052: guidance and lesson content come from the canonical's OWN
+      // coherent root causes/solutions, not the shared domain pool.
+      initialGuidance: `Confirm the affected workspace and timeline, then ${canonicalContent.solutionSteps[0]}. Preserve the observed evidence before changing configuration.`,
       initialCustomerResponse: `Hello {{customerName}},\n\nThank you for contacting OIP Developer Demo. We will verify ${blueprint.title.toLowerCase()} using the workspace timeline and the safest scoped checks.\n\nKind regards,\nOIP Developer Demo Support Team`,
-      rootCauses: domain.rootCauses,
-      solutionSteps: domain.solutionSteps,
+      rootCauses: canonicalContent.rootCauses,
+      solutionSteps: canonicalContent.solutionSteps,
       ticketOpeners: domain.ticketOpeners
     },
     lifecycle: {

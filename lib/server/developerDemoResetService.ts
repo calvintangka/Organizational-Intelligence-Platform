@@ -40,7 +40,7 @@ import {
 const EXACT_TARGET = DEVELOPER_DEMO_ORGANIZATION_ID;
 // TODO-026: digest updated after SimulatedTicketRecord.resolutionMode moved from
 // the sentinel "none" to null for unresolved tickets (counts/trust unchanged).
-const EXPECTED_SIMULATION_DIGEST = "d0ed2d9d5045548bfcaf3203463542843c2b02a752020cf2b0a3df11996df34b";
+const EXPECTED_SIMULATION_DIGEST = "569930520f5ee6804664ddc766c959ce1709b32da38bd4c55dd0fdc5a741a463";
 const EXPECTED = SEED_TESTING.EXPECTED;
 
 // Authoritative allowlist — exactly one organization may ever be reset.

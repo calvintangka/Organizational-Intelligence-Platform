@@ -132,7 +132,10 @@ async function main() {
     "I need a billing invoice address changed. No integration or signature failure occurred."
   );
   const m07 = pipeline(m07Ticket, profile, items);
-  check("A M07 selected the audited candidate", m07.topMatch?.item.id === "demo-ki-invoice-currency-display", m07.topMatch?.item.id);
+  // TODO-052: with coherent lesson data, "billing invoice address changed" ranks
+  // invoice-pdf-stale-address (invoice PDF / billing address) above the currency
+  // canonical. Evidence is still weak (score 1) and the draft still fails closed.
+  check("A M07 selected the audited candidate", m07.topMatch?.item.id === "demo-ki-invoice-pdf-stale-address", m07.topMatch?.item.id);
   check("A M07 lesson evidence is weak", Boolean(m07.lessonMatch)
     && m07.lessonMatch.score === 1
     && m07.lessonMatch.multiTokenMatches === 1

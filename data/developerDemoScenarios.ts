@@ -88,11 +88,14 @@ export const curatedDeveloperDemoScenarios: readonly CuratedDeveloperDemoScenari
     ticketSubject: "Invoice address change with incidental webhook wording",
     ticketBody: "I need a billing invoice address changed. No integration or signature failure occurred.",
     expectedCategory: "Billing",
-    expectedKnowledgeId: "demo-ki-invoice-currency-display",
-    expectedLessonId: "demo-les-invoice-currency-display-001",
+    // TODO-052: with coherent lesson data the closest billing candidate is the
+    // invoice-PDF/address canonical; the overlap is still weak and drafting still
+    // fails closed (the point of this scenario).
+    expectedKnowledgeId: "demo-ki-invoice-pdf-stale-address",
+    expectedLessonId: "demo-les-invoice-pdf-stale-address-001",
     expectedAuthorized: false,
     expectedDraftingMode: "no_template",
-    expectedTrust: 28,
+    expectedTrust: 68,
     expectedTrustBehavior: "Trust and a weak lexical overlap cannot authorize drafting.",
     expectedProvenanceHighlights: ["candidate may be visible", "lesson evidence remains weak"],
     expectedExplanationHighlights: ["no_template", "human review", "no knowledge authorization"],

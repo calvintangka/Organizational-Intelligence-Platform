@@ -70,6 +70,7 @@
     "probe:todo041-cross-domain": "node scripts/todo041-cross-domain-audit.cjs",
     "probe:todo048-root-cause-safety": "node scripts/todo048-root-cause-safety-probe.cjs",
     "probe:todo049-reporting-coherence": "node scripts/todo049-reporting-coherence-probe.cjs",
+    "probe:todo052-canonical-lesson-coherence": "node scripts/todo052-canonical-lesson-coherence-probe.cjs",
     "probe:todo038-claude-failover": "node scripts/todo038-claude-failover-probe.cjs",
     "restore:maesa-profile-vocabulary": "node scripts/restore-maesa-profile-vocabulary.cjs",
     "seed:test-organization": "node scripts/seed-test-organization.cjs",

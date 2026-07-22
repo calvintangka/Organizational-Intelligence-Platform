@@ -13,7 +13,8 @@ export function developerDemoSimulationConfig(
     seed,
     rngAlgorithm: "xoshiro128ss-v1",
     contractVersion: 1,
-    narrativeContentVersion: 1,
+    // TODO-052: canonical-specific coherent lesson content (was domain-pooled).
+    narrativeContentVersion: 2,
     historyStart: "2023-01-01T00:00:00.000Z",
     historyEnd: "2026-06-30T23:59:59.000Z",
     timeZone: "Asia/Jakarta",

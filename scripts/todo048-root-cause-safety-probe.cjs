@@ -115,49 +115,49 @@ const DOMAINS = [
     A: { subject: "Users keep landing on the login page", description: "Our staff keep getting bounced back to the sign-in screen and cannot reach the workspace." },
     B: { subject: "Sign-in loop and we touched SSO recently", description: "People loop at sign-in. We did some identity provider work last week but are not sure what changed." },
     C: { subject: "Loop started after a certificate rotation", description: "After we rotated the identity provider certificate, users started looping at sign-in." },
-    D: { subject: "Confirmed stale metadata", description: "Our engineer verified the identity provider metadata is stale after the configuration change, and that is producing the sign-in loop." }
+    D: { subject: "Confirmed signing certificate rotation", description: "Our engineer confirmed the identity provider signing certificate was rotated and the service provider metadata kept the previous signing certificate; updating the service provider metadata resolved the loop." }
   },
   {
     domain: "Billing", itemId: "demo-ki-duplicate-invoice-seat-change",
     A: { subject: "Charged twice", description: "We see two charges for what should be one subscription this month." },
     B: { subject: "Extra charge near renewal", description: "There is an unexpected extra charge around our renewal date. We changed our plan recently." },
     C: { subject: "Duplicate charge after adding seats", description: "We added seats and then saw a duplicate charge appear on the account." },
-    D: { subject: "Confirmed boundary crossing", description: "Finance confirmed a seat change crossed the invoice calculation boundary, producing the duplicate invoice." }
+    D: { subject: "Confirmed boundary crossing", description: "Finance confirmed a seat change crossed the invoice calculation boundary and produced overlapping charges on the same invoice." }
   },
   {
     domain: "API & Integrations", itemId: "demo-ki-webhook-signature-secret-rotation",
     A: { subject: "Webhooks rejected", description: "Our endpoint suddenly started rejecting the webhook deliveries it used to accept." },
     B: { subject: "Delivery failures after some maintenance", description: "Webhook verification is failing since our team did maintenance overnight; unsure what was touched." },
     C: { subject: "Failures began after we rotated a secret", description: "We rotated a signing secret and afterwards webhook signature verification started failing." },
-    D: { subject: "Confirmed rotation race", description: "We verified the signing secret was rotated before the sender refreshed it, which broke signature verification." }
+    D: { subject: "Confirmed rotation race", description: "We verified the webhook signing secret was rotated before every sender was updated to the new value, which broke signature verification." }
   },
   {
     domain: "Permissions & Access", itemId: "demo-ki-permission-inheritance-delay",
     A: { subject: "Access denied to shared resource", description: "A team member cannot open the shared resource even though they should be able to." },
     B: { subject: "New role but still blocked", description: "We assigned the correct role but the action is still denied for now." },
     C: { subject: "Denied right after assigning the role", description: "We assigned the role and the user was still denied access to the target workspace immediately after." },
-    D: { subject: "Confirmed inheritance delay", description: "Directory audit confirmed the role inheritance propagated late to the target workspace, so access lagged." }
+    D: { subject: "Confirmed inheritance delay", description: "Directory audit confirmed the new role assignment had not yet propagated to the target workspace, so access lagged." }
   },
   {
     domain: "Reporting & Exports", itemId: "demo-ki-scheduled-report-timezone",
     A: { subject: "Report total looks wrong", description: "Our report total does not match what we expected to see." },
     B: { subject: "Totals off around midnight", description: "The scheduled report totals look shifted; our teams work across a couple of regions." },
     C: { subject: "Report shows adjacent day records", description: "The scheduled report includes records from the next calendar day compared to the dashboard." },
-    D: { subject: "Confirmed timezone difference", description: "We confirmed the report timezone differs from the viewer workspace timezone, shifting the daily boundary." }
+    D: { subject: "Confirmed timezone difference", description: "We confirmed the report timezone differed from the viewer workspace timezone, shifting the daily boundary." }
   },
   {
     domain: "Mobile Application", itemId: "demo-ki-mobile-offline-sync-conflict",
     A: { subject: "Mobile changes not saving", description: "Edits made in the mobile app do not seem to save back to the workspace." },
     B: { subject: "Sync stuck after being offline", description: "A technician was offline in the field and now their app will not finish syncing." },
     C: { subject: "Offline edit will not merge", description: "An offline change made on the phone cannot merge after the device reconnected." },
-    D: { subject: "Confirmed revision conflict", description: "Diagnostics confirmed an offline mutation conflicts with a newer server revision, blocking the merge." }
+    D: { subject: "Confirmed revision conflict", description: "Diagnostics confirmed an offline edit conflicted with a newer server revision when the device reconnected, blocking the merge." }
   },
   {
     domain: "Notifications & Email", itemId: "demo-ki-email-notification-suppression",
     A: { subject: "Emails not arriving", description: "One of our users stopped receiving the email notifications they expect." },
     B: { subject: "No email despite settings on", description: "Notification settings are enabled but this recipient still gets no email; they had a bounce a while ago." },
     C: { subject: "Silent since an earlier bounce", description: "This recipient has received no notifications since an earlier delivery failure on their address." },
-    D: { subject: "Confirmed suppression", description: "We verified recipient suppression remains from an earlier delivery failure, so mail is withheld." }
+    D: { subject: "Confirmed suppression", description: "We verified the recipient remained on the suppression list after an earlier delivery failure, so mail is withheld." }
   }
 ];
 
@@ -245,7 +245,7 @@ function main() {
     const billingLesson = itemById.get("demo-ki-duplicate-invoice-seat-change").lessons[0];
     const aiStyleDraft = "Hello, We found that a seat change crossed the invoice calculation boundary. We will look into it.";
     const possibleAssessment = assessRootCauseEvidenceState(ticket({ id: "H-possible", subject: "Two charges", description: "We were charged twice." }), billingLesson);
-    const confirmedAssessment = assessRootCauseEvidenceState(ticket({ id: "H-confirmed", subject: "Confirmed", description: "Finance confirmed a seat change crossed the invoice calculation boundary." }), billingLesson);
+    const confirmedAssessment = assessRootCauseEvidenceState(ticket({ id: "H-confirmed", subject: "Confirmed", description: "Finance confirmed a seat change crossed the invoice calculation boundary and produced overlapping charges." }), billingLesson);
     const aiPossible = applyRootCauseSafeLanguage(aiStyleDraft, possibleAssessment);
     const aiConfirmed = applyRootCauseSafeLanguage(aiStyleDraft, confirmedAssessment);
     assert.equal(possibleAssessment.state, "POSSIBLE_FROM_ORGANIZATIONAL_MEMORY");
