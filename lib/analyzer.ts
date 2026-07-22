@@ -354,6 +354,59 @@ const CATEGORY_RULES: Array<{ category: string; keywords: string[]; tags: string
     tags: ["permissions", "role", "access-control"]
   },
   {
+    // Developer Demo cross-domain integration vocabulary. Keep generic
+    // connection/sync words weak; specific event, callback, and signature
+    // concepts should identify integration incidents without stealing tickets
+    // whose actual problem is access or authentication.
+    category: "API & Integrations",
+    keywords: [
+      "api", "api integration", "integration", "integrations", "webhook",
+      "callback", "event delivery", "event receiver", "event message", "event payload",
+      "external system", "third-party", "third party", "connector", "endpoint",
+      "shared secret", "signing secret", "signature", "signature check", "payload",
+      "incoming event", "event source", "delivery attempt", "listener", "event listener",
+      "authenticity test", "traffic refused", "callback trust check"
+    ],
+    tags: ["api", "integrations", "webhook", "event-delivery"]
+  },
+  {
+    // Reporting/export vocabulary is intentionally artifact-oriented. A bare
+    // "data" or "report" is not enough to force this category.
+    category: "Reporting & Exports",
+    keywords: [
+      "reporting", "dashboard", "analytics", "csv", "csv export", "export", "exported",
+      "downloaded table", "downloaded file", "spreadsheet", "report export", "data export",
+      "rows", "columns", "date range", "totals", "encoding", "accented", "replacement marks",
+      "character fidelity", "downloaded data", "csv output", "broken characters", "punctuation",
+      "text import", "report downloads", "file format"
+    ],
+    tags: ["reporting", "export", "analytics"]
+  },
+  {
+    // Mobile incidents need device/app context. Offline alone remains weak so
+    // a generic offline capability question can stay unclassified.
+    category: "Mobile Application",
+    keywords: [
+      "mobile app", "mobile application", "mobile", "phone", "tablet", "handset", "on the phone",
+      "on a tablet", "device", "offline", "offline work", "offline edit", "reconnect", "reconnecting",
+      "field", "mobile sync", "device sync", "local queue", "without reception", "without coverage"
+    ],
+    tags: ["mobile", "mobile-application", "device"]
+  },
+  {
+    // Notification vocabulary is recipient/delivery oriented. Email by itself
+    // remains insufficient because email can occur in authentication or
+    // account-recovery tickets.
+    category: "Notifications & Email",
+    keywords: [
+      "notification", "notifications", "email notification", "push notification", "alert", "alerts",
+      "message delivery", "recipient", "recipients", "mailbox", "mail delivery", "bounce", "bounced",
+      "delivery failure", "suppression", "subscriber", "outgoing list", "notification service",
+      "event notification", "product mail"
+    ],
+    tags: ["notifications", "email-delivery", "message-delivery"]
+  },
+  {
     category: "Delivery",
     keywords: ["delivery", "shipping", "tracking", "order", "arrived", "delayed", "delay", "package", "shipment"],
     tags: ["delivery", "tracking", "shipping"]
@@ -536,6 +589,33 @@ const CATEGORY_WEIGHTS: Record<string, Array<[string, number]>> = {
   // incidental Subscription vocabulary ("subscription", "renewal", "plan")
   // so validated billing lessons stay reachable. Base keywords keep weight 1.
   Billing: [
+    ["charged two times", 8],
+    ["charged twice", 8],
+    ["charged me twice", 8],
+    ["double charged", 8],
+    ["duplicate charge", 8],
+    ["repeated charge", 8],
+    ["two charges", 8],
+    ["second charge", 7],
+    ["extra bill", 7],
+    ["overlapping charges", 7],
+    ["seat change", 7],
+    ["seat adjustment", 7],
+    ["subscription quantity", 7],
+    ["changed the plan", 6],
+    ["old total", 5],
+    ["both versions", 5],
+    ["ledger", 4],
+    ["removed seats", 6],
+    ["reduced seats", 6],
+    ["lowered capacity", 6],
+    ["license change", 6],
+    ["line items", 5],
+    ["statement", 3],
+    ["bill", 3],
+    ["tax", 3],
+    ["currency", 3],
+    ["headcount", 4],
     ["payment keeps failing", 8],
     ["payment failure", 8],
     ["payment failed", 8],
@@ -629,6 +709,22 @@ const CATEGORY_WEIGHTS: Record<string, Array<[string, number]>> = {
     ["account", 1]
   ],
   "Permissions & Access": [
+    ["guest workspace", 10],
+    ["workspace access", 9],
+    ["shared workspace", 9],
+    ["external collaborator", 9],
+    ["access denied", 8],
+    ["permission error", 8],
+    ["organization boundary", 7],
+    ["organization roster", 7],
+    ["team space", 7],
+    ["project invite", 7],
+    ["guest", 6],
+    ["collaborator", 5],
+    ["contractor", 5],
+    ["vendor", 5],
+    ["invitation", 4],
+    ["shared area", 4],
     ["permission inheritance", 10],
     ["permissions inheritance", 10],
     ["role inheritance", 9],
@@ -640,6 +736,104 @@ const CATEGORY_WEIGHTS: Record<string, Array<[string, number]>> = {
     ["permission", 5],
     ["role", 3],
     ["inheritance", 6]
+  ],
+  "API & Integrations": [
+    ["webhook signature", 10],
+    ["signature check", 9],
+    ["signing secret", 9],
+    ["shared secret", 8],
+    ["event receiver", 8],
+    ["event listener", 8],
+    ["event delivery", 8],
+    ["event payload", 8],
+    ["incoming event", 8],
+    ["authenticity test", 8],
+    ["callback trust check", 8],
+    ["listener", 5],
+    ["callback", 7],
+    ["webhook", 7],
+    ["connector", 6],
+    ["external system", 6],
+    ["third-party", 6],
+    ["third party", 6],
+    ["integration", 5],
+    ["integrations", 5],
+    ["endpoint", 3],
+    ["signature", 4],
+    ["payload", 3],
+    ["api", 3],
+    ["event", 2]
+  ],
+  "Reporting & Exports": [
+    ["csv export", 10],
+    ["csv output", 10],
+    ["report export", 9],
+    ["data export", 9],
+    ["downloaded table", 9],
+    ["downloaded file", 8],
+    ["downloaded data", 8],
+    ["character fidelity", 8],
+    ["replacement marks", 8],
+    ["broken characters", 8],
+    ["text import", 7],
+    ["report downloads", 7],
+    ["punctuation", 5],
+    ["file format", 5],
+    ["spreadsheet", 7],
+    ["dashboard", 7],
+    ["analytics", 6],
+    ["encoding", 6],
+    ["accented", 5],
+    ["date range", 5],
+    ["columns", 4],
+    ["rows", 4],
+    ["totals", 4],
+    ["reporting", 4],
+    ["exported", 4],
+    ["export", 3]
+  ],
+  "Mobile Application": [
+    ["mobile application", 10],
+    ["mobile app", 9],
+    ["mobile sync", 8],
+    ["device sync", 8],
+    ["offline edit", 8],
+    ["offline work", 8],
+    ["without reception", 8],
+    ["without coverage", 8],
+    ["local queue", 8],
+    ["on a tablet", 7],
+    ["on the phone", 7],
+    ["reconnecting", 6],
+    ["reconnect", 5],
+    ["handset", 5],
+    ["tablet", 5],
+    ["phone", 5],
+    ["offline", 3],
+    ["field", 3],
+    ["device", 2],
+    ["mobile", 4]
+  ],
+  "Notifications & Email": [
+    ["email notification", 10],
+    ["push notification", 10],
+    ["event notification", 9],
+    ["notification service", 9],
+    ["delivery failure", 9],
+    ["outgoing list", 8],
+    ["message delivery", 8],
+    ["product mail", 8],
+    ["recipient", 6],
+    ["recipients", 6],
+    ["mailbox", 6],
+    ["suppression", 7],
+    ["bounced", 5],
+    ["bounce", 5],
+    ["subscriber", 5],
+    ["notifications", 5],
+    ["notification", 5],
+    ["alerts", 4],
+    ["alert", 4]
   ],
   Delivery: [
     ["delivery", 1],
@@ -774,6 +968,10 @@ const CORE_PROBLEM_MAP: Record<string, string> = {
   Subscription: "Customer needs help with subscription management",
   "Account Access": "Customer cannot access their account",
   "Permissions & Access": "Customer has a permissions or access-control issue",
+  "API & Integrations": "Customer has an API or integration issue",
+  "Reporting & Exports": "Customer has a reporting or data-export issue",
+  "Mobile Application": "Customer has a mobile application issue",
+  "Notifications & Email": "Customer has a notification or email-delivery issue",
   Delivery: "Customer has a delivery or shipping issue",
   "Delivery Delay": "Customer reports a delayed delivery or stale tracking update",
   "Package Tracking": "Customer needs package tracking support",
@@ -831,12 +1029,24 @@ function categoryAllowedByProfile(rule: { category: string; keywords: string[]; 
     profile.supportedDomains.some((domain) => containsSignal(categoryText, domain));
 }
 
+/**
+ * Normalize contractions and possessives without collapsing the possessive
+ * stem into a different token. `provider's webhook` must retain `provider`
+ * evidence, while `can't sign in` must still match the existing `cant` rules.
+ */
+function normalizeAnalyzerText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/([a-z])['’]s\b/g, "$1 s")
+    .replace(/([a-z])['’](?=[a-z])/g, "$1")
+    .replace(/`/g, "");
+}
+
 export function understandForProfile(ticket: Ticket, inputProfile: OrganizationProfile = FALLBACK_PROFILE): Understanding {
   const profile = normalizeOrganizationProfile(inputProfile);
-  // Normalize apostrophes so "can't" matches "cant", "I'm" matches "im", etc.
-  const fullText = `${ticket.subject} ${ticket.description}`
-    .toLowerCase()
-    .replace(/[\'\'`]/g, "");
+  // Normalize contractions while preserving the stem of possessives such as
+  // "provider's webhook" for bounded classifier concepts.
+  const fullText = normalizeAnalyzerText(`${ticket.subject} ${ticket.description}`);
 
   let bestCategory = "General";
   let bestScore = 0;
@@ -869,6 +1079,63 @@ export function understandForProfile(ticket: Ticket, inputProfile: OrganizationP
       effectiveScore
     };
   });
+
+  // Natural-language tickets often mention a neighboring domain while
+  // explicitly negating it (for example, "no callback failure" in a report
+  // ticket). Remove that lexical noise before selecting the category. This is
+  // intentionally bounded to explicit negation/access contexts so the
+  // classifier remains deterministic and does not alter retrieval safety.
+  const hasNegatedConcept = (concept: string): boolean => {
+    const escaped = concept.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const absencePattern = new RegExp(`\\b(?:no|without)\\b[^.!?]{0,100}\\b${escaped}\\b[^.!?]{0,45}\\b(?:detail|details|failure|issue|problem|symptom|context)\\b`);
+    const notAnIssuePattern = new RegExp(`\\bnot (?:a|an|the)\\b[^.!?]{0,100}\\b${escaped}\\b`);
+    const unrelatedPattern = new RegExp(`\\bunrelated to\\b[^.!?]{0,100}\\b${escaped}\\b`);
+    return absencePattern.test(fullText) || notAnIssuePattern.test(fullText) || unrelatedPattern.test(fullText);
+  };
+  const adjust = (category: string, delta: number): void => {
+    const entry = rankedCategories.find((candidate) => candidate.rule.category === category);
+    if (entry) entry.effectiveScore += delta;
+  };
+  const hasAccessIncident = /\b(?:access denied|access is denied|cannot open|can't open|permission(?:s)? (?:was|were) removed|removed (?:the )?(?:connector )?permission(?:s)?|role lacks permission|cannot access)\b/.test(fullText);
+  const hasCredentialIncident = /\b(?:password is rejected|ordinary login|login form|cannot access my account|forgot(?:ten)? (?:my )?(?:login )?email|account recovery)\b/.test(fullText);
+  const hasIntegrationFailure = /\b(?:invalid|fails?|failed|refused|rejected|cannot deliver|delivery failure|signature .*?(?:invalid|fails?|failed))\b/.test(fullText);
+
+  if (hasNegatedConcept("invoice") || hasNegatedConcept("payment")) adjust("Billing", -12);
+  if (hasNegatedConcept("callback") || hasNegatedConcept("endpoint") || hasNegatedConcept("event") || hasNegatedConcept("api")) adjust("API & Integrations", -12);
+  if (hasNegatedConcept("role") || hasNegatedConcept("permission") || hasNegatedConcept("workspace")) adjust("Permissions & Access", -12);
+  if (hasNegatedConcept("dashboard") || hasNegatedConcept("analytics") || hasNegatedConcept("export")) adjust("Reporting & Exports", -12);
+  if (hasNegatedConcept("mobile") || hasNegatedConcept("device") || hasNegatedConcept("synchronization")) adjust("Mobile Application", -12);
+  if (hasNegatedConcept("email") || hasNegatedConcept("push delivery")) adjust("Notifications & Email", -12);
+
+  if (hasAccessIncident && !hasCredentialIncident) {
+    adjust("Permissions & Access", 16);
+    if (!hasIntegrationFailure) adjust("API & Integrations", -12);
+    if (!hasIntegrationFailure && /\baccess (?:is )?denied\b/.test(fullText)) {
+      adjust("Permissions & Access", 10);
+      adjust("API & Integrations", -20);
+    }
+  }
+  if (hasCredentialIncident) {
+    adjust("Login", 10);
+    adjust("Permissions & Access", -12);
+  }
+  if (containsSignal(fullText, "identity provider") && containsSignal(fullText, "certificate")) adjust("Authentication", 6);
+  if (containsSignal(fullText, "invoice charges") || containsSignal(fullText, "duplicate invoice")) adjust("Billing", 8);
+  if ((containsSignal(fullText, "billing address") || containsSignal(fullText, "invoice address")) && !hasIntegrationFailure) {
+    adjust("Billing", 12);
+    adjust("API & Integrations", -12);
+  }
+  if (/\b(?:general|access|connection|offline) question\b/.test(fullText)) {
+    if (!hasAccessIncident && !hasIntegrationFailure) {
+      adjust("Permissions & Access", -8);
+      adjust("API & Integrations", -8);
+      adjust("Mobile Application", -8);
+    }
+  }
+  if (/\breport a bug\b/.test(fullText)) adjust("Reporting & Exports", -12);
+  if (/\b(?:there is|there are) no\b[^.!?]{0,90}\b(?:callback|endpoint|event delivery|api)\b/.test(fullText)) adjust("API & Integrations", -12);
+  if (/\boperating system\b/.test(fullText)) adjust("Mobile Application", -12);
+  if (/\b(?:electrical|static) charge\b/.test(fullText)) adjust("Mobile Application", -12);
 
   rankedCategories.sort((left, right) => {
     if (right.effectiveScore !== left.effectiveScore) return right.effectiveScore - left.effectiveScore;

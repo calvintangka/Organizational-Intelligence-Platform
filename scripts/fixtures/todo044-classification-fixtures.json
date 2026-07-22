@@ -1,0 +1,72 @@
+{
+  "unseen": [
+    {"id":"UB01","domain":"Billing","expectedCategory":"Billing","subject":"The ledger has two entries for one seat change","description":"Finance sees overlapping line items after the subscription quantity was reduced."},
+    {"id":"UB02","domain":"Billing","expectedCategory":"Billing","subject":"We were debited twice","description":"The same billing period produced a second charge even though the account was billed once before."},
+    {"id":"UB03","domain":"Billing","expectedCategory":"Billing","subject":"The bill uses the wrong currency","description":"The amount is present, but the currency displayed on our statement is not the one configured for the account."},
+    {"id":"UB04","domain":"Billing","expectedCategory":"Billing","subject":"Tax total differs by a small amount","description":"The invoice tax calculation does not match our expected rounded total."},
+    {"id":"UB05","domain":"Billing","expectedCategory":"Billing","subject":"Old team size remains on the bill","description":"The current invoice still includes users removed from the workspace before the billing cycle ended."},
+
+    {"id":"UI01","domain":"API & Integrations","expectedCategory":"API & Integrations","subject":"Partner events fail the authenticity check","description":"Our event listener receives the callback, but rejects its signature from the external system."},
+    {"id":"UI02","domain":"API & Integrations","expectedCategory":"API & Integrations","subject":"The third-party callback is refused","description":"A connector sends payloads to our endpoint and every callback is treated as untrusted."},
+    {"id":"UI03","domain":"API & Integrations","expectedCategory":"API & Integrations","subject":"The integration page marker expired","description":"A connector cannot resume its API synchronization from the previous cursor."},
+    {"id":"UI04","domain":"API & Integrations","expectedCategory":"API & Integrations","subject":"CRM synchronization stopped","description":"The external system connection no longer transfers event data through the integration hub."},
+    {"id":"UI05","domain":"API & Integrations","expectedCategory":"API & Integrations","subject":"Listener discards incoming payloads","description":"The callback endpoint receives traffic but marks each event invalid before processing it."},
+
+    {"id":"UP01","domain":"Permissions & Access","expectedCategory":"Permissions & Access","subject":"The contractor sees the organization but not the team","description":"An outside reviewer accepted the invitation, yet the shared workspace is absent."},
+    {"id":"UP02","domain":"Permissions & Access","expectedCategory":"Permissions & Access","subject":"A role change did not reach the project","description":"The inherited permission remains missing in the target workspace after the administrator updated the role."},
+    {"id":"UP03","domain":"Permissions & Access","expectedCategory":"Permissions & Access","subject":"An administrator must approve the request","description":"A pending access grant is waiting for the organization owner to approve the collaborator's role."},
+    {"id":"UP04","domain":"Permissions & Access","expectedCategory":"Permissions & Access","subject":"The external reviewer cannot open the resource","description":"The guest is listed in the organization roster but receives a permission error for the project."},
+    {"id":"UP05","domain":"Permissions & Access","expectedCategory":"Permissions & Access","subject":"Workspace sharing did not take effect","description":"We granted the vendor access to a team space, but the resource is still hidden."},
+
+    {"id":"UR01","domain":"Reporting & Exports","expectedCategory":"Reporting & Exports","subject":"Dashboard totals disagree with the source","description":"The analytics view shows a different total from the underlying workspace records."},
+    {"id":"UR02","domain":"Reporting & Exports","expectedCategory":"Reporting & Exports","subject":"The downloaded CSV is unreadable","description":"The export completes, but accented names become replacement characters in the spreadsheet."},
+    {"id":"UR03","domain":"Reporting & Exports","expectedCategory":"Reporting & Exports","subject":"Our analytics export is missing columns","description":"The report file downloads with a changed column set after the latest rollout."},
+    {"id":"UR04","domain":"Reporting & Exports","expectedCategory":"Reporting & Exports","subject":"The date range in the report is wrong","description":"A dashboard query includes records outside the selected reporting period."},
+    {"id":"UR05","domain":"Reporting & Exports","expectedCategory":"Reporting & Exports","subject":"The spreadsheet import changes punctuation","description":"Text is corrupted after we open the downloaded report in our finance tool."},
+
+    {"id":"UM01","domain":"Mobile Application","expectedCategory":"Mobile Application","subject":"The tablet cannot merge field edits","description":"Changes captured without reception conflict with the newer workspace copy when the tablet reconnects."},
+    {"id":"UM02","domain":"Mobile Application","expectedCategory":"Mobile Application","subject":"The field worker's phone is behind","description":"The handset keeps a local revision and refuses to synchronize it after service returns."},
+    {"id":"UM03","domain":"Mobile Application","expectedCategory":"Mobile Application","subject":"The app queues work while offline","description":"A mobile user records updates locally and the upload fails during reconnect."},
+    {"id":"UM04","domain":"Mobile Application","expectedCategory":"Mobile Application","subject":"Device sync stops on one record","description":"The phone reports a competing server revision instead of accepting the offline change."},
+    {"id":"UM05","domain":"Mobile Application","expectedCategory":"Mobile Application","subject":"The mobile app behaves differently in the field","description":"The device works online but cannot reconcile a record captured without coverage."},
+
+    {"id":"UN01","domain":"Notifications & Email","expectedCategory":"Notifications & Email","subject":"One recipient is missing every alert","description":"The mailbox previously bounced and remains excluded from later notification sends."},
+    {"id":"UN02","domain":"Notifications & Email","expectedCategory":"Notifications & Email","subject":"Push alerts never reach the device","description":"The notification service records an earlier delivery failure for this subscriber."},
+    {"id":"UN03","domain":"Notifications & Email","expectedCategory":"Notifications & Email","subject":"A recovered mailbox receives no product mail","description":"The address is valid again, but suppression still prevents event notifications."},
+    {"id":"UN04","domain":"Notifications & Email","expectedCategory":"Notifications & Email","subject":"The subscriber is absent from the outgoing list","description":"Other recipients receive the message while this mailbox remains skipped after a bounce."},
+    {"id":"UN05","domain":"Notifications & Email","expectedCategory":"Notifications & Email","subject":"Message delivery is incomplete","description":"A workspace event creates an alert, but the notification is not delivered to one recipient."}
+  ],
+  "negativeControls": [
+    {"id":"NB01","domain":"Billing","expectedCategory":"API & Integrations","label":"webhook-charge-context","subject":"Webhook charge verification fails","description":"The integration callback signature is invalid; the word charge refers to a verification charge in a test harness."},
+    {"id":"NB02","domain":"Billing","expectedCategory":"Uncategorized","label":"electrical-charge","subject":"The charge is too high","description":"An electrical charge on the device is outside the expected range; there is no invoice or payment issue."},
+    {"id":"NB03","domain":"Billing","expectedCategory":"Permissions & Access","label":"invoice-access","subject":"The invoice page is blocked","description":"A billing administrator cannot open the invoice because a role permission was removed."},
+
+    {"id":"NI01","domain":"API & Integrations","expectedCategory":"Permissions & Access","label":"webhook-permission","subject":"Webhook access is denied","description":"An administrator removed the connector permission; signature validation is working normally."},
+    {"id":"NI02","domain":"API & Integrations","expectedCategory":"Reporting & Exports","label":"integration-report","subject":"The integration report is wrong","description":"The dashboard totals are incorrect; there is no callback, endpoint, or event delivery failure."},
+    {"id":"NI03","domain":"API & Integrations","expectedCategory":"Uncategorized","label":"generic-connection","subject":"Connection question","description":"I have a general question about a connection with no external system, event, API, or endpoint details."},
+
+    {"id":"NP01","domain":"Permissions & Access","expectedCategory":"Login","label":"account-access-login","subject":"I cannot access my account","description":"The password is rejected on the ordinary login form; there is no role, guest, workspace, or permission change."},
+    {"id":"NP02","domain":"Permissions & Access","expectedCategory":"API & Integrations","label":"permission-webhook","subject":"Webhook permission check fails","description":"The callback signature is invalid after the integration secret changed; the access wording describes the check."},
+    {"id":"NP03","domain":"Permissions & Access","expectedCategory":"Uncategorized","label":"generic-access","subject":"Access question","description":"This is a general question about access with no account, workspace, role, or permission symptom."},
+
+    {"id":"NR01","domain":"Reporting & Exports","expectedCategory":"Notifications & Email","label":"report-email-delivery","subject":"The report email did not arrive","description":"The notification message was not delivered; report rows and exports are correct."},
+    {"id":"NR02","domain":"Reporting & Exports","expectedCategory":"Uncategorized","label":"report-a-bug","subject":"I need to report a bug","description":"This is a software defect report, not a dashboard, analytics, export, or data discrepancy issue."},
+    {"id":"NR03","domain":"Reporting & Exports","expectedCategory":"Permissions & Access","label":"report-permission","subject":"The report is hidden","description":"A guest cannot open the report because the workspace role does not grant access."},
+
+    {"id":"NM01","domain":"Mobile Application","expectedCategory":"Billing","label":"mobile-billing","subject":"The mobile bill is duplicated","description":"The phone is only where the customer noticed two invoice charges; the issue is the subscription billing ledger."},
+    {"id":"NM02","domain":"Mobile Application","expectedCategory":"Authentication","label":"mobile-sso","subject":"Mobile SSO loops","description":"The identity provider certificate is stale and federated users are redirected repeatedly; mobile is only the client."},
+    {"id":"NM03","domain":"Mobile Application","expectedCategory":"Uncategorized","label":"generic-offline","subject":"Offline question","description":"Can the product work without a network? No mobile device, app, record, or synchronization symptom is supplied."},
+
+    {"id":"NN01","domain":"Notifications & Email","expectedCategory":"Login","label":"email-login","subject":"The login email is forgotten","description":"The customer needs account recovery because they cannot remember the address used to sign in."},
+    {"id":"NN02","domain":"Notifications & Email","expectedCategory":"Permissions & Access","label":"notification-settings-access","subject":"A guest cannot open notification settings","description":"The blocked action is a workspace permission boundary; delivery and recipients are normal."},
+    {"id":"NN03","domain":"Notifications & Email","expectedCategory":"Uncategorized","label":"os-notification","subject":"The operating system shows a notification","description":"This is a device operating-system message, unrelated to OIP email or push delivery."}
+  ],
+  "ambiguity": [
+    {"id":"A01","expectedCategory":"Permissions & Access","subject":"Billing workspace access is denied","description":"A billing administrator cannot open the invoice page because the role lacks permission."},
+    {"id":"A02","expectedCategory":"Authentication","subject":"Login notification after sign-in","description":"The identity provider certificate changed and users are sent back to the login page; an email alert is only a symptom."},
+    {"id":"A03","expectedCategory":"Mobile Application","subject":"Offline invoice capture on a phone","description":"A field worker records invoice data in the mobile app without coverage and sync later fails."},
+    {"id":"A04","expectedCategory":"Reporting & Exports","subject":"Integration dashboard totals are wrong","description":"The connector is healthy, but the analytics dashboard shows incorrect totals in the report."},
+    {"id":"A05","expectedCategory":"Permissions & Access","subject":"Webhook access is denied to a guest","description":"The callback is healthy; the actual problem is that a guest role cannot open the integration workspace."},
+    {"id":"A06","expectedCategory":"Uncategorized","subject":"Something about data and access","description":"The customer gives no concrete symptom to distinguish reporting, permissions, billing, or integrations."}
+  ]
+}
