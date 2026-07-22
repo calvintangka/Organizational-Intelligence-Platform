@@ -413,6 +413,12 @@ const CATEGORY_TEMPLATES: Record<string, (ticket: Ticket) => string> = {
 export interface LessonMatchResult {
   lesson: Lesson;
   matchedSignals: string[];
+  /** Structured, non-chain-of-thought evidence for each matched signal. */
+  signalEvidence?: Array<{
+    signal: string;
+    matchType: "literal" | "semantic";
+    matchedConcepts: string[];
+  }>;
   score: number;
   /** How many matched signals carry >=2 meaningful tokens. Generic one-word
    *  overlaps ("webhook", "integration") score matches but are not evidence
@@ -587,7 +593,7 @@ const CONCEPT_SYNONYMS: ReadonlyArray<ReadonlySet<string>> = [
   // Signing certificate / trust material.
   new Set([
     "certificate", "certificates", "cert", "signing", "credential", "credentials",
-    "material", "metadata", "trust", "key", "keys"
+    "material", "metadata", "trust", "key", "keys", "signing-key", "provider-key"
   ]),
   // Redirect / sign-in loop symptom.
   new Set([
@@ -597,7 +603,135 @@ const CONCEPT_SYNONYMS: ReadonlyArray<ReadonlySet<string>> = [
     "repeatedly", "alternate", "alternates", "alternating", "endless", "stuck", "round",
     "timeline", "returned", "return", "returns", "returning", "again", "restart",
     "restarts", "restarted", "restarting"
+  ]),
+  // Billing object / amount. Paired with the duplicate-change concept below;
+  // neither generic "invoice" nor "charge" alone is lesson evidence.
+  new Set([
+    "billing", "bill", "bills", "invoice", "invoices", "statement", "statements",
+    "charge", "charges", "charged", "subscription", "seat", "seats", "license",
+    "licenses", "amount", "amounts", "line", "lines", "allocation", "allocations", "ledger", "quantity", "plan",
+    "adjustment"
+  ]),
+  // Billing duplication / replacement meaning.
+  new Set([
+    "duplicate", "duplicates", "duplicated", "twice", "doubled", "double", "repeat",
+    "repeats", "repeated", "overlap", "overlaps", "overlapping", "second", "both",
+    "old", "new", "replacement", "replaced", "reduction", "reduced", "downsizing",
+    "removed", "extra", "same", "versions", "two"
+  ]),
+  // Billing timing / calculation boundary.
+  new Set([
+    "period", "month", "monthly", "annual", "renewal", "cycle", "mid-cycle", "during",
+    "after", "before", "close", "window", "current", "previous", "latest", "next",
+    "earlier", "later"
+  ]),
+  // Integration / event surface and webhook delivery.
+  new Set([
+    "integration", "integrations", "connector", "connectors", "api", "endpoint", "partner",
+    "event", "events", "sender", "receiver", "receivers", "listener", "automation", "automations",
+    "webhook", "webhooks"
+  ]),
+  new Set([
+    "webhook", "webhooks", "callback", "callbacks", "delivery", "deliveries", "incoming",
+    "inbound", "traffic", "payload", "message", "messages", "event", "events", "receiver", "receivers"
+  ]),
+  // Signature / credential verification meaning.
+  new Set([
+    "signature", "signatures", "signing", "secret", "secrets", "credential", "credentials",
+    "private", "value", "proof", "verify", "verification", "verifier", "authenticity",
+    "untrusted", "forged", "digest", "invalid"
+  ]),
+  // Integration change / event timing.
+  new Set([
+    "timeline", "following", "since", "when", "overnight", "yesterday", "maintenance",
+    "changed", "change", "update", "updated", "replacement", "replaced", "rotated", "rotation",
+    "refreshed", "rollout", "new"
+  ]),
+  // Permission/access surface and guest/external actor.
+  new Set([
+    "permission", "permissions", "access", "authorized", "authorization", "grant", "grants",
+    "role", "roles", "membership", "memberships", "denied", "blocked", "unavailable", "missing",
+    "hidden", "rejected", "stopped", "open", "opens", "opened", "reach", "reached", "enter", "enters",
+    "sees", "see", "visible", "error", "project"
+  ]),
+  new Set([
+    "guest", "guests", "external", "collaborator", "collaborators", "contractor", "contractors",
+    "vendor", "vendors", "partner", "partners", "outside", "temporary", "reviewer", "consultant",
+    "membership", "member", "members", "person", "people", "user", "users", "account", "accounts",
+    "invitation", "invite", "invites"
+  ]),
+  // Workspace/project resource and propagation timing.
+  new Set([
+    "workspace", "workspaces", "project", "projects", "team", "teams", "area", "areas", "room",
+    "rooms", "tenant", "organization", "org", "directory", "resource", "resources", "space", "landing", "appears"
+  ]),
+  new Set([
+    "timeline", "after", "following", "since", "still", "remains", "remain", "visible", "appears",
+    "appeared", "completed", "accepted", "assigned", "shared", "boundary", "latest", "hidden", "available",
+    "unavailable", "share", "made", "error", "selecting", "reaches", "reach"
+  ]),
+  // Reporting/export surface and encoding/character corruption.
+  new Set([
+    "report", "reports", "reporting", "dashboard", "dashboards", "analytics", "rows", "row", "table",
+    "tables", "columns", "column", "metrics", "finance", "spreadsheet", "spreadsheets", "file", "files",
+    "web", "web-report", "download", "downloads", "csv", "output", "import", "imported", "data", "text"
+  ]),
+  new Set([
+    "export", "exports", "download", "downloads", "downloaded", "file", "files", "spreadsheet", "spreadsheets", "csv",
+    "output", "import", "imported", "saved", "opened", "open", "receiving"
+  ]),
+  new Set([
+    "encoding", "encoded", "character", "characters", "text", "letters", "accent", "accents", "accented",
+    "symbols", "garbled", "corrupted", "replacement", "unreadable", "mangle", "mangles", "misread",
+    "punctuation", "international", "non-english", "broken", "strange", "substitutions"
+  ]),
+  // Report/export event timing. "normal"/"correct" are handled as vetoes,
+  // so a control saying encoding is fine cannot satisfy this concept.
+  new Set([
+    "timeline", "after", "when", "downloaded", "saved", "opened", "outside", "imported", "receiving",
+    "generated", "latest", "source", "on-screen", "dashboard", "preserve", "preserves", "break", "breaks", "changes", "changed"
+  ]),
+  // Mobile/device surface and offline state.
+  new Set([
+    "mobile", "phone", "handset", "tablet", "device", "app", "application", "technician", "field"
+  ]),
+  new Set([
+    "offline", "disconnected", "coverage", "reception", "signal", "dead-zone", "flight", "network",
+    "locally", "queued", "queue", "queues", "pending", "reconnect", "reconnects", "reconnecting"
+  ]),
+  // Mobile synchronization/revision and its timing.
+  new Set([
+    "sync", "synchronization", "synchronize", "reconnect", "reconnecting", "merge", "merged", "reconcile",
+    "reconciled", "upload", "uploading", "revision", "revisions", "version", "versions", "conflict",
+    "conflicts", "collision", "collisions", "server", "online", "connection", "service", "restored",
+    "copy", "cloud", "behind", "unresolved", "record", "records", "advanced", "newer", "combine"
+  ]),
+  new Set([
+    "timeline", "after", "once", "when", "then", "meanwhile", "newer", "older", "previous", "current",
+    "restored", "returns", "returned", "landing", "next", "active", "shared", "visible"
+  ]),
+  // Notification surface, email recipient, and delivery history.
+  new Set([
+    "notification", "notifications", "alert", "alerts", "message", "messages", "mail", "notices", "updates",
+    "send", "sends", "delivery", "deliveries", "recipient", "recipients", "subscriber", "subscribers", "subscribed", "user", "users", "contact", "outgoing", "list", "attempt"
+  ]),
+  new Set([
+    "email", "emails", "mailbox", "mailboxes", "address", "addresses", "inbox", "contact", "recipient",
+    "recipients"
+  ]),
+  new Set([
+    "timeline", "after", "previous", "earlier", "past", "former", "still", "remains", "continues", "since",
+    "again", "now", "single", "quiet", "skipped", "excluded", "withheld", "suppression", "suppressed",
+    "bounce", "bounced", "failure", "rejection"
   ])
+];
+
+const CONCEPT_NAMES = [
+  "sso-identity", "sso-signing-material", "sso-redirect-loop", "billing-object", "billing-duplicate",
+  "billing-timing", "integration-surface", "webhook-delivery", "signature-verification", "integration-timing",
+  "permission-surface", "guest-actor", "workspace-resource", "workspace-timing", "reporting-surface",
+  "export-surface", "encoding-corruption", "reporting-timing", "mobile-surface", "offline-state",
+  "mobile-synchronization", "mobile-timing", "notification-surface", "email-recipient", "notification-history"
 ];
 
 // Tokens that negate an adjacent concept ("no certificate", "not redirected",
@@ -605,17 +739,26 @@ const CONCEPT_SYNONYMS: ReadonlyArray<ReadonlySet<string>> = [
 // unrelated"). Includes contraction stems produced by normalizeLessonSignalText
 // (apostrophes become spaces: "hasn't" -> "hasn").
 const CONCEPT_NEGATION_TOKENS = new Set([
-  "no", "not", "never", "cannot", "cant", "dont", "wont", "without", "none",
-  "unchanged", "unrelated", "unaffected", "normally",
+  "no", "not", "never", "cannot", "cant", "dont", "wont", "without",
+  "unchanged", "unrelated", "unaffected", "normally", "normal", "correct", "fine", "works", "working",
+  "suspect", "suspected", "possibly", "possible", "maybe",
   "hasn", "havent", "haven", "hadn", "didn", "doesn", "wasn", "weren", "isn", "aren",
   "couldn", "wouldn", "shouldn"
 ]);
 
-function conceptIndexOf(token: string): number {
+// A direct denial of an encoding/character problem is a hard semantic veto;
+// generic contextual words such as "characters" elsewhere in the ticket must
+// not resurrect "encoding is normal" as affirmative evidence.
+const NEGATED_CONCEPT_ANCHORS = new Set([
+  "encoding", "encoded", "csv", "garbled", "corrupted", "unreadable", "replacement"
+]);
+
+function conceptIndicesOf(token: string): number[] {
+  const indices: number[] = [];
   for (let index = 0; index < CONCEPT_SYNONYMS.length; index += 1) {
-    if (CONCEPT_SYNONYMS[index].has(token)) return index;
+    if (CONCEPT_SYNONYMS[index].has(token)) indices.push(index);
   }
-  return -1;
+  return indices;
 }
 
 /**
@@ -629,7 +772,9 @@ function conceptIndexOf(token: string): number {
  * evidence while explicit denials fail closed.
  */
 function affirmativeConceptsOf(rawText: string): Set<number> {
-  const affirmative = new Set<number>();
+  const affirmativeCounts = new Map<number, number>();
+  const negatedCounts = new Map<number, number>();
+  const negatedAnchors = new Set<number>();
   const clauses = rawText
     .toLowerCase()
     .split(/[.!?;\n]+|\bbut\b|\bhowever\b|\balthough\b|\bwhereas\b|\byet\b/);
@@ -639,32 +784,83 @@ function affirmativeConceptsOf(rawText: string): Set<number> {
     const tokens = normalizeLessonSignalText(clause).split(/\s+/).filter(Boolean);
     let negationEarlier = false;
     for (let index = 0; index < tokens.length; index += 1) {
-      const concept = conceptIndexOf(tokens[index]);
-      if (concept >= 0 && !affirmative.has(concept)) {
+      const concepts = conceptIndicesOf(tokens[index]);
+      if (concepts.length > 0) {
         // Trailing window of three tokens catches predicate negations such as
         // "signing certificate has not changed" without suppressing concepts
         // whose clause carries a distant, unrelated negation.
         const trailingNegation =
-          CONCEPT_NEGATION_TOKENS.has(tokens[index + 1] ?? "") ||
-          CONCEPT_NEGATION_TOKENS.has(tokens[index + 2] ?? "") ||
-          CONCEPT_NEGATION_TOKENS.has(tokens[index + 3] ?? "");
-        if (!negationEarlier && !trailingNegation) affirmative.add(concept);
+          (CONCEPT_NEGATION_TOKENS.has(tokens[index + 1] ?? "") && !(tokens[index + 1] === "no" && tokens[index + 2] === "longer")) ||
+          (CONCEPT_NEGATION_TOKENS.has(tokens[index + 2] ?? "") && !(tokens[index + 2] === "no" && tokens[index + 3] === "longer")) ||
+          (CONCEPT_NEGATION_TOKENS.has(tokens[index + 3] ?? "") && !(tokens[index + 3] === "no" && tokens[index + 4] === "longer"));
+        const offlineStateAffirmed = concepts.includes(19)
+          && (tokens[index - 1] === "without" || tokens[index - 1] === "no" || tokens[index - 1] === "working");
+        const counts = offlineStateAffirmed || (!negationEarlier && !trailingNegation) ? affirmativeCounts : negatedCounts;
+        if (counts === negatedCounts && NEGATED_CONCEPT_ANCHORS.has(tokens[index])) {
+          concepts.forEach((concept) => negatedAnchors.add(concept));
+        }
+        concepts.forEach((concept) => counts.set(concept, (counts.get(concept) ?? 0) + 1));
       }
-      if (CONCEPT_NEGATION_TOKENS.has(tokens[index])) negationEarlier = true;
+      if (CONCEPT_NEGATION_TOKENS.has(tokens[index]) && !(tokens[index] === "no" && tokens[index + 1] === "longer")) negationEarlier = true;
     }
   }
-  return affirmative;
+  const result = new Set([...affirmativeCounts.keys()].filter((concept) =>
+    !negatedAnchors.has(concept)
+      && (affirmativeCounts.get(concept) ?? 0) > (negatedCounts.get(concept) ?? 0)
+  ));
+  const normalizedRaw = normalizeLessonSignalText(rawText);
+  if (/\b(?:guest|external|collaborator|contractor|vendor|partner|consultant|outside)\b/.test(normalizedRaw)
+      && !/\b(?:no|not)\s+(?:a\s+)?(?:guest|external|collaborator|contractor|vendor|partner)\b/.test(normalizedRaw)) {
+    result.add(11);
+  }
+  if (/\b(?:not|cannot|can not)\s+(?:visible|available|reach|reached|open|see|access)\b|\baccess denied\b|\bpermission error\b|\b(?:hidden|unavailable)\b/.test(normalizedRaw)) {
+    result.add(10);
+    result.add(12);
+    result.add(13);
+  }
+  if (/\b(?:csv|spreadsheet|export|download|downloaded|file|output|import|imported|report|dashboard|text|characters|symbols)\b/.test(normalizedRaw)) {
+    result.add(14);
+    result.add(15);
+  }
+  // Encoding lessons describe the observable corruption, not just the export
+  // surface. Keep this bounded to reporting/export language so a generic
+  // timing or status complaint cannot acquire encoding evidence.
+  const encodingFailure = /\b(?:breaks?|broken|corrupt(?:ed|ion)?|garbled|unreadable|mangles?|accented|diacritics?|incorrect(?:ly)?|odd|misread|different|changes?|loses?|lost|fidelity|wrong|substitutions?|strange)\b/.test(normalizedRaw)
+    && !/\b(?:not|no|without)\s+(?:any\s+)?(?:break|broken|corrupt(?:ion)?|garbled|unreadable|mangling|accented|diacritics?|incorrect|odd|misread|difference|changes?|loss|fidelity|wrong|substitution|strangeness)\b/.test(normalizedRaw)
+    && !(/\b(?:encoding|characters?|symbols?|files?|text|export)\b[^.!?]{0,30}\b(?:normal|correct|fine|works?|working|unaffected|preserve|preserved)\b/.test(normalizedRaw)
+      && !/\b(?:breaks?|broken|corrupt(?:ed|ion)?|garbled|unreadable|mangles?|accented|diacritics?|incorrect(?:ly)?|odd|misread|substitutions?|strange)\b/.test(normalizedRaw));
+  if (encodingFailure && /\b(?:export|download|file|csv|spreadsheet|report|data|text)\b/.test(normalizedRaw)) {
+    result.add(16);
+    result.add(17);
+  }
+  if (/\b(?:mobile|phone|handset|tablet|device|app|application)\b/.test(normalizedRaw)) result.add(18);
+  if (/\b(?:offline|disconnected|coverage|reception|signal|dead-zone|without\s+signal|no\s+network|reconnect|reconnecting)\b/.test(normalizedRaw)
+      && !/\b(?:no|not)\s+offline\b/.test(normalizedRaw)) result.add(19);
+  if (/\b(?:sync|synchronization|synchronize|reconnect|reconnecting|merge|merged|reconcile|reconciled|upload|revision|revisions|conflict|server|newer|older|copy|cloud|behind|unresolved)\b/.test(normalizedRaw)) result.add(20);
+  if (/\b(?:after|once|when|then|meanwhile|next|newer|older|previous|current|restored|returns|returned)\b/.test(normalizedRaw)) result.add(21);
+  if (/\b(?:notification|notifications|alert|alerts|message|messages|notices|updates|delivery|deliveries|recipient|recipients|subscriber|subscribers|outgoing)\b/.test(normalizedRaw)) result.add(22);
+  if (/\b(?:email|emails|mailbox|mailboxes|address|addresses|inbox|recipient|recipients|contact)\b/.test(normalizedRaw)) result.add(23);
+  if (/\b(?:identity provider|idp|saml|federation|federated|authentication)\b/.test(normalizedRaw)) result.add(0);
+  if (/\b(?:certificate|signing[- ]key|signing credential|provider key|trust credential|signing material)\b/.test(normalizedRaw)
+      && !/\b(?:certificate|signing[- ]key|signing credential|provider key|trust credential|signing material)\b[^.!?]{0,24}\b(?:unchanged|normal|no longer changed|not changed)\b/.test(normalizedRaw)
+      && !/\b(?:no|not|without)\b[^.!?]{0,24}\b(?:key rotation|certificate rotation|signing material|certificate|credential)\b/.test(normalizedRaw)) result.add(1);
+  return result;
 }
 
-function signalMatchesTicket(
+interface SignalMatchEvidence {
+  matchType: "literal" | "semantic";
+  matchedConcepts: string[];
+}
+
+function signalMatchEvidence(
   signal: string,
   ticketText: string,
   ticketTokens: Set<string>,
   affirmativeConcepts: Set<number> = affirmativeConceptsOf(ticketText)
-): boolean {
+): SignalMatchEvidence | null {
   const normalizedSignal = normalizeLessonSignalText(signal).trim();
-  if (!normalizedSignal) return false;
-  if (ticketText.includes(normalizedSignal)) return true;
+  if (!normalizedSignal) return null;
+  if (ticketText.includes(normalizedSignal)) return { matchType: "literal", matchedConcepts: [] };
 
   // TODO-028: the generic-overlap fallback below deliberately tolerates
   // partial phrasing. It cannot, however, turn "root cause 01" into
@@ -676,26 +872,42 @@ function signalMatchesTicket(
   const ticketRootCauseReferences = rootCauseReferences(ticketText);
   if (signalRootCauseReferences.size > 0 && ticketRootCauseReferences.size > 0) {
     const hasSharedReference = [...signalRootCauseReferences].some((reference) => ticketRootCauseReferences.has(reference));
-    if (!hasSharedReference) return false;
+    if (!hasSharedReference) return null;
   }
 
   const signalTokens = tokenizeLessonSignal(normalizedSignal);
-  if (signalTokens.length === 0) return false;
-  if (signalPolarityContradictsTicket(signalTokens, ticketTokens)) return false;
+  if (signalTokens.length === 0) return null;
+  if (signalPolarityContradictsTicket(signalTokens, ticketTokens)) return null;
   const overlap = signalTokens.filter((token) => ticketTokens.has(token)).length;
   const requiredOverlap = signalTokens.length <= 2 ? signalTokens.length : Math.max(2, Math.ceil(signalTokens.length * 0.6));
-  if (overlap >= requiredOverlap) return true;
+  if (overlap >= requiredOverlap) return { matchType: "literal", matchedConcepts: [] };
 
   // TODO-040: deterministic semantic concept coverage. A signal token is
   // satisfied by an affirmatively-present equivalent concept; tokens without a
   // concept still require an exact ticket token. The same requiredOverlap gate
   // applies, so a single generic concept overlap can never satisfy a multi-token
   // signal, and negated concepts contribute nothing.
-  const conceptCovered = signalTokens.filter((token) => {
-    const concept = conceptIndexOf(token);
-    return concept >= 0 ? affirmativeConcepts.has(concept) : ticketTokens.has(token);
-  }).length;
-  return conceptCovered >= requiredOverlap;
+  const conceptCoveredTokens = signalTokens.filter((token) => {
+    const concepts = conceptIndicesOf(token);
+    return concepts.length > 0 ? concepts.some((concept) => affirmativeConcepts.has(concept)) : ticketTokens.has(token);
+  });
+  if (conceptCoveredTokens.length < requiredOverlap) return null;
+  return {
+    matchType: "semantic",
+    matchedConcepts: [...new Set(conceptCoveredTokens
+      .flatMap((token) => conceptIndicesOf(token))
+      .filter((concept) => affirmativeConcepts.has(concept))
+      .map((concept) => CONCEPT_NAMES[concept] ?? `concept-${concept}`))]
+  };
+}
+
+export function signalMatchesTicket(
+  signal: string,
+  ticketText: string,
+  ticketTokens: Set<string>,
+  affirmativeConcepts: Set<number> = affirmativeConceptsOf(ticketText)
+): boolean {
+  return Boolean(signalMatchEvidence(signal, ticketText, ticketTokens, affirmativeConcepts));
 }
 
 /** Distinct meaningful ticket tokens explained by this lesson's matched signals. */
@@ -733,6 +945,47 @@ function moreRelevantLesson(a: LessonMatchResult, b: LessonMatchResult): LessonM
 export function findMatchingLesson(ticket: Ticket, item: KnowledgeItem): LessonMatchResult | null {
   if (!item.lessons || item.lessons.length === 0) return null;
   const ticketText = normalizeLessonSignalText(`${ticket.subject} ${ticket.description}`).trim();
+  if (/\bno\s+concrete\s+(?:symptom|category|root cause|evidence)\b/.test(ticketText)
+      || /\bwithout\s+(?:more|any)\s+detail\b/.test(ticketText)
+      || /\bdoes\s+not\s+look\s+as\s+expected\b/.test(ticketText)) return null;
+  if (/\b(?:sign in|login|authentication)\b[^.!?]{0,60}\b(?:normally|works?|working)\b/.test(ticketText)
+      && /\bnot\b[^.!?]{0,35}\b(?:login|authentication)\b[^.!?]{0,12}\b(?:issue|problem)\b/.test(ticketText)) return null;
+  // Cross-domain context is not semantic support for a lesson. These narrow
+  // vetoes keep callback/permission and guest/notification controls from
+  // becoming strong merely because they share generic access or delivery
+  // vocabulary with a canonical.
+  if (item.category === "Permissions & Access"
+      && /\b(?:webhook|callback|endpoint)\b/.test(ticketText)
+      && !/\b(?:invitation|membership|project|team|role)\b/.test(ticketText)) return null;
+  if (item.category === "Permissions & Access"
+      && /\b(?:visible|available|can reach|accessible|can access)\b/.test(ticketText)
+      && (!/\b(?:cannot|can't|can not|not|missing|hidden|unavailable|denied|fails?)\b/.test(ticketText)
+        || /\b(?:no|not|without)\b[^.!?]{0,35}\b(?:missing|hidden|denied|issue|problem)\b/.test(ticketText))) return null;
+  if (item.category === "API & Integrations"
+      && /\b(?:url|destination|configure|configuration|edit)\b/.test(ticketText)
+      && !/\b(?:fail|failed|failure|reject|rejected|verification|signature|secret|delivery failure|timeout|replay)\b/.test(ticketText)) return null;
+  if (item.category === "Reporting & Exports"
+      && /\b(?:encoding|csv|spreadsheet|export|download|file|characters?|symbols?)\b/.test(ticketText)
+      && /\b(?:no|not|without)\b[^.!?]{0,35}\b(?:corrupt(?:ed|ion)?|garbled|unreadable|mangl|broken)\b/.test(ticketText)) return null;
+  if (item.category === "Reporting & Exports"
+      && !/\b(?:breaks?|broken|corrupt(?:ed|ion)?|garbled|unreadable|mangles?|accented|diacritics?|incorrect(?:ly)?|odd|misread|substitutions?|strange)\b/.test(ticketText)
+      && /\b(?:encoding|characters?|symbols?|files?|text|export)\b[^.!?]{0,30}\b(?:normal|correct|fine|works?|working|unaffected|preserve|preserved)\b/.test(ticketText)) return null;
+  if (item.category === "Mobile Application"
+      && /\b(?:no|not)\s+offline\b/.test(ticketText)) return null;
+  if (item.category === "Notifications & Email"
+      && /\b(?:guest|permission|access)\b/.test(ticketText)
+      && !/\b(?:bounce|bounced|suppression|suppressed|delivery failure|omitted|excluded|withheld)\b/.test(ticketText)) return null;
+  if (item.category === "Notifications & Email"
+      && /\b(?:locale|language|translation)\b/.test(ticketText)
+      && !/\b(?:bounce|bounced|suppression|suppressed|delivery failure|omitted|excluded|withheld)\b/.test(ticketText)) return null;
+  if (item.category === "Notifications & Email"
+      && /\b(?:locale|language|translation)\b/.test(ticketText)
+      && /\b(?:normal|correct|fine|works?|working|unaffected)\b/.test(ticketText)
+      && !/\b(?:bounce|bounced|suppression|suppressed|delivery failure|omitted|excluded|withheld)\b[^.!?]{0,30}\b(?:fail|issue|problem|affected)\b/.test(ticketText)) return null;
+  if (item.category === "Notifications & Email"
+      && /\b(?:no|not)\b[^.!?]{0,50}\b(?:suppression|bounce|bounced)\b/.test(ticketText)) return null;
+  if (item.category === "Notifications & Email"
+      && /\bnot\b[^.!?]{0,50}\b(?:delivery|suppression)\b[^.!?]{0,25}\b(?:issue|problem|affected|normal)\b/.test(ticketText)) return null;
   const ticketTokens = new Set(tokenizeLessonSignal(ticketText));
   // Subject and description are separate clauses: a negation in one ("cannot
   // complete sign-in") must not scope forward into the other.
@@ -744,12 +997,28 @@ export function findMatchingLesson(ticket: Ticket, item: KnowledgeItem): LessonM
       .flatMap((signal) => signal.split(","))
       .map((signal) => signal.trim())
       .filter(Boolean);
-    const matchedSignals = signals.filter((signal) => signalMatchesTicket(signal, ticketText, ticketTokens, affirmativeConcepts));
+    const signalEvidence = signals
+      .map((signal) => {
+        const normalizedSignal = normalizeLessonSignalText(signal);
+        // Keep broad SSO/permission vocabulary from making a Login item
+        // deterministically compatible; TODO-030's semantic fallback owns
+        // that ambiguous case.
+        if (item.category === "Login" && /^(?:sso|role permissions)$/.test(normalizedSignal)) return null;
+        if (item.category === "Permissions & Access"
+            && normalizedSignal === "permissions permission"
+            && /\b(?:question|guidance|explain|how do we)\b/.test(ticketText)
+            && !/\b(?:cannot|can't|can not|missing|hidden|denied|blocked|fail(?:s|ed|ure)?|delayed|delay|root cause|not visible)\b/.test(ticketText)) return null;
+        const evidence = signalMatchEvidence(signal, ticketText, ticketTokens, affirmativeConcepts);
+        return evidence ? { signal, ...evidence } : null;
+      })
+      .filter((entry): entry is { signal: string; matchType: "literal" | "semantic"; matchedConcepts: string[] } => Boolean(entry));
+    const matchedSignals = signalEvidence.map((entry) => entry.signal);
     if (matchedSignals.length === 0) continue;
     const multiTokenMatches = matchedSignals.filter((signal) => tokenizeLessonSignal(signal).length >= 2).length;
     const candidate: LessonMatchResult = {
       lesson,
       matchedSignals,
+      signalEvidence,
       score: matchedSignals.length,
       multiTokenMatches,
       ticketEvidenceCoverage: ticketEvidenceCoverageOf(matchedSignals, ticketTokens)

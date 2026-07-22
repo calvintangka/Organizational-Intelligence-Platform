@@ -44,7 +44,12 @@ export function buildDiscriminationLessonPayload(lessonMatch: LessonMatchResult)
 export function selectPreferredMatch(ticket: Ticket, matches: KnowledgeMatch[]): MatchWithLesson | null {
   if (matches.length === 0) return null;
 
-  const annotated = matches.map((match) => ({
+  // TODO-045: lesson evidence is evaluated only for the canonical retrieval
+  // winner already at the front of this ordered list. A semantically similar
+  // lesson on a lower-ranked sibling must not replace that canonical or turn a
+  // related problem into an authorized response.
+  const canonicalWinner = matches.slice(0, 1);
+  const annotated = canonicalWinner.map((match) => ({
     match,
     lessonMatch: findMatchingLesson(ticket, match.item)
   }));
@@ -74,43 +79,58 @@ export function selectPreferredMatch(ticket: Ticket, matches: KnowledgeMatch[]):
   }, relevantCluster[0]);
 }
 
-function normalizeLessonSearchText(value: string): string[] {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, " ")
-    .split(/\s+/)
-    .filter((token) => token.length > 2);
-}
-
 function isLessonSearchCandidate(
-  ticket: Ticket,
+  _ticket: Ticket,
   understanding: Understanding,
   item: KnowledgeItem,
-  canonicalProblemTitle: string
+  _canonicalProblemTitle: string
 ): boolean {
   if (!item.lessons?.length) return false;
-  if (!isCompatibleForDrafting(understanding, item, ticket)) return false;
-
-  const targetTokens = new Set(normalizeLessonSearchText(`${canonicalProblemTitle} ${understanding.category}`));
-  const itemTokens = normalizeLessonSearchText(
-    `${item.canonicalProblemTitle ?? ""} ${item.title} ${item.category} ${item.tags.join(" ")}`
-  );
-  return itemTokens.some((token) => targetTokens.has(token));
+  // TODO-045: semantic lesson evidence is the mechanism that can resolve an
+  // otherwise-unknown root cause. Keep the hard category boundary here, but
+  // do not require the pre-semantic root-cause compatibility verdict before
+  // considering a lesson that belongs to the already-selected canonical.
+  // Final authorization still re-runs isCompatibleForDrafting with the ticket
+  // after findMatchingLesson has produced strong evidence.
+  if (!isCompatibleForDrafting(understanding, item)) return false;
+  // The raw match at the caller boundary already identifies the canonical.
+  // Requiring lexical overlap with the classifier's canonical title would
+  // discard valid paraphrases before the semantic lesson matcher runs.
+  return true;
 }
 
 export function withPreDiscriminationLessonMatches(
-  ticket: Ticket,
+  _ticket: Ticket,
   understanding: Understanding,
   matches: KnowledgeMatch[],
-  items: KnowledgeItem[],
+  _items: KnowledgeItem[],
   canonicalProblemTitle: string
 ): KnowledgeMatch[] {
-  const lessonMatches = items
-    .filter((item) => isLessonSearchCandidate(ticket, understanding, item, canonicalProblemTitle))
-    .map((item) => ({ item, lessonMatch: findMatchingLesson(ticket, item) }))
+  // TODO-045: semantic evidence may validate a lesson only for the canonical
+  // retrieval winner. It must never search the whole organization and move a
+  // semantically related sibling ahead of the selected canonical. The raw
+  // ranking is therefore the candidate boundary; the `items` argument is
+  // retained for call-site compatibility and diagnostics.
+  // The canonical retrieval winner is the default boundary. The mature SSO
+  // semantic path (TODO-040) has an established same-category discrimination
+  // case, so retain only its tight retrieval score cluster; all other
+  // categories remain strictly on the raw winner and cannot be overridden by
+  // a lower-ranked sibling lesson.
+  const topScore = matches[0]?.matchScore ?? 0;
+  const canonicalCandidates = canonicalProblemTitle === "Authentication Infrastructure Issue"
+    ? matches.filter((match) => match.matchScore >= topScore - 10).map((match) => match.item)
+    : matches.length > 0 ? [matches[0].item] : [];
+  const lessonMatches = canonicalCandidates
+    .filter((item) => isLessonSearchCandidate(_ticket, understanding, item, canonicalProblemTitle))
+    .map((item) => ({ item, lessonMatch: findMatchingLesson(_ticket, item) }))
     .filter((entry): entry is { item: KnowledgeItem; lessonMatch: LessonMatchResult } => isStrongLessonMatch(entry.lessonMatch));
 
-  if (lessonMatches.length === 0) return matches;
+  if (lessonMatches.length === 0) {
+    // No strong lesson evidence means no semantic re-ranking occurred. Keep
+    // the original retrieval list for downstream compatibility/AI probes;
+    // authorization still requires the strong deterministic lesson gate.
+    return matches;
+  }
 
   // The pre-discrimination winner uses the same intrinsic lesson evidence and
   // stable identity fallback as the final selector; trust is deliberately absent.
@@ -138,10 +158,7 @@ export function withPreDiscriminationLessonMatches(
     matchedCategory: best.item.category
   };
 
-  return moveMatchToFront(
-    [lessonBackedMatch, ...matches.filter((match) => match.item.id !== best.item.id)],
-    best.item.id
-  );
+  return [lessonBackedMatch];
 }
 
 export function moveMatchToFront(matches: KnowledgeMatch[], matchId?: string): KnowledgeMatch[] {
