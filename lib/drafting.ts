@@ -861,6 +861,22 @@ export function draftResponse(
     return { draftResponse: draft, basedOnKnowledgeIds, confidenceNote, source: "deterministic" };
   }
 
+  // TODO-046: category/root-cause compatibility only makes a canonical item
+  // eligible for consideration. It is not sufficient evidence to claim that
+  // validated Organizational Memory applies. The legacy canonical-template
+  // fallback below used to authorize any positive matchScore even when no
+  // validated lesson matched the ticket (the TODO-041 C02 bypass). Fail closed
+  // at the final authorization boundary so a customer-facing template cannot
+  // be presented as grounded merely because the item shares a broad category.
+  if (compatibleMatch && !lessonMatch) {
+    return {
+      draftResponse: UNCATEGORIZED_PLACEHOLDER,
+      basedOnKnowledgeIds: [],
+      confidenceNote: "A compatible canonical candidate was considered, but no validated lesson provided sufficient relevance evidence. Human review must author the response and capture the correct root cause in Reflection.",
+      source: "no_template"
+    };
+  }
+
   if (!compatibleMatch || understanding.category === UNCATEGORIZED_CATEGORY) {
     return {
       draftResponse: UNCATEGORIZED_PLACEHOLDER,
