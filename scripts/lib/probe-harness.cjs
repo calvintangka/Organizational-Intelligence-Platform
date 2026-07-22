@@ -7,8 +7,8 @@
  *   1. optionally loads .env.local then .env from the project root (dotenv);
  *   2. resolves the "server-only" marker package to scripts/stubs/server-only.cjs
  *      so server modules can be exercised in-process;
- *   3. resolves the "@/" path alias against the project root (.ts, .tsx,
- *      directory index.ts);
+ *   3. resolves the "@/" path alias against the project root (exact files
+ *      such as JSON, .ts, .tsx, and directory index.ts);
  *   4. registers require.extensions for .ts/.tsx that transpile with the same
  *      compiler options every probe historically used (CommonJS, ES2020,
  *      ReactJSX, esModuleInterop) and rewrite import.meta.url to a CJS
@@ -48,6 +48,7 @@ function installProbeHarness({ loadEnv = true } = {}) {
     }
     if (request.startsWith("@/")) {
       const mapped = path.join(root, request.slice(2));
+      if (fs.existsSync(mapped) && fs.statSync(mapped).isFile()) return mapped;
       if (fs.existsSync(`${mapped}.ts`)) return `${mapped}.ts`;
       if (fs.existsSync(`${mapped}.tsx`)) return `${mapped}.tsx`;
       if (fs.existsSync(path.join(mapped, "index.ts"))) return path.join(mapped, "index.ts");
