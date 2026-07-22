@@ -1,0 +1,43 @@
+{
+  "manualTicket": {
+    "id": "TODO037-MANUAL",
+    "subject": "Users stuck in SSO redirect loop after certificate rotation",
+    "description": "After rotating our SSO certificate, several users are unable to sign in. They are repeatedly redirected between our login page and the identity provider. The issue started shortly after the new certificate was configured. Can you help us identify what is causing the redirect loop and how to fix it?"
+  },
+  "genuineParaphrases": [
+    {"id":"P01","subject":"Federated sign-in keeps sending staff back to the identity service","description":"We replaced the signing credential at our identity provider and now employees bounce between the application and the provider instead of entering the workspace."},
+    {"id":"P02","subject":"Users cannot complete the enterprise sign-on handshake","description":"The new IdP key was installed yesterday. Since then, the browser returns to the login screen over and over for affected SAML users."},
+    {"id":"P03","subject":"Authentication circles after changing the federation key","description":"Several people authenticate successfully at the provider but are sent back to our sign-in page after we changed the federation signing material."},
+    {"id":"P04","subject":"Company login bounces between two pages","description":"Our workforce is trapped in a repeating hand-off between the product and the corporate identity service. It began immediately after the provider credential update."},
+    {"id":"P05","subject":"Enterprise users return to login after the IdP key update","description":"Nobody can finish the federated login flow: the provider hands the browser back, and the product sends it straight back again following the signing-key replacement."},
+    {"id":"P06","subject":"SAML authentication never reaches the workspace","description":"The identity platform accepts the account, but the application restarts sign-in. This started when we changed the public signing credential used by the federation connection."},
+    {"id":"P07","subject":"New federation credential causes endless sign-in handoff","description":"Users are continuously shuttled from our app to the corporate identity service and back. The only recent change was replacing the credential used to verify assertions."},
+    {"id":"P08","subject":"Login flow repeats after identity-provider maintenance","description":"After the provider's signing material was renewed, the browser never lands in the product; it alternates between the two authentication endpoints."},
+    {"id":"P09","subject":"Workforce access fails at the final federation step","description":"People prove who they are at the company identity service, then the product asks them to authenticate again. The loop appeared after the federation key change."},
+    {"id":"P10","subject":"Corporate authentication is stuck in a bounce","description":"Our users are passed from the application to the identity platform and back without a session being established. This followed a replacement of the provider's signing key."},
+    {"id":"P11","subject":"IdP signing update broke the hand-off","description":"The application and our identity service keep handing the same browser request to one another. It affects federated users and began right after the signing credential was changed."},
+    {"id":"P12","subject":"Users see the sign-in page repeatedly after federation changes","description":"Authentication succeeds upstream but the product does not accept the return; users are sent back to start again since the identity provider key was renewed."},
+    {"id":"P13","subject":"Federated access fails after rotating trust material","description":"A change to the credential used by our enterprise identity connection now leaves every affected user in a repeated application/provider handoff."},
+    {"id":"P14","subject":"SAML users cannot get past the return from the provider","description":"The provider sends a response, but our site starts authentication again instead of creating a session. The behavior began after its signing credential was replaced."},
+    {"id":"P15","subject":"Enterprise login is endlessly redirected","description":"Several staff members report an authentication merry-go-round between our tenant and the corporate identity system after the latest federation credential deployment."},
+    {"id":"P16","subject":"Identity handshake fails following key replacement","description":"The account is accepted by the external identity service, yet the browser is returned to the product login and then sent away again. Nothing else changed besides the signing key."},
+    {"id":"P17","subject":"Workspaces cannot establish sessions for SAML users","description":"After updating the provider verification credential, users repeatedly traverse the two sign-in endpoints and never arrive authenticated in the workspace."},
+    {"id":"P18","subject":"Provider credential deployment leaves users in an auth loop","description":"Our federated login flow now cycles between the service and the identity platform. The cycle started with the new signing credential and affects multiple users."},
+    {"id":"P19","subject":"Sign-on handoff repeats after trust certificate update","description":"Replacing the enterprise federation trust material caused the browser to alternate between our login and the identity service for every affected employee."},
+    {"id":"P20","subject":"External authentication returns users to the beginning","description":"Users authenticate at the corporate provider but are never admitted to the application; they are sent through the same provider-to-app handoff repeatedly after the credential change."}
+  ],
+  "controls": [
+    {"id":"C01","label":"ordinary-password-reset","subject":"Forgotten password needs reset","description":"I cannot remember my password and need a reset email. The normal login form is the only issue."},
+    {"id":"C02","label":"generic-login","subject":"Cannot log in","description":"My account login fails and I need help signing in. There is no external identity provider or credential deployment involved."},
+    {"id":"C03","label":"browser-cookie","subject":"Browser session cookie problem","description":"Clearing browser cookies fixes some pages, but the browser session is not being retained. No federation or signing-key change occurred."},
+    {"id":"C04","label":"sso-provisioning-delay","subject":"New SSO user is still pending","description":"A newly provisioned employee cannot access the workspace yet. The identity provider account is waiting for directory synchronization; no credential was changed."},
+    {"id":"C05","label":"wrong-tenant-domain","subject":"SSO sends our tenant to the wrong domain","description":"The configured tenant name points to a different identity connection. Users are not in a repeating sign-in cycle and no certificate was rotated."},
+    {"id":"C06","label":"clock-drift","subject":"MFA codes are rejected","description":"A laptop clock is several minutes behind and time-based verification codes fail. Single sign-on certificates and provider redirects are unrelated."},
+    {"id":"C07","label":"conditional-access","subject":"Conditional access blocks device","description":"The identity service denies a device because of a policy rule. There is no return-to-login loop and the signing credential is unchanged."},
+    {"id":"C08","label":"unrelated-certificate","subject":"TLS certificate warning on webhook endpoint","description":"Our webhook endpoint presents an expired HTTPS certificate. Customer authentication and the identity provider sign-in flow work normally."},
+    {"id":"C09","label":"generic-redirect","subject":"A page redirects unexpectedly","description":"A marketing page redirects to an outdated URL. This is not a login, SAML, identity-provider, or certificate problem."},
+    {"id":"C10","label":"weak-sso-no-cert","subject":"SSO question","description":"We have a general question about enterprise sign-on configuration, but no observed bounce, failed handoff, key update, or certificate evidence."},
+    {"id":"C11","label":"contradiction","subject":"Reports fail after successful sign-in","description":"I can sign in normally and the password works. This is not an authentication problem; only the reports page is unavailable."},
+    {"id":"C12","label":"negation","subject":"No SSO redirect issue","description":"There is no redirect loop and no certificate change. Users authenticate normally; we need help with an unrelated account preference."}
+  ]
+}
