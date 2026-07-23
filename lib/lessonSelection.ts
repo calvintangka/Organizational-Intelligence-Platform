@@ -48,7 +48,13 @@ export function selectPreferredMatch(ticket: Ticket, matches: KnowledgeMatch[]):
   // winner already at the front of this ordered list. A semantically similar
   // lesson on a lower-ranked sibling must not replace that canonical or turn a
   // related problem into an authorized response.
-  const canonicalWinner = matches.slice(0, 1);
+  const firstCanonicalId = matches[0].item.canonicalProblemId ?? matches[0].item.id;
+  // Retrieval normally deduplicates this set. Keeping same-canonical ties in
+  // the cluster preserves the stable-id tie-breaker without allowing a
+  // different canonical sibling to replace the retrieval winner.
+  const canonicalWinner = matches.filter(
+    (match) => (match.item.canonicalProblemId ?? match.item.id) === firstCanonicalId
+  );
   const annotated = canonicalWinner.map((match) => ({
     match,
     lessonMatch: findMatchingLesson(ticket, match.item)
@@ -151,11 +157,15 @@ export function withPreDiscriminationLessonMatches(
   const lessonLabel = best.lessonMatch.lesson.title ?? best.lessonMatch.lesson.rootCause;
   const lessonBackedMatch: KnowledgeMatch = {
     item: best.item,
-    matchScore: Math.max(existing?.matchScore ?? 0, 95),
+    // Lesson evidence authorizes reuse, but it is not a canonical retrieval
+    // score. Preserve the intrinsic score so the UI never turns an evidence
+    // gate into a fabricated percentage.
+    matchScore: existing?.matchScore ?? 0,
     matchReason: `Validated lesson match - "${lessonLabel}" matched before AI discrimination via signals: ${best.lessonMatch.matchedSignals.join(", ")}.`,
     matchedTags: existing?.matchedTags ?? [],
     matchedKeywords: best.lessonMatch.matchedSignals.slice(0, 4),
-    matchedCategory: best.item.category
+    matchedCategory: best.item.category,
+    relevanceEvidence: existing?.relevanceEvidence
   };
 
   return [lessonBackedMatch];

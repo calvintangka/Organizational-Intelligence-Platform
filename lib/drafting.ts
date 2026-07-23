@@ -1209,12 +1209,12 @@ export function draftResponse(
   if (compatibleMatch && compatibleMatch.matchScore >= 55) {
     draft = renderCustomerResponse(compatibleMatch.item, ticket, profile, understanding);
     draft = appendTicketReferenceIfNeeded(draft, ticket.ticketId);
-    confidenceNote = `Medium-high confidence (canonical problem match ${compatibleMatch.matchScore}%). This draft uses the customer-facing response template, not internal agent guidance. Human review is still required unless trust allows auto-resolution.`;
+    confidenceNote = `Moderate-to-strong canonical relevance. This draft uses the customer-facing response template, not internal agent guidance. Human review is still required unless trust allows auto-resolution.`;
     basedOnKnowledgeIds.push(compatibleMatch.item.id);
   } else if (compatibleMatch && compatibleMatch.matchScore > 0) {
     draft = renderCustomerResponse(compatibleMatch.item, ticket, profile, understanding);
     draft = appendTicketReferenceIfNeeded(draft, ticket.ticketId);
-    confidenceNote = `Low-medium confidence (partial canonical problem match ${compatibleMatch.matchScore}%). The customer-facing template is used, but human review is required.`;
+    confidenceNote = `Weak canonical relevance. The customer-facing template is used, but human review is required.`;
     basedOnKnowledgeIds.push(compatibleMatch.item.id);
   } else {
     confidenceNote = `No matching knowledge found. No prior knowledge matched this ticket. Human review is required before saving or sending.`;

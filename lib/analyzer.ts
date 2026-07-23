@@ -5,6 +5,7 @@ import { defaultOrganizationProfile } from "@/data/seedOrganizationProfiles";
 import { normalizeOrganizationProfile, profileKeywordBank } from "@/lib/organizationProfile";
 import { containsSignal } from "@/lib/textSignal";
 import { extractCustomerContext } from "@/lib/customerContext";
+import { relevanceStrengthForScore } from "@/lib/relevanceLabels";
 
 const FALLBACK_PROFILE = defaultOrganizationProfile;
 
@@ -1337,7 +1338,7 @@ export function buildReasoning(understanding: Understanding, topMatch: Knowledge
       relevantMemory: topMatch ? topMatch.item.title : null,
       relevanceReason: topMatch ? topMatch.matchReason : null,
       uncertainty: topMatch
-        ? `A possible knowledge candidate exists (${topMatch.matchScore}%), but OIP is not confident enough to classify this issue automatically.`
+        ? `A possible knowledge candidate exists (relevance: ${relevanceStrengthForScore(topMatch.matchScore)}), but OIP is not confident enough to classify this issue automatically.`
         : "No prior knowledge matched this ticket. No template is available yet.",
       humanReviewRationale:
         "A human reviewer must classify this new issue type, author the first validated response, and capture the lesson before OIP can reuse it safely."
@@ -1351,9 +1352,9 @@ export function buildReasoning(understanding: Understanding, topMatch: Knowledge
 
   const uncertainty =
     topMatch && topMatch.matchScore >= 70
-      ? `High-confidence match found (${topMatch.matchScore}%), but the specific details may differ. Verify with the customer before sending.`
+      ? `Strong relevance found, but the specific details may differ. Verify with the customer before sending.`
       : topMatch
-      ? `A partial match was found (${topMatch.matchScore}%), but overlap is limited. The draft may need significant editing.`
+      ? `Moderate or weak relevance was found, but overlap is limited. The draft may need significant editing.`
       : "No prior knowledge matched this ticket. The draft is based on a category template only.";
 
 
@@ -1409,7 +1410,7 @@ export function buildConfidence(understanding: Understanding, topMatch: Knowledg
 
 
     score += memoryBoost;
-    basis.push(`Memory match: ${topMatch.matchScore}% similarity`);
+    basis.push(`Memory relevance: ${relevanceStrengthForScore(topMatch.matchScore)}`);
     if (topMatch.matchScore < 60) {
       uncertaintyFactors.push("Memory match is partial, not exact");
     }

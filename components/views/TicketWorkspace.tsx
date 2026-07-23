@@ -26,6 +26,7 @@ import { HumanReviewEditor } from "@/components/HumanReviewEditor";
 import { ReflectionPanel } from "@/components/ReflectionPanel";
 import { ProvenancePanel } from "@/components/ProvenancePanel";
 import { findMatchingLesson } from "@/lib/drafting";
+import { buildMatchExplainability } from "@/lib/explainability";
 
 export type TicketPhase =
   | "idle"
@@ -199,6 +200,7 @@ function getTimelineItems(
   analysis: AIAnalysis | null,
   topMatch: KnowledgeMatch | null,
   suggestedResponse: SuggestedResponse | null,
+  selectedTicket: Ticket | null,
   reflectionDecision: ReflectionDecision | null,
   lastSavedKnowledgeId: string | null,
   domainClassification: BusinessDomainClassification | null,
@@ -225,7 +227,9 @@ function getTimelineItems(
         : step >= 3
         ? "No knowledge match — cold start"
         : "Searching organizational memory",
-      detail: topMatch ? `${topMatch.matchScore}% match` : undefined,
+      detail: topMatch
+        ? `Relevance: ${buildMatchExplainability(topMatch, selectedTicket, suggestedResponse).relevance}`
+        : undefined,
       status: step >= 3 ? "done" : step === 2 && isProcessing ? "running" : "pending",
     },
     {
@@ -338,8 +342,8 @@ export function TicketWorkspace({
     extractedFields.subIssues.length > 0 ||
     extractedFields.urgencyIndicators.length > 0
   );
-  const timelineItems = getTimelineItems(currentStep, isProcessing, aiAnalysis, topMatch, suggestedResponse, reflectionDecision, lastSavedKnowledgeId, domainClassification);
-  const isColdStart = knowledgeItems.length === 0 || (!!suggestedResponse && suggestedResponse.basedOnKnowledgeIds.length === 0);
+  const timelineItems = getTimelineItems(currentStep, isProcessing, aiAnalysis, topMatch, suggestedResponse, selectedTicket, reflectionDecision, lastSavedKnowledgeId, domainClassification);
+  const isColdStart = knowledgeItems.length === 0 || (!topMatch && !!suggestedResponse && suggestedResponse.basedOnKnowledgeIds.length === 0);
   const reuseLessonMatch = reuseItem && customSecondText.trim()
     ? findMatchingLesson(
         { id: "", customerName: "Customer", subject: customSecondText, description: customSecondText, category: "", status: "new" as const, createdAt: "" },

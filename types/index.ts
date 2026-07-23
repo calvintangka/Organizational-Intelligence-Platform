@@ -30,6 +30,8 @@ export type {
 export type {
   KnowledgeItem,
   KnowledgeMatch,
+  ExplainabilityStrength,
+  MatchExplainability,
   KnowledgeProvenance,
   KnowledgeValidation,
   KnowledgeCandidate,

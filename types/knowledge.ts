@@ -237,3 +237,14 @@ export interface KnowledgeMatch {
     conceptMatches: string[];
   };
 }
+
+export type ExplainabilityStrength = "Strong" | "Moderate" | "Weak" | "None";
+
+export interface MatchExplainability {
+  relevance: ExplainabilityStrength;
+  lessonEvidence: ExplainabilityStrength;
+  authorized: boolean;
+  decision: "Grounded Organizational Memory authorized" | "Not authorized for grounded reuse" | "No compatible Organizational Memory used";
+  evidence: string[];
+  reason: string;
+}

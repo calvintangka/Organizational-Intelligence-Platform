@@ -1,5 +1,7 @@
 import type { KnowledgeMatch, SuggestedResponse, Ticket } from "@/types";
 import { findMatchingLesson } from "@/lib/drafting";
+import { buildMatchExplainability } from "@/lib/explainability";
+import type { MatchExplainability } from "@/types";
 import { formatLastUpdatedDisplay } from "@/lib/knowledgeTimestamps";
 
 interface ProvenancePanelProps {
@@ -63,9 +65,39 @@ function responseGroundingCopy(
   return null;
 }
 
+function ExplainabilityDetails({ explanation }: { explanation: MatchExplainability }) {
+  return (
+    <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Why this memory was selected</p>
+      <div className="mt-2 grid gap-2 sm:grid-cols-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Relevance</p>
+          <p className="text-sm font-semibold text-ink">{explanation.relevance}</p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Lesson evidence</p>
+          <p className="text-sm font-semibold text-ink">{explanation.lessonEvidence}</p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Decision</p>
+          <p className="text-sm font-semibold text-ink">{explanation.decision}</p>
+        </div>
+      </div>
+      {explanation.evidence.length > 0 && (
+        <ul className="mt-3 space-y-1 text-xs leading-5 text-slate-600">
+          {explanation.evidence.slice(0, 4).map((evidence) => <li key={evidence}>• {evidence}</li>)}
+        </ul>
+      )}
+      <p className="mt-3 text-xs leading-5 text-slate-500">Trust is historical reliability and is evaluated separately: {explanation.reason}</p>
+    </div>
+  );
+}
+
 export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized = false, response, fallbackTechnicalDetails }: ProvenancePanelProps) {
   const lessonMatch = topMatch && ticket ? findMatchingLesson(ticket, topMatch.item) : null;
   const groundingCopy = responseGroundingCopy(response, lessonMatch);
+  const explanation = buildMatchExplainability(topMatch, ticket, response);
+  const lessonGrounded = !!lessonMatch || response?.draftMode === "lesson_grounded";
 
   if (groundingCopy) {
     return (
@@ -79,6 +111,7 @@ export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized
             <pre className="mt-1 whitespace-pre-wrap rounded-lg bg-amber-100/60 p-2 font-mono text-[11px] leading-5 text-amber-900/80">{fallbackTechnicalDetails}</pre>
           </details>
         )}
+        {topMatch && <ExplainabilityDetails explanation={explanation} />}
       </section>
     );
   }
@@ -105,15 +138,26 @@ export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized
   const provenance = item.provenance;
   const lastUpdatedDisplay = formatLastUpdatedDisplay([item.lastUpdated, item.lastValidated, item.approvedAt, item.createdAt]);
 
+  if (response?.source === "no_template") {
+    return (
+      <section className="rounded-3xl border border-amber-200 bg-amber-50/60 p-5 shadow-soft">
+        <p className="text-xs font-bold uppercase tracking-wide text-amber-700">Why this response?</p>
+        <p className="mt-2 font-semibold text-ink">Relevant memory found, but not authorized for reuse</p>
+        <p className="mt-1 text-sm leading-6 text-slate-700">{explanation.reason} A human must author or verify the response before it can be sent or learned.</p>
+        <ExplainabilityDetails explanation={explanation} />
+      </section>
+    );
+  }
+
   return (
     <section className="rounded-3xl border border-blue-100 bg-blue-50/40 p-5 shadow-soft">
       <p className="text-xs font-bold uppercase tracking-wide text-memory">Why this response?</p>
       <p className="mt-1.5 font-semibold text-ink">
-        {lessonMatch ? "Lesson-informed draft" : "Based on approved organizational knowledge"}
+        {lessonGrounded ? "Lesson-informed draft" : "Based on approved organizational knowledge"}
       </p>
       <p className="mt-1 text-sm text-slate-600">
-        {lessonMatch
-          ? `OIP matched this ticket to a learned lesson: "${lessonMatch.lesson.title ?? lessonMatch.lesson.rootCause}" (matched signals: ${lessonMatch.matchedSignals.join(", ")}). The response below uses this lesson's specific guidance.`
+        {lessonGrounded
+          ? `OIP matched this ticket to a validated lesson: "${response?.groundingLabel ?? lessonMatch?.lesson.title ?? lessonMatch?.lesson.rootCause ?? "matched lesson"}". The response below uses this lesson's specific guidance.`
           : "OIP matched this ticket to an approved knowledge entry and used it to draft the response below."}
       </p>
 
@@ -145,6 +189,14 @@ export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized
         </div>
       )}
 
+      {!lessonMatch && lessonGrounded && (
+        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-amber-700">Validated Lesson</p>
+          <p className="mt-1.5 text-sm font-semibold text-amber-900">{response?.groundingLabel ?? "Semantic lesson match"}</p>
+          <p className="mt-0.5 text-xs text-amber-800">High-confidence semantic lesson evidence authorized this grounded response.</p>
+        </div>
+      )}
+
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-blue-100 bg-white p-3">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Knowledge Used</p>
@@ -153,8 +205,9 @@ export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized
         </div>
 
         <div className="rounded-2xl border border-blue-100 bg-white p-3">
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Match &amp; Trust</p>
-          <p className="mt-1 text-sm font-semibold text-ink">{topMatch.matchScore}% match</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Relevance &amp; Trust</p>
+          <p className="mt-1 text-sm font-semibold text-ink">Relevance: {explanation.relevance}</p>
+          <p className="mt-0.5 text-xs text-slate-500">Lesson evidence: {explanation.lessonEvidence}</p>
           <p className="mt-0.5 text-xs text-slate-500">Trust: {item.trustScore ?? 20}/100</p>
         </div>
 
@@ -172,6 +225,8 @@ export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized
           <p className="mt-0.5 text-xs text-slate-500">{item.timesSeen ?? 1} ticket{(item.timesSeen ?? 1) !== 1 ? "s" : ""} seen</p>
         </div>
       </div>
+
+      <ExplainabilityDetails explanation={explanation} />
 
       {exampleTickets.length > 0 && (
         <div className="mt-3 rounded-2xl border border-blue-100 bg-white p-3">

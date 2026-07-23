@@ -2302,28 +2302,34 @@ export default function Home() {
     deterministicConfidenceNote: string,
     deterministicSource: SuggestedResponse["source"],
     baseAdvisory: AIAdvisory | null,
-    requestGeneration?: number
+    requestGeneration?: number,
+    semanticAuthorization?: SemanticLessonAuthorization | null
   ): Promise<{
     advisory: AIAdvisory | null;
     response: SuggestedResponse;
     usedAIDraft: boolean;
   }> {
-    const lessonMatch = matchedKnowledge ? findMatchingLesson(ticket, matchedKnowledge.item) : null;
-    const draftMode: DraftGroundingMode = lessonMatch
+    const deterministicLessonMatch = matchedKnowledge ? findMatchingLesson(ticket, matchedKnowledge.item) : null;
+    const semanticLesson = matchedKnowledge && semanticAuthorization
+      ? matchedKnowledge.item.lessons?.find((lesson) => lesson.id === resolveLessonIdForItem(matchedKnowledge.item, semanticAuthorization.lessonId)) ?? null
+      : null;
+    const lessonMatch = deterministicLessonMatch;
+    const groundingLesson = lessonMatch?.lesson ?? semanticLesson;
+    const draftMode: DraftGroundingMode = groundingLesson
       ? "lesson_grounded"
       : matchedKnowledge && deterministicSource !== "no_template"
       ? "memory_grounded"
       : "cold_start";
     const groundingLabel =
       draftMode === "lesson_grounded"
-        ? lessonMatch?.lesson.title ?? lessonMatch?.lesson.rootCause ?? "matched lesson"
+        ? groundingLesson?.title ?? groundingLesson?.rootCause ?? "matched lesson"
         : draftMode === "memory_grounded"
         ? matchedKnowledge?.item.canonicalProblemTitle ?? matchedKnowledge?.item.title ?? "organizational memory"
         : "no organizational knowledge";
     const groundingContent =
       draftMode === "lesson_grounded"
-        ? lessonMatch
-          ? normalizeReusableLessonTemplate(lessonMatch.lesson.customerResponse)
+        ? groundingLesson
+          ? normalizeReusableLessonTemplate(groundingLesson.customerResponse)
           : deterministicDraft
         : draftMode === "memory_grounded"
         ? deterministicDraft
@@ -2359,13 +2365,13 @@ export default function Home() {
       groundingMode: draftMode,
       groundingLabel,
       groundingContent,
-      lessonGrounding: lessonMatch
+      lessonGrounding: groundingLesson
         ? {
-            rootCause: lessonMatch.lesson.rootCause,
-            solution: lessonMatch.lesson.solution,
-            customerResponse: normalizeReusableLessonTemplate(lessonMatch.lesson.customerResponse),
-            matchedSignals: lessonMatch.matchedSignals,
-            doNotPromise: lessonMatch.lesson.doNotPromise
+            rootCause: groundingLesson.rootCause,
+            solution: groundingLesson.solution,
+            customerResponse: normalizeReusableLessonTemplate(groundingLesson.customerResponse),
+            matchedSignals: lessonMatch?.matchedSignals ?? groundingLesson.signals,
+            doNotPromise: groundingLesson.doNotPromise
           }
         : undefined,
       deterministicDraft,
@@ -3076,7 +3082,7 @@ export default function Home() {
       createLogEntry(`Category detected: ${enrichedUnderstanding.category}`, `Tags: ${enrichedUnderstanding.tags.join(", ")}`),
       createLogEntry(
         `Retrieved ${matches.length} memory candidate${matches.length !== 1 ? "s" : ""}`,
-        `Top: "${effectiveReuseMatch.item.title}" — ${effectiveReuseMatch.matchScore}% similarity`
+        `Top candidate: "${effectiveReuseMatch.item.title}" — intrinsic relevance retained for ranking`
       ),
       createLogEntry(`Trust evaluated: ${trust.score}/100 → ${trust.decisionLabel}`, `Maturity: ${trust.maturity}`),
       isUnknownIssue
@@ -3250,7 +3256,7 @@ export default function Home() {
     addLogEntries([
       createLogEntry(
         `Retrieved ${matches.length} memory candidate${matches.length !== 1 ? "s" : ""}`,
-        topMatch ? `Top: "${topMatch.item.title}" (${topMatch.matchScore}%)` : "No knowledge matches"
+        topMatch ? `Top candidate: "${topMatch.item.title}" (intrinsic relevance retained for ranking)` : "No knowledge matches"
       ),
       topTrust
         ? createLogEntry(`Trust evaluated: ${topTrust.score}/100 → ${topTrust.decisionLabel}`)
@@ -3284,7 +3290,7 @@ export default function Home() {
     if (semanticFallback) setSimilarKnowledge([semanticFallback.match]);
     const draftMatch = effectiveTopMatch ?? semanticFallback?.match ?? null;
     const draft = draftResponse(ticket, enrichedUnderstanding, draftMatch, profile, knowledgeItems.length === 0, semanticFallback?.authorization ?? null);
-    const aiDraft = await requestDraftAdvisory(ticket, enrichedUnderstanding, canonicalProblem.title, draftMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", advisory, requestGeneration);
+    const aiDraft = await requestDraftAdvisory(ticket, enrichedUnderstanding, canonicalProblem.title, draftMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", advisory, requestGeneration, semanticFallback?.authorization ?? null);
     if (!ticketRequestIsCurrent(requestGeneration)) return;
     const response = aiDraft.response;
 

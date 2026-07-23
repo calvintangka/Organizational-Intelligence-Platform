@@ -1,5 +1,6 @@
 ﻿import { useState } from "react";
 import type { ReflectionAction, ReflectionCommitInput, ReflectionDecision, Lesson, LessonMode } from "@/types";
+import { relevanceStrengthForScore } from "@/lib/relevanceLabels";
 
 const ACTION_LABELS: Record<ReflectionAction, string> = {
   create_new: "New Knowledge Entry",
@@ -155,7 +156,7 @@ export function ReflectionPanel({ decision, onConfirm, existingLessons = [], rev
           <div className={`mt-4 rounded-2xl border ${sectionBg} p-4`}>
             <p className={`text-xs font-bold uppercase tracking-wide ${textFaint}`}>Matched Knowledge</p>
             <p className={`mt-1 font-semibold ${text}`}>{decision.existingItemTitle}</p>
-            {decision.existingItemSimilarity !== undefined && <p className={`mt-0.5 text-sm ${textFaint}`}>{decision.existingItemSimilarity}% similarity to this ticket</p>}
+            {decision.existingItemSimilarity !== undefined && <p className={`mt-0.5 text-sm ${textFaint}`}>Canonical relevance: {relevanceStrengthForScore(decision.existingItemSimilarity)}</p>}
           </div>
         )}
 
