@@ -22,6 +22,7 @@ generated/prisma/
 tmp/
 outputs/
 .codex-screenshots/
+.codex_spreadsheet_work/
 
 # Generated investor artifacts (kept out of version control)
 OIP_Investor_One_Pager*
