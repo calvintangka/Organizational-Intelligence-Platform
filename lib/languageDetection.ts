@@ -59,6 +59,13 @@ export interface LanguageDetection {
 /** At or above this, the detection is strong enough to drive response language. */
 export const CONFIDENT_DETECTION = 0.6;
 
+/**
+ * Weighted marker score at which lexical evidence is considered complete. Below
+ * it, confidence is scaled down proportionally, so a one-or-two-word fragment
+ * cannot present itself as a confident detection.
+ */
+const MIN_CONFIDENT_LEXICAL_SCORE = 6;
+
 export function isSupportedLanguage(value: unknown): value is SupportedLanguageCode {
   return typeof value === "string" && (SUPPORTED_LANGUAGES as readonly string[]).includes(value);
 }
@@ -179,9 +186,22 @@ const ORTHOGRAPHY_MARKERS: Array<{ language: Exclude<SupportedLanguageCode, "ja"
   { language: "fr", pattern: /\b\w+(?:tion|tions)\b/u, weight: 1 }
 ];
 
+/**
+ * URLs, emails, and ticket ids are not natural language, but they tokenize into
+ * words that vote: a bare "https://example.com/login" once scored Portuguese at
+ * 0.83 purely because a domain ends in ".com" and "com" is a Portuguese word.
+ * Strip them before scoring.
+ */
+function stripNonLinguisticTokens(text: string): string {
+  return text
+    .replace(/\b(?:https?:\/\/|www\.)\S+/giu, " ")
+    .replace(/\b[\w.+-]+@[\w.-]+\.\w+\b/giu, " ")
+    .replace(/\b[A-Z]{2,}-\d{4,}-\d+\b/gu, " ");
+}
+
 /** Lowercase and split on non-letters, preserving letters from every script. */
 function tokenize(text: string): string[] {
-  return text
+  return stripNonLinguisticTokens(text)
     .toLowerCase()
     .split(/[^\p{L}\p{N}']+/u)
     .filter(Boolean);
@@ -217,12 +237,20 @@ function detectByLexicon(text: string): LanguageDetection | null {
   const top = candidates[0];
   const runnerUp = candidates[1]?.score ?? 0;
   const total = candidates.reduce((sum, candidate) => sum + candidate.score, 0);
-  // Confidence blends dominance over the runner-up with the share of all
-  // evidence, so "one weak hit" never reads as certain.
+  // Separation says how cleanly the winner beat the alternatives; evidence says
+  // how much signal there was at all. Confidence is their PRODUCT, not their sum.
+  //
+  // Summing them was wrong: with a single marker hit, dominance and share are
+  // both 1 by definition (there is nothing to compare against), which scored
+  // 0.83 off one weak word — enough to clear the reply-language bar. A lone
+  // Portuguese "com" from a URL, or the word "no", would then pick the reply
+  // language. Multiplying makes thin evidence cap the whole score, so weak input
+  // falls back instead of being presented as a confident detection.
   const dominance = top.score > 0 ? (top.score - runnerUp) / top.score : 0;
   const share = total > 0 ? top.score / total : 0;
-  const evidence = Math.min(1, top.score / 6);
-  const confidence = Math.min(1, Math.max(0.15, (dominance * 0.5 + share * 0.3 + evidence * 0.2)));
+  const separation = dominance * 0.6 + share * 0.4;
+  const evidence = Math.min(1, top.score / MIN_CONFIDENT_LEXICAL_SCORE);
+  const confidence = Math.min(1, separation * evidence);
 
   return {
     language: top.language,

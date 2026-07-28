@@ -763,13 +763,21 @@ export function TicketWorkspace({
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className={`text-xs font-bold uppercase tracking-wide ${darkMode ? "text-slate-400" : "text-slate-500"}`}>
-                    Language
+                    {/* An assumed language must never read as a detected one. */}
+                    {ticketLanguage.method === "fallback"
+                      ? "Language (assumed)"
+                      : ticketLanguage.method === "reviewer"
+                      ? "Language (set by reviewer)"
+                      : "Language (detected)"}
                   </p>
                   <p className={`mt-1 text-sm font-semibold ${darkMode ? "text-slate-200" : "text-[#111827]"}`}>
                     {languageLabel(ticketLanguage.detected as SupportedLanguageCode)}
                     <span className={`ml-2 text-xs font-normal ${darkMode ? "text-slate-500" : "text-slate-400"}`}>
-                      {Math.round(ticketLanguage.confidence * 100)}% confidence · {ticketLanguage.method}
-                      {ticketLanguage.reviewerOverride ? " · reviewer set" : ""}
+                      {ticketLanguage.method === "fallback"
+                        ? "not detected — organization default applied"
+                        : ticketLanguage.method === "reviewer"
+                        ? "confirmed by a reviewer"
+                        : `${Math.round(ticketLanguage.confidence * 100)}% confidence · ${ticketLanguage.method}`}
                     </span>
                   </p>
                 </div>

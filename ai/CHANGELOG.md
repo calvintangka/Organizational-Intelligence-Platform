@@ -1,5 +1,17 @@
 # Change Log
 
+## [2026-07-29] TODO-058A Multilingual Foundation Verification & Closeout
+
+**Task/Prompt:** Formally verify and close the TODO-058 foundation (commit 2c57a11) against the real code before TODO-058B changes matching and retrieval. Do not expand into Phases C/D/G.
+
+- **Verified against the code, not the prior report.** Confirmed structurally that Claude reuses `createLMStudioProvider`, so both provider tiers share one prompt builder and receive the identical resolved-language instruction; the instruction sits in `sharedSystemRules`, which every draft branch (cold start and grounded) consumes.
+- **Foundation defect found and fixed — detector confidence.** The confidence model summed dominance and share, but with a single marker hit both are 1 by definition, so one weak word scored **0.833** — above the 0.6 reply bar. A bare URL read as Portuguese at 0.83 (the domain `.com` is a Portuguese word) and the lone word "no" as Spanish. Confidence is now the **product** of separation and evidence, and URLs, emails, and ticket ids are stripped before scoring. Every hostile input now lands below the bar (URL/email/ticket-id/technical terms → 0.000) while all 14 real ticket samples stay above it — zero regressions.
+- **Two further defects fixed.** A reviewer override was stored as `method: "lexical"`, misrepresenting a human decision as a detection — added a `"reviewer"` method. The bulk intake path wrote classification with no language metadata at all, so the field was present or absent depending on which intake path a ticket arrived through.
+- **UI corrected for Part H.** The ticket panel now labels "Language (detected)" / "Language (assumed)" / "Language (set by reviewer)", and an assumed language reads "not detected — organization default applied" instead of showing a confidence figure.
+- **Persistence proven against PostgreSQL** with a disposable fixture org: modern save round-trips, an older client omitting the keys entirely does **not** erase stored settings, a partial update preserves them, an explicit edit still overwrites, stale-write conflict detection still fires, and malformed stored settings coerce safely. Fixture deleted; mature organizations byte-identical.
+- Probe extended 21 → **39 checks** (hostile detector input, bounded/consistent confidence, Unicode source-text preservation incl. dakuten/handakuten, concept determinism and precedence, persistence preservation, provider independence, UI labelling, both intake paths). Regression: BUG-009, BUG-010, TODO-046, TODO-048, TODO-050, TODO-055, TODO-056, and developer-demo mature English retrieval (33 PASS / 0 FAIL, no findings) all pass; `tsc`, strict-unused, and production build clean. Per-ticket overhead 79–90 µs. Zero writes to mature data — all revisions and row counts unchanged.
+- **Not claimed:** multilingual retrieval does not work yet. Non-English tickets still classify `Uncategorized` deterministically. Phases C/D/G remain TODO-058B.
+
 ## [2026-07-29] TODO-058 Language-Neutral Organizational Memory (foundation)
 
 **Task/Prompt:** Audit language assumptions, then make Organizational Memory language-neutral — one shared memory serving every language, never one memory per language. Scope agreed with the user: deterministic concept-alias architecture, foundation implemented + design for the invasive matching phases.

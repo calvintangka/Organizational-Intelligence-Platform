@@ -33,8 +33,12 @@ export interface TicketRecordLanguage {
   detected: string;
   /** 0..1 detector confidence. */
   confidence: number;
-  /** How the detection was reached. */
-  method: "script" | "lexical" | "fallback";
+  /**
+   * How the language was reached. "fallback" means it was ASSUMED from the
+   * organization default, not detected — the UI must not present it as a
+   * detection. "reviewer" means a human set it explicitly.
+   */
+  method: "script" | "lexical" | "fallback" | "reviewer";
   /** Language the outgoing draft was written in, once a draft exists. */
   responseLanguage?: string;
   /** Set when a human reviewer corrected the detected language. */

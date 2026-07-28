@@ -1326,6 +1326,18 @@ export default function Home() {
           canonicalProblem: item.canonicalProblem.title,
           classifiedBy: "deterministic" as const,
           confidence: "bulk",
+          // TODO-058A: bulk-committed tickets record language metadata on the
+          // same terms as single tickets, so the field is never silently absent
+          // depending on which intake path a ticket arrived through.
+          language: (() => {
+            const resolved = resolveTicketLanguage(item.ticket, organizationProfile);
+            return {
+              detected: resolved.detection.language,
+              confidence: resolved.detection.confidence,
+              method: resolved.detection.method,
+              responseLanguage: resolved.response.language,
+            };
+          })(),
         },
         memoryMatch: { knowledgeId: result.validatedItem.id, matchType: "template" as const, lessonId: null },
         draftSource: "deterministic" as const,
@@ -1767,7 +1779,9 @@ export default function Home() {
         language: {
           detected: language,
           confidence: 1,
-          method: "lexical",
+          // A human decision is not a lexical detection; record it as such so
+          // the stored metadata stays honest about where the language came from.
+          method: "reviewer",
           responseLanguage: response.language,
           reviewerOverride: true,
         },

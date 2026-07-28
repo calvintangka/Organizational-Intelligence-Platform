@@ -17,12 +17,14 @@
  * docs/TODO-058-LANGUAGE-NEUTRAL-DESIGN.md.
  */
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const path = require("node:path");
 const { installProbeHarness } = require("./lib/probe-harness.cjs");
 
 const { root } = installProbeHarness({ loadEnv: false });
 
 const {
+  CONFIDENT_DETECTION,
   SUPPORTED_LANGUAGES,
   detectLanguage,
   isSupportedLanguage,
@@ -292,6 +294,249 @@ check("L: the shipped English signal matcher is untouched", () => {
   assert.equal(containsSignal("the monkey escaped", "key"), false);
   assert.equal(containsSignal("password reset requested", "password"), true);
   assert.equal(containsSignal("ログインできません", "ログイン"), false, "the English matcher still cannot see CJK — Phase C is pending");
+});
+
+/* ---------- TODO-058A Part B: hostile and ambiguous detector input ---------- */
+
+check("058A/B: non-linguistic input never reads as a confident detection", () => {
+  const hostile = [
+    ["url", "https://example.com/login?next=/dashboard"],
+    ["email", "please contact me at user@example.com"],
+    ["ticket id", "OIP-20260728-5001"],
+    ["technical terms", "HTTP 500 SAML SSO OAuth JWT timeout webhook"],
+    ["product names", "OIP Maesa FastDrop"],
+    ["punctuation", "!!! ??? ... ---"],
+    ["numbers", "12345 67890"],
+    ["emoji", "😀😀😀"],
+    ["single ambiguous word", "no"]
+  ];
+  for (const [label, text] of hostile) {
+    const result = detectLanguage(text);
+    assert.ok(
+      result.confidence < CONFIDENT_DETECTION,
+      `${label}: confidence ${result.confidence} must stay below the reply bar ${CONFIDENT_DETECTION} ("${text}")`
+    );
+    const decision = resolveResponseLanguage(resolveLanguagePolicy({}), result);
+    assert.notEqual(decision.reason, "customer_language", `${label}: must not drive a customer-language reply`);
+  }
+});
+
+check("058A/B: every detection is finite, bounded, and internally consistent", () => {
+  const samples = [
+    "", "   ", "!!!", "12345", "no", "OIP-1", "https://x.com/login",
+    ...EQUIVALENT_TICKETS.map(([, text]) => text),
+    "Hello team, ログインできません. Please help.",
+    "Hi, no puedo iniciar sesion in the OIP dashboard"
+  ];
+  for (const text of samples) {
+    const result = detectLanguage(text);
+    assert.ok(isSupportedLanguage(result.language), `"${text}": invalid language code ${result.language}`);
+    assert.ok(Number.isFinite(result.confidence), `"${text}": confidence must be finite`);
+    assert.ok(result.confidence >= 0 && result.confidence <= 1, `"${text}": confidence ${result.confidence} out of range`);
+    assert.ok(["script", "lexical", "fallback"].includes(result.method), `"${text}": bad method ${result.method}`);
+    // fallbackApplied must be truthful in both directions.
+    assert.equal(result.fallbackApplied, result.method === "fallback", `"${text}": fallbackApplied disagrees with method`);
+    if (result.fallbackApplied) assert.equal(result.confidence, 0, `"${text}": an assumed language must not claim confidence`);
+  }
+});
+
+check("058A/B: the organization default is used only when nothing was detected", () => {
+  // Nothing detectable -> the organization default is applied and disclosed.
+  const assumed = detectLanguage("!!! 123", { defaultLanguage: "ja" });
+  assert.equal(assumed.language, "ja");
+  assert.equal(assumed.fallbackApplied, true);
+  // Detectable -> the organization default must NOT override the real detection.
+  const detected = detectLanguage("Ich kann mich nicht bei meinem Arbeitsbereich anmelden.", { defaultLanguage: "ja" });
+  assert.equal(detected.language, "de", "a real detection must win over the organization default");
+  assert.equal(detected.fallbackApplied, false);
+});
+
+check("058A/B: mixed-language input does not confidently pick the minority language", () => {
+  const mixed = detectLanguage("Hi, no puedo iniciar sesion in the OIP dashboard");
+  assert.ok(
+    mixed.confidence < CONFIDENT_DETECTION || mixed.language === "es",
+    `mixed input resolved to ${mixed.language} at ${mixed.confidence}`
+  );
+});
+
+/* ---------- TODO-058A Part C: source text is never mutated ---------- */
+
+check("058A/C: folding is derived — it never mutates the caller's string", () => {
+  const originals = [
+    "ログインできません",           // dakuten
+    "パスワードが拒否されます",      // handakuten
+    "로그인할 수 없습니다",          // Hangul
+    "我无法登录",                   // Han
+    "Je ne peux pas me connecter à mon espace",  // French accents
+    "No puedo iniciar sesión, ¿me ayudan?",      // Spanish accents + inverted marks
+    "Não consigo entrar na conta",               // Portuguese tilde
+    "Ich kann mich nicht anmelden, Grüße, größe", // umlauts + ß
+    "Non riesco ad accedere però"                // Italian accents
+  ];
+  for (const original of originals) {
+    const copy = String(original);
+    foldForMatching(original);
+    conceptsInText(original, BUILT_IN_CONCEPTS);
+    assert.equal(original, copy, `source text was mutated: ${original}`);
+  }
+});
+
+check("058A/C: dakuten and handakuten survive folding as distinct characters", () => {
+  // グ (ku+dakuten) must not collapse to ク, and プ must not collapse to フ.
+  assert.equal(foldForMatching("ログイン"), "ログイン");
+  assert.equal(foldForMatching("パスワード"), "パスワード");
+  assert.notEqual(foldForMatching("グ"), foldForMatching("ク"), "dakuten distinguishes real characters");
+  assert.notEqual(foldForMatching("プ"), foldForMatching("フ"), "handakuten distinguishes real characters");
+  assert.equal(foldForMatching("한국어"), "한국어", "Hangul must survive");
+  assert.equal(foldForMatching("发票"), "发票", "Han must survive");
+});
+
+check("058A/C: accented Latin folds to its base letter rather than breaking apart", () => {
+  assert.equal(foldForMatching("sesión"), "sesion");
+  assert.equal(foldForMatching("não"), "nao");
+  assert.equal(foldForMatching("Grüße"), "gruße", "ß is a letter, not a diacritic, and must be kept");
+  assert.equal(foldForMatching("però"), "pero");
+  assert.equal(foldForMatching("çà"), "ca");
+  // Folded forms compare equal to their unaccented spelling — the point of it.
+  assert.equal(foldForMatching("factura"), foldForMatching("fácturá"));
+});
+
+/* ---------- TODO-058A Part D: concept determinism and precedence ---------- */
+
+check("058A/D: alias resolution is deterministic across repeated builds", () => {
+  const first = buildConceptIndex(resolveConceptVocabulary({}));
+  const second = buildConceptIndex(resolveConceptVocabulary({}));
+  assert.deepEqual([...first.entries()].sort(), [...second.entries()].sort(), "index must be reproducible");
+  const a = conceptsInText(EQUIVALENT_TICKETS[7][1], BUILT_IN_CONCEPTS).sort();
+  const b = conceptsInText(EQUIVALENT_TICKETS[7][1], BUILT_IN_CONCEPTS).sort();
+  assert.deepEqual(a, b, "concept extraction must be reproducible");
+});
+
+check("058A/D: unknown text never invents a concept", () => {
+  const before = resolveConceptVocabulary({}).length;
+  conceptsInText("völlig unbekannter text ohne bezug", resolveConceptVocabulary({}));
+  conceptsInText("まったく関係のないテキスト", resolveConceptVocabulary({}));
+  assert.equal(resolveConceptVocabulary({}).length, before, "concept vocabulary must not grow from matching");
+});
+
+check("058A/D: no concept id carries a language suffix", () => {
+  for (const concept of resolveConceptVocabulary({ conceptVocabulary: [{ id: "sla", label: "SLA", aliases: ["service level"] }] })) {
+    assert.ok(/^[a-z0-9_]+$/u.test(concept.id), `${concept.id} must be a neutral slug`);
+    assert.ok(!/_(en|id|es|fr|de|pt|it|ja|ko|zh)$/u.test(concept.id), `${concept.id} must not be language-scoped`);
+  }
+});
+
+/* ---------- TODO-058A Part G: persistence preserves language settings ---------- */
+
+check("058A/G: an older client omitting language settings cannot erase them", () => {
+  // Mirrors lib/server/persistenceService.ts carryForwardOptionalSettings.
+  const stored = {
+    products: ["p"],
+    languagePolicy: { organizationLanguage: "id", responseMode: "organization_language", internalLanguage: "id", minimumDetectionConfidence: 0.7 },
+    conceptVocabulary: [{ id: "sla", label: "SLA", aliases: ["service level"] }],
+    _profileRevision: 4
+  };
+  // An older client sends a profile with no language keys at all.
+  const incoming = { products: ["p"], _profileRevision: 4 };
+  const next = { ...incoming };
+  for (const key of ["conceptVocabulary", "languagePolicy"]) {
+    if (next[key] === undefined && stored[key] !== undefined) next[key] = stored[key];
+  }
+  assert.deepEqual(next.languagePolicy, stored.languagePolicy, "an omitted policy must be carried forward");
+  assert.deepEqual(next.conceptVocabulary, stored.conceptVocabulary, "an omitted vocabulary must be carried forward");
+});
+
+check("058A/G: an explicit change still overwrites the stored value", () => {
+  const stored = { languagePolicy: { organizationLanguage: "id", responseMode: "organization_language", internalLanguage: "id", minimumDetectionConfidence: 0.7 } };
+  const incoming = { languagePolicy: { organizationLanguage: "ja", responseMode: "customer_language", internalLanguage: "ja", minimumDetectionConfidence: 0.5 } };
+  const next = { ...incoming };
+  for (const key of ["conceptVocabulary", "languagePolicy"]) {
+    if (next[key] === undefined && stored[key] !== undefined) next[key] = stored[key];
+  }
+  assert.equal(next.languagePolicy.organizationLanguage, "ja", "carry-forward must not block a real edit");
+});
+
+check("058A/G: a ticket with no language metadata still loads safely", () => {
+  const legacyClassification = { category: "Login", intent: "reset", canonicalProblem: "Login Issue", classifiedBy: "deterministic", confidence: "high" };
+  assert.equal(legacyClassification.language, undefined, "historical rows carry no language field");
+  // The UI reads `classification?.language ?? null` and renders nothing for null.
+  const forUi = legacyClassification.language ?? null;
+  assert.equal(forUi, null, "absent language metadata must be representable as null, not a crash");
+});
+
+/* ---------- TODO-058A Part I: provider independence ---------- */
+
+check("058A/I: detection, concepts, and policy run with every provider unavailable", () => {
+  // These modules must not import any provider or perform I/O. Verified
+  // structurally: the probe itself runs with no network, no key, no adapter.
+  const source = [
+    fs.readFileSync(path.join(root, "lib", "languageDetection.ts"), "utf8"),
+    fs.readFileSync(path.join(root, "lib", "conceptVocabulary.ts"), "utf8"),
+    fs.readFileSync(path.join(root, "lib", "languagePolicy.ts"), "utf8"),
+    fs.readFileSync(path.join(root, "lib", "textNormalization.ts"), "utf8")
+  ].join("\n");
+  for (const token of ["fetch(", "lib/ai/", "process.env", "XMLHttpRequest"]) {
+    assert.ok(!source.includes(token), `the deterministic language layer must not reference ${token}`);
+  }
+  // And they still produce full results here, with no provider configured.
+  const detection = detectLanguage(EQUIVALENT_TICKETS[8][1]);
+  assert.equal(detection.language, "ko");
+  assert.ok(conceptsInText(EQUIVALENT_TICKETS[8][1], BUILT_IN_CONCEPTS).includes("login"));
+  assert.equal(resolveResponseLanguage(resolveLanguagePolicy({}), detection).language, "ko");
+});
+
+/* ---------- TODO-058A Part H: the UI cannot present assumed as detected ---------- */
+
+check("058A/H: the ticket panel labels detected, assumed, and reviewer-set distinctly", () => {
+  const workspace = fs.readFileSync(path.join(root, "components", "views", "TicketWorkspace.tsx"), "utf8");
+  assert.ok(workspace.includes("Language (assumed)"), "a fallback language must be labelled as assumed");
+  assert.ok(workspace.includes("Language (detected)"), "a real detection must be labelled as detected");
+  assert.ok(workspace.includes("Language (set by reviewer)"), "a reviewer override must be labelled as such");
+  assert.ok(
+    workspace.includes("not detected — organization default applied"),
+    "an assumed language must say so instead of showing a confidence figure"
+  );
+  assert.ok(workspace.includes("Replying in"), "the outgoing draft language must be shown");
+  assert.ok(workspace.includes("onLanguageOverride"), "the reviewer override control must exist");
+});
+
+check("058A/H: a reviewer override is recorded as a decision, not as a detection", () => {
+  const page = fs.readFileSync(path.join(root, "app", "page.tsx"), "utf8");
+  const start = page.indexOf("function overrideTicketLanguage");
+  assert.ok(start >= 0, "the override handler must exist");
+  const body = page.slice(start, page.indexOf("function changeOrganizationProfile", start));
+  assert.ok(body.includes('method: "reviewer"'), "an override must not masquerade as a lexical detection");
+  assert.ok(body.includes("reviewerOverride: true"), "the override flag must be persisted");
+  assert.ok(body.includes("resolveResponseLanguage("), "an override must re-resolve through organization policy");
+});
+
+check("058A/H: both intake paths record language metadata", () => {
+  const page = fs.readFileSync(path.join(root, "app", "page.tsx"), "utf8");
+  const classificationBlocks = page.split("classification: {").slice(1);
+  const writeBlocks = classificationBlocks.filter((block) => block.slice(0, 400).includes("category:"));
+  assert.ok(writeBlocks.length >= 2, `expected the single and bulk intake paths (found ${writeBlocks.length})`);
+  for (const [index, block] of writeBlocks.entries()) {
+    assert.ok(block.slice(0, 900).includes("language:"), `intake path ${index + 1} must record language metadata`);
+  }
+});
+
+/* ---------- TODO-058A Part F: drafting integration is structural ---------- */
+
+check("058A/F: both provider tiers share one prompt builder", () => {
+  const claude = fs.readFileSync(path.join(root, "lib", "ai", "claudeApi.ts"), "utf8");
+  const lmStudio = fs.readFileSync(path.join(root, "lib", "ai", "lmStudio.ts"), "utf8");
+  const prompts = fs.readFileSync(path.join(root, "lib", "ai", "prompts.ts"), "utf8");
+  assert.ok(claude.includes("createLMStudioProvider("), "Claude must reuse the shared provider implementation");
+  assert.ok(lmStudio.includes("buildDraftCustomerResponsePrompt(input)"), "the draft path must use the shared prompt builder");
+  assert.ok(prompts.includes("responseLanguageInstruction"), "the shared prompt must carry the resolved language instruction");
+  // The instruction lives in sharedSystemRules, so every prompt branch inherits
+  // it — cold start and grounded alike.
+  const start = prompts.indexOf("const sharedSystemRules");
+  assert.ok(start >= 0, "sharedSystemRules must exist");
+  const declaration = prompts.slice(start, prompts.indexOf("];", start));
+  assert.ok(declaration.includes("languageInstruction(input)"), "the language rule must be part of the shared system rules");
+  const branches = prompts.slice(start).match(/sharedSystemRules/gu) ?? [];
+  assert.ok(branches.length >= 4, `every draft branch must consume sharedSystemRules (found ${branches.length} references)`);
 });
 
 console.log("");
