@@ -1,6 +1,8 @@
 ﻿"use client";
 
 import { useState } from "react";
+import { SUPPORTED_LANGUAGES, languageLabel, type SupportedLanguageCode } from "@/lib/languageDetection";
+import type { TicketRecordLanguage } from "@/types/ticket";
 import {
   curatedDeveloperDemoScenarios,
   curatedScenarioText,
@@ -54,6 +56,10 @@ interface TicketWorkspaceProps {
   aiAdvisory: AIAdvisory | null;
   errorMessage: string;
   organizationProfile: OrganizationProfile;
+  /** TODO-058: detected/response language metadata for the active ticket. */
+  ticketLanguage?: TicketRecordLanguage | null;
+  /** TODO-058: reviewer correction of the detected language. */
+  onLanguageOverride?: (language: SupportedLanguageCode) => void;
   // LLM discrimination result (shown in OIP reasoning when a match was rejected)
   discriminationReasoning?: string | null;
   discriminatedMatchTitle?: string | null;
@@ -303,6 +309,8 @@ export function TicketWorkspace({
   reflectionDecision,
   knowledgeItems,
   domainClassification,
+  ticketLanguage,
+  onLanguageOverride,
   errorMessage,
   organizationProfile,
   discriminationReasoning,
@@ -746,6 +754,50 @@ export function TicketWorkspace({
                   ? "Cold start -- no organizational memory exists yet."
                   : "This ticket doesn't match existing knowledge. Approval will create a new entry."}
               </p>
+            </div>
+          )}
+
+          {/* TODO-058 — detected language, confidence, and reviewer override */}
+          {ticketLanguage && (
+            <div className={`mt-3 rounded-xl p-4 ${darkMode ? "bg-[#111827]" : "bg-slate-50"}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className={`text-xs font-bold uppercase tracking-wide ${darkMode ? "text-slate-400" : "text-slate-500"}`}>
+                    Language
+                  </p>
+                  <p className={`mt-1 text-sm font-semibold ${darkMode ? "text-slate-200" : "text-[#111827]"}`}>
+                    {languageLabel(ticketLanguage.detected as SupportedLanguageCode)}
+                    <span className={`ml-2 text-xs font-normal ${darkMode ? "text-slate-500" : "text-slate-400"}`}>
+                      {Math.round(ticketLanguage.confidence * 100)}% confidence · {ticketLanguage.method}
+                      {ticketLanguage.reviewerOverride ? " · reviewer set" : ""}
+                    </span>
+                  </p>
+                </div>
+                {ticketLanguage.responseLanguage && (
+                  <span
+                    className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${darkMode ? "bg-blue-900/40 text-blue-300" : "bg-blue-50 text-blue-700"}`}
+                  >
+                    Replying in {languageLabel(ticketLanguage.responseLanguage as SupportedLanguageCode)}
+                  </span>
+                )}
+              </div>
+              {onLanguageOverride && (
+                <div className="mt-2 flex items-center gap-2">
+                  <label className={`text-xs ${darkMode ? "text-slate-500" : "text-slate-400"}`} htmlFor="ticket-language-override">
+                    Correct the language
+                  </label>
+                  <select
+                    id="ticket-language-override"
+                    value={ticketLanguage.detected}
+                    onChange={(e) => onLanguageOverride(e.target.value as SupportedLanguageCode)}
+                    className={`rounded-lg border px-2 py-1 text-xs outline-none ${darkMode ? "border-[#2d3f52] bg-[#0b1220] text-slate-200" : "border-slate-200 bg-white text-[#111827]"}`}
+                  >
+                    {SUPPORTED_LANGUAGES.map((code) => (
+                      <option key={code} value={code}>{languageLabel(code)}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           )}
 

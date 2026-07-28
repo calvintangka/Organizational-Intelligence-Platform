@@ -1,5 +1,6 @@
 import type { OrganizationProfile } from "@/types";
 import { normalizeOrganizationProfile } from "@/lib/organizationProfile";
+import { responseLanguageInstruction } from "@/lib/languagePolicy";
 import type {
   AnalyzeTicketInput,
   CanonicalProblemInput,
@@ -49,6 +50,17 @@ function toneInstruction(profile: OrganizationProfile): string {
     default:
       return "Tone rule: Professional. Use clear business language, professional salutations, and avoid slang or overly casual phrasing.";
   }
+}
+
+/**
+ * TODO-058: emit the resolved response-language rule when the caller supplied
+ * one. Absent means the caller has not adopted language policy yet, and the
+ * prompt stays byte-identical to its pre-TODO-058 form.
+ */
+function languageInstruction(input: DraftCustomerResponseInput): string[] {
+  const decision = input.responseLanguage;
+  if (!decision) return [];
+  return [responseLanguageInstruction(decision)];
 }
 
 function preferredGreeting(profile: OrganizationProfile, senderName: string | null): string {
@@ -221,6 +233,11 @@ export function buildDraftCustomerResponsePrompt(input: DraftCustomerResponseInp
     "Keep the customer response concise and customer-facing.",
     "Keep customerResponse under 140 words, using short sentences and only the details needed by the customer.",
     toneInstruction(input.organizationProfile),
+    // TODO-058 Phase F: the response language is an organization decision that
+    // was resolved deterministically before this prompt was built. Passing it
+    // explicitly stops the provider from picking a language by mirroring the
+    // ticket, so every provider produces the same policy-compliant language.
+    ...languageInstruction(input),
     ...draftStructureInstructions(input),
     ...noUnvalidatedCommitmentsRule(input),
     ...emailRecoveryGuardrails,

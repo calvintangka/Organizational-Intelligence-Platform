@@ -2,6 +2,8 @@ import "server-only";
 
 import { requireOrganizationId } from "@/lib/organizationId";
 import { prisma } from "@/lib/server/prisma";
+import { normalizeConceptVocabulary } from "@/lib/conceptVocabulary";
+import { resolveLanguagePolicy } from "@/lib/languagePolicy";
 import type {
   EmergingPattern,
   IntelligenceLogEntry,
@@ -125,6 +127,14 @@ function mapOrganization(row: PrismaOrganization): OrganizationProfile {
     escalationRules: stringArray(settings.escalationRules),
     accentColor: optionalString(settings.accentColor),
     logoInitials: optionalString(settings.logoInitials),
+    // TODO-058: optional language settings. Absent stays absent so an
+    // organization that never configured them is byte-identical to before.
+    ...(Array.isArray(settings.conceptVocabulary)
+      ? { conceptVocabulary: normalizeConceptVocabulary(settings.conceptVocabulary) }
+      : {}),
+    ...(settings.languagePolicy && typeof settings.languagePolicy === "object" && !Array.isArray(settings.languagePolicy)
+      ? { languagePolicy: resolveLanguagePolicy({ languagePolicy: settings.languagePolicy as OrganizationProfile["languagePolicy"] }) }
+      : {}),
     createdAt: iso(row.createdAt),
     updatedAt: iso(row.updatedAt),
     profileRevision: typeof settings._profileRevision === "number" ? settings._profileRevision : 0
@@ -613,10 +623,35 @@ function toOrganizationRow(profile: OrganizationProfile): {
       escalationRules: profile.escalationRules ?? [],
       accentColor: profile.accentColor,
       logoInitials: profile.logoInitials,
+      // TODO-058: language settings are optional. Persist them only when the
+      // caller actually carries them, so a client that predates TODO-058 cannot
+      // erase a configured policy or concept vocabulary by omission — the
+      // failure mode TODO-056 repaired for the other settings arrays.
+      ...(profile.conceptVocabulary !== undefined ? { conceptVocabulary: profile.conceptVocabulary } : {}),
+      ...(profile.languagePolicy !== undefined ? { languagePolicy: profile.languagePolicy } : {}),
       _profileRevision: profile.profileRevision ?? 0
     }),
     createdAt: optionalDate(profile.createdAt) ?? new Date()
   };
+}
+
+/**
+ * TODO-058: optional settings keys that a client predating this feature does not
+ * send. Preserve the stored value instead of dropping it, so an older client
+ * cannot silently erase a configured policy or concept vocabulary — the exact
+ * failure mode TODO-056 had to repair for the other settings fields.
+ */
+const PRESERVE_ON_OMISSION = ["conceptVocabulary", "languagePolicy"] as const;
+
+function carryForwardOptionalSettings(
+  nextSettings: Record<string, unknown>,
+  currentSettings: Record<string, unknown>
+): void {
+  for (const key of PRESERVE_ON_OMISSION) {
+    if (nextSettings[key] === undefined && currentSettings[key] !== undefined) {
+      nextSettings[key] = currentSettings[key];
+    }
+  }
 }
 
 const KNOWLEDGE_LIFECYCLES = ["active", "candidate", "deprecated"] as const;
@@ -813,6 +848,7 @@ export async function upsertOrganizationProfile(profile: OrganizationProfile): P
       throw conflict("This organization profile is stale and was not saved. Reload the latest profile before editing it.");
     }
     const nextSettings = asRecord(row.settings);
+    carryForwardOptionalSettings(nextSettings, currentSettings);
     nextSettings._profileRevision = existing ? currentRevision + 1 : Math.max(0, incomingRevision);
     return prisma.organization.upsert({
       where: { id: row.id },
@@ -839,6 +875,7 @@ export async function upsertOrganizationProfiles(list: OrganizationProfile[]): P
           throw conflict("This organization list contains a stale profile and was not saved. Reload the latest organizations before editing them.");
         }
         const nextSettings = asRecord(row.settings);
+        carryForwardOptionalSettings(nextSettings, currentSettings);
         nextSettings._profileRevision = existing ? currentRevision + 1 : Math.max(0, incomingRevision);
         results.push(await tx.organization.upsert({
           where: { id: row.id },

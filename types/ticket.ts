@@ -19,6 +19,26 @@ export interface TicketRecordClassification {
   canonicalProblem: string | null;
   classifiedBy: "deterministic" | "llm_fallback";
   confidence: string;
+  /**
+   * TODO-058: detected language of the INCOMING ticket, plus the language the
+   * outgoing draft used. Both are metadata about this ticket only — knowledge,
+   * canonicals, and lessons stay language-neutral and are never partitioned by
+   * language. Optional so historical rows remain valid without a backfill.
+   */
+  language?: TicketRecordLanguage;
+}
+
+export interface TicketRecordLanguage {
+  /** Detected language of the customer's message (ISO 639-1). */
+  detected: string;
+  /** 0..1 detector confidence. */
+  confidence: number;
+  /** How the detection was reached. */
+  method: "script" | "lexical" | "fallback";
+  /** Language the outgoing draft was written in, once a draft exists. */
+  responseLanguage?: string;
+  /** Set when a human reviewer corrected the detected language. */
+  reviewerOverride?: boolean;
 }
 
 export interface TicketRecordMemoryMatch {

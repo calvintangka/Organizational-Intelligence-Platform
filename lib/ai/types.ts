@@ -1,3 +1,4 @@
+import type { ResponseLanguageDecision } from "@/lib/languagePolicy";
 import type {
   AIDiagnostics,
   AIAnalysisSuggestion,
@@ -93,6 +94,12 @@ export interface DraftCustomerResponseInput {
   organizationProfile: OrganizationProfile;
   deterministicUnderstanding: Understanding;
   canonicalProblemTitle: string;
+  /**
+   * TODO-058: the language the draft must be written in, resolved from the
+   * organization's policy before any provider is called. Optional so callers
+   * that have not adopted language policy behave exactly as before.
+   */
+  responseLanguage?: ResponseLanguageDecision;
   groundingMode: DraftGroundingMode;
   groundingLabel: string;
   groundingContent: string;

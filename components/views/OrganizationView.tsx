@@ -11,6 +11,9 @@ import {
   normalizeAccentColor,
   resolveAutoResolutionThreshold
 } from "@/lib/organizationProfile";
+import { SUPPORTED_LANGUAGES, languageLabel, type SupportedLanguageCode } from "@/lib/languageDetection";
+import { resolveLanguagePolicy } from "@/lib/languagePolicy";
+import { resolveConceptVocabulary } from "@/lib/conceptVocabulary";
 
 interface OrganizationViewProps {
   profile: OrganizationProfile;
@@ -92,6 +95,11 @@ export function OrganizationView({
   // defined number on every render — including one where an upstream profile
   // has not yet supplied the field.
   const autoResolutionThreshold = resolveAutoResolutionThreshold(profile.autoResolutionThreshold);
+  // TODO-058: a profile that has never configured language settings resolves to
+  // the product default, so this section renders identically for every existing
+  // organization until someone actually changes something.
+  const languagePolicy = resolveLanguagePolicy(profile);
+  const concepts = resolveConceptVocabulary(profile);
 
   const [vocabInput, setVocabInput] = useState("");
   const [addOpen, setAddOpen] = useState(false);
@@ -130,6 +138,12 @@ export function OrganizationView({
 
   function removeVocabTerm(term: string) {
     onChange({ ...profile, businessVocabulary: vocabulary.filter((t) => t !== term) });
+  }
+
+  /** TODO-058: patch one language-policy field, materializing the resolved
+   *  defaults so a partial stored policy can never be written. */
+  function changeLanguagePolicy(patch: Partial<typeof languagePolicy>) {
+    onChange({ ...profile, languagePolicy: { ...languagePolicy, ...patch } });
   }
 
   function handleDelete(org: OrganizationProfile) {
@@ -435,6 +449,125 @@ export function OrganizationView({
               ))}
             </select>
           </div>
+        </div>
+      </div>
+
+      {/* TODO-058 — Language */}
+      <div className={`${card} mb-4`}>
+        <h2 className={heading}>Language</h2>
+        <p className={sub}>
+          One shared organizational memory serves every language. These settings control the language OIP replies in —
+          they never split knowledge, canonical problems, or lessons by language.
+        </p>
+
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <div>
+            <p className={label}>Organization language</p>
+            <select
+              className={input}
+              value={languagePolicy.organizationLanguage}
+              onChange={(e) => changeLanguagePolicy({ organizationLanguage: e.target.value as SupportedLanguageCode })}
+            >
+              {SUPPORTED_LANGUAGES.map((code) => (
+                <option key={code} value={code}>{languageLabel(code)}</option>
+              ))}
+            </select>
+            <p className={`mt-1 text-xs ${darkMode ? "text-slate-500" : "text-slate-400"}`}>
+              Used when detection is not confident enough to choose.
+            </p>
+          </div>
+
+          <div>
+            <p className={label}>Reply language</p>
+            <select
+              className={input}
+              value={languagePolicy.responseMode}
+              onChange={(e) => changeLanguagePolicy({ responseMode: e.target.value as typeof languagePolicy.responseMode })}
+            >
+              <option value="customer_language">Reply in the customer&apos;s language</option>
+              <option value="organization_language">Always reply in the organization language</option>
+              <option value="fixed_language">Always reply in a fixed language</option>
+            </select>
+          </div>
+
+          {languagePolicy.responseMode === "fixed_language" && (
+            <div>
+              <p className={label}>Fixed reply language</p>
+              <select
+                className={input}
+                value={languagePolicy.fixedResponseLanguage ?? languagePolicy.organizationLanguage}
+                onChange={(e) => changeLanguagePolicy({ fixedResponseLanguage: e.target.value as SupportedLanguageCode })}
+              >
+                {SUPPORTED_LANGUAGES.map((code) => (
+                  <option key={code} value={code}>{languageLabel(code)}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <p className={label}>Internal documentation language</p>
+            <select
+              className={input}
+              value={languagePolicy.internalLanguage}
+              onChange={(e) => changeLanguagePolicy({ internalLanguage: e.target.value as SupportedLanguageCode })}
+            >
+              {SUPPORTED_LANGUAGES.map((code) => (
+                <option key={code} value={code}>{languageLabel(code)}</option>
+              ))}
+            </select>
+            <p className={`mt-1 text-xs ${darkMode ? "text-slate-500" : "text-slate-400"}`}>
+              Language for lessons and internal guidance.
+            </p>
+          </div>
+
+          <div>
+            <p className={label}>Minimum detection confidence</p>
+            <div className="mt-1 flex items-center gap-3">
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={Math.round(languagePolicy.minimumDetectionConfidence * 100)}
+                onChange={(e) => changeLanguagePolicy({ minimumDetectionConfidence: Number(e.target.value) / 100 })}
+                className="flex-1 accent-[#2563EB]"
+              />
+              <span className={`w-10 text-sm font-bold ${darkMode ? "text-white" : "text-[#111827]"}`}>
+                {Math.round(languagePolicy.minimumDetectionConfidence * 100)}%
+              </span>
+            </div>
+            <p className={`mt-1 text-xs ${darkMode ? "text-slate-500" : "text-slate-400"}`}>
+              Below this, OIP replies in the organization language instead of guessing.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <p className={label}>Business concepts</p>
+          <p className={`text-xs ${darkMode ? "text-slate-500" : "text-slate-400"}`}>
+            Each concept carries every language&apos;s wording, so a concept is never duplicated per language.
+            {" "}{concepts.length} concept{concepts.length === 1 ? "" : "s"} in force.
+          </p>
+          <div className="mt-3 space-y-2">
+            {concepts.slice(0, 6).map((concept) => (
+              <div
+                key={concept.id}
+                className={`rounded-xl border px-3 py-2 ${darkMode ? "border-[#2d3f52] bg-[#111827]" : "border-slate-200 bg-slate-50"}`}
+              >
+                <p className={`text-sm font-semibold ${darkMode ? "text-white" : "text-[#111827]"}`}>{concept.label}</p>
+                <p className={`mt-0.5 text-xs ${darkMode ? "text-slate-400" : "text-slate-500"}`}>
+                  {concept.aliases.slice(0, 8).join(" · ")}
+                  {concept.aliases.length > 8 ? ` · +${concept.aliases.length - 8} more` : ""}
+                </p>
+              </div>
+            ))}
+          </div>
+          {concepts.length > 6 && (
+            <p className={`mt-2 text-xs ${darkMode ? "text-slate-500" : "text-slate-400"}`}>
+              +{concepts.length - 6} more built-in concepts.
+            </p>
+          )}
         </div>
       </div>
 

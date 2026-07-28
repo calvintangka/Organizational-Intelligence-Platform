@@ -85,6 +85,8 @@ import {
   normalizeOrganizationProfile,
 } from "@/lib/organizationProfile";
 import { useOrganizationDocumentTitle } from "@/lib/documentTitle";
+import { detectLanguage, isSupportedLanguage, languageLabel, type SupportedLanguageCode } from "@/lib/languageDetection";
+import { resolveLanguagePolicy, resolveResponseLanguage } from "@/lib/languagePolicy";
 import {
   createTicketRecord,
   computeEditDistance,
@@ -390,6 +392,24 @@ type AuthUser = { id: string; name: string; email: string };
  * silently produced partial profiles with undefined fields in React state.
  */
 type ActiveOrganizationContext = { id: string; name: string; industry: string; description: string };
+
+/**
+ * TODO-058: resolve the incoming ticket's language and the language the reply
+ * must be written in.
+ *
+ * Deterministic and provider-independent, so the decision exists even when every
+ * AI tier is unavailable. The result is metadata about THIS ticket — it never
+ * selects, partitions, or forks organizational memory, which stays
+ * language-neutral.
+ */
+function resolveTicketLanguage(ticket: Ticket, profile: OrganizationProfile) {
+  const policy = resolveLanguagePolicy(profile);
+  const defaultLanguage = isSupportedLanguage(policy.organizationLanguage)
+    ? policy.organizationLanguage
+    : undefined;
+  const detection = detectLanguage(`${ticket.subject ?? ""} ${ticket.description ?? ""}`.trim(), { defaultLanguage });
+  return { policy, detection, response: resolveResponseLanguage(policy, detection) };
+}
 
 function LoginScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUser) => void }) {
   const [email, setEmail] = useState("");
@@ -1730,6 +1750,39 @@ export default function Home() {
     if (confirmed) resetOrganization();
   }
 
+  /**
+   * TODO-058 Phase H: a reviewer corrects the detected language. The override is
+   * authoritative (confidence 1) and re-resolves the response language through
+   * the same organization policy, so a correction cannot bypass the policy.
+   * Ticket metadata only — organizational memory is untouched.
+   */
+  function overrideTicketLanguage(language: SupportedLanguageCode) {
+    if (!activeTicketRecord?.classification) return;
+    const policy = resolveLanguagePolicy(organizationProfile);
+    const response = resolveResponseLanguage(policy, { language, confidence: 1 });
+    const updated: TicketRecord = {
+      ...activeTicketRecord,
+      classification: {
+        ...activeTicketRecord.classification,
+        language: {
+          detected: language,
+          confidence: 1,
+          method: "lexical",
+          responseLanguage: response.language,
+          reviewerOverride: true,
+        },
+      },
+    };
+    setActiveTicketRecord(updated);
+    persistTicketRecord(updated);
+    addLogEntries([
+      createLogEntry(
+        `Reviewer set ticket language: ${languageLabel(language)}`,
+        `${updated.ticketId} — ${response.explanation}`
+      ),
+    ]);
+  }
+
   function changeOrganizationProfile(profile: OrganizationProfile) {
     const normalizedProfile = normalizeOrganizationProfile(profile);
     setOrganizationProfile(normalizedProfile);
@@ -2403,6 +2456,10 @@ export default function Home() {
       groundingMode: draftMode,
       groundingLabel,
       groundingContent,
+      // TODO-058 Phase F: the provider is told which language to write in
+      // rather than inferring it from the ticket, so every provider produces
+      // the same policy-compliant language.
+      responseLanguage: resolveTicketLanguage(ticket, organizationProfile).response,
       lessonGrounding: groundingLesson
         ? {
             rootCause: groundingLesson.rootCause,
@@ -3232,6 +3289,9 @@ export default function Home() {
     const analysis = understandingToAnalysis(enrichedUnderstanding);
 
     // Update record with classification
+    // TODO-058: language is recorded as ticket metadata alongside the
+    // classification. Knowledge, canonicals, and lessons stay language-neutral.
+    const ticketLanguage = resolveTicketLanguage(ticket, organizationProfile);
     record = {
       ...record,
       classification: {
@@ -3240,6 +3300,12 @@ export default function Home() {
         canonicalProblem: canonicalProblem.title,
         classifiedBy: "deterministic",
         confidence: domain.confidence,
+        language: {
+          detected: ticketLanguage.detection.language,
+          confidence: ticketLanguage.detection.confidence,
+          method: ticketLanguage.detection.method,
+          responseLanguage: ticketLanguage.response.language,
+        },
       },
     };
     setActiveTicketRecord(record);
@@ -3250,6 +3316,10 @@ export default function Home() {
     setSelectedTicket({ ...ticket, status: "analyzed" });
     addLogEntries([
       createLogEntry("Observed ticket input", `Ticket: ${tId}`),
+      createLogEntry(
+        `Detected language: ${languageLabel(ticketLanguage.detection.language)}`,
+        `Confidence ${ticketLanguage.detection.confidence.toFixed(2)} (${ticketLanguage.detection.method}). ${ticketLanguage.response.explanation}`
+      ),
       createLogEntry(`Extracted category: ${enrichedUnderstanding.category}`, `Urgency: ${enrichedUnderstanding.urgency}`),
       createLogEntry("Canonical problem proposed", canonicalProblem.title),
     ]);
@@ -3483,6 +3553,8 @@ export default function Home() {
                   knowledgeItems={knowledgeItems}
                   businessRelevance={businessRelevance}
                   domainClassification={domainClassification}
+                  ticketLanguage={activeTicketRecord?.classification?.language ?? null}
+                  onLanguageOverride={overrideTicketLanguage}
                   aiAdvisory={aiAdvisory}
                   errorMessage={errorMessage}
                   organizationProfile={organizationProfile}

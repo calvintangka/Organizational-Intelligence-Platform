@@ -56,7 +56,13 @@ export type {
 export type { Metrics, OrgMetrics } from "./metrics";
 export type { Observation, ExtractedTicketFields, Understanding, ReasoningSummary, Confidence, BusinessRelevance, BusinessDomainClassification, IntelligenceLogEntry } from "./oip";
 export type { EmergingPattern, EmergingPatternExample } from "./patterns";
-export type { OrganizationProfile, CustomerTone } from "./organization";
+export type {
+  OrganizationProfile,
+  CustomerTone,
+  BusinessConcept,
+  LanguagePolicy,
+  ResponseLanguageMode
+} from "./organization";
 export type {
   BlockedMigrationExport,
   MigrationExportCounts,

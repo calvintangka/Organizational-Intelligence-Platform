@@ -1,5 +1,7 @@
 import { defaultOrganizationProfile, seedOrganizationProfiles } from "@/data/seedOrganizationProfiles";
 import type { OrganizationProfile } from "@/types";
+import { normalizeConceptVocabulary } from "@/lib/conceptVocabulary";
+import { resolveLanguagePolicy } from "@/lib/languagePolicy";
 
 export const ORGANIZATION_PROFILE_KEY = "oip.organizationProfile.v1";
 export const ORGANIZATION_LIST_KEY = "oip.organizationList.v1";
@@ -87,6 +89,15 @@ export function normalizeOrganizationProfile(profile: OrganizationProfile): Orga
     autoResolutionThreshold: Math.max(0, Math.min(100, Math.round(migratedProfile.autoResolutionThreshold ?? DEFAULT_AUTO_RESOLUTION_THRESHOLD))),
     accentColor: normalizeAccentColor(migratedProfile.accentColor),
     logoInitials: normalizeInitials(migratedProfile.logoInitials),
+    // TODO-058: normalize language settings only when the profile carries them.
+    // Absent must stay absent — materializing a default here would make every
+    // existing profile look edited and would write a policy nobody configured.
+    ...(migratedProfile.conceptVocabulary !== undefined
+      ? { conceptVocabulary: normalizeConceptVocabulary(migratedProfile.conceptVocabulary) }
+      : {}),
+    ...(migratedProfile.languagePolicy !== undefined
+      ? { languagePolicy: resolveLanguagePolicy(migratedProfile) }
+      : {}),
     createdAt: migratedProfile.createdAt ?? now,
     updatedAt: now
   };
