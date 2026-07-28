@@ -75,6 +75,7 @@
     "probe:todo053-tiebreak-determinism": "node scripts/todo053-tiebreak-determinism-probe.cjs",
     "probe:todo051-match-explainability": "node scripts/todo051-match-explainability-probe.cjs",
     "probe:todo038-claude-failover": "node scripts/todo038-claude-failover-probe.cjs",
+    "probe:todo055-document-title": "node scripts/todo055-document-title-probe.cjs",
     "probe:todo056-controlled-threshold": "node scripts/todo056-controlled-threshold-probe.cjs",
     "restore:maesa-profile-vocabulary": "node scripts/restore-maesa-profile-vocabulary.cjs",
     "restore:organization-profile-settings": "node scripts/restore-organization-profile-settings.cjs",

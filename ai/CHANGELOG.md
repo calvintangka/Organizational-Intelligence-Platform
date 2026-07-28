@@ -1,5 +1,15 @@
 # Change Log
 
+## [2026-07-28] TODO-055 Dynamic Browser Tab Title by Active Organization
+
+**Task/Prompt:** Make the browser tab title reflect the active organization instead of the static "Maesa Tech". Smallest correct solution; no switching, auth, API, persistence, or data changes.
+
+- Root cause: `app/layout.tsx` exported a static Next.js Metadata API `title: "Maesa Tech"`. Metadata is resolved per route on the server, and the whole app is one client route (`app/page.tsx`), so switching organizations never re-evaluated it. The title was effectively fixed for the session.
+- New `lib/documentTitle.ts`: `APP_TITLE` ("OIP"), `organizationDocumentTitle()` formatting `<Organization Name> | OIP` with a bare-`OIP` fallback for null/undefined/blank/non-string, and `useOrganizationDocumentTitle()`, which writes `document.title` from an effect keyed on the computed title and skips the write when it already matches.
+- `app/page.tsx` calls the hook with `authStatus === "authenticated" && hydrated ? organizationProfile.name : null`. It reads organization state the app already holds — no new request, no polling, no localStorage, no new global state. `app/layout.tsx` now uses `APP_TITLE` as the pre-hydration fallback so no organization name is baked into the build.
+- Verified live: a fresh load goes `""` → `"OIP"` → `"OIP Developer Demo | OIP"`, never flashing another organization. Switch cycle Developer Demo → Maesa → FastDrop → Developer Demo updated the tab every time with no refresh. Refresh inside each of the three organizations produced the correct title immediately. Two view navigations produced zero `document.title` writes; a switch produces exactly two (a 140 ms neutral `"OIP"` while the incoming organization loads, then its name) — brief and never a stale organization name.
+- Added `probe:todo055-document-title` (format, fallbacks, no id/environment leakage, distinct titles per organization, layout carries no organization name, page gates on auth + hydration). Verification: TODO-055, TODO-056, BUG-009, organization-switching and active-organization probes, `tsc --noEmit`, strict-unused, and production build pass; built HTML contains no organization name. Zero database writes — Developer Demo profile revision unchanged at 33 across six switches.
+
 ## [2026-07-28] TODO-056 Follow-up — Organization Profile Settings Restore
 
 **Task/Prompt:** Confirm and repair the organization profile settings arrays that the pre-TODO-056 partial-profile save erased in PostgreSQL. Targeted and idempotent; no reset, no reseed, no knowledge/lesson/trust/ticket changes.

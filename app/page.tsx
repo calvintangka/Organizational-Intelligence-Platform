@@ -84,6 +84,7 @@ import {
   normalizeAccentColor,
   normalizeOrganizationProfile,
 } from "@/lib/organizationProfile";
+import { useOrganizationDocumentTitle } from "@/lib/documentTitle";
 import {
   createTicketRecord,
   computeEditDistance,
@@ -463,6 +464,15 @@ export default function Home() {
   const [migrationWarning, setMigrationWarning] = useState("");
   // BUG-009: non-blocking notice shown after stale-profile conflict recovery.
   const [profileConflictNotice, setProfileConflictNotice] = useState("");
+
+  // TODO-055: the browser tab follows the active organization. It reads the
+  // organization state the app already holds — no extra request, no polling, no
+  // extra global state. Anything short of a hydrated authenticated organization
+  // shows the bare product name, so a refresh never flashes the seed
+  // organization's name and the login screen stays unbranded.
+  useOrganizationDocumentTitle(
+    authStatus === "authenticated" && hydrated ? organizationProfile.name : null
+  );
 
   // OIP engine state
   const [businessRelevance, setBusinessRelevance] = useState<BusinessRelevance | null>(null);
