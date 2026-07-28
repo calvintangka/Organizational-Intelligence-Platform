@@ -1,5 +1,15 @@
 # Change Log
 
+## [2026-07-28] TODO-056 Follow-up — Organization Profile Settings Restore
+
+**Task/Prompt:** Confirm and repair the organization profile settings arrays that the pre-TODO-056 partial-profile save erased in PostgreSQL. Targeted and idempotent; no reset, no reseed, no knowledge/lesson/trust/ticket changes.
+
+- Confirmed and larger than first reported. Developer Demo had lost all eight array fields (products, services, supportedDomains, businessVocabulary, supportedIssueTypes, outOfScopeTopics, supportBoundaries, escalationRules). Maesa and FastDrop had lost the four the earlier `restore:maesa-profile-vocabulary` did not cover (supportedIssueTypes, outOfScopeTopics, supportBoundaries, escalationRules). `test-oip-regression` is intact — its empty `outOfScopeTopics` matches its own seed.
+- New `restore:organization-profile-settings`, modelled on the Maesa script: jsonb merge of only the restored keys, a field patched only when stored is EMPTY and the seed is non-empty (so reruns are no-ops and no deliberate edit is clobbered), read-back through `getOrganizationProfile`, and assertions that identity columns, unrelated settings keys, knowledge/candidates/tickets/validations/memory/trust-evidence/patterns counts, summed trust, and every other organization row are unchanged.
+- Scalar settings are deliberately NOT restored and only reported, because they are user-editable and a stored value cannot be distinguished from a deliberate choice: Developer Demo `accentColor` #2563EB vs seed #7C3AED and absent `logoInitials` vs seed "OIP"; FastDrop `customerTone` "professional" vs seed "friendly" and absent `accentColor` vs seed #F59E0B. `autoResolutionThreshold` was left untouched everywhere (Developer Demo stays 100).
+- Verified the repair holds: two subsequent profile saves from the Organization page (revision 31 → 33) preserved all eight arrays, where pre-fix saves erased them. Organization page renders the restored vocabulary.
+- Probes after restore: developer-demo integrity byte-identical to its pre-restore baseline (3 pre-existing findings, all traceable to live ticket `OIP-20260728-5001`, none introduced here), developer-demo mature retrieval 0 FAIL, TODO-025G curated scenarios pass, BUG-008 retrieval and semantic pass, TODO-056 probe passes, `tsc --noEmit` clean.
+
 ## [2026-07-28] TODO-056 Organization Settings Controlled Input Stability
 
 **Task/Prompt:** Stop the React "changing an uncontrolled input to be controlled" warning on the Organization auto-resolution threshold slider, without touching organization-switching logic, persistence architecture, conflict detection, or mature data.
