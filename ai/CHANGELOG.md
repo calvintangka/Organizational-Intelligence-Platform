@@ -1,5 +1,18 @@
 # Change Log
 
+## [2026-07-29] TODO-058B Language-Neutral Retrieval
+
+**Task/Prompt:** Make the deterministic Organizational Memory lookup path language-neutral so equivalent tickets in ten languages reach the same canonical and memory. Do not rebuild TODO-058A.
+
+- **10/10 languages now reach canonical `Login Issue`, up from 4/10**, verified through the real production functions (`assessBusinessRelevanceForProfile`, `understandForProfile`, `identifyCanonicalProblem`) across four problem families in ten languages.
+- **Backward compatibility by construction.** Concept evidence applies ONLY when the English lexical layer found nothing across every allowed category, so an English ticket never enters the concept path and no existing English score or canonical selection can move. The probe asserts English tickets carry zero concept evidence, and that concept assist fires for exactly `es, fr, de, ja, ko, zh` — the six languages the Phase A audit measured failing.
+- New `lib/conceptExtraction.ts` (Part B contract): one extraction per ticket, reused by relevance, understanding, and lesson matching. Never mutates or translates the ticket, never calls a provider, never invents concepts, attributes organization vs built-in aliases, and does not let a repeated alias inflate evidence.
+- **A safety regression was caught and fixed mid-change.** The first Part F implementation gated the cross-language lesson path per-LESSON instead of per-TICKET. English text also produces concepts, so English tickets fell into it: TODO-046 dropped to `unsafe=1/14` and a **forged lesson became authorized**. Re-gated on the ticket carrying no lexical evidence at all — TODO-046 is back to `COMPLETED`, `unsafe=0/14`, forged lesson blocked.
+- **Three further defects found by the new probe and fixed:** a bare URL leaked the `login` concept (identifiers are now stripped before extraction); a single bare alias ("sandi") authorized a category (minimum concept evidence is now 2); and the evidence rule was script-blind, so the German compound `Lieferverzögerung` and CJK terms scored as weakly as a stray noun (a multi-word phrase, a long Latin compound, or a non-Latin term of 3+ characters now counts as specific).
+- Added `probe:todo058b-language-neutral-retrieval` — 16 offline checks over production functions: four families × ten languages, determinism, no language-scoped ids, English baseline preservation, and negative/ambiguous cases.
+- **Zero schema change.** Concept signals are derived at runtime, so the 180 seeded Developer Demo lessons need no migration. Regression: TODO-046, BUG-008 retrieval + semantic, BUG-010, TODO-019, TODO-039, TODO-040, TODO-047, TODO-048, TODO-049, TODO-050, TODO-051, TODO-052, TODO-053, TODO-058A, and mature English retrieval (33 PASS / 0 FAIL) all pass; `tsc`, strict-unused, and build clean. Concept extraction adds ~0.24 ms per ticket. Mature data byte-identical.
+- **Not complete.** Canonical SUB-selection inside a category still runs off English-regex intent inference, so Indonesian "faktur duplikat" reaches the general billing canonical rather than the invoice-specific one — recorded as an asserted known gap so it cannot silently widen. Cross-language lesson matching currently reaches CJK only. Parts J/K/L (reflection language, cross-language dedup, memory promotion) are not implemented.
+
 ## [2026-07-29] TODO-058A Multilingual Foundation Verification & Closeout
 
 **Task/Prompt:** Formally verify and close the TODO-058 foundation (commit 2c57a11) against the real code before TODO-058B changes matching and retrieval. Do not expand into Phases C/D/G.

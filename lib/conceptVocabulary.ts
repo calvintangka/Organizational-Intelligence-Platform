@@ -166,6 +166,86 @@ export const BUILT_IN_CONCEPTS: BusinessConcept[] = [
     ]
   },
   {
+    id: "device_replacement",
+    label: "Device replacement",
+    aliases: [
+      "new device", "new phone", "replaced my phone", "device replacement", "new laptop", "changed devices",
+      "perangkat baru", "ganti perangkat", "mengganti perangkat", "ponsel baru", "hp baru",
+      "nuevo dispositivo", "cambie de dispositivo", "telefono nuevo",
+      "nouvel appareil", "change d appareil", "nouveau telephone",
+      "neues gerat", "gerat gewechselt", "neues handy",
+      "novo dispositivo", "troquei de aparelho", "celular novo",
+      "nuovo dispositivo", "cambiato dispositivo", "nuovo telefono",
+      "新しいデバイス", "機種変更", "端末を変更",
+      "새 기기", "기기 변경", "휴대폰 교체",
+      "新设备", "更换设备", "换了手机"
+    ]
+  },
+  {
+    id: "delivery_delay",
+    label: "Delivery delay",
+    aliases: [
+      "delivery delay", "delayed delivery", "package is late", "shipment delayed", "not delivered", "late delivery",
+      "keterlambatan pengiriman", "pengiriman terlambat", "paket terlambat", "belum sampai",
+      "retraso en la entrega", "envio retrasado", "paquete retrasado", "no ha llegado",
+      "retard de livraison", "livraison en retard", "colis en retard",
+      "lieferverzogerung", "lieferung verspatet", "paket verspatet",
+      "atraso na entrega", "entrega atrasada", "encomenda atrasada",
+      "ritardo nella consegna", "consegna in ritardo", "pacco in ritardo",
+      "配達遅延", "配送が遅れ", "荷物が届かない",
+      "배송 지연", "배송이 늦어", "택배 지연",
+      "配送延迟", "快递延误", "包裹延迟"
+    ]
+  },
+  {
+    id: "duplicate_record",
+    label: "Duplicate record",
+    aliases: [
+      "duplicate record", "duplicate records", "duplicated entry", "duplicate entries", "created twice", "double entry",
+      "data duplikat", "duplikat", "catatan ganda", "terduplikasi", "dua kali",
+      "registro duplicado", "registros duplicados", "entrada duplicada",
+      "enregistrement en double", "doublon", "doublons",
+      "doppelter datensatz", "duplikat eintrag", "doppelte eintrage",
+      "registro duplicado", "registros duplicados", "entrada duplicada",
+      "record duplicato", "record duplicati", "voce duplicata",
+      "重複レコード", "重複データ", "二重登録",
+      "중복 레코드", "중복 데이터", "중복 등록",
+      "重复记录", "重复数据", "重复条目"
+    ]
+  },
+  {
+    id: "permission",
+    label: "Permission",
+    aliases: [
+      "permission", "permissions", "role", "access rights", "privileges",
+      "izin", "hak akses", "peran",
+      "permiso", "permisos", "rol", "derechos de acceso",
+      "permission", "autorisation", "role", "droits d acces",
+      "berechtigung", "berechtigungen", "rolle", "zugriffsrechte",
+      "permissao", "permissoes", "papel", "direitos de acesso",
+      "autorizzazione", "autorizzazioni", "ruolo", "diritti di accesso",
+      "権限", "アクセス権", "ロール",
+      "권한", "접근 권한", "역할",
+      "权限", "访问权限", "角色"
+    ]
+  },
+  {
+    id: "report_export",
+    label: "Reporting and export",
+    aliases: [
+      "report", "reporting", "export", "dashboard", "csv export", "download report",
+      "laporan", "ekspor", "unduh laporan", "dasbor",
+      "informe", "reporte", "exportar", "exportacion", "panel",
+      "rapport", "exporter", "exportation", "tableau de bord",
+      "bericht", "exportieren", "export", "ubersicht",
+      "relatorio", "exportar", "exportacao", "painel",
+      "rapporto", "esportare", "esportazione", "cruscotto",
+      "レポート", "エクスポート", "ダッシュボード",
+      "보고서", "내보내기", "대시보드",
+      "报表", "报告", "导出", "仪表板"
+    ]
+  },
+  {
     id: "verification_code",
     label: "Verification code",
     aliases: [

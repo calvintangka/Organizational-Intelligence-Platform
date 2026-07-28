@@ -3,6 +3,14 @@ import type { ExtractedTicketFields, Observation, Understanding, ReasoningSummar
 import type { KnowledgeMatch, OrganizationProfile } from "@/types";
 import { defaultOrganizationProfile } from "@/data/seedOrganizationProfiles";
 import { normalizeOrganizationProfile, profileKeywordBank } from "@/lib/organizationProfile";
+import {
+  conceptEvidenceFor,
+  conceptsPresent,
+  extractConcepts,
+  onlyGenericConcepts,
+  GENERIC_CONCEPT_IDS,
+  type ConceptExtraction
+} from "@/lib/conceptExtraction";
 import { containsSignal } from "@/lib/textSignal";
 import { extractCustomerContext } from "@/lib/customerContext";
 import { relevanceStrengthForScore } from "@/lib/relevanceLabels";
@@ -95,6 +103,54 @@ const LEGAL_SUBSTANCE_SIGNALS = [
   "file a claim"
 ];
 
+/**
+ * TODO-058B Parts D/E — language-neutral concept evidence per understanding
+ * category. The English `keywords` on each rule are untouched; these are the
+ * SAME categories reached through concepts instead of English wording, so every
+ * language converges on one category and therefore one canonical id. There is
+ * deliberately no "Login (JA)" — a language never creates a category.
+ */
+const CATEGORY_CONCEPTS: Record<string, readonly string[]> = {
+  Login: ["login", "password"],
+  "Two-Factor Auth": ["verification_code", "device_replacement"],
+  "Account Access": ["account", "access_denied"],
+  "Permissions & Access": ["permission", "access_denied"],
+  Billing: ["invoice", "payment"],
+  Subscription: ["subscription"],
+  Refund: ["refund"],
+  "Delivery Delay": ["delivery_delay"],
+  "Reporting & Exports": ["report_export"]
+};
+
+/**
+ * Concept evidence is applied ONLY when the English lexical layer found nothing
+ * at all across every allowed category.
+ *
+ * This is what makes TODO-058B backward compatible by construction rather than
+ * by hope: if an English ticket scored anything today, it takes the identical
+ * path and reaches the identical category, so no existing English score can
+ * drop and no existing canonical selection can move. Concepts rescue exactly
+ * the tickets the deterministic layer was already failing — the ones the Phase A
+ * audit measured landing in Uncategorized.
+ */
+const MIN_CONCEPT_CATEGORY_EVIDENCE = 2;
+
+function conceptScoreForCategory(category: string, extraction: ConceptExtraction): number {
+  const conceptIds = CATEGORY_CONCEPTS[category];
+  if (!conceptIds || extraction.empty) return 0;
+  const present = conceptsPresent(extraction, conceptIds);
+  if (present.length === 0) return 0;
+  // A category whose ONLY evidence is a generic concept must not win on that
+  // alone; "account" or "report" appears in nearly every support ticket.
+  if (present.every((conceptId) => GENERIC_CONCEPT_IDS.includes(conceptId)) && present.length < 2) return 0;
+  const evidence = conceptEvidenceFor(extraction, present);
+  // A single bare alias is not a ticket. One word ("sandi", "factura") states a
+  // noun, not a problem, and must not select a category on its own — real
+  // multilingual tickets carry either two distinct concepts or two surface
+  // forms of one. Below that bar the ticket stays Uncategorized and fails closed.
+  return evidence >= MIN_CONCEPT_CATEGORY_EVIDENCE ? evidence : 0;
+}
+
 function normalizeForSignalMatching(value: string): string {
   return value
     .toLowerCase()
@@ -147,8 +203,20 @@ export function assessBusinessRelevanceForProfile(
     ...profileKeywordBank(profile),
     ...BUSINESS_RELEVANCE_SIGNALS
   ];
+  // TODO-058B Part C: a relevant non-English ticket used to be rejected here,
+  // before understanding ever ran, because the ASCII normalizer left nothing to
+  // match. Concept evidence is added ONLY when the English layer found nothing,
+  // so English relevance decisions are bit-for-bit unchanged. Generic concepts
+  // alone never establish relevance, so a bare product name, URL, or the word
+  // "account" cannot let an irrelevant ticket through.
+  const conceptExtraction = extractConcepts(ticketText, profile);
   const profileOutOfScope = [...profile.outOfScopeTopics, ...profile.supportBoundaries, ...OUT_OF_SCOPE_SIGNALS];
-  const matchedBusinessSignals = findMatchedSignals(normalizedText, [...new Set(profileSignals.map((signal) => signal.toLowerCase()))]);
+  const lexicalBusinessSignals = findMatchedSignals(normalizedText, [...new Set(profileSignals.map((signal) => signal.toLowerCase()))]);
+  const conceptBusinessSignals =
+    lexicalBusinessSignals.length === 0 && !onlyGenericConcepts(conceptExtraction)
+      ? conceptExtraction.matches.map((match) => `concept:${match.conceptId}`)
+      : [];
+  const matchedBusinessSignals = [...lexicalBusinessSignals, ...conceptBusinessSignals];
   const detectedOutOfScopeSignals = findMatchedSignals(
     normalizedText,
     [...new Set(profileOutOfScope.flatMap((signal) => [signal.toLowerCase(), ...signal.toLowerCase().split(/[,.;]/)]))]
@@ -1016,6 +1084,8 @@ export function understandForProfile(ticket: Ticket, inputProfile: OrganizationP
 
   const rules = CATEGORY_RULES.filter((rule) => categoryAllowedByProfile(rule, profile));
   const loginContradiction = hasExplicitLoginContradiction(fullText);
+  // TODO-058B: one extraction per ticket, reused by every rule below.
+  const conceptExtraction = extractConcepts(`${ticket.subject} ${ticket.description}`, profile);
   const rankedCategories = rules.map((rule) => {
     let score = 0;
     const weights = CATEGORY_WEIGHTS[rule.category];
@@ -1040,6 +1110,24 @@ export function understandForProfile(ticket: Ticket, inputProfile: OrganizationP
       effectiveScore
     };
   });
+
+  // TODO-058B: apply concept evidence only when the English lexical layer found
+  // NOTHING across every allowed category. An English ticket therefore never
+  // reaches this branch, which is why no existing English score can decrease and
+  // no existing canonical selection can move. See CATEGORY_CONCEPTS above.
+  const englishFoundSomething = rankedCategories.some((candidate) => candidate.effectiveScore > 0);
+  let conceptAssisted = false;
+  if (!englishFoundSomething && !conceptExtraction.empty) {
+    for (const candidate of rankedCategories) {
+      const conceptScore = conceptScoreForCategory(candidate.rule.category, conceptExtraction);
+      if (conceptScore > 0) {
+        // max(), never sum: concepts stand in for the missing English evidence
+        // rather than stacking on top of it.
+        candidate.effectiveScore = Math.max(candidate.effectiveScore, conceptScore);
+        conceptAssisted = true;
+      }
+    }
+  }
 
   // Natural-language tickets often mention a neighboring domain while
   // explicitly negating it (for example, "no callback failure" in a report
@@ -1242,7 +1330,13 @@ export function understandForProfile(ticket: Ticket, inputProfile: OrganizationP
     intent,
     urgency,
     tags: [...new Set(tags)],
-    detectedSignals: detectedSignals.slice(0, 6),
+    // TODO-058B Part H: when the category was reached through concepts rather
+    // than English wording, surface the concept evidence so a reviewer can see
+    // WHY a non-English ticket matched. Lexical signals keep priority in the
+    // list, so English explanations are unchanged.
+    detectedSignals: conceptAssisted
+      ? [...detectedSignals, ...conceptExtraction.matches.map((match) => `concept:${match.conceptId}`)].slice(0, 6)
+      : detectedSignals.slice(0, 6),
     extractedFields
   };
 }

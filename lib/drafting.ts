@@ -14,6 +14,7 @@ import {
   applyRootCauseSafeLanguage,
   rootCauseEvidenceNote
 } from "@/lib/rootCauseSafety";
+import { extractConcepts, GENERIC_CONCEPT_IDS } from "@/lib/conceptExtraction";
 
 const UNCATEGORIZED_CATEGORY = "Uncategorized";
 const UNCATEGORIZED_PLACEHOLDER = "This issue type is new to the organization. Please write a response below and teach OIP through the Reflection step.";
@@ -424,6 +425,12 @@ export interface LessonMatchResult {
     matchType: "literal" | "semantic";
     matchedConcepts: string[];
   }>;
+  /**
+   * TODO-058B: language-neutral concepts that produced this match when there was
+   * no lexical evidence. Absent for every lexical (English) match, so the two
+   * kinds of evidence stay separately explainable.
+   */
+  matchedConceptIds?: string[];
   score: number;
   /** How many matched signals carry >=2 meaningful tokens. Generic one-word
    *  overlaps ("webhook", "integration") score matches but are not evidence
@@ -941,6 +948,27 @@ function signalMatchEvidence(
   };
 }
 
+/**
+ * TODO-058B Part F: language-neutral concept ids for a piece of text, derived at
+ * runtime against the built-in vocabulary. Lessons keep their authored text; no
+ * lesson is rewritten and no concept signal is stored.
+ */
+function conceptIdsForText(text: string): string[] {
+  return extractConcepts(text, {}).conceptIds;
+}
+
+/**
+ * Specific (non-generic) concepts shared by the ticket and a lesson's signals.
+ * Generic concepts are excluded so broad overlap can never authorize a lesson.
+ */
+function sharedSpecificConcepts(ticketConceptIds: string[], lessonSignals: string[]): string[] {
+  if (ticketConceptIds.length === 0) return [];
+  const lessonConceptIds = new Set(lessonSignals.flatMap((signal) => conceptIdsForText(signal)));
+  return ticketConceptIds.filter(
+    (conceptId) => lessonConceptIds.has(conceptId) && !GENERIC_CONCEPT_IDS.includes(conceptId)
+  );
+}
+
 export function signalMatchesTicket(
   signal: string,
   ticketText: string,
@@ -1027,6 +1055,13 @@ export function findMatchingLesson(ticket: Ticket, item: KnowledgeItem): LessonM
   if (item.category === "Notifications & Email"
       && /\bnot\b[^.!?]{0,50}\b(?:delivery|suppression)\b[^.!?]{0,25}\b(?:issue|problem|affected|normal)\b/.test(ticketText)) return null;
   const ticketTokens = new Set(tokenizeLessonSignal(ticketText));
+  // TODO-058B: extracted once per ticket, reused by every lesson below.
+  const ticketConcepts = conceptIdsForText(`${ticket.subject} ${ticket.description}`);
+  // The ticket carries no ASCII-matchable content at all — the measured failure
+  // mode for CJK, where the lesson-signal normalizer erases the text entirely.
+  // Only such a ticket may be matched through concepts; anything the English
+  // layer can still read takes the unchanged lexical path.
+  const ticketLacksLexicalEvidence = ticketTokens.size === 0;
   // Subject and description are separate clauses: a negation in one ("cannot
   // complete sign-in") must not scope forward into the other.
   const affirmativeConcepts = affirmativeConceptsOf(`${ticket.subject}. ${ticket.description}`);
@@ -1052,8 +1087,33 @@ export function findMatchingLesson(ticket: Ticket, item: KnowledgeItem): LessonM
         return evidence ? { signal, ...evidence } : null;
       })
       .filter((entry): entry is { signal: string; matchType: "literal" | "semantic"; matchedConcepts: string[] } => Boolean(entry));
-    const matchedSignals = signalEvidence.map((entry) => entry.signal);
-    if (matchedSignals.length === 0) continue;
+    let matchedSignals = signalEvidence.map((entry) => entry.signal);
+    let conceptMatchedIds: string[] = [];
+    if (matchedSignals.length === 0) {
+      // TODO-058B Part F: cross-language lesson matching.
+      //
+      // Gated on the TICKET carrying no lexical evidence at all, not merely on
+      // this lesson missing. Gating per-lesson was a safety defect: an English
+      // ticket reaches this branch for every lesson that happens not to match
+      // lexically, and English text also produces concepts, so weak-fallback and
+      // forged-lesson cases became authorized (TODO-046 matrix 1/14 unsafe).
+      // With the ticket-level gate an English ticket can never enter here.
+      //
+      // Concept ids are derived from the lesson's own signal text at runtime —
+      // nothing stored, so the 180 seeded Developer Demo lessons need no
+      // migration and behave identically until a ticket arrives in another
+      // language. A SPECIFIC shared concept is required: generic overlap
+      // ("account", "error", "permission", "report_export") can never authorize
+      // a lesson, because those appear in nearly every ticket in every language.
+      if (!ticketLacksLexicalEvidence) continue;
+      const shared = sharedSpecificConcepts(ticketConcepts, signals);
+      if (shared.length === 0) continue;
+      conceptMatchedIds = shared;
+      matchedSignals = signals.filter((signal) =>
+        conceptIdsForText(signal).some((conceptId) => shared.includes(conceptId))
+      );
+      if (matchedSignals.length === 0) continue;
+    }
     const multiTokenMatches = matchedSignals.filter((signal) => tokenizeLessonSignal(signal).length >= 2).length;
     const candidate: LessonMatchResult = {
       lesson,
@@ -1061,7 +1121,11 @@ export function findMatchingLesson(ticket: Ticket, item: KnowledgeItem): LessonM
       signalEvidence,
       score: matchedSignals.length,
       multiTokenMatches,
-      ticketEvidenceCoverage: ticketEvidenceCoverageOf(matchedSignals, ticketTokens)
+      ticketEvidenceCoverage: ticketEvidenceCoverageOf(matchedSignals, ticketTokens),
+      // TODO-058B Part H: report concept evidence SEPARATELY from lexical
+      // evidence so a reviewer can tell a cross-language concept match from a
+      // literal wording match. Empty for every English match.
+      ...(conceptMatchedIds.length > 0 ? { matchedConceptIds: conceptMatchedIds } : {})
     };
     best = best ? moreRelevantLesson(best, candidate) : candidate;
   }
