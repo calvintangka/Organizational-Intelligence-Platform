@@ -383,6 +383,13 @@ function applyAdvisoryExtractedFields(
 
 type AuthUser = { id: string; name: string; email: string };
 
+/**
+ * TODO-056: the shape /api/auth/active-organization actually returns. It is an
+ * authorization/identity context, NOT an OrganizationProfile — typing it as one
+ * silently produced partial profiles with undefined fields in React state.
+ */
+type ActiveOrganizationContext = { id: string; name: string; industry: string; description: string };
+
 function LoginScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUser) => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -609,7 +616,7 @@ export default function Home() {
         // an organization outside the user's current membership set.
         const activeResponse = await fetch("/api/auth/active-organization", { cache: "no-store" });
         const activePayload = await activeResponse.json().catch(() => null) as {
-          data?: { activeOrganizationId?: string | null; organization?: OrganizationProfile | null };
+          data?: { activeOrganizationId?: string | null; organization?: ActiveOrganizationContext | null };
           error?: { message?: string };
         } | null;
         if (!activeResponse.ok) {
@@ -619,7 +626,7 @@ export default function Home() {
         if (!activeContext?.activeOrganizationId || !activeContext.organization) {
           throw new Error("No authorized organization is available for this user.");
         }
-        const loadedProfile = activeContext.organization;
+        const activeOrganizationContext = activeContext.organization;
         const orgId = activeContext.activeOrganizationId;
         // Resolve this organization's durable authority and select its adapter
         // BEFORE touching any organization-owned resource. A discovery failure
@@ -652,6 +659,20 @@ export default function Home() {
         ]);
 
         if (cancelled) return;
+
+        // TODO-056: /api/auth/active-organization returns an authorization
+        // CONTEXT (id, name, industry, description) — not a full profile. Using
+        // it as organizationProfile left every other field undefined, which both
+        // rendered the auto-resolution slider uncontrolled and sent an undefined
+        // revision on the next save (a spurious stale-profile conflict). Take the
+        // complete profile from the organization list, which both persistence
+        // modes return in full, and keep the context only for identity.
+        const loadedProfile =
+          loadedOrganizationList.find((organization) => organization.id === orgId)
+          ?? normalizeOrganizationProfile({
+            ...defaultOrganizationProfile,
+            ...activeOrganizationContext
+          } as OrganizationProfile);
 
         // BUG-009: this is a server-authoritative load, not a user edit. Suppress
         // the autosave it would otherwise trigger so hydration never PUTs the
@@ -1717,7 +1738,7 @@ export default function Home() {
     const found = availableOrganizations.find((org) => org.id === id);
     if (!found || found.id === organizationProfile.id) return;
     const generation = ++organizationSwitchGeneration.current;
-    let authorizedProfile: OrganizationProfile | null = null;
+    let authorizedContext: ActiveOrganizationContext | null = null;
     // Membership authorization happens before any outgoing state is reset or
     // persisted. A rejected switch therefore leaves the current workspace
     // untouched and cannot write outgoing data into the requested scope.
@@ -1729,13 +1750,13 @@ export default function Home() {
         body: JSON.stringify({ organizationId: found.id })
       });
       const payload = await response.json().catch(() => null) as {
-        data?: { organization?: OrganizationProfile | null };
+        data?: { organization?: ActiveOrganizationContext | null };
         error?: { message?: string };
       } | null;
       if (!response.ok) {
         throw new Error(payload?.error?.message ?? "You do not have access to that organization.");
       }
-      authorizedProfile = payload?.data?.organization ?? null;
+      authorizedContext = payload?.data?.organization ?? null;
     } catch (error) {
       if (generation === organizationSwitchGeneration.current) {
         setErrorMessage(error instanceof Error ? error.message : "You do not have access to that organization.");
@@ -1767,7 +1788,14 @@ export default function Home() {
       await activatePersistenceOrganization(found.id);
       const loaded = await loadOrganizationState(found.id);
       if (generation !== organizationSwitchGeneration.current) return;
-      const incomingProfile = authorizedProfile && authorizedProfile.id === found.id ? authorizedProfile : found;
+      // TODO-056: the active-organization response is an authorization context,
+      // not a profile. It confirms the switch was authorized for this id; the
+      // complete profile comes from the organization list so no profile field
+      // (threshold, revision, vocabulary) is left undefined after a switch.
+      if (authorizedContext && authorizedContext.id !== found.id) {
+        throw new Error("The authorized organization did not match the requested organization.");
+      }
+      const incomingProfile = found;
       // BUG-009: switching organizations replaces the profile from a
       // server-authoritative load; suppress the echo autosave it would trigger.
       suppressNextProfileSave.current = true;

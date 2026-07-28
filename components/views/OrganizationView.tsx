@@ -3,7 +3,14 @@
 import { useState } from "react";
 import type { CustomerTone, OrganizationProfile } from "@/types";
 import { ACCENT_SWATCHES } from "@/components/AccentPicker";
-import { initialsFor, normalizeAccentColor } from "@/lib/organizationProfile";
+import {
+  AUTO_RESOLUTION_THRESHOLD_MAX,
+  AUTO_RESOLUTION_THRESHOLD_MIN,
+  DEFAULT_AUTO_RESOLUTION_THRESHOLD,
+  initialsFor,
+  normalizeAccentColor,
+  resolveAutoResolutionThreshold
+} from "@/lib/organizationProfile";
 
 interface OrganizationViewProps {
   profile: OrganizationProfile;
@@ -59,7 +66,7 @@ function buildNewProfile(input: {
     outOfScopeTopics: [],
     customerTone: input.tone,
     supportBoundaries: [],
-    autoResolutionThreshold: 80,
+    autoResolutionThreshold: DEFAULT_AUTO_RESOLUTION_THRESHOLD,
     escalationRules: [],
     accentColor: normalizeAccentColor(input.accentColor),
     logoInitials: initials.length > 0 ? initials : undefined,
@@ -81,6 +88,10 @@ export function OrganizationView({
   const initials = initialsFor(profile);
   const vocabulary = profile.businessVocabulary ?? [];
   const isCustomIndustry = !INDUSTRIES.includes(profile.industry);
+  // TODO-056: the range input below is controlled, so its value must be a
+  // defined number on every render — including one where an upstream profile
+  // has not yet supplied the field.
+  const autoResolutionThreshold = resolveAutoResolutionThreshold(profile.autoResolutionThreshold);
 
   const [vocabInput, setVocabInput] = useState("");
   const [addOpen, setAddOpen] = useState(false);
@@ -99,7 +110,7 @@ export function OrganizationView({
   const sub = `text-sm mt-0.5 ${darkMode ? "text-slate-400" : "text-[#667085]"}`;
 
   const learningPolicies = [
-    `Auto-resolution threshold: ${profile.autoResolutionThreshold}`,
+    `Auto-resolution threshold: ${autoResolutionThreshold}`,
     "Reflection required before memory save",
     "Human approval for new knowledge",
     "Provenance required for all responses",
@@ -335,15 +346,15 @@ export function OrganizationView({
             <div className="flex items-center gap-3 mt-1">
               <input
                 type="range"
-                min={40}
-                max={100}
+                min={AUTO_RESOLUTION_THRESHOLD_MIN}
+                max={AUTO_RESOLUTION_THRESHOLD_MAX}
                 step={5}
-                value={profile.autoResolutionThreshold}
-                onChange={(e) => onChange({ ...profile, autoResolutionThreshold: Number(e.target.value) })}
+                value={autoResolutionThreshold}
+                onChange={(e) => onChange({ ...profile, autoResolutionThreshold: resolveAutoResolutionThreshold(Number(e.target.value)) })}
                 className="flex-1 accent-[#2563EB]"
               />
               <span className={`text-sm font-bold w-8 ${darkMode ? "text-white" : "text-[#111827]"}`}>
-                {profile.autoResolutionThreshold}
+                {autoResolutionThreshold}
               </span>
             </div>
           </div>

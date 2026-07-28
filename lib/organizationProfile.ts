@@ -6,6 +6,23 @@ export const ORGANIZATION_LIST_KEY = "oip.organizationList.v1";
 
 const DEFAULT_ACCENT = "#2563EB";
 
+/** Product default used whenever a profile carries no auto-resolution threshold. */
+export const DEFAULT_AUTO_RESOLUTION_THRESHOLD = 80;
+/** Range the auto-resolution control offers. */
+export const AUTO_RESOLUTION_THRESHOLD_MIN = 40;
+export const AUTO_RESOLUTION_THRESHOLD_MAX = 100;
+
+/**
+ * TODO-056: resolve a threshold that is always safe to hand a controlled range
+ * input — a finite number inside the control's own range. This is a rendering
+ * guard only; it never rewrites the stored profile, so a persisted value is
+ * changed only when the user actually moves the slider.
+ */
+export function resolveAutoResolutionThreshold(value: unknown): number {
+  const numeric = typeof value === "number" && Number.isFinite(value) ? value : DEFAULT_AUTO_RESOLUTION_THRESHOLD;
+  return Math.max(AUTO_RESOLUTION_THRESHOLD_MIN, Math.min(AUTO_RESOLUTION_THRESHOLD_MAX, Math.round(numeric)));
+}
+
 function hasStorage(): boolean {
   return typeof window !== "undefined" && !!window.localStorage;
 }
@@ -67,7 +84,7 @@ export function normalizeOrganizationProfile(profile: OrganizationProfile): Orga
     outOfScopeTopics: coerceProfileStringArray(migratedProfile.outOfScopeTopics),
     supportBoundaries: coerceProfileStringArray(migratedProfile.supportBoundaries),
     escalationRules: coerceProfileStringArray(migratedProfile.escalationRules),
-    autoResolutionThreshold: Math.max(0, Math.min(100, Math.round(migratedProfile.autoResolutionThreshold ?? 80))),
+    autoResolutionThreshold: Math.max(0, Math.min(100, Math.round(migratedProfile.autoResolutionThreshold ?? DEFAULT_AUTO_RESOLUTION_THRESHOLD))),
     accentColor: normalizeAccentColor(migratedProfile.accentColor),
     logoInitials: normalizeInitials(migratedProfile.logoInitials),
     createdAt: migratedProfile.createdAt ?? now,

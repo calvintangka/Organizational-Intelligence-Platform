@@ -1,5 +1,15 @@
 # Change Log
 
+## [2026-07-28] TODO-056 Organization Settings Controlled Input Stability
+
+**Task/Prompt:** Stop the React "changing an uncontrolled input to be controlled" warning on the Organization auto-resolution threshold slider, without touching organization-switching logic, persistence architecture, conflict detection, or mature data.
+
+- Root cause: `/api/auth/active-organization` returns an authorization CONTEXT (`id`, `name`, `industry`, `description`) — proven by a live probe — but `app/page.tsx` typed it as `OrganizationProfile` and put it straight into `organizationProfile` state on hydration and on organization switch. Every other profile field was therefore `undefined`, so the range input rendered with no `value` (uncontrolled) until the first edit ran `normalizeOrganizationProfile` and made it controlled. The same partial object left `updatedAt` undefined, which is why the spurious "Profile updated elsewhere" banner appeared alongside the warning.
+- Production fix in `app/page.tsx`: new `ActiveOrganizationContext` type names the real payload shape; hydration and `selectOrganization` now take the complete profile from the organization list (full in both persistence modes) and use the context only for identity/authorization. A context id that disagrees with the requested organization now fails the switch instead of being adopted.
+- Rendering guard in `lib/organizationProfile.ts` / `OrganizationView.tsx`: `resolveAutoResolutionThreshold` always yields a finite number inside `AUTO_RESOLUTION_THRESHOLD_MIN..MAX` (40–100), defaulting to `DEFAULT_AUTO_RESOLUTION_THRESHOLD` (80). It is display-only — the stored profile is never rewritten, so a persisted value changes only when the user moves the slider. `min`/`max` now come from the shared constants.
+- BUG-009 behavior preserved: conflict detection, the authoritative reload, the banner, no automatic retry of the rejected write, and the switch-generation race guard are all unchanged. Only the spurious conflict caused by an undefined revision goes away.
+- Added `probe:todo056-controlled-threshold`: an offline probe that renders `OrganizationView` for a complete profile, a missing threshold, the raw partial context, a missing→defined update, a conflict reload, each seeded organization, and boundaries 40/100, asserting a defined in-range numeric value every time. Verification: TODO-056, BUG-009, BUG-010, organization-switching, active-organization probes, `tsc --noEmit`, and production build all pass. No reset, no reseed; Developer Demo / Maesa / FastDrop / test-oip-regression rows unchanged.
+
 ## [2026-07-22] TODO-038 Claude API Failover
 
 **Task/Prompt:** Replace the operationally unavailable NVIDIA NIM/Nemotron fallback with the repository's established Claude API pattern while preserving all deterministic authorization boundaries.
