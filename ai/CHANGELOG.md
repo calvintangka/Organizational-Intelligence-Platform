@@ -1,5 +1,18 @@
 # Change Log
 
+## [2026-07-29] TODO-058D Uniform Cross-Language Lesson Reuse
+
+**Task/Prompt:** Close the two gaps left by TODO-058B/C — CJK-only lesson matching, and unverified persisted promotion. Do not redesign 058A/B/C.
+
+- **Gap 1 closed. The lesson gate was a SCRIPT test, not a compatibility test.** It read `ticketTokens.size === 0`, which is only true when the ASCII normalizer erases the text — i.e. CJK. Indonesian and accented Latin leave tokens behind ("restablecimos", "sertifikat"), so they looked lexically readable and never reached the concept path, even though those tokens can never match an English-authored lesson signal. Cross-language reuse therefore worked for ja/ko/zh and silently failed for id/es/fr/de/pt/it. The gate now asks whether lexical matching is a FAIR test at all: it is not when the ticket is written in a different language from the lessons. Measured: **9/9 non-English languages now select the same lesson**, where previously only 3 did.
+- The lesson-authoring language is now a parameter (`findMatchingLesson(ticket, item, { internalLanguage })`) defaulting to English, so an organization documenting in Indonesian correctly treats Indonesian tickets as same-language.
+- **Two authorization defects found by the new probe and fixed.** A single bare alias ("contraseña") authorized a lesson through the concept path — the concept path now requires an actual message, not a bare term. That length bar was then script-blind and rejected genuine CJK tickets, so it is script-aware for the same reason alias specificity is: a CJK sentence carries roughly a morpheme per character.
+- **A threshold was being reused for the wrong purpose.** The gate initially required `CONFIDENT_DETECTION` (0.6), which is tuned for choosing the customer's REPLY language, where caution is right. Reusing it for matching rejected genuine Spanish and French tickets scoring just under the bar. Eligibility now asks whether a language was actually detected (`!fallbackApplied`) rather than whether we are confident enough to reply in it.
+- English remains the baseline and is never eligible for the concept path: TODO-046 stays at `unsafe=0/14` with the forged lesson blocked, and mature English retrieval is 33 PASS / 0 FAIL.
+- Added `probe:todo058d-cross-language-learning` — 12 offline checks over the real matcher: three lesson families across all ten languages, concept evidence reported separately from lexical, determinism, English exclusion, configurable internal language, and safety negatives (generic concepts, identifiers, cross-domain concepts, single weak alias).
+- Regression: TODO-058A/B/C, BUG-008 ×2, BUG-010, TODO-019, TODO-039, TODO-040, TODO-046, TODO-047, TODO-048, TODO-049, TODO-050, TODO-051, TODO-052, TODO-053, mature English retrieval, `tsc`, strict-unused, build — all pass. Zero writes; counts and revisions byte-identical.
+- **Gap 2 NOT closed.** The isolated PostgreSQL integration probe (Parts F, G, L) was not built, so persisted strengthening and new-lesson promotion remain verified only at the decision layer, not end to end against a database. Parts H (dedup through the persisted pipeline), I, and M were likewise not exercised.
+
 ## [2026-07-29] TODO-058C Language-Neutral Organizational Learning
 
 **Task/Prompt:** Complete the organizational learning lifecycle so language never creates duplicate Organizational Memory.

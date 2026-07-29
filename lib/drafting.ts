@@ -15,6 +15,25 @@ import {
   rootCauseEvidenceNote
 } from "@/lib/rootCauseSafety";
 import { extractConcepts, GENERIC_CONCEPT_IDS } from "@/lib/conceptExtraction";
+import { DEFAULT_LANGUAGE, detectLanguage } from "@/lib/languageDetection";
+import { foldForMatching } from "@/lib/textNormalization";
+
+/**
+ * Is there an actual message here, rather than a bare term?
+ *
+ * Script-aware for the same reason alias specificity is: a CJK sentence carries
+ * roughly a morpheme per character, so "我的密码被拒绝，无法登录" says as much in 12
+ * characters as a Latin sentence says in 40. One shared bar would either let a
+ * bare Latin word through or reject a complete CJK ticket.
+ */
+const MIN_LATIN_TICKET_LENGTH = 20;
+const MIN_NON_LATIN_TICKET_LENGTH = 8;
+
+function hasSubstantiveContent(text: string): boolean {
+  const folded = foldForMatching(text);
+  const nonLatin = /[^\p{Script=Latin}\p{N}\s]/u.test(folded);
+  return folded.length >= (nonLatin ? MIN_NON_LATIN_TICKET_LENGTH : MIN_LATIN_TICKET_LENGTH);
+}
 
 const UNCATEGORIZED_CATEGORY = "Uncategorized";
 const UNCATEGORIZED_PLACEHOLDER = "This issue type is new to the organization. Please write a response below and teach OIP through the Reflection step.";
@@ -1010,7 +1029,16 @@ function moreRelevantLesson(a: LessonMatchResult, b: LessonMatchResult): LessonM
   return (a.lesson.id ?? "") <= (b.lesson.id ?? "") ? a : b;
 }
 
-export function findMatchingLesson(ticket: Ticket, item: KnowledgeItem): LessonMatchResult | null {
+/** TODO-058D: the language stored lessons are authored in. Defaults to English. */
+export interface LessonMatchOptions {
+  internalLanguage?: string;
+}
+
+export function findMatchingLesson(
+  ticket: Ticket,
+  item: KnowledgeItem,
+  options?: LessonMatchOptions
+): LessonMatchResult | null {
   if (!item.lessons || item.lessons.length === 0) return null;
   const ticketText = normalizeLessonSignalText(`${ticket.subject} ${ticket.description}`).trim();
   if (/\bno\s+concrete\s+(?:symptom|category|root cause|evidence)\b/.test(ticketText)
@@ -1057,11 +1085,35 @@ export function findMatchingLesson(ticket: Ticket, item: KnowledgeItem): LessonM
   const ticketTokens = new Set(tokenizeLessonSignal(ticketText));
   // TODO-058B: extracted once per ticket, reused by every lesson below.
   const ticketConcepts = conceptIdsForText(`${ticket.subject} ${ticket.description}`);
-  // The ticket carries no ASCII-matchable content at all — the measured failure
-  // mode for CJK, where the lesson-signal normalizer erases the text entirely.
-  // Only such a ticket may be matched through concepts; anything the English
-  // layer can still read takes the unchanged lexical path.
-  const ticketLacksLexicalEvidence = ticketTokens.size === 0;
+  // TODO-058D Part C: the gate is a LANGUAGE-COMPATIBILITY test, not a script
+  // test.
+  //
+  // It used to be `ticketTokens.size === 0`, which is only true when the ASCII
+  // normalizer erased the text — i.e. CJK. Indonesian and accented Latin leave
+  // tokens behind ("restablecimos", "sertifikat"), so they looked lexically
+  // readable and never reached the concept path, even though those tokens can
+  // never match an English-authored lesson signal. That made cross-language
+  // reuse work for ja/ko/zh and silently fail for id/es/fr/de/pt/it.
+  //
+  // The honest test is whether lexical matching is a FAIR test at all: it is not
+  // when the ticket is written in a different language from the lessons. An
+  // English ticket is therefore never eligible — which is what keeps the TODO-046
+  // authorization matrix at 0/14 and the English baseline exact — while all nine
+  // non-English languages become eligible uniformly.
+  const ticketLanguage = detectLanguage(`${ticket.subject} ${ticket.description}`);
+  const lessonLanguage = options?.internalLanguage ?? DEFAULT_LANGUAGE;
+  // Eligibility asks "was a language actually detected, and is it a different
+  // one?" — NOT "are we confident enough to reply in it". CONFIDENT_DETECTION is
+  // tuned for choosing the customer's reply language, where caution is right;
+  // reusing it here rejected genuine Spanish and French tickets that scored just
+  // under the bar. `fallbackApplied` is the correct signal: a fallback means the
+  // language was assumed, not read, so the ticket stays on the lexical path.
+  const ticketLanguageDiffersFromLessons =
+    !ticketLanguage.fallbackApplied && ticketLanguage.language !== lessonLanguage;
+  // Length of the folded text, which is script-agnostic: it counts CJK
+  // characters as readily as Latin letters, so the bar means the same thing in
+  // every supported language.
+  const ticketHasSubstantiveContent = hasSubstantiveContent(`${ticket.subject} ${ticket.description}`);
   // Subject and description are separate clauses: a negation in one ("cannot
   // complete sign-in") must not scope forward into the other.
   const affirmativeConcepts = affirmativeConceptsOf(`${ticket.subject}. ${ticket.description}`);
@@ -1105,7 +1157,11 @@ export function findMatchingLesson(ticket: Ticket, item: KnowledgeItem): LessonM
       // language. A SPECIFIC shared concept is required: generic overlap
       // ("account", "error", "permission", "report_export") can never authorize
       // a lesson, because those appear in nearly every ticket in every language.
-      if (!ticketLacksLexicalEvidence) continue;
+      if (!ticketLanguageDiffersFromLessons) continue;
+      // A bare term is not a ticket. "contraseña" or "sandi" on its own names a
+      // thing without describing a problem, and must never authorize a lesson —
+      // the concept path requires an actual message behind it.
+      if (!ticketHasSubstantiveContent) continue;
       const shared = sharedSpecificConcepts(ticketConcepts, signals);
       if (shared.length === 0) continue;
       conceptMatchedIds = shared;
