@@ -1,5 +1,19 @@
 # Change Log
 
+## [2026-07-29] TODO-058E Persisted Multilingual Learning Verification
+
+**Task/Prompt:** Prove the database agrees with the decision layer — equivalent validated tickets in different languages must produce one persisted Organizational Memory.
+
+- **No persistence defect found.** The write path was already language-neutral; this task proves it rather than changing it. **No production code was modified.**
+- Write-pipeline audit: `commitValidation` (`lib/server/persistenceService.ts:1202`) wraps candidate upsert, ValidationRecord, MemoryChangeRecord, KnowledgeItem/trust/revision/version in a single `prisma.$transaction`, with replay protection keyed on `validation.id` returning `replayed: true`.
+- New `probe:todo058e-persisted-multilingual` drives the REAL transaction against a disposable organization: five validated commits (en, es, ja, id, plus a recovery commit) against one English-authored lesson. **Result: one knowledge item, one lesson, one canonical, five validation rows, five memory-change rows, trust evidence on a single item, and no language-scoped ids anywhere.**
+- Transaction safety verified by poisoning a live commit (duplicate memory-change id under a new validation id): the whole transaction rolls back — no validation row, no memory-change row, no trust evidence, unchanged trust and revision, no orphan candidate — and a legitimate commit then succeeds.
+- Idempotency verified: replaying an identical commit returns `replayed: true` and adds no rows and no trust.
+- Two fixture-construction facts were discovered and are worth recording: a knowledge item is persisted under its CANONICAL id (`withCanonicalProblemDefaults` rewrites the item id), and canonical ids are global, so a fixture must not borrow a real canonical id.
+- Commit transaction timing: avg 14.8 ms, worst 34 ms.
+- Regression: TODO-058A/B/C/D, BUG-008, BUG-010, TODO-019, TODO-039, TODO-040, TODO-046, TODO-047, TODO-048, TODO-049, TODO-050, TODO-051, TODO-052, TODO-053, mature English retrieval (33 PASS / 0 FAIL), `tsc`, strict-unused, build — all pass. Mature counts, trust total, and profile revisions byte-identical; zero leftover fixture rows, verified on both the success and the hard-failure path.
+- **Not covered:** new-lesson PROMOTION (Part D) was not exercised — the probe verifies strengthening of an existing lesson. Parts G deduplication is demonstrated through repeated strengthening rather than through two independently promoted lessons being merged.
+
 ## [2026-07-29] TODO-058D Uniform Cross-Language Lesson Reuse
 
 **Task/Prompt:** Close the two gaps left by TODO-058B/C — CJK-only lesson matching, and unverified persisted promotion. Do not redesign 058A/B/C.
