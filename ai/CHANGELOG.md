@@ -1,5 +1,18 @@
 # Change Log
 
+## [2026-07-29] TODO-058F New Multilingual Lesson Promotion Verification
+
+**Task/Prompt:** Prove a genuinely new operational lesson is promoted exactly once regardless of customer language, closing the last unverified lifecycle.
+
+- **No promotion defect found. No production code changed** — this verifies existing behavior.
+- Promotion audit: the promoted lesson's TEXT comes from a reviewer-authored `lessonDraft` (`applyLessonToItem` in `app/page.tsx`), not from the customer-facing draft. The pipeline neither translates it nor derives it from the customer language. Deduplication happens in `mergeLessonIntoExisting`, keyed on the canonical id, inside the same `commitValidation` transaction.
+- New `probe:todo058f-new-lesson-promotion` drives the real transaction and the real merge function against a disposable organization: a Japanese ticket promotes one new English-authored lesson onto an existing canonical, then Spanish, Indonesian, and English tickets each strengthen it. **Result: one knowledge item, two lessons (the unrelated seed plus exactly one promotion), 4 validation rows, 4 memory-change rows, trust evidence on a single item, unique version lineage, no language-scoped ids.**
+- **Internal documentation language verified:** the promoted lesson contains no Japanese despite a Japanese source ticket, and the authored English root cause and solution are preserved verbatim. This is a preservation guarantee — the pipeline stores what the reviewer authored and never substitutes the customer language into memory.
+- Transaction safety: a poisoned promotion (duplicate memory-change id) rolls back with no partial lesson, no orphan validation or memory-change row, and unchanged trust; a retry then succeeds and still leaves exactly one promoted lesson; replaying the promotion returns `replayed: true` and duplicates nothing.
+- Timing: avg 25.5 ms, worst 54 ms per commit.
+- Regression: TODO-058A/B/C/D/E, BUG-008, BUG-010, TODO-019, TODO-039, TODO-040, TODO-046, TODO-047, TODO-048, TODO-049, TODO-050, TODO-051, TODO-052, TODO-053, mature English retrieval (33 PASS / 0 FAIL), `tsc`, strict-unused, build — all pass. Mature counts, trust total, profile revisions, and HERO provenance (`OIP-20230104-0001`) unchanged; zero leftover fixtures.
+- **Limitation:** the reviewer-authored lesson draft is supplied by the probe, because `applyLessonToItem` lives in the React component rather than a shared module. The persistence, merge, and language-preservation semantics are real; the Reflection UI form itself is not exercised.
+
 ## [2026-07-29] TODO-058E Persisted Multilingual Learning Verification
 
 **Task/Prompt:** Prove the database agrees with the decision layer — equivalent validated tickets in different languages must produce one persisted Organizational Memory.

@@ -81,6 +81,7 @@
     "probe:todo058c-language-neutral-learning": "node scripts/todo058c-language-neutral-learning-probe.cjs",
     "probe:todo058d-cross-language-learning": "node scripts/todo058d-cross-language-learning-probe.cjs",
     "probe:todo058e-persisted-multilingual": "node scripts/todo058e-persisted-multilingual-probe.cjs",
+    "probe:todo058f-new-lesson-promotion": "node scripts/todo058f-new-lesson-promotion-probe.cjs",
     "probe:todo056-controlled-threshold": "node scripts/todo056-controlled-threshold-probe.cjs",
     "restore:maesa-profile-vocabulary": "node scripts/restore-maesa-profile-vocabulary.cjs",
     "restore:organization-profile-settings": "node scripts/restore-organization-profile-settings.cjs",
