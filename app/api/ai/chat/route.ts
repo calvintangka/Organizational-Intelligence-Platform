@@ -18,6 +18,8 @@ interface ChatRequestBody {
   temperature?: number;
   max_tokens?: number;
   messages?: ChatMessage[];
+  /** TODO-062A: caller-requested deadline, clamped server-side. */
+  timeout_ms?: number;
 }
 
 function readBaseUrl(): string {
@@ -29,9 +31,19 @@ function readModel(requestedModel?: string): string {
   return trimmed || (process.env.AI_MODEL ?? process.env.NEXT_PUBLIC_AI_MODEL ?? DEFAULT_AI_MODEL);
 }
 
-function readTimeoutMs(): number {
+/**
+ * TODO-062A: a browser-side caller knows how long its own call is worth waiting
+ * for (bulk advisory calls budget 90s, single-ticket calls far less), but the
+ * proxy used to ignore that entirely and impose AI_TIMEOUT_MS on everything.
+ * With measured LM Studio latency at ~28-38s against a 30s default, bulk calls
+ * were being cut off just short of succeeding. The request may now raise the
+ * deadline, still clamped to MAX_TIMEOUT_MS so no client can pin a connection.
+ */
+function readTimeoutMs(requested?: number): number {
   const configured = Number(process.env.AI_TIMEOUT_MS ?? process.env.NEXT_PUBLIC_AI_TIMEOUT_MS ?? `${DEFAULT_TIMEOUT_MS}`);
-  return Math.max(5000, Math.min(Number.isFinite(configured) ? configured : DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS));
+  const base = Number.isFinite(configured) ? configured : DEFAULT_TIMEOUT_MS;
+  const effective = typeof requested === "number" && Number.isFinite(requested) ? Math.max(base, requested) : base;
+  return Math.max(5000, Math.min(effective, MAX_TIMEOUT_MS));
 }
 
 function readMode(): "disabled" | "lmstudio" {
@@ -91,7 +103,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid chat messages" }, { status: 400 });
   }
 
-  const timeoutMs = readTimeoutMs();
+  const timeoutMs = readTimeoutMs(body.timeout_ms);
   const model = readModel(requestedModel);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);

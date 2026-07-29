@@ -18,6 +18,8 @@ interface ChatRequestBody {
   temperature?: number;
   max_tokens?: number;
   messages?: ChatMessage[];
+  /** TODO-062A: caller-requested deadline, clamped server-side. */
+  timeout_ms?: number;
 }
 
 function readApiKey(): string {
@@ -28,9 +30,12 @@ function readModel(): string {
   return process.env.CLAUDE_MODEL?.trim() || DEFAULT_CLAUDE_MODEL;
 }
 
-function readTimeoutMs(): number {
+/** TODO-062A: honours the caller's deadline (still clamped). See the chat proxy. */
+function readTimeoutMs(requested?: number): number {
   const configured = Number(process.env.CLAUDE_TIMEOUT_MS ?? `${DEFAULT_TIMEOUT_MS}`);
-  return Math.max(5000, Math.min(Number.isFinite(configured) ? configured : DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS));
+  const base = Number.isFinite(configured) ? configured : DEFAULT_TIMEOUT_MS;
+  const effective = typeof requested === "number" && Number.isFinite(requested) ? Math.max(base, requested) : base;
+  return Math.max(5000, Math.min(effective, MAX_TIMEOUT_MS));
 }
 
 function buildDiagnosticHeaders(model: string, proxySucceeded: boolean, fallbackReason?: string): Headers {
@@ -91,7 +96,7 @@ export async function POST(request: Request) {
     .map((message) => ({ role: "user" as const, content: message.content }));
   if (messages.length === 0) return errorResponse(400, model, "At least one user message is required");
 
-  const timeoutMs = readTimeoutMs();
+  const timeoutMs = readTimeoutMs(body.timeout_ms);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 

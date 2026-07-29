@@ -103,10 +103,10 @@ async function callChatCompletion<T>(
   const requestedTimeout = options.timeoutMs ?? config.timeoutMs;
   const timeoutMs = Math.max(5000, Math.min(requestedTimeout, MAX_AI_TIMEOUT_MS));
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  const endpoint =
-    typeof window === "undefined"
-      ? `${config.baseUrl.replace(/\/$/, "")}/chat/completions`
-      : config.proxyPath;
+  const viaProxy = typeof window !== "undefined";
+  const endpoint = viaProxy
+    ? config.proxyPath
+    : `${config.baseUrl.replace(/\/$/, "")}/chat/completions`;
 
   const resolvedMaxTokens = Math.max(options.maxTokens ?? 180, config.minMaxTokens ?? 0);
   try {
@@ -119,6 +119,13 @@ async function callChatCompletion<T>(
         model: config.model,
         temperature: 0.2,
         max_tokens: resolvedMaxTokens,
+        // TODO-062A: in the browser this request is a double hop, and the proxy
+        // used to apply its own AI_TIMEOUT_MS (30s) while ignoring what the
+        // caller actually asked for. Bulk advisory calls request 90s but were
+        // silently cut at 30s — right on top of the measured ~28-38s LM Studio
+        // latency, so they failed by a hair. Only sent proxy-side; upstream
+        // OpenAI-compatible servers never see this field.
+        ...(viaProxy ? { timeout_ms: timeoutMs } : {}),
         messages: [
           { role: "system", content: prompt.system },
           { role: "user", content: prompt.user }
@@ -342,10 +349,16 @@ export function createLMStudioProvider(config: AIConfig, labelOverride?: string)
       // to "deterministic_fallback" even when LM Studio was reachable).
       // Also uses a longer timeout because bulk analysis happens in batched
       // context where the user has already accepted waiting for the run.
+      //
+      // TODO-062A: 400 was still too tight and truncated 100% of the time
+      // against gemma-4-e4b — measured 397 of 400 tokens consumed by reasoning
+      // alone, so finish_reason=length fired before any JSON content existed.
+      // Every bulk cluster therefore burned a full ~27s round-trip and returned
+      // nothing. Measured completions at 700 land at 474-597 tokens and parse.
       const result = await callChatCompletion<Record<string, unknown>>(
         config,
         buildCanonicalProblemPrompt(input),
-        { maxTokens: 400, timeoutMs: 90000 }
+        { maxTokens: 700, timeoutMs: 90000 }
       );
       if (!result.ok || !result.data) return relabel(mapFailure<AICanonicalProblemSuggestion>(result));
       return relabel({
@@ -406,10 +419,14 @@ export function createLMStudioProvider(config: AIConfig, labelOverride?: string)
       // was too tight for gemma-4-e4b's verbose JSON. Bumped to 400 and
       // accept a longer timeout so a single batched call can complete even
       // when LM Studio is responding slowly.
+      //
+      // TODO-062A: 400 left only ~3-70 tokens of headroom after reasoning
+      // (measured 337-394 reasoning+content against the cap), so truncation was
+      // a coin flip per ticket. Raised in step with suggestCanonicalProblem.
       const result = await callChatCompletion<Record<string, unknown>>(
         config,
         buildMatchDiscriminationPrompt(input),
-        { maxTokens: 400, timeoutMs: 90000 }
+        { maxTokens: 700, timeoutMs: 90000 }
       );
       if (!result.ok || !result.data) return relabel(mapFailure<MatchDiscriminationResult>(result));
       const confidence = result.data.confidence === "high" || result.data.confidence === "low"

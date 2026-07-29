@@ -40,6 +40,23 @@ interface AnalyzeBulkEntriesInput {
   knowledgeItems: KnowledgeItem[];
   aiAdapter: AIAdapter;
   onProgress?: (progress: BulkAnalysisProgress) => void;
+  /** TODO-062A: lets the operator abandon a long run instead of waiting it out. */
+  signal?: AbortSignal;
+  /** TODO-062A: total wall-clock allowed for AI advisory calls across the run. */
+  aiBudgetMs?: number;
+  /** TODO-062A: backstop for a provider promise that never settles. */
+  aiCallWatchdogMs?: number;
+}
+
+/**
+ * TODO-062A: distinguishes an operator-requested abort from a genuine failure so
+ * the UI can say "cancelled" rather than "bulk analysis failed".
+ */
+export class BulkAnalysisCancelledError extends Error {
+  constructor(message = "Bulk analysis was cancelled.") {
+    super(message);
+    this.name = "BulkAnalysisCancelledError";
+  }
 }
 
 export interface BulkClusterCommitDraft {
@@ -532,17 +549,98 @@ function mergeClusterEvidence(item: KnowledgeItem, cluster: BulkCluster, at: str
   };
 }
 
-function updateProgress(onProgress: AnalyzeBulkEntriesInput["onProgress"], completed: number, total: number, currentLabel: string) {
-  onProgress?.({
-    completed,
-    total,
-    currentLabel,
-    percent: total === 0 ? 100 : Math.round((completed / total) * 100)
-  });
+/*
+ * TODO-062A progress model.
+ *
+ * The old model mapped the row loop alone onto 0-100%, so the last row of a
+ * 100-row file reported 99% and then the entire (AI-bound, minutes-long)
+ * clustering pass ran with no progress events at all. The UI was pinned on
+ * "Analyzing csv row 100 (99%)" for 99.5% of the run's wall clock, which is
+ * indistinguishable from a hang.
+ *
+ * Both phases now own a slice of the bar, so clustering is visibly progressing
+ * and 100% is reserved for a genuinely finished run.
+ */
+const ROW_PHASE_CEILING = 80;
+const CLUSTER_PHASE_CEILING = 99;
+const DEFAULT_AI_BUDGET_MS = 180000;
+const DEFAULT_AI_CALL_WATCHDOG_MS = 130000;
+
+function phasePercent(completed: number, total: number, floor: number, ceiling: number): number {
+  if (total <= 0) return ceiling;
+  const span = ceiling - floor;
+  return floor + Math.min(span, Math.max(0, Math.round((completed / total) * span)));
+}
+
+function updateProgress(
+  onProgress: AnalyzeBulkEntriesInput["onProgress"],
+  phase: BulkAnalysisProgress["phase"],
+  completed: number,
+  total: number,
+  currentLabel: string
+) {
+  const percent =
+    phase === "complete"
+      ? 100
+      : phase === "analyzing"
+      ? phasePercent(completed, total, 0, ROW_PHASE_CEILING)
+      : phasePercent(completed, total, ROW_PHASE_CEILING, CLUSTER_PHASE_CEILING);
+  onProgress?.({ completed, total, currentLabel, percent, phase });
+}
+
+function throwIfCancelled(signal: AbortSignal | undefined) {
+  if (signal?.aborted) throw new BulkAnalysisCancelledError();
+}
+
+/**
+ * TODO-062A: guarantees an AI advisory call settles.
+ *
+ * Every tier below this already sets its own AbortController, but that only
+ * covers the request it knows about — a provider that resolves late, throws
+ * synchronously, or returns a promise that never settles would pin the whole
+ * pipeline with no way out. Advisory calls are strictly optional (each caller
+ * already has a deterministic answer in hand), so any failure here degrades to
+ * "no advisory" rather than failing the run.
+ */
+async function callAdvisory<T>(
+  call: () => Promise<T>,
+  watchdogMs: number
+): Promise<{ ok: true; value: T } | { ok: false; reason: string }> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const value = await Promise.race([
+      call(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`AI advisory call exceeded ${watchdogMs}ms watchdog`)), watchdogMs);
+      })
+    ]);
+    return { ok: true, value };
+  } catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : "Unknown AI advisory failure" };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promise<BulkAnalysisResult> {
-  const { entries, organizationProfile, knowledgeItems, aiAdapter, onProgress } = input;
+  const { entries, organizationProfile, knowledgeItems, aiAdapter, onProgress, signal } = input;
+  // TODO-062A: the run must terminate regardless of how the provider behaves.
+  // `aiDeadline` bounds total advisory time; `watchdogMs` bounds any single
+  // call. Exhausting either only costs advisory quality — the deterministic
+  // result is already complete without it.
+  const watchdogMs = input.aiCallWatchdogMs ?? DEFAULT_AI_CALL_WATCHDOG_MS;
+  const aiDeadline = Date.now() + (input.aiBudgetMs ?? DEFAULT_AI_BUDGET_MS);
+  let aiBudgetExhausted = false;
+  const aiBudgetAvailable = () => {
+    if (aiBudgetExhausted) return false;
+    if (Date.now() < aiDeadline) return true;
+    aiBudgetExhausted = true;
+    console.warn("[bulkUpload] AI advisory budget exhausted; remaining clusters use deterministic reasoning.");
+    return false;
+  };
+  // Clamping the watchdog to whatever budget is left makes total AI time a hard
+  // ceiling (the budget) rather than "budget plus one in-flight overrun".
+  const remainingWatchdogMs = () => Math.max(1000, Math.min(watchdogMs, aiDeadline - Date.now()));
   let analysisMode: BulkAnalysisMode = aiAdapter.config.mode === "disabled" ? "deterministic" : "ai_assisted";
   let usedAIAssistance = false;
   let fallbackUsed = false;
@@ -561,8 +659,9 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
   const analyzedQueries: Array<BulkAnalyzedQuery & { relevanceStatus: "relevant" | "uncertain" | "out_of_scope" }> = [];
 
   for (let index = 0; index < entries.length; index += 1) {
+    throwIfCancelled(signal);
     const entry = entries[index];
-    updateProgress(onProgress, index, entries.length, `Analyzing ${entry.sourceLabel}`);
+    updateProgress(onProgress, "analyzing", index, entries.length, `Analyzing ${entry.sourceLabel}`);
     const ticket = buildBulkTicket(entry);
     const relevance = assessBusinessRelevanceForProfile(`${ticket.subject} ${ticket.description}`, organizationProfile);
     const understanding = understandForProfile(ticket, organizationProfile);
@@ -581,14 +680,22 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
       `canonical problem ${canonicalProblem.title}`
     ];
 
-    if (existingMatch && aiAdapter.config.mode !== "disabled") {
-      const result = await aiAdapter.provider.discriminateMatch({
-        ticket,
-        matchedCanonicalTitle: existingMatch.item.canonicalProblemTitle ?? existingMatch.item.title,
-        matchedProblemSummary: existingMatch.item.problemSummary ?? existingMatch.item.problem,
-        deterministicUnderstanding: understanding
-      });
-      if (result.ok && result.data) {
+    if (existingMatch && aiAdapter.config.mode !== "disabled" && aiBudgetAvailable()) {
+      // TODO-062A: guarded so a provider that throws (socket hang up, DNS
+      // failure) on row 67 can no longer discard the 99 rows around it.
+      const guarded = await callAdvisory(
+        () =>
+          aiAdapter.provider.discriminateMatch({
+            ticket,
+            matchedCanonicalTitle: existingMatch!.item.canonicalProblemTitle ?? existingMatch!.item.title,
+            matchedProblemSummary: existingMatch!.item.problemSummary ?? existingMatch!.item.problem,
+            deterministicUnderstanding: understanding
+          }),
+        remainingWatchdogMs()
+      );
+      const result = guarded.ok ? guarded.value : null;
+      aiCallAttempts += 1;
+      if (result?.ok && result.data) {
         usedAIAssistance = true;
         actualProviderLabel = result.providerLabel ?? actualProviderLabel;
         if (result.data.isDistinctFromMatch && result.data.confidence !== "low") {
@@ -602,7 +709,6 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
         // outcomes and decide after the loop whether enough calls failed to
         // truly be a "deterministic_fallback" vs "mostly AI-assisted".
         fallbackUsed = true;
-        aiCallAttempts += 1;
         aiCallFailures += 1;
       }
     }
@@ -654,9 +760,20 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
     clusterMap.set(key, existing);
   }
 
+  // TODO-062A: the row phase is genuinely done here — say so, instead of
+  // leaving the bar parked on the last row's label for the whole cluster pass.
+  updateProgress(
+    onProgress,
+    "analyzing",
+    entries.length,
+    entries.length,
+    `Analyzed ${entries.length} quer${entries.length === 1 ? "y" : "ies"}`
+  );
+
   const clusters: BulkCluster[] = [];
   const groupedEntries = [...clusterMap.entries()];
   for (let index = 0; index < groupedEntries.length; index += 1) {
+    throwIfCancelled(signal);
     const [key, items] = groupedEntries[index];
     const representative = items[0];
     const existingKnowledge = representative.existingMatch
@@ -682,20 +799,37 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
         ? "merge_existing"
         : "create_new";
 
+    // TODO-062A: this is where the run used to disappear. Each iteration can
+    // cost a full provider round-trip (~28-38s against local LM Studio), so the
+    // cluster count — which is data-dependent and unbounded — directly set how
+    // long the UI sat frozen. Report before each call, not just at the end.
+    updateProgress(
+      onProgress,
+      "clustering",
+      index,
+      groupedEntries.length,
+      `Clustering ${index + 1} of ${groupedEntries.length}: ${representative.canonicalProblem.title}`
+    );
+
     let reasoning = `${items.length} query${items.length === 1 ? "" : "ies"} align to ${representative.canonicalProblem.title}.`;
-    if (aiAdapter.config.mode !== "disabled") {
-      const advisory = await aiAdapter.provider.suggestCanonicalProblem({
-        ticket: representative.ticket,
-        organizationProfile,
-        deterministicUnderstanding: representative.understanding,
-        deterministicCanonicalProblem: {
-          title: representative.canonicalProblem.title,
-          summary: representative.canonicalProblem.problemSummary,
-          category: representative.canonicalProblem.category
-        }
-      });
+    if (aiAdapter.config.mode !== "disabled" && aiBudgetAvailable()) {
+      const guarded = await callAdvisory(
+        () =>
+          aiAdapter.provider.suggestCanonicalProblem({
+            ticket: representative.ticket,
+            organizationProfile,
+            deterministicUnderstanding: representative.understanding,
+            deterministicCanonicalProblem: {
+              title: representative.canonicalProblem.title,
+              summary: representative.canonicalProblem.problemSummary,
+              category: representative.canonicalProblem.category
+            }
+          }),
+        remainingWatchdogMs()
+      );
+      const advisory = guarded.ok ? guarded.value : null;
       aiCallAttempts += 1;
-      if (advisory.ok && advisory.data) {
+      if (advisory?.ok && advisory.data) {
         usedAIAssistance = true;
         actualProviderLabel = advisory.providerLabel ?? actualProviderLabel;
         if (advisory.data.rationale?.trim()) {
@@ -765,7 +899,7 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
   // display contexts that don't branch on tier-specific substrings.
   const providerLabel = actualProviderLabel ?? aiAdapter.provider.label;
   const applyMode = (cluster: BulkCluster): BulkCluster => ({ ...cluster, analysisMode, providerLabel });
-  updateProgress(onProgress, entries.length, entries.length, "Analysis complete");
+  updateProgress(onProgress, "complete", entries.length, entries.length, "Analysis complete");
 
   return {
     total: entries.length,

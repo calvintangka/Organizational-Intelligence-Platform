@@ -101,11 +101,23 @@ export interface BulkCluster {
   providerLabel: string;
 }
 
+/**
+ * TODO-062A: bulk analysis runs in two distinct phases and the second one used
+ * to be invisible. `phase` lets the UI distinguish "still reading rows" from
+ * "clustering the rows it already read", so a long clustering pass can no
+ * longer masquerade as a stalled final row.
+ */
+export type BulkAnalysisPhase = "analyzing" | "clustering" | "complete";
+
 export interface BulkAnalysisProgress {
+  /** Units finished within the current phase (not across the whole run). */
   completed: number;
+  /** Units in the current phase. */
   total: number;
   currentLabel: string;
+  /** Monotonic 0-100 across the whole run, not just the current phase. */
   percent: number;
+  phase: BulkAnalysisPhase;
 }
 
 export interface BulkAnalysisResult {

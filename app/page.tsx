@@ -1271,14 +1271,16 @@ export default function Home() {
 
   async function analyzeUploadedQueries(
     entries: BulkUploadEntry[],
-    onProgress: (progress: BulkAnalysisProgress) => void
+    onProgress: (progress: BulkAnalysisProgress) => void,
+    signal: AbortSignal
   ) {
     return analyzeBulkEntries({
       entries,
       organizationProfile,
       knowledgeItems,
       aiAdapter,
-      onProgress
+      onProgress,
+      signal
     });
   }
 

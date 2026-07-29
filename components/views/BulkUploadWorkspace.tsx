@@ -14,7 +14,11 @@ interface BulkUploadWorkspaceProps {
   darkMode: boolean;
   onSwitchToSingle: () => void;
   onSwitchToBulk: () => void;
-  onAnalyze: (entries: BulkUploadParseResult["entries"], onProgress: (progress: BulkAnalysisProgress) => void) => Promise<BulkAnalysisResult>;
+  onAnalyze: (
+    entries: BulkUploadParseResult["entries"],
+    onProgress: (progress: BulkAnalysisProgress) => void,
+    signal: AbortSignal
+  ) => Promise<BulkAnalysisResult>;
   onCommitCluster: (cluster: BulkCluster) => Promise<{
     knowledgeId: string;
     candidateId: string;
@@ -84,6 +88,7 @@ export function BulkUploadWorkspace({
   onOpenSingleTicket
 }: BulkUploadWorkspaceProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const analysisControllerRef = useRef<AbortController | null>(null);
   const [fileName, setFileName] = useState("");
   const [fileContent, setFileContent] = useState("");
   const [parseResult, setParseResult] = useState<BulkUploadParseResult | null>(null);
@@ -144,22 +149,51 @@ export function BulkUploadWorkspace({
 
   async function startAnalysis() {
     if (!parseResult || parseResult.entries.length === 0 || parseResult.needsMapping) return;
+    const controller = new AbortController();
+    analysisControllerRef.current = controller;
     setIsAnalyzing(true);
     setErrorMessage("");
     setAnalysis(null);
-    setProgress({ completed: 0, total: parseResult.entries.length, currentLabel: "Preparing analysis", percent: 0 });
+    setProgress({
+      completed: 0,
+      total: parseResult.entries.length,
+      currentLabel: "Preparing analysis",
+      percent: 0,
+      phase: "analyzing"
+    });
     try {
-      const result = await onAnalyze(parseResult.entries, setProgress);
+      const result = await onAnalyze(parseResult.entries, setProgress, controller.signal);
       setAnalysis(result);
       setClusters(result.clusters.map(withEditableCluster));
       setUnclustered(withEditableCluster(result.unclustered));
       setExpandedClusterId(result.clusters[0]?.id ?? null);
-      setProgress({ completed: result.total, total: result.total, currentLabel: "Analysis complete", percent: 100 });
+      setProgress({
+        completed: result.total,
+        total: result.total,
+        currentLabel: "Analysis complete",
+        percent: 100,
+        phase: "complete"
+      });
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Bulk analysis failed.");
+      // TODO-062A: an abandoned run reports as cancelled, not as a failure, and
+      // always clears the progress line so no spinner can outlive the run.
+      const cancelled = controller.signal.aborted;
+      setErrorMessage(
+        cancelled
+          ? "Bulk analysis was cancelled. No organizational memory was changed."
+          : error instanceof Error
+          ? error.message
+          : "Bulk analysis failed."
+      );
+      setProgress(null);
     } finally {
+      analysisControllerRef.current = null;
       setIsAnalyzing(false);
     }
+  }
+
+  function cancelAnalysis() {
+    analysisControllerRef.current?.abort();
   }
 
   function moveQueryToUnclustered(clusterId: string, entryId: string) {
@@ -373,9 +407,19 @@ export function BulkUploadWorkspace({
             >
               {isAnalyzing ? "Analyzing..." : "Analyze queries"}
             </button>
+            {isAnalyzing ? (
+              <button
+                type="button"
+                onClick={cancelAnalysis}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${darkMode ? "border border-[#2d3f52] text-slate-300 hover:bg-[#111827]" : "border border-slate-200 text-slate-700 hover:bg-slate-50"}`}
+              >
+                Cancel analysis
+              </button>
+            ) : null}
             {progress ? (
               <p className={`text-sm ${muted}`}>
                 {progress.currentLabel} ({progress.percent}%)
+                {progress.phase === "clustering" ? " · clustering" : ""}
               </p>
             ) : null}
             {analysis ? (
