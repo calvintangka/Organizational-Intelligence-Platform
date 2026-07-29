@@ -116,8 +116,12 @@ const CATEGORY_CONCEPTS: Record<string, readonly string[]> = {
   "Account Access": ["account", "access_denied"],
   "Permissions & Access": ["permission", "access_denied"],
   Billing: ["invoice", "payment"],
-  Subscription: ["subscription"],
-  Refund: ["refund"],
+  // Refund and Subscription are deliberately ABSENT. Neither is needed by any
+  // supported multilingual family, and TODO-011 case C shows the risk of adding
+  // them: it expects a refund request to fall back to Billing when the profile
+  // has no Refund category. (That case fails independently of this work — it
+  // already failed at 6f795bd — but concept assist must not make it worse by
+  // resurrecting a category the English layer scored at zero.)
   "Delivery Delay": ["delivery_delay"],
   "Reporting & Exports": ["report_export"]
 };
@@ -134,6 +138,41 @@ const CATEGORY_CONCEPTS: Record<string, readonly string[]> = {
  * audit measured landing in Uncategorized.
  */
 const MIN_CONCEPT_CATEGORY_EVIDENCE = 2;
+
+/**
+ * TODO-058C Part G: concept-driven intent, used to refine canonical
+ * sub-selection when English phrasing produced no intent. Each entry names the
+ * SPECIFIC concept that distinguishes one canonical from its category's general
+ * fallback — "faktur duplikat" should reach the invoice canonical, exactly as
+ * "duplicate invoice" does. Only specific concepts appear here; a generic one
+ * must never refine a canonical.
+ *
+ * A rule must never let a concept re-introduce an intent the ORGANIZATION
+ * PROFILE disabled. An earlier draft mapped Billing + refund -> refund_request,
+ * which resurrected a refund intent for a profile whose Refund category is
+ * switched off — TODO-011 case C caught it. Refinement therefore stays inside
+ * the category the ticket already legitimately reached.
+ */
+const CONCEPT_INTENT_RULES: Array<{ category: string; conceptId: string; intent: string }> = [
+  { category: "Billing", conceptId: "invoice", intent: "invoice_question" }
+];
+
+/**
+ * Intents that are a category's GENERAL fallback rather than a specific
+ * diagnosis. Only these may be refined by concept evidence; a specific intent
+ * that the English layer already determined is never overridden.
+ */
+const REFINABLE_GENERIC_INTENTS = new Set(["billing_charge_issue"]);
+
+function isRefinableGenericIntent(intent: string | undefined): boolean {
+  return !intent || REFINABLE_GENERIC_INTENTS.has(intent);
+}
+
+function conceptIntentForCategory(category: string, extraction: ConceptExtraction): string | undefined {
+  if (extraction.empty) return undefined;
+  const found = new Set(extraction.conceptIds);
+  return CONCEPT_INTENT_RULES.find((rule) => rule.category === category && found.has(rule.conceptId))?.intent;
+}
 
 function conceptScoreForCategory(category: string, extraction: ConceptExtraction): number {
   const conceptIds = CATEGORY_CONCEPTS[category];
@@ -1298,7 +1337,21 @@ export function understandForProfile(ticket: Ticket, inputProfile: OrganizationP
 
 
  const coreProblem = isUncategorized ? ticket.subject : CORE_PROBLEM_MAP[bestCategory] ?? ticket.subject;
-  const intent = isUncategorized ? UNCATEGORIZED_INTENT : inferIntent(bestCategory, detectedSignals, fullText);
+  const lexicalIntent = isUncategorized ? UNCATEGORIZED_INTENT : inferIntent(bestCategory, detectedSignals, fullText);
+  // TODO-058C Part G: canonical SUB-selection keys off intent, which is inferred
+  // from English phrasing. A non-English ticket therefore reached the category's
+  // general canonical ("Billing & Charge Issue") instead of the specific one
+  // ("Billing & Invoice Issue"). Refine with concept evidence ONLY when English
+  // produced no intent at all, so English canonical selection is untouched.
+  //
+  // Gated on conceptAssisted: only a ticket whose CATEGORY already needed
+  // concept evidence — i.e. one the English layer could not read at all — may
+  // have its intent refined. An English ticket mentioning "invoice" or "bill"
+  // already reaches invoice_question lexically, so its canonical is untouched.
+  const intent =
+    !isUncategorized && conceptAssisted && isRefinableGenericIntent(lexicalIntent)
+      ? conceptIntentForCategory(bestCategory, conceptExtraction) ?? lexicalIntent
+      : lexicalIntent;
   const signalSummary = detectedSignals.slice(0, 3).join(", ");
   const summary = isUncategorized
     ? UNCATEGORIZED_REASONING

@@ -1,5 +1,18 @@
 # Change Log
 
+## [2026-07-29] TODO-058C Language-Neutral Organizational Learning
+
+**Task/Prompt:** Complete the organizational learning lifecycle so language never creates duplicate Organizational Memory.
+
+- **LEARNING DEFECT FOUND AND FIXED (the headline).** `generateReflection` compares the reviewed response to the stored template with `wordOverlapPct`, which matches `\b\w{4,}\b` — ASCII only. A policy-compliant Japanese reply therefore shares zero words with an English template, so overlap read 0%. Measured on the identical correct resolution at 92% similarity: English gave `trust_update_only` with trust **+5**, Japanese gave `create_version` with `reset_partial` and trust **−8**. The organization was creating a duplicate version of memory it already had AND being penalized for obeying its own language policy.
+- **Fix (Part B/C/D):** reflection now receives the resolved reply language and the configured internal documentation language. When they differ, the word-overlap proxy is invalid, so the decision uses problem SIMILARITY alone — which is language-neutral. Same-language resolutions (every English one) keep the overlap path byte-identical, verified both with and without the new context.
+- **Part G gap from TODO-058B closed.** Canonical sub-selection keyed off English-inferred intent, so "faktur duplikat" reached the general billing canonical. Concept-driven intent refinement now routes all eight tested languages to `canonical-billing-invoice-issue`. Gated on the ticket having needed concept assist, so English canonical selection is untouched, and the TODO-058B probe's known-gap allowance was removed rather than left in place.
+- **A refinement rule was withdrawn during the work.** An initial `Billing + refund → refund_request` rule let a concept re-introduce an intent the organization PROFILE had disabled. Removed; refinement now stays inside the category the ticket legitimately reached. `Refund` and `Subscription` were likewise dropped from the concept-to-category map — no supported family needs them, and reviving a profile-disabled category is exactly the wrong behavior.
+- Added `probe:todo058c-language-neutral-learning` — 10 offline checks over the real reflection and retrieval functions: identical outcome and trust across all ten languages, no version/lesson created by language alone, English byte-identical, a genuinely rewritten same-language answer still versions, canonical refinement, distinct problems staying distinct, and reviewer-facing rationale.
+- Regression: TODO-058A, TODO-058B, BUG-008 ×2, BUG-010, TODO-019, TODO-039, TODO-040, TODO-046, TODO-047, TODO-048, TODO-049, TODO-050, TODO-051, TODO-052, TODO-053, and mature English retrieval (33 PASS / 0 FAIL) all pass; `tsc`, strict-unused, and build clean. Zero writes — counts and profile revisions byte-identical.
+- **Correction to an earlier assumption:** TODO-011 case C (refund-disabled profile falling back to Billing) fails, but it fails identically at `6f795bd`, before any TODO-058B retrieval work. It is pre-existing and unrelated, not a regression from this line of work.
+- **Not complete:** cross-language lesson MATCHING still reaches CJK only (accented Latin retains ASCII tokens and takes the lexical path), so Part H is unfinished. Lesson authoring language (Part C beyond reflection) and end-to-end promotion against a live database (Part E) were not exercised.
+
 ## [2026-07-29] TODO-058B Language-Neutral Retrieval
 
 **Task/Prompt:** Make the deterministic Organizational Memory lookup path language-neutral so equivalent tickets in ten languages reach the same canonical and memory. Do not rebuild TODO-058A.

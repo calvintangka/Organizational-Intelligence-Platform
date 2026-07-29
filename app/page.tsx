@@ -2677,9 +2677,16 @@ export default function Home() {
       draftedMatch && suggestedResponse?.draftMode === "lesson_grounded"
         ? findMatchingLesson(selectedTicket, draftedMatch.item)?.lesson ?? null
         : null;
+    // TODO-058C: reflection needs to know whether the reply was rendered in a
+    // different language from the organization's documentation, so a
+    // policy-compliant translation is never mistaken for a rewritten answer.
+    const reflectionLanguage = resolveTicketLanguage(selectedTicket, organizationProfile);
     const reflection = generateReflection(und, reviewedResponse, existingMatch, {
       draftMode: suggestedResponse?.draftMode,
       matchedLesson
+    }, {
+      responseLanguage: reflectionLanguage.response.language,
+      internalLanguage: reflectionLanguage.policy.internalLanguage
     });
     setReflectionDecision(reflection);
 

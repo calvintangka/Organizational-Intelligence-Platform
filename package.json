@@ -78,6 +78,7 @@
     "probe:todo055-document-title": "node scripts/todo055-document-title-probe.cjs",
     "probe:todo058-multilingual": "node scripts/todo058-multilingual-probe.cjs",
     "probe:todo058b-language-neutral-retrieval": "node scripts/todo058b-language-neutral-retrieval-probe.cjs",
+    "probe:todo058c-language-neutral-learning": "node scripts/todo058c-language-neutral-learning-probe.cjs",
     "probe:todo056-controlled-threshold": "node scripts/todo056-controlled-threshold-probe.cjs",
     "restore:maesa-profile-vocabulary": "node scripts/restore-maesa-profile-vocabulary.cjs",
     "restore:organization-profile-settings": "node scripts/restore-organization-profile-settings.cjs",

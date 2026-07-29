@@ -26,6 +26,29 @@ function wordOverlapPct(a: string, b: string): number {
   return Math.round((shared / Math.min(aWords.size, bWords.size)) * 100);
 }
 
+/**
+ * TODO-058C Part B: the languages involved in this resolution.
+ *
+ * `responseLanguage` is what the customer-facing draft was written in (decided
+ * by organization policy in TODO-058A); `internalLanguage` is the organization's
+ * configured documentation language, which is what stored templates and lessons
+ * are written in.
+ */
+export interface ReflectionLanguageContext {
+  responseLanguage?: string;
+  internalLanguage?: string;
+}
+
+/**
+ * True when the reply was rendered in a different language from the stored
+ * organizational memory it was grounded on.
+ */
+function isCrossLanguageResolution(context?: ReflectionLanguageContext): boolean {
+  const response = context?.responseLanguage;
+  const internal = context?.internalLanguage;
+  return Boolean(response && internal && response !== internal);
+}
+
 export function generateReflection(
   und: Understanding,
   reviewedResponse: string,
@@ -33,7 +56,8 @@ export function generateReflection(
   groundingSource?: {
     draftMode?: DraftGroundingMode;
     matchedLesson?: Lesson | null;
-  }
+  },
+  languageContext?: ReflectionLanguageContext
 ): ReflectionDecision {
   if (und.category === "Uncategorized" && !existingMatch) {
     return {
@@ -64,6 +88,46 @@ export function generateReflection(
       ? groundingSource.matchedLesson.customerResponse
       : item.customerResponseTemplate ?? item.approvedAnswer ?? "";
   const responseOverlap = wordOverlapPct(reviewedResponse, existingTemplate);
+
+  // TODO-058C Part B/C/D: word overlap is a proxy for "did the reviewer rewrite
+  // the answer?". That proxy is INVALID across languages: a policy-compliant
+  // Japanese reply shares no words with an English template, so overlap reads 0
+  // and the organization gets punished for obeying its own language policy —
+  // measured as create_version with trust -8, where the identical English
+  // resolution produced trust_update_only with +5. Language would then create a
+  // duplicate version of memory the organization already has.
+  //
+  // When the reply language differs from the internal documentation language,
+  // decide on SIMILARITY alone, which is language-neutral. Nothing else changes:
+  // same-language resolutions (every English one) keep the overlap path exactly.
+  if (isCrossLanguageResolution(languageContext)) {
+    const languageNote =
+      `The reply was written in ${languageContext?.responseLanguage} while organizational memory is documented in ` +
+      `${languageContext?.internalLanguage}, so wording overlap is not evidence of a different resolution. ` +
+      `This decision uses problem similarity only, and language alone never creates a new version or lesson.`;
+    if (similarity >= 80) {
+      return {
+        isLearningEvent: false,
+        action: "trust_update_only",
+        rationale: `This resolution matches the known solution "${itemTitle}" (${similarity}% similarity). ${languageNote}`,
+        existingItemId: item.id,
+        existingItemTitle: itemTitle,
+        existingItemSimilarity: similarity,
+        trustImpact: "increase",
+        estimatedTrustDelta: 5
+      };
+    }
+    return {
+      isLearningEvent: true,
+      action: "merge_existing",
+      rationale: `This ticket partially matches the known solution "${itemTitle}" (${similarity}% similarity). Adding it as supporting evidence confirms the pattern holds across languages. ${languageNote}`,
+      existingItemId: item.id,
+      existingItemTitle: itemTitle,
+      existingItemSimilarity: similarity,
+      trustImpact: "increase",
+      estimatedTrustDelta: 3
+    };
+  }
 
   if (similarity >= 80) {
     if (responseOverlap >= 70) {

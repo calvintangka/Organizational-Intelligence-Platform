@@ -113,9 +113,10 @@ console.log("TODO-058B language-neutral retrieval probe\n");
  * any NEW divergence fails the probe. Closing it means concept-aware intent
  * inference, which is deliberately out of this change's scope.
  */
-const KNOWN_CANONICAL_GAPS = {
-  invoice: { id: "canonical-billing-charge-issue" }
-};
+/* CLOSED by TODO-058C Part G: concept-driven intent refinement now routes
+ * "faktur duplikat" / "請求書の重複" to the invoice-specific canonical, so every
+ * family converges on one canonical id and no gap remains. */
+const KNOWN_CANONICAL_GAPS = {};
 
 for (const [family, byLanguage] of Object.entries(FAMILIES)) {
   check(`M: "${family}" reaches ONE canonical across all ten languages`, () => {
