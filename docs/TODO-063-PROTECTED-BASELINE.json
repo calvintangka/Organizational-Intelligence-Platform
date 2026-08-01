@@ -1,0 +1,51 @@
+{
+  "capturedAt": "2026-08-01T16:29:11.820Z",
+  "organizationId": "profile-oip-developer-demo",
+  "fixture": {
+    "path": "tmp/TODO-062B-developer-bulk.csv",
+    "uploadKey": "bulk-d5ccce9c",
+    "rows": 100,
+    "languages": { "en": 50, "id": 50 },
+    "ticketRange": ["OD-20260729-5016", "OD-20260729-5115"]
+  },
+  "counts": {
+    "knowledge": 47,
+    "lessons": 181,
+    "canonicals": 47,
+    "tickets": 5120,
+    "candidates": 1805,
+    "validations": 1804,
+    "memoryChanges": 1804,
+    "trustEvidence": 4500,
+    "patterns": 50,
+    "intelligenceLog": 196
+  },
+  "derived": {
+    "trustTotal": 2811,
+    "ticketSequenceCounter": 5120,
+    "profileRevision": 33,
+    "knowledgeVersions": 130,
+    "mergedTickets": 1029,
+    "duplicatePreventions": 1029,
+    "emergingPatternsDetected": 54,
+    "promotedPatterns": 45
+  },
+  "digests": {
+    "metrics": "f547c5551018bf31",
+    "matureMemory": "e57a6bd258101a2d"
+  },
+  "heroProvenance": {
+    "knowledgeId": "demo-ki-sso-certificate-redirect-loop",
+    "sourceTicketId": "OIP-20230104-0001",
+    "trustScore": 95,
+    "revision": 2,
+    "lessonCount": 10,
+    "versionCount": 7
+  },
+  "protectedOrganizations": [
+    "profile-oip-developer-demo",
+    "profile-maesa-tech",
+    "profile-fastdrop-logistics",
+    "test-oip-regression"
+  ]
+}

@@ -46,6 +46,7 @@ const UNCATEGORIZED_PLACEHOLDER = "This issue type is new to the organization. P
  * issue (or any other cross-category mismatch) regardless of trust score.
  */
 const COMPATIBLE_CATEGORIES: Record<string, string[]> = {
+  "Business Inquiry": ["Business Inquiry"],
   Activation: ["Activation"],
   // Two-Factor Auth is its own canonical problem - not compatible with Login templates
   "Two-Factor Auth": ["Two-Factor Auth"],
@@ -314,7 +315,16 @@ export function isCompatibleForDrafting(
   item: KnowledgeItem,
   ticket?: Ticket
 ): boolean {
-  if (!isCategoryCompatible(understanding.category, item.category)) return false;
+  if (!isCategoryCompatible(understanding.category, item.category)) {
+    // A newly named canonical problem can carry a provisional category equal
+    // to its title while the first validated lesson establishes the actual
+    // operational boundary. Strong, non-contradictory lesson evidence may
+    // bridge that provisional label; ordinary keyword overlap may not.
+    const provisionalCategory = item.category === "General"
+      || item.category === UNCATEGORIZED_CATEGORY
+      || item.category === item.canonicalProblemTitle;
+    if (!ticket || !provisionalCategory || !isStrongValidatedLessonMatch(understanding, ticket, item)) return false;
+  }
   if (!ticket) return true;
   if (isStrongValidatedLessonMatch(understanding, ticket, item)) return true;
   return assessRootCauseCompatibility(understanding, item, ticket).compatible;
@@ -1224,6 +1234,53 @@ function applyProfileTone(draft: string, ticket: Ticket, profile: OrganizationPr
 function appendTicketReferenceIfNeeded(draft: string, ticketId: string | undefined): string {
   if (!ticketId || draft.includes(ticketId)) return draft;
   return `${draft}\n\nYour ticket reference is ${ticketId}.`;
+}
+
+export function draftBusinessInquiryResponse(
+  ticket: Ticket,
+  understanding: Understanding,
+  profile: OrganizationProfile,
+  responseLanguage: string
+): Pick<SuggestedResponse, "draftResponse" | "basedOnKnowledgeIds" | "confidenceNote" | "source"> {
+  const classification = understanding.businessClassification;
+  const intent = classification?.intent ?? "general_business_inquiry";
+  const name = resolveCustomerAddressingName(ticket, understanding);
+  const greeting = responseLanguage.toLowerCase().startsWith("id")
+    ? name ? `Halo ${name}, terima kasih telah menghubungi ${profile.name}.` : `Halo, terima kasih telah menghubungi ${profile.name}.`
+    : name ? `Hello ${name}, thank you for contacting ${profile.name}.` : `Hello, thank you for contacting ${profile.name}.`;
+  const identity = understanding.extractedFields.companyName
+    ? responseLanguage.toLowerCase().startsWith("id")
+      ? `Kami memahami bahwa Anda menghubungi kami dari ${understanding.extractedFields.companyName}${understanding.extractedFields.senderRole ? ` sebagai ${understanding.extractedFields.senderRole}` : ""}.`
+      : `We understand that you are contacting us from ${understanding.extractedFields.companyName}${understanding.extractedFields.senderRole ? ` as ${understanding.extractedFields.senderRole}` : ""}.`
+    : "";
+  const isIndonesian = responseLanguage.toLowerCase().startsWith("id");
+  const products = profile.products.join(", ");
+  const services = profile.services.join(", ");
+  const domains = profile.supportedDomains.join(", ");
+  const body = isIndonesian
+    ? intent === "company_information"
+      ? `${profile.name} adalah perusahaan di industri ${profile.industry}. Profil organisasi menjelaskan bahwa ${profile.description} Layanan yang tercatat meliputi: ${services}.`
+      : intent === "product_information" || intent === "multilingual_support"
+      ? `${profile.name} menawarkan produk berikut: ${products}. Produk dan kemampuan yang tercatat dalam profil mencakup: ${domains}.`
+      : `Kami dapat membagikan informasi yang tercatat tentang ${profile.name}: ${profile.description} Produk yang tercatat adalah ${products}, dengan layanan ${services}.`
+    : intent === "company_information"
+      ? `${profile.name} operates in the ${profile.industry} industry. The approved organization profile describes it as ${profile.description} The listed services are: ${services}.`
+      : intent === "product_information" || intent === "multilingual_support"
+      ? `${profile.name} offers: ${products}. The capabilities currently listed in the organization profile include: ${domains}.`
+      : `Here is the approved information available about ${profile.name}: ${profile.description} The listed products are ${products}, with services including ${services}.`;
+  const limitation = isIndonesian
+    ? `Profil organisasi saat ini tidak memuat harga, lampiran, tautan publik, atau detail integrasi, jadi informasi tersebut tidak saya karang.`
+    : `The current organization profile does not include pricing, attachments, public links, or integration details, so I have not invented them.`;
+  const reference = ticket.ticketId
+    ? isIndonesian ? `\n\nReferensi tiket Anda adalah ${ticket.ticketId}.` : `\n\nYour ticket reference is ${ticket.ticketId}.`
+    : "";
+  const closing = isIndonesian ? `\n\nHormat kami,\nTim ${profile.name}` : `\n\nKind regards,\n${profile.name} Support Team`;
+  return {
+    draftResponse: `${greeting}${identity ? `\n\n${identity}` : ""}\n\n${body}\n\n${limitation}${reference}${closing}`,
+    basedOnKnowledgeIds: [],
+    confidenceNote: `Grounded business-inquiry draft based only on the approved ${profile.name} organization profile (${intent}). No operational lessons, resolved tickets, pricing, links, attachments, or unsupported integrations were used. Human review is required before sending.`,
+    source: "deterministic"
+  };
 }
 
 export function draftResponse(

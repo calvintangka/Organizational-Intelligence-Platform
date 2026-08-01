@@ -153,7 +153,7 @@ function mockProvider(calls, respond) {
 async function main() {
   const before = await snapshots();
   const [profile, items] = await Promise.all([persistence.getOrganizationProfile(DEMO), persistence.loadKnowledge(DEMO)]);
-  if (profile.id !== DEMO || items.length !== 45) throw new Error(`Expected mature demo; got ${profile.id}/${items.length}.`);
+  if (profile.id !== DEMO || items.length !== 47) throw new Error(`Expected current mature demo; got ${profile.id}/${items.length}.`);
   const hero = items.find((item) => item.id === HERO);
   assert(hero, `Missing ${HERO}.`);
   const cases = {};

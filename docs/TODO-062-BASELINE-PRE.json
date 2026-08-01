@@ -1,0 +1,1605 @@
+{
+  "capturedAt": "2026-07-29T11:10:12.970Z",
+  "organizationId": "profile-oip-developer-demo",
+  "counts": {
+    "knowledgeItems": 45,
+    "knowledgeCandidates": 1802,
+    "validationRecords": 1801,
+    "memoryChangeRecords": 1801,
+    "ticketRecords": 5003,
+    "trustEvidence": 4500,
+    "emergingPatterns": 46,
+    "intelligenceLog": 92
+  },
+  "derived": {
+    "lessonCount": 180,
+    "trustTotal": 2771,
+    "canonicalCount": 45
+  },
+  "ticketSequenceCounter": 5003,
+  "profileRevision": 33,
+  "organizationSettingsDigest": "b6ca9f83f8ab69ed",
+  "metricsDigest": "370e6a1d2afd3f57",
+  "knowledgeFingerprints": [
+    {
+      "id": "demo-ki-annual-renewal-seat-count",
+      "canonicalProblemId": "demo-ki-annual-renewal-seat-count",
+      "canonicalProblemTitle": "Annual Renewal Seat Reconciliation",
+      "category": "Billing",
+      "trustScore": 68,
+      "timesSeen": 22,
+      "timesReused": 10,
+      "humanReviewCount": 11,
+      "sourceTicketId": "OIP-20240306-1018",
+      "createdAt": "2024-03-25T12:02:04.000Z",
+      "lastUpdatedAt": "2026-04-06T03:51:36.000Z",
+      "revision": 1,
+      "lessonCount": 4,
+      "lessonIds": [
+        "demo-les-annual-renewal-seat-count-001",
+        "demo-les-annual-renewal-seat-count-002",
+        "demo-les-annual-renewal-seat-count-003",
+        "demo-les-annual-renewal-seat-count-004"
+      ],
+      "contentDigest": "e658e7bdf0d7a66d",
+      "lessonTextDigest": "5828792d83918747",
+      "versionLineage": [
+        "1:demo-ki-annual-renewal-seat-count-v001",
+        "2:demo-ki-annual-renewal-seat-count-v002",
+        "3:demo-ki-annual-renewal-seat-count-v003"
+      ]
+    },
+    {
+      "id": "demo-ki-api-idempotency-collision",
+      "canonicalProblemId": "demo-ki-api-idempotency-collision",
+      "canonicalProblemTitle": "API Idempotency Key Collision",
+      "category": "API & Integrations",
+      "trustScore": 28,
+      "timesSeen": 15,
+      "timesReused": 2,
+      "humanReviewCount": 3,
+      "sourceTicketId": "OIP-20251002-3459",
+      "createdAt": "2025-10-11T19:25:05.000Z",
+      "lastUpdatedAt": "2026-05-07T03:35:00.000Z",
+      "revision": 1,
+      "lessonCount": 1,
+      "lessonIds": [
+        "demo-les-api-idempotency-collision-001"
+      ],
+      "contentDigest": "5c5c37c3d72c7a25",
+      "lessonTextDigest": "4d315e0f5e6c3d28",
+      "versionLineage": [
+        "1:demo-ki-api-idempotency-collision-v001"
+      ]
+    },
+    {
+      "id": "demo-ki-api-pagination-cursor",
+      "canonicalProblemId": "demo-ki-api-pagination-cursor",
+      "canonicalProblemTitle": "API Pagination Cursor Invalidated",
+      "category": "API & Integrations",
+      "trustScore": 68,
+      "timesSeen": 22,
+      "timesReused": 10,
+      "humanReviewCount": 11,
+      "sourceTicketId": "OIP-20240406-1156",
+      "createdAt": "2024-05-08T07:54:05.000Z",
+      "lastUpdatedAt": "2026-04-23T01:54:36.000Z",
+      "revision": 1,
+      "lessonCount": 4,
+      "lessonIds": [
+        "demo-les-api-pagination-cursor-001",
+        "demo-les-api-pagination-cursor-002",
+        "demo-les-api-pagination-cursor-003",
+        "demo-les-api-pagination-cursor-004"
+      ],
+      "contentDigest": "bbb06583105f2b02",
+      "lessonTextDigest": "ae9a5ff860a7fced",
+      "versionLineage": [
+        "1:demo-ki-api-pagination-cursor-v001",
+        "2:demo-ki-api-pagination-cursor-v002",
+        "3:demo-ki-api-pagination-cursor-v003"
+      ]
+    },
+    {
+      "id": "demo-ki-api-rate-limit-burst",
+      "canonicalProblemId": "demo-ki-api-rate-limit-burst",
+      "canonicalProblemTitle": "API Rate-Limit Burst During Synchronization",
+      "category": "API & Integrations",
+      "trustScore": 98,
+      "timesSeen": 49,
+      "timesReused": 16,
+      "humanReviewCount": 17,
+      "sourceTicketId": "OIP-20230421-0148",
+      "createdAt": "2023-04-27T13:55:03.000Z",
+      "lastUpdatedAt": "2026-06-12T00:37:38.000Z",
+      "revision": 1,
+      "lessonCount": 6,
+      "lessonIds": [
+        "demo-les-api-rate-limit-burst-001",
+        "demo-les-api-rate-limit-burst-002",
+        "demo-les-api-rate-limit-burst-003",
+        "demo-les-api-rate-limit-burst-004",
+        "demo-les-api-rate-limit-burst-005",
+        "demo-les-api-rate-limit-burst-006"
+      ],
+      "contentDigest": "e55b35fe63c1db4c",
+      "lessonTextDigest": "65af23294f7afdb5",
+      "versionLineage": [
+        "1:demo-ki-api-rate-limit-burst-v001",
+        "2:demo-ki-api-rate-limit-burst-v002",
+        "3:demo-ki-api-rate-limit-burst-v003",
+        "4:demo-ki-api-rate-limit-burst-v004",
+        "5:demo-ki-api-rate-limit-burst-v005"
+      ]
+    },
+    {
+      "id": "demo-ki-audit-log-visibility",
+      "canonicalProblemId": "demo-ki-audit-log-visibility",
+      "canonicalProblemTitle": "Audit Log Visibility Scope",
+      "category": "Permissions & Access",
+      "trustScore": 48,
+      "timesSeen": 24,
+      "timesReused": 6,
+      "humanReviewCount": 7,
+      "sourceTicketId": "OIP-20240621-1410",
+      "createdAt": "2024-07-25T02:13:06.000Z",
+      "lastUpdatedAt": "2026-04-21T00:29:10.000Z",
+      "revision": 1,
+      "lessonCount": 3,
+      "lessonIds": [
+        "demo-les-audit-log-visibility-001",
+        "demo-les-audit-log-visibility-002",
+        "demo-les-audit-log-visibility-003"
+      ],
+      "contentDigest": "71b7b3b40426ac3c",
+      "lessonTextDigest": "63a1d96f0ce3694a",
+      "versionLineage": [
+        "1:demo-ki-audit-log-visibility-v001",
+        "2:demo-ki-audit-log-visibility-v002"
+      ]
+    },
+    {
+      "id": "demo-ki-biometric-unlock-reset",
+      "canonicalProblemId": "demo-ki-biometric-unlock-reset",
+      "canonicalProblemTitle": "Biometric Unlock Reset",
+      "category": "Mobile Application",
+      "trustScore": 43,
+      "timesSeen": 14,
+      "timesReused": 5,
+      "humanReviewCount": 6,
+      "sourceTicketId": "OIP-20241106-1901",
+      "createdAt": "2024-11-25T11:33:03.000Z",
+      "lastUpdatedAt": "2026-03-12T03:24:41.000Z",
+      "revision": 1,
+      "lessonCount": 2,
+      "lessonIds": [
+        "demo-les-biometric-unlock-reset-001",
+        "demo-les-biometric-unlock-reset-002"
+      ],
+      "contentDigest": "ab838529f2b1cf2d",
+      "lessonTextDigest": "baff42925a06c713",
+      "versionLineage": [
+        "1:demo-ki-biometric-unlock-reset-v001"
+      ]
+    },
+    {
+      "id": "demo-ki-cellular-attachment-resume",
+      "canonicalProblemId": "demo-ki-cellular-attachment-resume",
+      "canonicalProblemTitle": "Cellular Attachment Upload Resume",
+      "category": "Mobile Application",
+      "trustScore": 43,
+      "timesSeen": 14,
+      "timesReused": 5,
+      "humanReviewCount": 6,
+      "sourceTicketId": "OIP-20250120-2287",
+      "createdAt": "2025-02-20T03:03:05.000Z",
+      "lastUpdatedAt": "2026-03-15T14:30:01.000Z",
+      "revision": 1,
+      "lessonCount": 2,
+      "lessonIds": [
+        "demo-les-cellular-attachment-resume-001",
+        "demo-les-cellular-attachment-resume-002"
+      ],
+      "contentDigest": "4586374165ba4478",
+      "lessonTextDigest": "64c8c199dbccd79a",
+      "versionLineage": [
+        "1:demo-ki-cellular-attachment-resume-v001"
+      ]
+    },
+    {
+      "id": "demo-ki-connector-field-mapping",
+      "canonicalProblemId": "demo-ki-connector-field-mapping",
+      "canonicalProblemTitle": "Connector Field Mapping Drift",
+      "category": "API & Integrations",
+      "trustScore": 68,
+      "timesSeen": 22,
+      "timesReused": 10,
+      "humanReviewCount": 11,
+      "sourceTicketId": "OIP-20240422-1202",
+      "createdAt": "2024-05-07T05:40:07.000Z",
+      "lastUpdatedAt": "2026-03-31T20:27:37.000Z",
+      "revision": 1,
+      "lessonCount": 4,
+      "lessonIds": [
+        "demo-les-connector-field-mapping-001",
+        "demo-les-connector-field-mapping-002",
+        "demo-les-connector-field-mapping-003",
+        "demo-les-connector-field-mapping-004"
+      ],
+      "contentDigest": "60cc3e18c54640eb",
+      "lessonTextDigest": "52e0f9cbb3447283",
+      "versionLineage": [
+        "1:demo-ki-connector-field-mapping-v001",
+        "2:demo-ki-connector-field-mapping-v002",
+        "3:demo-ki-connector-field-mapping-v003"
+      ]
+    },
+    {
+      "id": "demo-ki-csv-export-encoding",
+      "canonicalProblemId": "demo-ki-csv-export-encoding",
+      "canonicalProblemTitle": "CSV Export Encoding Mismatch",
+      "category": "Reporting & Exports",
+      "trustScore": 71,
+      "timesSeen": 50,
+      "timesReused": 17,
+      "humanReviewCount": 18,
+      "sourceTicketId": "OIP-20230810-0351",
+      "createdAt": "2023-09-04T18:29:09.000Z",
+      "lastUpdatedAt": "2026-06-26T09:12:39.000Z",
+      "revision": 1,
+      "lessonCount": 6,
+      "lessonIds": [
+        "demo-les-csv-export-encoding-001",
+        "demo-les-csv-export-encoding-002",
+        "demo-les-csv-export-encoding-003",
+        "demo-les-csv-export-encoding-004",
+        "demo-les-csv-export-encoding-005",
+        "demo-les-csv-export-encoding-006"
+      ],
+      "contentDigest": "87e53a8432029e3f",
+      "lessonTextDigest": "a2977cdd6a87d274",
+      "versionLineage": [
+        "1:demo-ki-csv-export-encoding-v001",
+        "2:demo-ki-csv-export-encoding-v002",
+        "3:demo-ki-csv-export-encoding-v003",
+        "4:demo-ki-csv-export-encoding-v004"
+      ]
+    },
+    {
+      "id": "demo-ki-custom-role-cache",
+      "canonicalProblemId": "demo-ki-custom-role-cache",
+      "canonicalProblemTitle": "Custom Role Claim Cache",
+      "category": "Permissions & Access",
+      "trustScore": 71,
+      "timesSeen": 50,
+      "timesReused": 17,
+      "humanReviewCount": 18,
+      "sourceTicketId": "OIP-20230621-0257",
+      "createdAt": "2023-06-29T07:45:04.000Z",
+      "lastUpdatedAt": "2026-06-17T07:58:42.000Z",
+      "revision": 1,
+      "lessonCount": 6,
+      "lessonIds": [
+        "demo-les-custom-role-cache-001",
+        "demo-les-custom-role-cache-002",
+        "demo-les-custom-role-cache-003",
+        "demo-les-custom-role-cache-004",
+        "demo-les-custom-role-cache-005",
+        "demo-les-custom-role-cache-006"
+      ],
+      "contentDigest": "69fdf27a91eb4d4e",
+      "lessonTextDigest": "2cc041ce5bd54721",
+      "versionLineage": [
+        "1:demo-ki-custom-role-cache-v001",
+        "2:demo-ki-custom-role-cache-v002",
+        "3:demo-ki-custom-role-cache-v003",
+        "4:demo-ki-custom-role-cache-v004"
+      ]
+    },
+    {
+      "id": "demo-ki-dashboard-filter-persistence",
+      "canonicalProblemId": "demo-ki-dashboard-filter-persistence",
+      "canonicalProblemTitle": "Dashboard Filter Persistence",
+      "category": "Reporting & Exports",
+      "trustScore": 48,
+      "timesSeen": 24,
+      "timesReused": 6,
+      "humanReviewCount": 7,
+      "sourceTicketId": "OIP-20240708-1470",
+      "createdAt": "2024-09-09T09:33:09.000Z",
+      "lastUpdatedAt": "2026-06-03T09:03:31.000Z",
+      "revision": 1,
+      "lessonCount": 3,
+      "lessonIds": [
+        "demo-les-dashboard-filter-persistence-001",
+        "demo-les-dashboard-filter-persistence-002",
+        "demo-les-dashboard-filter-persistence-003"
+      ],
+      "contentDigest": "d35ab89ed9c44329",
+      "lessonTextDigest": "12ec5799db963aa7",
+      "versionLineage": [
+        "1:demo-ki-dashboard-filter-persistence-v001",
+        "2:demo-ki-dashboard-filter-persistence-v002"
+      ]
+    },
+    {
+      "id": "demo-ki-delegated-admin-approval",
+      "canonicalProblemId": "demo-ki-delegated-admin-approval",
+      "canonicalProblemTitle": "Delegated Administrator Approval",
+      "category": "Permissions & Access",
+      "trustScore": 28,
+      "timesSeen": 15,
+      "timesReused": 2,
+      "humanReviewCount": 3,
+      "sourceTicketId": "OIP-20251107-3621",
+      "createdAt": "2025-11-21T06:38:03.000Z",
+      "lastUpdatedAt": "2026-05-20T02:23:01.000Z",
+      "revision": 1,
+      "lessonCount": 1,
+      "lessonIds": [
+        "demo-les-delegated-admin-approval-001"
+      ],
+      "contentDigest": "2955948be96732d5",
+      "lessonTextDigest": "25e325056864e1a5",
+      "versionLineage": [
+        "1:demo-ki-delegated-admin-approval-v001"
+      ]
+    },
+    {
+      "id": "demo-ki-digest-email-timezone",
+      "canonicalProblemId": "demo-ki-digest-email-timezone",
+      "canonicalProblemTitle": "Digest Email Timezone Shift",
+      "category": "Notifications & Email",
+      "trustScore": 48,
+      "timesSeen": 24,
+      "timesReused": 6,
+      "humanReviewCount": 7,
+      "sourceTicketId": "OIP-20241008-1783",
+      "createdAt": "2024-11-10T11:13:05.000Z",
+      "lastUpdatedAt": "2026-05-15T21:36:10.000Z",
+      "revision": 1,
+      "lessonCount": 3,
+      "lessonIds": [
+        "demo-les-digest-email-timezone-001",
+        "demo-les-digest-email-timezone-002",
+        "demo-les-digest-email-timezone-003"
+      ],
+      "contentDigest": "6344ec75c3c49e99",
+      "lessonTextDigest": "fa8b042af6224c5d",
+      "versionLineage": [
+        "1:demo-ki-digest-email-timezone-v001",
+        "2:demo-ki-digest-email-timezone-v002"
+      ]
+    },
+    {
+      "id": "demo-ki-duplicate-invoice-seat-change",
+      "canonicalProblemId": "demo-ki-duplicate-invoice-seat-change",
+      "canonicalProblemTitle": "Duplicate Invoice After Seat Changes",
+      "category": "Billing",
+      "trustScore": 95,
+      "timesSeen": 123,
+      "timesReused": 23,
+      "humanReviewCount": 21,
+      "sourceTicketId": "OIP-20230109-0004",
+      "createdAt": "2023-02-13T15:48:10.000Z",
+      "lastUpdatedAt": "2026-05-11T17:21:18.000Z",
+      "revision": 1,
+      "lessonCount": 10,
+      "lessonIds": [
+        "demo-les-duplicate-invoice-seat-change-001",
+        "demo-les-duplicate-invoice-seat-change-002",
+        "demo-les-duplicate-invoice-seat-change-003",
+        "demo-les-duplicate-invoice-seat-change-004",
+        "demo-les-duplicate-invoice-seat-change-005",
+        "demo-les-duplicate-invoice-seat-change-006",
+        "demo-les-duplicate-invoice-seat-change-007",
+        "demo-les-duplicate-invoice-seat-change-008",
+        "demo-les-duplicate-invoice-seat-change-009",
+        "demo-les-duplicate-invoice-seat-change-010"
+      ],
+      "contentDigest": "1c8316f81d6ac43a",
+      "lessonTextDigest": "c40b3af3b0644abc",
+      "versionLineage": [
+        "1:demo-ki-duplicate-invoice-seat-change-v001",
+        "2:demo-ki-duplicate-invoice-seat-change-v002",
+        "3:demo-ki-duplicate-invoice-seat-change-v003",
+        "4:demo-ki-duplicate-invoice-seat-change-v004",
+        "5:demo-ki-duplicate-invoice-seat-change-v005",
+        "6:demo-ki-duplicate-invoice-seat-change-v006",
+        "7:demo-ki-duplicate-invoice-seat-change-v007"
+      ]
+    },
+    {
+      "id": "demo-ki-email-dmarc-alignment",
+      "canonicalProblemId": "demo-ki-email-dmarc-alignment",
+      "canonicalProblemTitle": "Email DMARC Alignment Failure",
+      "category": "Notifications & Email",
+      "trustScore": 43,
+      "timesSeen": 14,
+      "timesReused": 5,
+      "humanReviewCount": 6,
+      "sourceTicketId": "OIP-20250307-2518",
+      "createdAt": "2025-03-18T13:16:02.000Z",
+      "lastUpdatedAt": "2026-05-13T19:11:03.000Z",
+      "revision": 1,
+      "lessonCount": 2,
+      "lessonIds": [
+        "demo-les-email-dmarc-alignment-001",
+        "demo-les-email-dmarc-alignment-002"
+      ],
+      "contentDigest": "1292de6edcb5286e",
+      "lessonTextDigest": "f2a9ce20ad5e1468",
+      "versionLineage": [
+        "1:demo-ki-email-dmarc-alignment-v001"
+      ]
+    },
+    {
+      "id": "demo-ki-email-notification-suppression",
+      "canonicalProblemId": "demo-ki-email-notification-suppression",
+      "canonicalProblemTitle": "Email Notification Suppression",
+      "category": "Notifications & Email",
+      "trustScore": 71,
+      "timesSeen": 50,
+      "timesReused": 17,
+      "humanReviewCount": 18,
+      "sourceTicketId": "OIP-20231002-0493",
+      "createdAt": "2023-11-01T11:46:07.000Z",
+      "lastUpdatedAt": "2026-06-25T07:19:42.000Z",
+      "revision": 1,
+      "lessonCount": 6,
+      "lessonIds": [
+        "demo-les-email-notification-suppression-001",
+        "demo-les-email-notification-suppression-002",
+        "demo-les-email-notification-suppression-003",
+        "demo-les-email-notification-suppression-004",
+        "demo-les-email-notification-suppression-005",
+        "demo-les-email-notification-suppression-006"
+      ],
+      "contentDigest": "64a27778dbe46a60",
+      "lessonTextDigest": "6fb921bb90428b2b",
+      "versionLineage": [
+        "1:demo-ki-email-notification-suppression-v001",
+        "2:demo-ki-email-notification-suppression-v002",
+        "3:demo-ki-email-notification-suppression-v003",
+        "4:demo-ki-email-notification-suppression-v004"
+      ]
+    },
+    {
+      "id": "demo-ki-failed-card-retry-schedule",
+      "canonicalProblemId": "demo-ki-failed-card-retry-schedule",
+      "canonicalProblemTitle": "Failed Card Retry Schedule",
+      "category": "Billing",
+      "trustScore": 68,
+      "timesSeen": 22,
+      "timesReused": 10,
+      "humanReviewCount": 11,
+      "sourceTicketId": "OIP-20240223-0971",
+      "createdAt": "2024-03-21T17:33:07.000Z",
+      "lastUpdatedAt": "2026-04-13T01:59:37.000Z",
+      "revision": 1,
+      "lessonCount": 4,
+      "lessonIds": [
+        "demo-les-failed-card-retry-schedule-001",
+        "demo-les-failed-card-retry-schedule-002",
+        "demo-les-failed-card-retry-schedule-003",
+        "demo-les-failed-card-retry-schedule-004"
+      ],
+      "contentDigest": "324eba79c56cc4b4",
+      "lessonTextDigest": "d90f25c47bbea529",
+      "versionLineage": [
+        "1:demo-ki-failed-card-retry-schedule-v001",
+        "2:demo-ki-failed-card-retry-schedule-v002",
+        "3:demo-ki-failed-card-retry-schedule-v003"
+      ]
+    },
+    {
+      "id": "demo-ki-guest-workspace-access",
+      "canonicalProblemId": "demo-ki-guest-workspace-access",
+      "canonicalProblemTitle": "Guest Workspace Access Boundary",
+      "category": "Permissions & Access",
+      "trustScore": 68,
+      "timesSeen": 23,
+      "timesReused": 10,
+      "humanReviewCount": 11,
+      "sourceTicketId": "OIP-20240516-1289",
+      "createdAt": "2024-06-23T12:13:06.000Z",
+      "lastUpdatedAt": "2026-04-21T03:20:34.000Z",
+      "revision": 1,
+      "lessonCount": 3,
+      "lessonIds": [
+        "demo-les-guest-workspace-access-001",
+        "demo-les-guest-workspace-access-002",
+        "demo-les-guest-workspace-access-003"
+      ],
+      "contentDigest": "9178bd9537c8c2d7",
+      "lessonTextDigest": "4c71b260fc349252",
+      "versionLineage": [
+        "1:demo-ki-guest-workspace-access-v001",
+        "2:demo-ki-guest-workspace-access-v002",
+        "3:demo-ki-guest-workspace-access-v003"
+      ]
+    },
+    {
+      "id": "demo-ki-invoice-currency-display",
+      "canonicalProblemId": "demo-ki-invoice-currency-display",
+      "canonicalProblemTitle": "Invoice Currency Display Difference",
+      "category": "Billing",
+      "trustScore": 28,
+      "timesSeen": 14,
+      "timesReused": 2,
+      "humanReviewCount": 3,
+      "sourceTicketId": "OIP-20250711-3110",
+      "createdAt": "2025-08-16T16:30:03.000Z",
+      "lastUpdatedAt": "2026-05-09T09:58:01.000Z",
+      "revision": 1,
+      "lessonCount": 2,
+      "lessonIds": [
+        "demo-les-invoice-currency-display-001",
+        "demo-les-invoice-currency-display-002"
+      ],
+      "contentDigest": "5790cbcc7d8fa410",
+      "lessonTextDigest": "acd668e1dd15c8f9",
+      "versionLineage": [
+        "1:demo-ki-invoice-currency-display-v001"
+      ]
+    },
+    {
+      "id": "demo-ki-invoice-pdf-stale-address",
+      "canonicalProblemId": "demo-ki-invoice-pdf-stale-address",
+      "canonicalProblemTitle": "Invoice PDF Shows Previous Address",
+      "category": "Billing",
+      "trustScore": 68,
+      "timesSeen": 22,
+      "timesReused": 10,
+      "humanReviewCount": 11,
+      "sourceTicketId": "OIP-20240212-0927",
+      "createdAt": "2024-03-15T03:12:07.000Z",
+      "lastUpdatedAt": "2026-04-01T10:32:36.000Z",
+      "revision": 1,
+      "lessonCount": 4,
+      "lessonIds": [
+        "demo-les-invoice-pdf-stale-address-001",
+        "demo-les-invoice-pdf-stale-address-002",
+        "demo-les-invoice-pdf-stale-address-003",
+        "demo-les-invoice-pdf-stale-address-004"
+      ],
+      "contentDigest": "5120157c9d0b1ef4",
+      "lessonTextDigest": "a2f21468acfe5a7e",
+      "versionLineage": [
+        "1:demo-ki-invoice-pdf-stale-address-v001",
+        "2:demo-ki-invoice-pdf-stale-address-v002",
+        "3:demo-ki-invoice-pdf-stale-address-v003"
+      ]
+    },
+    {
+      "id": "demo-ki-invoice-tax-rounding",
+      "canonicalProblemId": "demo-ki-invoice-tax-rounding",
+      "canonicalProblemTitle": "Invoice Tax Rounding Difference",
+      "category": "Billing",
+      "trustScore": 98,
+      "timesSeen": 49,
+      "timesReused": 16,
+      "humanReviewCount": 17,
+      "sourceTicketId": "OIP-20230316-0094",
+      "createdAt": "2023-03-28T07:06:02.000Z",
+      "lastUpdatedAt": "2026-06-11T10:48:41.000Z",
+      "revision": 1,
+      "lessonCount": 6,
+      "lessonIds": [
+        "demo-les-invoice-tax-rounding-001",
+        "demo-les-invoice-tax-rounding-002",
+        "demo-les-invoice-tax-rounding-003",
+        "demo-les-invoice-tax-rounding-004",
+        "demo-les-invoice-tax-rounding-005",
+        "demo-les-invoice-tax-rounding-006"
+      ],
+      "contentDigest": "a02dd3fb00f90c6a",
+      "lessonTextDigest": "8721da43138c7696",
+      "versionLineage": [
+        "1:demo-ki-invoice-tax-rounding-v001",
+        "2:demo-ki-invoice-tax-rounding-v002",
+        "3:demo-ki-invoice-tax-rounding-v003",
+        "4:demo-ki-invoice-tax-rounding-v004",
+        "5:demo-ki-invoice-tax-rounding-v005"
+      ]
+    },
+    {
+      "id": "demo-ki-large-export-timeout",
+      "canonicalProblemId": "demo-ki-large-export-timeout",
+      "canonicalProblemTitle": "Large Export Processing Timeout",
+      "category": "Reporting & Exports",
+      "trustScore": 48,
+      "timesSeen": 24,
+      "timesReused": 6,
+      "humanReviewCount": 7,
+      "sourceTicketId": "OIP-20240810-1552",
+      "createdAt": "2024-09-15T19:14:08.000Z",
+      "lastUpdatedAt": "2026-06-04T23:46:28.000Z",
+      "revision": 1,
+      "lessonCount": 3,
+      "lessonIds": [
+        "demo-les-large-export-timeout-001",
+        "demo-les-large-export-timeout-002",
+        "demo-les-large-export-timeout-003"
+      ],
+      "contentDigest": "4517ad74a425a051",
+      "lessonTextDigest": "24293cd49ac579ed",
+      "versionLineage": [
+        "1:demo-ki-large-export-timeout-v001",
+        "2:demo-ki-large-export-timeout-v002"
+      ]
+    },
+    {
+      "id": "demo-ki-mfa-device-clock-drift",
+      "canonicalProblemId": "demo-ki-mfa-device-clock-drift",
+      "canonicalProblemTitle": "MFA Codes Rejected by Device Clock Drift",
+      "category": "Authentication",
+      "trustScore": 98,
+      "timesSeen": 49,
+      "timesReused": 16,
+      "humanReviewCount": 17,
+      "sourceTicketId": "OIP-20230213-0051",
+      "createdAt": "2023-03-03T20:38:06.000Z",
+      "lastUpdatedAt": "2026-06-04T08:26:40.000Z",
+      "revision": 1,
+      "lessonCount": 6,
+      "lessonIds": [
+        "demo-les-mfa-device-clock-drift-001",
+        "demo-les-mfa-device-clock-drift-002",
+        "demo-les-mfa-device-clock-drift-003",
+        "demo-les-mfa-device-clock-drift-004",
+        "demo-les-mfa-device-clock-drift-005",
+        "demo-les-mfa-device-clock-drift-006"
+      ],
+      "contentDigest": "efffaeac23f535bf",
+      "lessonTextDigest": "e09073bfbb01de5b",
+      "versionLineage": [
+        "1:demo-ki-mfa-device-clock-drift-v001",
+        "2:demo-ki-mfa-device-clock-drift-v002",
+        "3:demo-ki-mfa-device-clock-drift-v003",
+        "4:demo-ki-mfa-device-clock-drift-v004",
+        "5:demo-ki-mfa-device-clock-drift-v005"
+      ]
+    },
+    {
+      "id": "demo-ki-mfa-recovery-code-exhaustion",
+      "canonicalProblemId": "demo-ki-mfa-recovery-code-exhaustion",
+      "canonicalProblemTitle": "MFA Recovery Code Exhaustion",
+      "category": "Authentication",
+      "trustScore": 28,
+      "timesSeen": 14,
+      "timesReused": 2,
+      "humanReviewCount": 3,
+      "sourceTicketId": "OIP-20250614-2969",
+      "createdAt": "2025-06-24T19:22:04.000Z",
+      "lastUpdatedAt": "2026-04-30T21:00:00.000Z",
+      "revision": 1,
+      "lessonCount": 2,
+      "lessonIds": [
+        "demo-les-mfa-recovery-code-exhaustion-001",
+        "demo-les-mfa-recovery-code-exhaustion-002"
+      ],
+      "contentDigest": "637cd42d0714f56f",
+      "lessonTextDigest": "05ae1067eaf493d6",
+      "versionLineage": [
+        "1:demo-ki-mfa-recovery-code-exhaustion-v001"
+      ]
+    },
+    {
+      "id": "demo-ki-mobile-deep-link-workspace",
+      "canonicalProblemId": "demo-ki-mobile-deep-link-workspace",
+      "canonicalProblemTitle": "Mobile Deep Link Workspace Mismatch",
+      "category": "Mobile Application",
+      "trustScore": 43,
+      "timesSeen": 14,
+      "timesReused": 5,
+      "humanReviewCount": 6,
+      "sourceTicketId": "OIP-20241209-2052",
+      "createdAt": "2025-01-04T03:24:04.000Z",
+      "lastUpdatedAt": "2026-03-23T11:38:00.000Z",
+      "revision": 1,
+      "lessonCount": 2,
+      "lessonIds": [
+        "demo-les-mobile-deep-link-workspace-001",
+        "demo-les-mobile-deep-link-workspace-002"
+      ],
+      "contentDigest": "a94c5a5311a69848",
+      "lessonTextDigest": "8672f5acc63a06a6",
+      "versionLineage": [
+        "1:demo-ki-mobile-deep-link-workspace-v001"
+      ]
+    },
+    {
+      "id": "demo-ki-mobile-offline-export-filters",
+      "canonicalProblemId": "demo-ki-mobile-offline-export-filters",
+      "canonicalProblemTitle": "Mobile Offline Export Loses Date Filters",
+      "category": "Mobile Application",
+      "trustScore": 28,
+      "timesSeen": 15,
+      "timesReused": 2,
+      "humanReviewCount": 3,
+      "sourceTicketId": "OIP-20260105-3988",
+      "createdAt": "2026-01-15T10:51:03.000Z",
+      "lastUpdatedAt": "2026-06-12T21:37:03.000Z",
+      "revision": 1,
+      "lessonCount": 1,
+      "lessonIds": [
+        "demo-les-mobile-offline-export-filters-001"
+      ],
+      "contentDigest": "29940b44975673de",
+      "lessonTextDigest": "1b2f116a9faaf9d7",
+      "versionLineage": [
+        "1:demo-ki-mobile-offline-export-filters-v001"
+      ]
+    },
+    {
+      "id": "demo-ki-mobile-offline-sync-conflict",
+      "canonicalProblemId": "demo-ki-mobile-offline-sync-conflict",
+      "canonicalProblemTitle": "Mobile Offline Synchronization Conflict",
+      "category": "Mobile Application",
+      "trustScore": 71,
+      "timesSeen": 50,
+      "timesReused": 17,
+      "humanReviewCount": 18,
+      "sourceTicketId": "OIP-20230904-0411",
+      "createdAt": "2023-09-10T01:44:04.000Z",
+      "lastUpdatedAt": "2026-06-26T08:21:40.000Z",
+      "revision": 1,
+      "lessonCount": 6,
+      "lessonIds": [
+        "demo-les-mobile-offline-sync-conflict-001",
+        "demo-les-mobile-offline-sync-conflict-002",
+        "demo-les-mobile-offline-sync-conflict-003",
+        "demo-les-mobile-offline-sync-conflict-004",
+        "demo-les-mobile-offline-sync-conflict-005",
+        "demo-les-mobile-offline-sync-conflict-006"
+      ],
+      "contentDigest": "49f5e9fcd59991c8",
+      "lessonTextDigest": "9902cbcd99746ac9",
+      "versionLineage": [
+        "1:demo-ki-mobile-offline-sync-conflict-v001",
+        "2:demo-ki-mobile-offline-sync-conflict-v002",
+        "3:demo-ki-mobile-offline-sync-conflict-v003",
+        "4:demo-ki-mobile-offline-sync-conflict-v004"
+      ]
+    },
+    {
+      "id": "demo-ki-mobile-push-token-stale",
+      "canonicalProblemId": "demo-ki-mobile-push-token-stale",
+      "canonicalProblemTitle": "Stale Mobile Push Token",
+      "category": "Mobile Application",
+      "trustScore": 48,
+      "timesSeen": 24,
+      "timesReused": 6,
+      "humanReviewCount": 7,
+      "sourceTicketId": "OIP-20240905-1638",
+      "createdAt": "2024-10-09T17:03:08.000Z",
+      "lastUpdatedAt": "2026-04-29T17:35:27.000Z",
+      "revision": 1,
+      "lessonCount": 3,
+      "lessonIds": [
+        "demo-les-mobile-push-token-stale-001",
+        "demo-les-mobile-push-token-stale-002",
+        "demo-les-mobile-push-token-stale-003"
+      ],
+      "contentDigest": "94174d82db76ff74",
+      "lessonTextDigest": "aacda93f670d767c",
+      "versionLineage": [
+        "1:demo-ki-mobile-push-token-stale-v001",
+        "2:demo-ki-mobile-push-token-stale-v002"
+      ]
+    },
+    {
+      "id": "demo-ki-notification-digest-duplication",
+      "canonicalProblemId": "demo-ki-notification-digest-duplication",
+      "canonicalProblemTitle": "Notification Digest Duplication",
+      "category": "Notifications & Email",
+      "trustScore": 43,
+      "timesSeen": 14,
+      "timesReused": 5,
+      "humanReviewCount": 6,
+      "sourceTicketId": "OIP-20250414-2704",
+      "createdAt": "2025-05-22T18:04:04.000Z",
+      "lastUpdatedAt": "2026-05-09T13:42:43.000Z",
+      "revision": 1,
+      "lessonCount": 2,
+      "lessonIds": [
+        "demo-les-notification-digest-duplication-001",
+        "demo-les-notification-digest-duplication-002"
+      ],
+      "contentDigest": "12c80a4b14af3c4c",
+      "lessonTextDigest": "bff04eee2d7635a9",
+      "versionLineage": [
+        "1:demo-ki-notification-digest-duplication-v001"
+      ]
+    },
+    {
+      "id": "demo-ki-notification-locale-fallback",
+      "canonicalProblemId": "demo-ki-notification-locale-fallback",
+      "canonicalProblemTitle": "Notification Locale Fallback",
+      "category": "Notifications & Email",
+      "trustScore": 43,
+      "timesSeen": 14,
+      "timesReused": 5,
+      "humanReviewCount": 6,
+      "sourceTicketId": "OIP-20250208-2394",
+      "createdAt": "2025-03-21T22:37:04.000Z",
+      "lastUpdatedAt": "2026-03-26T04:41:00.000Z",
+      "revision": 1,
+      "lessonCount": 2,
+      "lessonIds": [
+        "demo-les-notification-locale-fallback-001",
+        "demo-les-notification-locale-fallback-002"
+      ],
+      "contentDigest": "0534a65a2f9c8670",
+      "lessonTextDigest": "d02e2a33bc1fc8b8",
+      "versionLineage": [
+        "1:demo-ki-notification-locale-fallback-v001"
+      ]
+    },
+    {
+      "id": "demo-ki-oauth-refresh-token-revoked",
+      "canonicalProblemId": "demo-ki-oauth-refresh-token-revoked",
+      "canonicalProblemTitle": "Revoked OAuth Refresh Token",
+      "category": "API & Integrations",
+      "trustScore": 98,
+      "timesSeen": 49,
+      "timesReused": 16,
+      "humanReviewCount": 17,
+      "sourceTicketId": "OIP-20230512-0180",
+      "createdAt": "2023-05-24T14:50:05.000Z",
+      "lastUpdatedAt": "2026-06-01T04:09:40.000Z",
+      "revision": 1,
+      "lessonCount": 6,
+      "lessonIds": [
+        "demo-les-oauth-refresh-token-revoked-001",
+        "demo-les-oauth-refresh-token-revoked-002",
+        "demo-les-oauth-refresh-token-revoked-003",
+        "demo-les-oauth-refresh-token-revoked-004",
+        "demo-les-oauth-refresh-token-revoked-005",
+        "demo-les-oauth-refresh-token-revoked-006"
+      ],
+      "contentDigest": "cf49850ed2f04185",
+      "lessonTextDigest": "74e263b81bcf80a3",
+      "versionLineage": [
+        "1:demo-ki-oauth-refresh-token-revoked-v001",
+        "2:demo-ki-oauth-refresh-token-revoked-v002",
+        "3:demo-ki-oauth-refresh-token-revoked-v003",
+        "4:demo-ki-oauth-refresh-token-revoked-v004",
+        "5:demo-ki-oauth-refresh-token-revoked-v005"
+      ]
+    },
+    {
+      "id": "demo-ki-passwordless-link-expiry",
+      "canonicalProblemId": "demo-ki-passwordless-link-expiry",
+      "canonicalProblemTitle": "Passwordless Link Expiry",
+      "category": "Authentication",
+      "trustScore": 68,
+      "timesSeen": 22,
+      "timesReused": 10,
+      "humanReviewCount": 11,
+      "sourceTicketId": "OIP-20231110-0582",
+      "createdAt": "2023-12-26T22:45:06.000Z",
+      "lastUpdatedAt": "2026-04-14T06:31:36.000Z",
+      "revision": 1,
+      "lessonCount": 4,
+      "lessonIds": [
+        "demo-les-passwordless-link-expiry-001",
+        "demo-les-passwordless-link-expiry-002",
+        "demo-les-passwordless-link-expiry-003",
+        "demo-les-passwordless-link-expiry-004"
+      ],
+      "contentDigest": "9a43850c954cfd8c",
+      "lessonTextDigest": "fd35360954e5e6c6",
+      "versionLineage": [
+        "1:demo-ki-passwordless-link-expiry-v001",
+        "2:demo-ki-passwordless-link-expiry-v002",
+        "3:demo-ki-passwordless-link-expiry-v003"
+      ]
+    },
+    {
+      "id": "demo-ki-permission-inheritance-delay",
+      "canonicalProblemId": "demo-ki-permission-inheritance-delay",
+      "canonicalProblemTitle": "Permission Inheritance Delay",
+      "category": "Permissions & Access",
+      "trustScore": 98,
+      "timesSeen": 50,
+      "timesReused": 16,
+      "humanReviewCount": 17,
+      "sourceTicketId": "OIP-20230606-0216",
+      "createdAt": "2023-06-28T20:25:05.000Z",
+      "lastUpdatedAt": "2026-06-04T01:06:39.000Z",
+      "revision": 1,
+      "lessonCount": 6,
+      "lessonIds": [
+        "demo-les-permission-inheritance-delay-001",
+        "demo-les-permission-inheritance-delay-002",
+        "demo-les-permission-inheritance-delay-003",
+        "demo-les-permission-inheritance-delay-004",
+        "demo-les-permission-inheritance-delay-005",
+        "demo-les-permission-inheritance-delay-006"
+      ],
+      "contentDigest": "5acf91c5c6039d77",
+      "lessonTextDigest": "86dcbc663ef0981f",
+      "versionLineage": [
+        "1:demo-ki-permission-inheritance-delay-v001",
+        "2:demo-ki-permission-inheritance-delay-v002",
+        "3:demo-ki-permission-inheritance-delay-v003",
+        "4:demo-ki-permission-inheritance-delay-v004"
+      ]
+    },
+    {
+      "id": "demo-ki-proration-credit-mismatch",
+      "canonicalProblemId": "demo-ki-proration-credit-mismatch",
+      "canonicalProblemTitle": "Proration Credit Timing Mismatch",
+      "category": "Billing",
+      "trustScore": 98,
+      "timesSeen": 49,
+      "timesReused": 16,
+      "humanReviewCount": 17,
+      "sourceTicketId": "OIP-20230403-0125",
+      "createdAt": "2023-05-06T00:47:09.000Z",
+      "lastUpdatedAt": "2026-06-10T15:43:41.000Z",
+      "revision": 1,
+      "lessonCount": 6,
+      "lessonIds": [
+        "demo-les-proration-credit-mismatch-001",
+        "demo-les-proration-credit-mismatch-002",
+        "demo-les-proration-credit-mismatch-003",
+        "demo-les-proration-credit-mismatch-004",
+        "demo-les-proration-credit-mismatch-005",
+        "demo-les-proration-credit-mismatch-006"
+      ],
+      "contentDigest": "b32b53ef3eddfcf7",
+      "lessonTextDigest": "a7364eb0159664fd",
+      "versionLineage": [
+        "1:demo-ki-proration-credit-mismatch-v001",
+        "2:demo-ki-proration-credit-mismatch-v002",
+        "3:demo-ki-proration-credit-mismatch-v003",
+        "4:demo-ki-proration-credit-mismatch-v004",
+        "5:demo-ki-proration-credit-mismatch-v005"
+      ]
+    },
+    {
+      "id": "demo-ki-report-column-order-migration",
+      "canonicalProblemId": "demo-ki-report-column-order-migration",
+      "canonicalProblemTitle": "Report Column Order Migration",
+      "category": "Reporting & Exports",
+      "trustScore": 28,
+      "timesSeen": 15,
+      "timesReused": 2,
+      "humanReviewCount": 3,
+      "sourceTicketId": "OIP-20251202-3759",
+      "createdAt": "2025-12-10T18:44:04.000Z",
+      "lastUpdatedAt": "2026-06-20T00:46:03.000Z",
+      "revision": 1,
+      "lessonCount": 1,
+      "lessonIds": [
+        "demo-les-report-column-order-migration-001"
+      ],
+      "contentDigest": "a33dcf1c0c05e73b",
+      "lessonTextDigest": "eeb61dfa77bfbdd0",
+      "versionLineage": [
+        "1:demo-ki-report-column-order-migration-v001"
+      ]
+    },
+    {
+      "id": "demo-ki-saml-nameid-case",
+      "canonicalProblemId": "demo-ki-saml-nameid-case",
+      "canonicalProblemTitle": "SAML NameID Case Sensitivity",
+      "category": "Authentication",
+      "trustScore": 43,
+      "timesSeen": 14,
+      "timesReused": 5,
+      "humanReviewCount": 6,
+      "sourceTicketId": "OIP-20250513-2818",
+      "createdAt": "2025-06-11T13:18:05.000Z",
+      "lastUpdatedAt": "2026-04-22T13:43:00.000Z",
+      "revision": 1,
+      "lessonCount": 2,
+      "lessonIds": [
+        "demo-les-saml-nameid-case-001",
+        "demo-les-saml-nameid-case-002"
+      ],
+      "contentDigest": "de6c1f027cb66581",
+      "lessonTextDigest": "8d3cabd17e3e95cc",
+      "versionLineage": [
+        "1:demo-ki-saml-nameid-case-v001"
+      ]
+    },
+    {
+      "id": "demo-ki-scheduled-report-timezone",
+      "canonicalProblemId": "demo-ki-scheduled-report-timezone",
+      "canonicalProblemTitle": "Scheduled Report Timezone Boundary",
+      "category": "Reporting & Exports",
+      "trustScore": 71,
+      "timesSeen": 50,
+      "timesReused": 17,
+      "humanReviewCount": 18,
+      "sourceTicketId": "OIP-20230703-0296",
+      "createdAt": "2023-08-23T01:30:05.000Z",
+      "lastUpdatedAt": "2026-06-26T23:29:38.000Z",
+      "revision": 1,
+      "lessonCount": 6,
+      "lessonIds": [
+        "demo-les-scheduled-report-timezone-001",
+        "demo-les-scheduled-report-timezone-002",
+        "demo-les-scheduled-report-timezone-003",
+        "demo-les-scheduled-report-timezone-004",
+        "demo-les-scheduled-report-timezone-005",
+        "demo-les-scheduled-report-timezone-006"
+      ],
+      "contentDigest": "dff1417d7827b177",
+      "lessonTextDigest": "943cc98a7b133b37",
+      "versionLineage": [
+        "1:demo-ki-scheduled-report-timezone-v001",
+        "2:demo-ki-scheduled-report-timezone-v002",
+        "3:demo-ki-scheduled-report-timezone-v003",
+        "4:demo-ki-scheduled-report-timezone-v004"
+      ]
+    },
+    {
+      "id": "demo-ki-scim-delayed-provisioning",
+      "canonicalProblemId": "demo-ki-scim-delayed-provisioning",
+      "canonicalProblemTitle": "Delayed SCIM User Provisioning",
+      "category": "Authentication",
+      "trustScore": 98,
+      "timesSeen": 49,
+      "timesReused": 16,
+      "humanReviewCount": 17,
+      "sourceTicketId": "OIP-20230307-0079",
+      "createdAt": "2023-03-30T17:15:03.000Z",
+      "lastUpdatedAt": "2026-06-01T02:51:39.000Z",
+      "revision": 1,
+      "lessonCount": 6,
+      "lessonIds": [
+        "demo-les-scim-delayed-provisioning-001",
+        "demo-les-scim-delayed-provisioning-002",
+        "demo-les-scim-delayed-provisioning-003",
+        "demo-les-scim-delayed-provisioning-004",
+        "demo-les-scim-delayed-provisioning-005",
+        "demo-les-scim-delayed-provisioning-006"
+      ],
+      "contentDigest": "f2f05a949b75c6f4",
+      "lessonTextDigest": "4e2ec7ffde729ac9",
+      "versionLineage": [
+        "1:demo-ki-scim-delayed-provisioning-v001",
+        "2:demo-ki-scim-delayed-provisioning-v002",
+        "3:demo-ki-scim-delayed-provisioning-v003",
+        "4:demo-ki-scim-delayed-provisioning-v004",
+        "5:demo-ki-scim-delayed-provisioning-v005"
+      ]
+    },
+    {
+      "id": "demo-ki-session-cookie-samesite",
+      "canonicalProblemId": "demo-ki-session-cookie-samesite",
+      "canonicalProblemTitle": "Session Cookie SameSite Restriction",
+      "category": "Authentication",
+      "trustScore": 68,
+      "timesSeen": 22,
+      "timesReused": 10,
+      "humanReviewCount": 11,
+      "sourceTicketId": "OIP-20231204-0652",
+      "createdAt": "2024-01-11T02:53:04.000Z",
+      "lastUpdatedAt": "2026-04-02T18:52:37.000Z",
+      "revision": 1,
+      "lessonCount": 4,
+      "lessonIds": [
+        "demo-les-session-cookie-samesite-001",
+        "demo-les-session-cookie-samesite-002",
+        "demo-les-session-cookie-samesite-003",
+        "demo-les-session-cookie-samesite-004"
+      ],
+      "contentDigest": "b08c83e01db71355",
+      "lessonTextDigest": "717ecdcf975d233a",
+      "versionLineage": [
+        "1:demo-ki-session-cookie-samesite-v001",
+        "2:demo-ki-session-cookie-samesite-v002",
+        "3:demo-ki-session-cookie-samesite-v003"
+      ]
+    },
+    {
+      "id": "demo-ki-sso-certificate-redirect-loop",
+      "canonicalProblemId": "demo-ki-sso-certificate-redirect-loop",
+      "canonicalProblemTitle": "SSO Redirect Loop After Certificate Rotation",
+      "category": "Authentication",
+      "trustScore": 95,
+      "timesSeen": 124,
+      "timesReused": 23,
+      "humanReviewCount": 21,
+      "sourceTicketId": "OIP-20230104-0001",
+      "createdAt": "2023-01-12T18:10:30.000Z",
+      "lastUpdatedAt": "2026-07-27T19:47:40.672Z",
+      "revision": 2,
+      "lessonCount": 10,
+      "lessonIds": [
+        "demo-les-sso-certificate-redirect-loop-001",
+        "demo-les-sso-certificate-redirect-loop-002",
+        "demo-les-sso-certificate-redirect-loop-003",
+        "demo-les-sso-certificate-redirect-loop-004",
+        "demo-les-sso-certificate-redirect-loop-005",
+        "demo-les-sso-certificate-redirect-loop-006",
+        "demo-les-sso-certificate-redirect-loop-007",
+        "demo-les-sso-certificate-redirect-loop-008",
+        "demo-les-sso-certificate-redirect-loop-009",
+        "demo-les-sso-certificate-redirect-loop-010"
+      ],
+      "contentDigest": "b0e02231383c56d7",
+      "lessonTextDigest": "536ca8fe7e9fae13",
+      "versionLineage": [
+        "1:demo-ki-sso-certificate-redirect-loop-v001",
+        "2:demo-ki-sso-certificate-redirect-loop-v002",
+        "3:demo-ki-sso-certificate-redirect-loop-v003",
+        "4:demo-ki-sso-certificate-redirect-loop-v004",
+        "5:demo-ki-sso-certificate-redirect-loop-v005",
+        "6:demo-ki-sso-certificate-redirect-loop-v006",
+        "7:demo-ki-sso-certificate-redirect-loop-v007"
+      ]
+    },
+    {
+      "id": "demo-ki-sso-domain-verification",
+      "canonicalProblemId": "demo-ki-sso-domain-verification",
+      "canonicalProblemTitle": "SSO Domain Verification Pending",
+      "category": "Authentication",
+      "trustScore": 68,
+      "timesSeen": 22,
+      "timesReused": 10,
+      "humanReviewCount": 11,
+      "sourceTicketId": "OIP-20240112-0815",
+      "createdAt": "2024-01-28T21:28:06.000Z",
+      "lastUpdatedAt": "2026-04-04T17:58:36.000Z",
+      "revision": 1,
+      "lessonCount": 4,
+      "lessonIds": [
+        "demo-les-sso-domain-verification-001",
+        "demo-les-sso-domain-verification-002",
+        "demo-les-sso-domain-verification-003",
+        "demo-les-sso-domain-verification-004"
+      ],
+      "contentDigest": "ee25e7835ab9f0e2",
+      "lessonTextDigest": "24307717b713672f",
+      "versionLineage": [
+        "1:demo-ki-sso-domain-verification-v001",
+        "2:demo-ki-sso-domain-verification-v002",
+        "3:demo-ki-sso-domain-verification-v003"
+      ]
+    },
+    {
+      "id": "demo-ki-vat-exemption-review",
+      "canonicalProblemId": "demo-ki-vat-exemption-review",
+      "canonicalProblemTitle": "VAT Exemption Document Review",
+      "category": "Billing",
+      "trustScore": 28,
+      "timesSeen": 15,
+      "timesReused": 2,
+      "humanReviewCount": 3,
+      "sourceTicketId": "OIP-20250814-3217",
+      "createdAt": "2025-09-07T15:09:04.000Z",
+      "lastUpdatedAt": "2026-05-28T16:05:00.000Z",
+      "revision": 1,
+      "lessonCount": 1,
+      "lessonIds": [
+        "demo-les-vat-exemption-review-001"
+      ],
+      "contentDigest": "04cff965346edf26",
+      "lessonTextDigest": "a6d7b7bf4872966e",
+      "versionLineage": [
+        "1:demo-ki-vat-exemption-review-v001"
+      ]
+    },
+    {
+      "id": "demo-ki-webhook-delivery-replay",
+      "canonicalProblemId": "demo-ki-webhook-delivery-replay",
+      "canonicalProblemTitle": "Webhook Delivery Replay Ordering",
+      "category": "API & Integrations",
+      "trustScore": 68,
+      "timesSeen": 22,
+      "timesReused": 10,
+      "humanReviewCount": 11,
+      "sourceTicketId": "OIP-20240326-1111",
+      "createdAt": "2024-04-24T03:47:06.000Z",
+      "lastUpdatedAt": "2026-04-02T04:23:36.000Z",
+      "revision": 1,
+      "lessonCount": 4,
+      "lessonIds": [
+        "demo-les-webhook-delivery-replay-001",
+        "demo-les-webhook-delivery-replay-002",
+        "demo-les-webhook-delivery-replay-003",
+        "demo-les-webhook-delivery-replay-004"
+      ],
+      "contentDigest": "d2e012f01a277cf1",
+      "lessonTextDigest": "80ca2862198e342d",
+      "versionLineage": [
+        "1:demo-ki-webhook-delivery-replay-v001",
+        "2:demo-ki-webhook-delivery-replay-v002",
+        "3:demo-ki-webhook-delivery-replay-v003"
+      ]
+    },
+    {
+      "id": "demo-ki-webhook-ipv6-allowlist",
+      "canonicalProblemId": "demo-ki-webhook-ipv6-allowlist",
+      "canonicalProblemTitle": "Webhook IPv6 Allowlist Gap",
+      "category": "API & Integrations",
+      "trustScore": 28,
+      "timesSeen": 15,
+      "timesReused": 2,
+      "humanReviewCount": 3,
+      "sourceTicketId": "OIP-20250911-3349",
+      "createdAt": "2025-09-22T21:06:03.000Z",
+      "lastUpdatedAt": "2026-05-18T14:02:01.000Z",
+      "revision": 1,
+      "lessonCount": 1,
+      "lessonIds": [
+        "demo-les-webhook-ipv6-allowlist-001"
+      ],
+      "contentDigest": "ad3f7f5b909fb2b2",
+      "lessonTextDigest": "6c11dcb996baa249",
+      "versionLineage": [
+        "1:demo-ki-webhook-ipv6-allowlist-v001"
+      ]
+    },
+    {
+      "id": "demo-ki-webhook-signature-secret-rotation",
+      "canonicalProblemId": "demo-ki-webhook-signature-secret-rotation",
+      "canonicalProblemTitle": "Webhook Signature Failure After Secret Rotation",
+      "category": "API & Integrations",
+      "trustScore": 95,
+      "timesSeen": 123,
+      "timesReused": 23,
+      "humanReviewCount": 21,
+      "sourceTicketId": "OIP-20230112-0010",
+      "createdAt": "2023-01-28T17:50:07.000Z",
+      "lastUpdatedAt": "2026-05-03T19:27:19.000Z",
+      "revision": 1,
+      "lessonCount": 10,
+      "lessonIds": [
+        "demo-les-webhook-signature-secret-rotation-001",
+        "demo-les-webhook-signature-secret-rotation-002",
+        "demo-les-webhook-signature-secret-rotation-003",
+        "demo-les-webhook-signature-secret-rotation-004",
+        "demo-les-webhook-signature-secret-rotation-005",
+        "demo-les-webhook-signature-secret-rotation-006",
+        "demo-les-webhook-signature-secret-rotation-007",
+        "demo-les-webhook-signature-secret-rotation-008",
+        "demo-les-webhook-signature-secret-rotation-009",
+        "demo-les-webhook-signature-secret-rotation-010"
+      ],
+      "contentDigest": "71af6617057fafc3",
+      "lessonTextDigest": "45c23bb1572b5bda",
+      "versionLineage": [
+        "1:demo-ki-webhook-signature-secret-rotation-v001",
+        "2:demo-ki-webhook-signature-secret-rotation-v002",
+        "3:demo-ki-webhook-signature-secret-rotation-v003",
+        "4:demo-ki-webhook-signature-secret-rotation-v004",
+        "5:demo-ki-webhook-signature-secret-rotation-v005",
+        "6:demo-ki-webhook-signature-secret-rotation-v006",
+        "7:demo-ki-webhook-signature-secret-rotation-v007"
+      ]
+    }
+  ],
+  "patterns": [
+    {
+      "id": "demo-pat-annual-renewal-seat-count",
+      "title": "Emerging pattern: Annual Renewal Seat Reconciliation",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-api-idempotency-collision",
+      "title": "Emerging pattern: API Idempotency Key Collision",
+      "status": "promoted",
+      "timesSeen": 3,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-api-pagination-cursor",
+      "title": "Emerging pattern: API Pagination Cursor Invalidated",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-api-rate-limit-burst",
+      "title": "Emerging pattern: API Rate-Limit Burst During Synchronization",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-audit-log-visibility",
+      "title": "Emerging pattern: Audit Log Visibility Scope",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-biometric-unlock-reset",
+      "title": "Emerging pattern: Biometric Unlock Reset",
+      "status": "promoted",
+      "timesSeen": 3,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-cellular-attachment-resume",
+      "title": "Emerging pattern: Cellular Attachment Upload Resume",
+      "status": "promoted",
+      "timesSeen": 3,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-connector-field-mapping",
+      "title": "Emerging pattern: Connector Field Mapping Drift",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-csv-export-encoding",
+      "title": "Emerging pattern: CSV Export Encoding Mismatch",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-custom-role-cache",
+      "title": "Emerging pattern: Custom Role Claim Cache",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-dashboard-filter-persistence",
+      "title": "Emerging pattern: Dashboard Filter Persistence",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-delegated-admin-approval",
+      "title": "Emerging pattern: Delegated Administrator Approval",
+      "status": "promoted",
+      "timesSeen": 3,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-digest-email-timezone",
+      "title": "Emerging pattern: Digest Email Timezone Shift",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-duplicate-invoice-seat-change",
+      "title": "Emerging pattern: Duplicate Invoice After Seat Changes",
+      "status": "promoted",
+      "timesSeen": 7,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-email-dmarc-alignment",
+      "title": "Emerging pattern: Email DMARC Alignment Failure",
+      "status": "promoted",
+      "timesSeen": 3,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-email-notification-suppression",
+      "title": "Emerging pattern: Email Notification Suppression",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-failed-card-retry-schedule",
+      "title": "Emerging pattern: Failed Card Retry Schedule",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-guest-workspace-access",
+      "title": "Emerging pattern: Guest Workspace Access Boundary",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-invoice-currency-display",
+      "title": "Emerging pattern: Invoice Currency Display Difference",
+      "status": "promoted",
+      "timesSeen": 3,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-invoice-pdf-stale-address",
+      "title": "Emerging pattern: Invoice PDF Shows Previous Address",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-invoice-tax-rounding",
+      "title": "Emerging pattern: Invoice Tax Rounding Difference",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-large-export-timeout",
+      "title": "Emerging pattern: Large Export Processing Timeout",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-mfa-device-clock-drift",
+      "title": "Emerging pattern: MFA Codes Rejected by Device Clock Drift",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-mfa-recovery-code-exhaustion",
+      "title": "Emerging pattern: MFA Recovery Code Exhaustion",
+      "status": "promoted",
+      "timesSeen": 3,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-mobile-deep-link-workspace",
+      "title": "Emerging pattern: Mobile Deep Link Workspace Mismatch",
+      "status": "promoted",
+      "timesSeen": 3,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-mobile-offline-export-filters",
+      "title": "Emerging pattern: Mobile Offline Export Loses Date Filters",
+      "status": "promoted",
+      "timesSeen": 3,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-mobile-offline-sync-conflict",
+      "title": "Emerging pattern: Mobile Offline Synchronization Conflict",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-mobile-push-token-stale",
+      "title": "Emerging pattern: Stale Mobile Push Token",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-notification-digest-duplication",
+      "title": "Emerging pattern: Notification Digest Duplication",
+      "status": "promoted",
+      "timesSeen": 3,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-notification-locale-fallback",
+      "title": "Emerging pattern: Notification Locale Fallback",
+      "status": "promoted",
+      "timesSeen": 3,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-oauth-refresh-token-revoked",
+      "title": "Emerging pattern: Revoked OAuth Refresh Token",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-passwordless-link-expiry",
+      "title": "Emerging pattern: Passwordless Link Expiry",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-permission-inheritance-delay",
+      "title": "Emerging pattern: Permission Inheritance Delay",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-proration-credit-mismatch",
+      "title": "Emerging pattern: Proration Credit Timing Mismatch",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-report-column-order-migration",
+      "title": "Emerging pattern: Report Column Order Migration",
+      "status": "promoted",
+      "timesSeen": 3,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-saml-nameid-case",
+      "title": "Emerging pattern: SAML NameID Case Sensitivity",
+      "status": "promoted",
+      "timesSeen": 3,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-scheduled-report-timezone",
+      "title": "Emerging pattern: Scheduled Report Timezone Boundary",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-scim-delayed-provisioning",
+      "title": "Emerging pattern: Delayed SCIM User Provisioning",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-session-cookie-samesite",
+      "title": "Emerging pattern: Session Cookie SameSite Restriction",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-sso-certificate-redirect-loop",
+      "title": "Emerging pattern: SSO Redirect Loop After Certificate Rotation",
+      "status": "promoted",
+      "timesSeen": 7,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-sso-domain-verification",
+      "title": "Emerging pattern: SSO Domain Verification Pending",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-vat-exemption-review",
+      "title": "Emerging pattern: VAT Exemption Document Review",
+      "status": "promoted",
+      "timesSeen": 3,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-webhook-delivery-replay",
+      "title": "Emerging pattern: Webhook Delivery Replay Ordering",
+      "status": "promoted",
+      "timesSeen": 5,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-webhook-ipv6-allowlist",
+      "title": "Emerging pattern: Webhook IPv6 Allowlist Gap",
+      "status": "promoted",
+      "timesSeen": 3,
+      "confidenceScore": 1
+    },
+    {
+      "id": "demo-pat-webhook-signature-secret-rotation",
+      "title": "Emerging pattern: Webhook Signature Failure After Secret Rotation",
+      "status": "promoted",
+      "timesSeen": 7,
+      "confidenceScore": 1
+    },
+    {
+      "id": "pattern-hi-name-is-1785177223315",
+      "title": "HI, Name Is",
+      "status": "suggested",
+      "timesSeen": 3,
+      "confidenceScore": 61
+    }
+  ],
+  "matureMemoryDigest": "12c251983aed4aeb"
+}

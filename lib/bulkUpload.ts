@@ -1,12 +1,19 @@
 import type { AIAdapter } from "@/lib/ai/types";
-import { assessBusinessRelevanceForProfile, understandForProfile } from "@/lib/analyzer";
+import { assessBusinessRelevanceForProfile, routeBusinessInquiryUnderstanding, understandForProfile } from "@/lib/analyzer";
 import {
   createCanonicalProblem,
-  findCanonicalProblem,
+  createGeneralizedEvidenceExample,
   identifyCanonicalProblem,
   withCanonicalProblemDefaults
 } from "@/lib/canonicalProblemEngine";
-import { findMatchingLesson } from "@/lib/drafting";
+import { findMatchingLesson, isCompatibleForDrafting } from "@/lib/drafting";
+import { retrieveMemory } from "@/lib/memory";
+import {
+  isStrongLessonMatch,
+  selectPreferredMatch,
+  withPreDiscriminationLessonMatches
+} from "@/lib/lessonSelection";
+import { ticketContradictsLesson } from "@/lib/drafting";
 import { ticketReferenceId } from "@/lib/knowledgeProvenance";
 import type {
   BulkAnalyzedQuery,
@@ -24,9 +31,21 @@ import type {
   KnowledgeItem,
   OrganizationProfile,
   ReflectionAction,
+  RetrievalAudit,
   SupportedBulkUploadFormat,
   Ticket
 } from "@/types";
+
+/** Stable across a retry of the same file; used to persist rows before analysis. */
+export function bulkUploadKey(fileName: string, content: string): string {
+  let hash = 2166136261;
+  const input = `${fileName}\u0000${content}`;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `bulk-${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
 
 const MESSAGE_FIELD_HINTS = ["message", "query", "text", "body", "issue", "description", "prompt", "question", "subject"];
 const RESOLUTION_FIELD_HINTS = ["resolution", "answer", "solution", "response", "reply", "outcome", "resolved", "fix"];
@@ -530,13 +549,11 @@ function mergeClusterEvidence(item: KnowledgeItem, cluster: BulkCluster, at: str
   const existingIds = new Set((base.exampleTickets ?? []).map((example) => example.ticketId));
   const addedExamples = cluster.items
     .filter((entry) => !existingIds.has(ticketReferenceId(entry.ticket)))
-    .map((entry) => ({
-      ticketId: ticketReferenceId(entry.ticket),
-      customerName: entry.ticket.customerName,
-      originalIssue: entry.ticket.description,
-      createdAt: entry.ticket.createdAt,
-      resolutionMode: "human" as const
-    }));
+    .map((entry) => createGeneralizedEvidenceExample(
+        ticketReferenceId(entry.ticket),
+        base.problemSummary ?? base.problem,
+        "human"
+      ));
 
   return {
     ...base,
@@ -565,6 +582,17 @@ const ROW_PHASE_CEILING = 80;
 const CLUSTER_PHASE_CEILING = 99;
 const DEFAULT_AI_BUDGET_MS = 180000;
 const DEFAULT_AI_CALL_WATCHDOG_MS = 130000;
+// A category match contributes 55 points in retrieveMemory. Requiring 70
+// means a preserved candidate also carries at least one additional retrieval
+// signal (tag, keyword, concept, or exact phrase); this is a preservation
+// floor, not a lowering of the retrieval threshold.
+const MINIMUM_PRESERVABLE_MATCH_SCORE = 70;
+
+function hasExplicitAIRejectionEvidence(reasoning: string | undefined): boolean {
+  const normalized = reasoning?.trim().toLowerCase() ?? "";
+  if (normalized.length < 24) return false;
+  return /\b(?:distinct|different|unrelated|mismatch|does not match|not the same|instead of|separate problem|separate issue)\b/.test(normalized);
+}
 
 function phasePercent(completed: number, total: number, floor: number, ceiling: number): number {
   if (total <= 0) return ceiling;
@@ -665,22 +693,63 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
     const ticket = buildBulkTicket(entry);
     const relevance = assessBusinessRelevanceForProfile(`${ticket.subject} ${ticket.description}`, organizationProfile);
     const understanding = understandForProfile(ticket, organizationProfile);
-    const canonicalProblem = identifyCanonicalProblem(understanding, organizationProfile);
+    const businessRouting = routeBusinessInquiryUnderstanding(understanding);
+    const routedUnderstanding = businessRouting.understanding;
+    const canonicalProblem = businessRouting.canonicalProblem ?? identifyCanonicalProblem(routedUnderstanding, organizationProfile);
     const relevanceStatus = relevance.status;
-    const canonicalMatch = relevanceStatus === "out_of_scope" ? null : findCanonicalProblem(understanding, knowledgeItems, organizationProfile);
-    let existingMatch = canonicalMatch
-      ? {
-          item: canonicalMatch.item,
-          matchScore: canonicalMatch.similarity,
-          matchReason: canonicalMatch.reason
-        }
-      : null;
+    const rawMemoryMatches = relevanceStatus === "out_of_scope"
+      ? []
+      : retrieveMemory(routedUnderstanding, knowledgeItems);
+    const memoryMatches = withPreDiscriminationLessonMatches(
+      ticket,
+      routedUnderstanding,
+      rawMemoryMatches,
+      knowledgeItems,
+      canonicalProblem.title
+    );
+    const compatibleMatches = memoryMatches.filter((match) => isCompatibleForDrafting(routedUnderstanding, match.item, ticket));
+    const selectedMatchInfo = compatibleMatches.length > 0 ? selectPreferredMatch(ticket, compatibleMatches) : null;
+    let existingMatch = selectedMatchInfo?.match ?? null;
+    let retrievedLessonId = selectedMatchInfo?.lessonMatch?.lesson.id ?? null;
+    const selectedLessonMatch = selectedMatchInfo?.lessonMatch ?? null;
+    const deterministicCandidate = rawMemoryMatches.length > 0;
+    const deterministicTopMatch = rawMemoryMatches[0] ?? null;
+    const deterministicMatchScore = existingMatch?.matchScore ?? deterministicTopMatch?.matchScore ?? null;
+    const deterministicKnowledgeId = existingMatch?.item.id ?? deterministicTopMatch?.item.id ?? null;
+    const deterministicLessonId = retrievedLessonId;
+    const deterministicMeetsPreservationFloor = Boolean(
+      existingMatch && existingMatch.matchScore >= MINIMUM_PRESERVABLE_MATCH_SCORE
+    );
+    let retrievalAudit: RetrievalAudit = {
+      decision: !deterministicCandidate
+        ? "no_deterministic_candidate"
+        : compatibleMatches.length === 0
+        ? "rejected_by_compatibility"
+        : "deterministic_preserved",
+      deterministicCandidate,
+      deterministicMatchScore,
+      deterministicKnowledgeId,
+      deterministicLessonId,
+      providerOutcome: "not_run",
+      reason: !deterministicCandidate
+        ? "No deterministic knowledge candidate was retrieved."
+        : compatibleMatches.length === 0
+        ? "Deterministic candidates were rejected by the compatibility gate."
+        : "Deterministic candidate preserved before provider execution."
+    };
+    const strongLessonAccepted =
+      Boolean(existingMatch) &&
+      isStrongLessonMatch(selectedLessonMatch) &&
+      !ticketContradictsLesson(ticket, selectedLessonMatch.lesson);
     const reasoningParts = [
-      `Category ${understanding.category}`,
+      `Category ${routedUnderstanding.category}`,
       `canonical problem ${canonicalProblem.title}`
     ];
 
-    if (existingMatch && aiAdapter.config.mode !== "disabled" && aiBudgetAvailable()) {
+    if (strongLessonAccepted) {
+      reasoningParts.push("Validated lesson match accepted before broad AI discrimination");
+      retrievalAudit.reason = "Strong validated lesson match preserved before provider execution.";
+    } else if (existingMatch && aiAdapter.config.mode !== "disabled" && aiBudgetAvailable()) {
       // TODO-062A: guarded so a provider that throws (socket hang up, DNS
       // failure) on row 67 can no longer discard the 99 rows around it.
       const guarded = await callAdvisory(
@@ -689,7 +758,7 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
             ticket,
             matchedCanonicalTitle: existingMatch!.item.canonicalProblemTitle ?? existingMatch!.item.title,
             matchedProblemSummary: existingMatch!.item.problemSummary ?? existingMatch!.item.problem,
-            deterministicUnderstanding: understanding
+            deterministicUnderstanding: routedUnderstanding
           }),
         remainingWatchdogMs()
       );
@@ -698,11 +767,29 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
       if (result?.ok && result.data) {
         usedAIAssistance = true;
         actualProviderLabel = result.providerLabel ?? actualProviderLabel;
-        if (result.data.isDistinctFromMatch && result.data.confidence !== "low") {
+        retrievalAudit.providerLabel = result.providerLabel ?? null;
+        retrievalAudit.providerOutcome = result.data.isDistinctFromMatch ? "rejected" : "confirmed";
+        if (
+          result.data.isDistinctFromMatch &&
+          result.data.confidence === "high" &&
+          hasExplicitAIRejectionEvidence(result.data.reasoning) &&
+          !deterministicMeetsPreservationFloor
+        ) {
           reasoningParts.push(`AI rejected the existing-memory match: ${result.data.reasoning}`);
           existingMatch = null;
+          retrievedLessonId = null;
+          retrievalAudit.decision = "rejected_by_ai";
+          retrievalAudit.reason = `High-confidence provider rejection contained explicit contradiction evidence: ${result.data.reasoning}`;
+        } else if (result.data.isDistinctFromMatch) {
+          reasoningParts.push(`AI rejection did not override deterministic retrieval: ${result.data.reasoning}`);
+          retrievalAudit.decision = "deterministic_preserved";
+          retrievalAudit.reason = deterministicMeetsPreservationFloor
+            ? `Deterministic match preserved despite provider rejection because its score (${deterministicMatchScore}) met the preservation floor.`
+            : `Provider rejection lacked high-confidence explicit contradiction evidence: ${result.data.reasoning}`;
         } else if (result.data.reasoning) {
           reasoningParts.push(`AI confirmed the match: ${result.data.reasoning}`);
+          retrievalAudit.decision = "deterministic_preserved";
+          retrievalAudit.reason = `Provider confirmed the deterministic match: ${result.data.reasoning}`;
         }
       } else {
         // F-3: a single bad response no longer flips the mode. Track per-call
@@ -710,15 +797,24 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
         // truly be a "deterministic_fallback" vs "mostly AI-assisted".
         fallbackUsed = true;
         aiCallFailures += 1;
+        retrievalAudit.providerOutcome = guarded.ok ? "unavailable" : "exception";
+        retrievalAudit.decision = existingMatch ? "deterministic_preserved" : retrievalAudit.decision;
+        retrievalAudit.reason = `Provider unavailable; deterministic retrieval preserved. ${guarded.ok ? "No valid provider result was returned." : guarded.reason}`;
       }
+    } else if (existingMatch && aiAdapter.config.mode !== "disabled") {
+      retrievalAudit.providerOutcome = "budget_exhausted";
+      retrievalAudit.decision = "deterministic_preserved";
+      retrievalAudit.reason = "AI budget exhausted; deterministic retrieval preserved.";
     }
 
     const analyzedBase: BulkAnalyzedQuery = {
       entry,
       ticket,
-      understanding,
+      understanding: routedUnderstanding,
       canonicalProblem,
       existingMatch,
+      retrievedLessonId,
+      retrievalAudit,
       confidence: "medium",
       reasoning: reasoningParts.join(" · ")
     };
@@ -956,13 +1052,9 @@ export function prepareBulkClusterCommit(
         internalGuidance: cluster.knowledgeDraft.internalGuidance,
         approvedAnswer: responseTemplate,
         customerResponseTemplate: responseTemplate,
-        exampleTickets: cluster.items.map((item) => ({
-          ticketId: ticketReferenceId(item.ticket),
-          customerName: item.ticket.customerName,
-          originalIssue: item.ticket.description,
-          createdAt: item.ticket.createdAt,
-          resolutionMode: "human" as const
-        })),
+        exampleTickets: cluster.items.map((item) =>
+          createGeneralizedEvidenceExample(ticketReferenceId(item.ticket), cluster.problemSummary, "human")
+        ),
         timesSeen: cluster.items.length,
         humanReviewCount: 1,
         knowledgeVersions: [

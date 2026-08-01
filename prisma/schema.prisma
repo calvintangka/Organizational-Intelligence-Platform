@@ -315,6 +315,10 @@ model TicketRecord {
   id                  String                @id @default(cuid())
   organizationId      String
   ticketId            String
+  bulkUploadKey       String?
+  bulkEntryId         String?
+  bulkClusterId       String?
+  intakeMode          String?
   rawMessage          String
   subject             String?
   status              TicketRecordLifecycle @default(open)
@@ -333,6 +337,7 @@ model TicketRecord {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, ticketId])
+  @@unique([organizationId, bulkUploadKey, bulkEntryId])
   @@index([organizationId])
   @@index([organizationId, status])
   @@index([organizationId, createdAt])

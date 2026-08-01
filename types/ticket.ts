@@ -19,6 +19,8 @@ export interface TicketRecordClassification {
   canonicalProblem: string | null;
   classifiedBy: "deterministic" | "llm_fallback";
   confidence: string;
+  inquiryType?: "operational_support" | "business_inquiry";
+  businessIntent?: string;
   /**
    * TODO-058: detected language of the INCOMING ticket, plus the language the
    * outgoing draft used. Both are metadata about this ticket only — knowledge,
@@ -45,10 +47,37 @@ export interface TicketRecordLanguage {
   reviewerOverride?: boolean;
 }
 
+export type RetrievalDecision =
+  | "no_deterministic_candidate"
+  | "rejected_by_compatibility"
+  | "rejected_by_ai"
+  | "deterministic_preserved";
+
+export type RetrievalProviderOutcome =
+  | "not_run"
+  | "confirmed"
+  | "rejected"
+  | "unavailable"
+  | "budget_exhausted"
+  | "cancelled"
+  | "exception";
+
+export interface RetrievalAudit {
+  decision: RetrievalDecision;
+  deterministicCandidate: boolean;
+  deterministicMatchScore: number | null;
+  deterministicKnowledgeId: string | null;
+  deterministicLessonId: string | null;
+  providerOutcome: RetrievalProviderOutcome;
+  providerLabel?: string | null;
+  reason: string;
+}
+
 export interface TicketRecordMemoryMatch {
   knowledgeId: string | null;
   matchType: "lesson" | "template" | "none";
   lessonId: string | null;
+  retrievalAudit?: RetrievalAudit;
 }
 
 export interface TicketRecordResolution {
@@ -69,6 +98,11 @@ export interface TicketRecord {
   ticketId: string;
   orgId: string;
   createdAt: string;
+  /** Stable idempotency metadata for rows originating from a bulk upload. */
+  bulkUploadKey?: string | null;
+  bulkEntryId?: string | null;
+  bulkClusterId?: string | null;
+  intakeMode?: "single" | "bulk";
   rawMessage: string;
   subject: string | null;
   classification: TicketRecordClassification | null;
@@ -84,6 +118,13 @@ export interface TicketRecord {
    * captured — it must never be treated as a human resolution.
    */
   resolutionMode?: "human" | "automatic" | null;
+}
+
+export interface BulkTicketSeed {
+  uploadKey: string;
+  entryId: string;
+  rawMessage: string;
+  subject: string | null;
 }
 
 export type TicketRecordFilter =

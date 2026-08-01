@@ -284,7 +284,7 @@ async function aiSafetyCases(profile, hero) {
 async function main() {
   const before = await snapshots();
   const [profile, items] = await Promise.all([persistence.getOrganizationProfile(DEMO), persistence.loadKnowledge(DEMO)]);
-  if (profile.id !== DEMO || items.length !== 45) throw new Error(`Expected mature Developer Demo profile with 45 items; got ${profile.id}/${items.length}.`);
+  if (profile.id !== DEMO || items.length !== 47) throw new Error(`Expected current Developer Demo profile with 47 items; got ${profile.id}/${items.length}.`);
   const expectedHero = items.find((item) => item.id === HERO);
   if (!expectedHero) throw new Error(`Missing ${HERO}.`);
 

@@ -86,7 +86,7 @@ async function snapshots() { return Object.fromEntries(await Promise.all(PROTECT
 async function main() {
   const before = await snapshots();
   const [profile, items] = await Promise.all([persistence.getOrganizationProfile(DEMO), persistence.loadKnowledge(DEMO)]);
-  if (profile.id !== DEMO || items.length !== 45) throw new Error(`Expected mature demo; got ${profile.id}/${items.length}.`);
+  if (profile.id !== DEMO || items.length !== 47) throw new Error(`Expected current mature demo; got ${profile.id}/${items.length}.`);
 
   const unseen = UNSEEN_SSO.map((def) => {
     const u = understandForProfile(ticket(def), profile);

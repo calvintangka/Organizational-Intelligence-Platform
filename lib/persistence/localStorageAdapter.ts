@@ -9,6 +9,7 @@ import type {
   OrganizationProfile,
   TicketPage,
   TicketPageRequest,
+  BulkTicketSeed,
   TicketRecord,
   ValidationRecord
 } from "@/types";
@@ -41,6 +42,7 @@ import {
   saveOrganizationProfile
 } from "@/lib/organizationProfile";
 import {
+  createTicketRecord,
   generateTicketId,
   generateTicketIds,
   loadTicketPage as loadLocalStorageTicketPage,
@@ -162,6 +164,38 @@ export class LocalStorageAdapter implements PersistenceAdapter {
     if (index >= 0) next[index] = record;
     else next.push(record);
     await saveLocalStorageTicketRecords(organizationId, next);
+  }
+
+  async prepareBulkTicketRecords(
+    organizationId: string,
+    profile: OrganizationProfile,
+    seeds: BulkTicketSeed[]
+  ): Promise<TicketRecord[]> {
+    this.assertProfileOrganization(organizationId, profile);
+    const existing = await loadLocalStorageTicketRecords(organizationId);
+    const byKey = new Map(
+      existing
+        .filter((record) => record.bulkUploadKey && record.bulkEntryId)
+        .map((record) => [`${record.bulkUploadKey}:${record.bulkEntryId}`, record])
+    );
+    const missing = seeds.filter((seed) => !byKey.has(`${seed.uploadKey}:${seed.entryId}`));
+    const ids = generateTicketIds(profile, missing.length);
+    const created = missing.map((seed, index) => {
+      const record = createTicketRecord(ids[index], organizationId, seed.rawMessage, seed.subject);
+      return {
+        ...record,
+        bulkUploadKey: seed.uploadKey,
+        bulkEntryId: seed.entryId,
+        intakeMode: "bulk" as const,
+        status: "in_review" as const
+      };
+    });
+    const next = [...existing, ...created];
+    if (created.length > 0) await saveLocalStorageTicketRecords(organizationId, next);
+    const merged = new Map(
+      [...existing, ...created].map((record) => [`${record.bulkUploadKey}:${record.bulkEntryId}`, record])
+    );
+    return seeds.map((seed) => merged.get(`${seed.uploadKey}:${seed.entryId}`)!).filter(Boolean);
   }
 
   async generateTicketId(organizationId: string, profile: OrganizationProfile): Promise<string> {

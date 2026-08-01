@@ -9,6 +9,7 @@ import type {
   OrganizationProfile,
   TicketPage,
   TicketPageRequest,
+  BulkTicketSeed,
   TicketRecord,
   ValidationRecord
 } from "@/types";
@@ -156,6 +157,19 @@ export class ServerPersistenceAdapter implements PersistenceAdapter {
 
   async saveTicketRecord(organizationId: string, record: TicketRecord): Promise<void> {
     await this.writeResource(organizationId, "tickets", [record]);
+  }
+
+  async prepareBulkTicketRecords(
+    organizationId: string,
+    _profile: OrganizationProfile,
+    seeds: BulkTicketSeed[]
+  ): Promise<TicketRecord[]> {
+    const id = this.rememberOrganization(organizationId);
+    return this.requestData<TicketRecord[]>(
+      `${this.organizationPath(id)}/tickets/bulk-prepare`,
+      "POST",
+      { seeds }
+    );
   }
 
   async generateTicketId(organizationId: string, profile: OrganizationProfile): Promise<string> {

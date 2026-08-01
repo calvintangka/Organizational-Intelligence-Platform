@@ -67,7 +67,7 @@ async function main() {
   const before = await snapshots();
   const profile = await persistence.getOrganizationProfile(DEMO);
   const items = await persistence.loadKnowledge(DEMO);
-  if (items.length !== 45) throw new Error(`Expected 45 Developer Demo items, got ${items.length}.`);
+  if (items.length !== 47) throw new Error(`Expected 47 current Developer Demo items, got ${items.length}.`);
 
   const baseline = {
     overall: { correct: 15, total: 70 },
@@ -121,4 +121,3 @@ async function main() {
 }
 
 main().catch((error) => { console.error(error); process.exitCode = 1; }).finally(async () => { try { await prisma.$disconnect(); } catch { /* ignore shutdown errors */ } });
-

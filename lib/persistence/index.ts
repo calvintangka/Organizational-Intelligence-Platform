@@ -17,6 +17,7 @@ import type {
   OrganizationProfile,
   TicketPage,
   TicketPageRequest,
+  BulkTicketSeed,
   TicketRecord,
   ValidationRecord
 } from "@/types";
@@ -178,6 +179,14 @@ class RoutingPersistenceAdapter implements PersistenceAdapter {
 
   saveTicketRecord(organizationId: string, record: TicketRecord): Promise<void> {
     return this.activeResourceAdapter.saveTicketRecord(organizationId, record);
+  }
+
+  prepareBulkTicketRecords(
+    organizationId: string,
+    profile: OrganizationProfile,
+    seeds: BulkTicketSeed[]
+  ): Promise<TicketRecord[]> {
+    return this.activeResourceAdapter.prepareBulkTicketRecords(organizationId, profile, seeds);
   }
 
   generateTicketId(organizationId: string, profile: OrganizationProfile): Promise<string> {

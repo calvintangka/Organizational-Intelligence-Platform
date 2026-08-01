@@ -5,12 +5,20 @@
   TicketRecordStatus,
   TicketRecordClassification,
   TicketRecordMemoryMatch,
+  RetrievalAudit,
+  RetrievalDecision,
+  RetrievalProviderOutcome,
   TicketRecordResolution,
   TicketRecordReflection,
+  BulkTicketSeed,
   TicketRecordFilter,
   TicketPageRequest,
   TicketPage
 } from "./ticket";
+export type {
+  BusinessIntent,
+  BusinessIntentClassification
+} from "./oip";
 export type {
   AIAnalysis,
   DraftGroundingMode,

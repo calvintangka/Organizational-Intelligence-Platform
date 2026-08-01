@@ -176,7 +176,7 @@ function main() {
   return (async () => {
     const before = await snapshots();
     const [profile, items] = await Promise.all([persistence.getOrganizationProfile(DEMO), persistence.loadKnowledge(DEMO)]);
-    if (profile.id !== DEMO || items.length !== 45) throw new Error(`Expected mature demo; got ${profile.id}/${items.length}.`);
+    if (profile.id !== DEMO || items.length !== 47) throw new Error(`Expected current mature demo; got ${profile.id}/${items.length}.`);
     const itemById = new Map(items.map((it) => [it.id, it]));
     const cases = {};
 

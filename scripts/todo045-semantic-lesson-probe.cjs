@@ -74,7 +74,7 @@ function appendSignals(definition, suffix) { return { ...definition, id: `${defi
 async function main() {
   const before = await snapshots();
   const [profile, items] = await Promise.all([persistence.getOrganizationProfile(DEMO), persistence.loadKnowledge(DEMO)]);
-  if (items.length !== 45) throw new Error(`Expected 45 mature Developer Demo knowledge items; got ${items.length}.`);
+  if (items.length !== 47) throw new Error(`Expected 47 current mature Developer Demo knowledge items; got ${items.length}.`);
 
   const rows = [];
   const exact = [];

@@ -16,12 +16,13 @@ import { defaultOrganizationProfile, seedOrganizationProfiles } from "@/data/see
 import { createAIAdapter } from "@/lib/ai/adapter";
 import { buildAIAdvisory, shouldAcceptPatternSuggestion } from "@/lib/ai/deterministic";
 import type { AIProviderResult } from "@/lib/ai/types";
-import { assessBusinessRelevanceForProfile, understandForProfile } from "@/lib/analyzer";
+import { assessBusinessRelevanceForProfile, routeBusinessInquiryUnderstanding, understandForProfile } from "@/lib/analyzer";
 import { extractCustomerContext, isLikelyPersonName, textHasExplicitRole } from "@/lib/customerContext";
 import { classifyBusinessDomain } from "@/lib/domainClassifier";
+import { businessLessonSignalAliases } from "@/lib/businessInquiry";
 import { analyzeBulkEntries, prepareBulkClusterCommit } from "@/lib/bulkUpload";
 import { retrieveMemory } from "@/lib/memory";
-import { draftResponse, findMatchingLesson, isCompatibleForDrafting, ticketContradictsLesson } from "@/lib/drafting";
+import { draftBusinessInquiryResponse, draftResponse, findMatchingLesson, isCompatibleForDrafting, ticketContradictsLesson } from "@/lib/drafting";
 import type { LessonMatchResult, SemanticLessonAuthorization } from "@/lib/drafting";
 import {
   buildDiscriminationLessonPayload,
@@ -37,8 +38,10 @@ import {
   buildPackCandidateContent
 } from "@/lib/knowledgePacks";
 import { generateReflection } from "@/lib/reflection";
+import { assessReflectionSafety } from "@/lib/reflectionSafety";
 import {
   createCanonicalProblem,
+  createGeneralizedEvidenceExample,
   dedupeLessonCollection,
   getCustomerResponseTemplate,
   identifyCanonicalProblem,
@@ -46,6 +49,7 @@ import {
   mergeLessonIntoExisting,
   mergeIntoCanonicalProblem,
   normalizeReusableLessonTemplate,
+  createOpaqueProvenanceId,
   resolveLessonIdForItem,
   upsertCanonicalProblem,
   withCanonicalProblemDefaults
@@ -118,6 +122,7 @@ import type {
   ValidationRecord,
   MemoryChangeRecord,
   BulkAnalysisProgress,
+  BulkAnalyzedQuery,
   BulkCluster,
   BulkUploadEntry,
   Understanding,
@@ -247,7 +252,8 @@ function understandingToAnalysis(und: ReturnType<typeof understandForProfile>): 
     urgency: und.urgency,
     suggestedTags: und.tags,
     detectedSignals: und.detectedSignals,
-    extractedFields: und.extractedFields
+    extractedFields: und.extractedFields,
+    businessClassification: und.businessClassification
   };
 }
 
@@ -261,7 +267,8 @@ function toUnderstanding(analysis: AIAnalysis): Understanding {
     urgency: analysis.urgency,
     tags: analysis.suggestedTags,
     detectedSignals: analysis.detectedSignals ?? [],
-    extractedFields: analysis.extractedFields ?? emptyExtractedTicketFields()
+    extractedFields: analysis.extractedFields ?? emptyExtractedTicketFields(),
+    businessClassification: analysis.businessClassification
   };
 }
 
@@ -517,6 +524,7 @@ export default function Home() {
 
   // Ticket records (first-class persisted case records)
   const ticketSaveChains = useRef<Record<string, Promise<void>>>({});
+  const bulkTicketRecords = useRef<Record<string, TicketRecord>>({});
   const [activeTicketRecord, setActiveTicketRecord] = useState<TicketRecord | null>(null);
 
   // LLM match discrimination — reasoning surfaced in the analysis step
@@ -1272,9 +1280,10 @@ export default function Home() {
   async function analyzeUploadedQueries(
     entries: BulkUploadEntry[],
     onProgress: (progress: BulkAnalysisProgress) => void,
-    signal: AbortSignal
+    signal: AbortSignal,
+    uploadKey: string
   ) {
-    return analyzeBulkEntries({
+    const result = await analyzeBulkEntries({
       entries,
       organizationProfile,
       knowledgeItems,
@@ -1282,9 +1291,79 @@ export default function Home() {
       onProgress,
       signal
     });
+    const analyzedByEntry = new Map<string, { item: BulkAnalyzedQuery; clusterId: string }>();
+    for (const cluster of result.clusters) {
+      for (const item of cluster.items) analyzedByEntry.set(item.entry.id, { item, clusterId: cluster.id });
+    }
+    for (const item of result.unclustered.items) {
+      analyzedByEntry.set(item.entry.id, { item, clusterId: result.unclustered.id });
+    }
+    const updates: TicketRecord[] = [];
+    for (const entry of entries) {
+      const prepared = bulkTicketRecords.current[`${uploadKey}:${entry.id}`];
+      const analyzed = analyzedByEntry.get(entry.id);
+      if (!prepared || !analyzed) throw new Error(`Durable bulk ticket missing analysis for uploaded row ${entry.id}.`);
+      const language = resolveTicketLanguage(analyzed.item.ticket, organizationProfile);
+      updates.push({
+        ...prepared,
+        bulkClusterId: analyzed.clusterId,
+        status: "in_review",
+          classification: {
+          category: analyzed.item.understanding.category,
+          intent: analyzed.item.understanding.intent ?? "unspecified",
+          canonicalProblem: analyzed.item.canonicalProblem.title,
+          classifiedBy: "deterministic",
+          confidence: analyzed.item.confidence,
+          inquiryType: analyzed.item.understanding.businessClassification?.inquiryType,
+          businessIntent: analyzed.item.understanding.businessClassification?.intent,
+          language: {
+            detected: language.detection.language,
+            confidence: language.detection.confidence,
+            method: language.detection.method,
+              responseLanguage: language.response.language
+            }
+          },
+          memoryMatch: analyzed.item.existingMatch
+            ? {
+                knowledgeId: analyzed.item.existingMatch.item.id,
+                matchType: analyzed.item.retrievedLessonId ? "lesson" : "template",
+                lessonId: analyzed.item.retrievedLessonId ?? null,
+                retrievalAudit: analyzed.item.retrievalAudit
+              }
+            : {
+                knowledgeId: null,
+                matchType: "none",
+                lessonId: null,
+                retrievalAudit: analyzed.item.retrievalAudit
+              }
+      });
+    }
+    persistTicketRecords(updates);
+    await flushTicketSaves(organizationProfile.id);
+    for (const update of updates) bulkTicketRecords.current[`${uploadKey}:${update.bulkEntryId}`] = update;
+    return result;
   }
 
-  async function commitBulkCluster(cluster: BulkCluster): Promise<{
+  async function prepareBulkEntries(uploadKey: string, entries: BulkUploadEntry[]): Promise<void> {
+    const prepared = await persistence.prepareBulkTicketRecords(
+      organizationProfile.id,
+      organizationProfile,
+      entries.map((entry) => ({
+        uploadKey,
+        entryId: entry.id,
+        rawMessage: entry.message,
+        subject: entry.message.length > 80 ? `${entry.message.slice(0, 80)}…` : entry.message
+      }))
+    );
+    if (prepared.length !== entries.length) {
+      throw new Error(`Bulk persistence returned ${prepared.length} tickets for ${entries.length} uploaded rows.`);
+    }
+    for (const record of prepared) {
+      bulkTicketRecords.current[`${uploadKey}:${record.bulkEntryId}`] = record;
+    }
+  }
+
+  async function commitBulkCluster(cluster: BulkCluster, uploadKey: string): Promise<{
     knowledgeId: string;
     candidateId: string;
     validationId: string;
@@ -1304,7 +1383,6 @@ export default function Home() {
       rationale: prepared.rationale,
       createdAt: now
     });
-    const bulkTicketIds = await persistence.generateTicketIds(organizationProfile.id, organizationProfile, cluster.items?.length ?? 0);
     const result = applyValidatedMemoryChange(candidate, prepared.beforeState, prepared.afterState, prepared.rationale);
     setSessionCreatedIds((prev) => new Set([...prev, result.validatedItem.id]));
     setLastSavedKnowledgeId(result.validatedItem.id);
@@ -1318,16 +1396,21 @@ export default function Home() {
     }
     // Create ticket records for each bulk-uploaded query
     const bulkRecords: TicketRecord[] = (cluster.items ?? []).map((item, index) => {
-      const bulkTicketId = bulkTicketIds[index];
-      const rec = createTicketRecord(bulkTicketId, organizationProfile.id, item.entry.message, item.ticket.subject);
+      const rec = bulkTicketRecords.current[`${uploadKey}:${item.entry.id}`];
+      if (!rec) {
+        throw new Error(`Durable bulk ticket missing for uploaded row ${item.entry.id}.`);
+      }
       return {
         ...rec,
+        bulkClusterId: cluster.id,
         classification: {
           category: item.understanding.category,
           intent: item.understanding.intent ?? "unspecified",
           canonicalProblem: item.canonicalProblem.title,
           classifiedBy: "deterministic" as const,
           confidence: "bulk",
+          inquiryType: item.understanding.businessClassification?.inquiryType,
+          businessIntent: item.understanding.businessClassification?.intent,
           // TODO-058A: bulk-committed tickets record language metadata on the
           // same terms as single tickets, so the field is never silently absent
           // depending on which intake path a ticket arrived through.
@@ -1627,7 +1710,22 @@ export default function Home() {
         senderName: extractedName,
         companyName: resumeContext.companyName,
         senderRole: resumeContext.senderRole
-      }
+      },
+      businessClassification:
+        record.classification?.inquiryType === "business_inquiry" &&
+        (record.classification.businessIntent === "product_information" ||
+          record.classification.businessIntent === "company_information" ||
+          record.classification.businessIntent === "general_business_inquiry" ||
+          record.classification.businessIntent === "multilingual_support")
+          ? {
+              inquiryType: "business_inquiry",
+              intent: record.classification.businessIntent,
+              confidence: record.classification.confidence === "high" || record.classification.confidence === "medium" ? record.classification.confidence : "low",
+              signals: []
+            }
+          : record.classification?.inquiryType === "operational_support"
+          ? { inquiryType: "operational_support", intent: "operational_support", confidence: "low", signals: [] }
+          : undefined
     };
 
     // Re-derive similarKnowledge from the persisted knowledgeId when present.
@@ -1644,13 +1742,22 @@ export default function Home() {
         ]
       : [];
 
-    const draft = draftResponse(
-      reconstructedTicket,
-      reconstructedUnderstanding,
-      reconstructedSimilarKnowledge[0] ?? null,
-      organizationProfile,
-      knowledgeItems.length === 0
-    );
+    const restoredBusinessMemory = reconstructedUnderstanding.businessClassification?.inquiryType === "business_inquiry"
+      && reconstructedSimilarKnowledge[0]?.item.category === "Business Inquiry";
+    const draft = reconstructedUnderstanding.businessClassification?.inquiryType === "business_inquiry" && !restoredBusinessMemory
+      ? draftBusinessInquiryResponse(
+          reconstructedTicket,
+          reconstructedUnderstanding,
+          organizationProfile,
+          resolveTicketLanguage(reconstructedTicket, organizationProfile).response.language
+        )
+      : draftResponse(
+          reconstructedTicket,
+          reconstructedUnderstanding,
+          reconstructedSimilarKnowledge[0] ?? null,
+          organizationProfile,
+          knowledgeItems.length === 0
+        );
 
     const reconstructedResponse: SuggestedResponse = {
       ticketId: record.ticketId,
@@ -1658,8 +1765,12 @@ export default function Home() {
       basedOnKnowledgeIds: draft.basedOnKnowledgeIds,
       confidenceNote: draft.confidenceNote,
       source: draft.source,
-      draftMode: record.draftSource === "ai_advisory" ? "memory_grounded" : record.memoryMatch?.matchType === "lesson" ? "lesson_grounded" : "memory_grounded",
-      groundingLabel: restoredKnowledge?.title ?? "organizational memory"
+      draftMode: reconstructedUnderstanding.businessClassification?.inquiryType === "business_inquiry" && !restoredBusinessMemory
+        ? "memory_grounded"
+        : record.draftSource === "ai_advisory" ? "memory_grounded" : record.memoryMatch?.matchType === "lesson" ? "lesson_grounded" : "memory_grounded",
+      groundingLabel: reconstructedUnderstanding.businessClassification?.inquiryType === "business_inquiry" && !restoredBusinessMemory
+        ? "organization profile"
+        : restoredKnowledge?.title ?? "organizational memory"
     };
 
     const reviewedText =
@@ -1974,7 +2085,9 @@ export default function Home() {
       return `AI draft grounded in validated lesson: ${groundingLabel ?? "matched lesson"}`;
     }
     if (mode === "memory_grounded") {
-      return "AI draft grounded in organizational memory";
+      return groundingLabel === "organization profile"
+        ? "AI draft grounded in organization profile"
+        : "AI draft grounded in organizational memory";
     }
     return "AI suggestion - no organizational knowledge exists yet; this draft is not based on validated memory. Review carefully before sending.";
   }
@@ -2182,6 +2295,18 @@ export default function Home() {
     const commitmentViolation = validateNoUnvalidatedCommitments(draft, context);
     if (commitmentViolation) {
       return commitmentViolation;
+    }
+    if (understanding.businessClassification?.inquiryType === "business_inquiry") {
+      const unsupportedBusinessContent = [
+        { label: "invented public link", pattern: /https?:\/\/|www\.|official website/i },
+        { label: "invented attachment or brochure", pattern: /\b(?:attached|attachment|brochure|datasheet)\b/i },
+        { label: "unsupported pricing detail", pattern: /\b(?:pricing|price|cost|per seat|per user)\b/i },
+        { label: "unsupported integration claim", pattern: /\b(?:integration|integrations|integrate)\b/i },
+        { label: "unsupported account-details request", pattern: /\b(?:account details|account information|account credentials)\b/i }
+      ].find((rule) => rule.pattern.test(draft));
+      if (unsupportedBusinessContent) {
+        return `AI business draft included ${unsupportedBusinessContent.label}; only approved organization-profile facts are allowed.`;
+      }
     }
     if (understanding.category === "Activation") {
       return validateActivationDraft(draft);
@@ -2416,25 +2541,33 @@ export default function Home() {
     response: SuggestedResponse;
     usedAIDraft: boolean;
   }> {
+    const isBusinessInquiry = understanding.businessClassification?.inquiryType === "business_inquiry";
+    const isBusinessMemoryReuse = isBusinessInquiry && matchedKnowledge?.item.category === "Business Inquiry";
     const deterministicLessonMatch = matchedKnowledge ? findMatchingLesson(ticket, matchedKnowledge.item) : null;
     const semanticLesson = matchedKnowledge && semanticAuthorization
       ? matchedKnowledge.item.lessons?.find((lesson) => lesson.id === resolveLessonIdForItem(matchedKnowledge.item, semanticAuthorization.lessonId)) ?? null
       : null;
     const lessonMatch = deterministicLessonMatch;
     const groundingLesson = lessonMatch?.lesson ?? semanticLesson;
-    const draftMode: DraftGroundingMode = groundingLesson
+    const draftMode: DraftGroundingMode = isBusinessInquiry && !isBusinessMemoryReuse
+      ? "memory_grounded"
+      : groundingLesson
       ? "lesson_grounded"
       : matchedKnowledge && deterministicSource !== "no_template"
       ? "memory_grounded"
       : "cold_start";
     const groundingLabel =
-      draftMode === "lesson_grounded"
+      isBusinessInquiry && !isBusinessMemoryReuse
+        ? "organization profile"
+        : draftMode === "lesson_grounded"
         ? groundingLesson?.title ?? groundingLesson?.rootCause ?? "matched lesson"
         : draftMode === "memory_grounded"
         ? matchedKnowledge?.item.canonicalProblemTitle ?? matchedKnowledge?.item.title ?? "organizational memory"
         : "no organizational knowledge";
     const groundingContent =
-      draftMode === "lesson_grounded"
+      isBusinessInquiry && !isBusinessMemoryReuse
+        ? deterministicDraft
+        : draftMode === "lesson_grounded"
         ? groundingLesson
           ? normalizeReusableLessonTemplate(groundingLesson.customerResponse)
           : deterministicDraft
@@ -2457,7 +2590,9 @@ export default function Home() {
         advisory: baseAdvisory,
         response: {
           ...fallbackResponse,
-          fallbackNotice: formatDraftFallbackNotice(deterministicSource, defaultAvailabilityMessage(), baseAdvisory?.diagnostics),
+          fallbackNotice: isBusinessInquiry && !isBusinessMemoryReuse
+            ? "AI assistant unavailable — showing a grounded organization-profile draft for human review."
+            : formatDraftFallbackNotice(deterministicSource, defaultAvailabilityMessage(), baseAdvisory?.diagnostics),
           fallbackTechnicalDetails: buildFallbackTechnicalDetails(defaultAvailabilityMessage(), baseAdvisory?.diagnostics)
         },
         usedAIDraft: false
@@ -2489,7 +2624,7 @@ export default function Home() {
       matchedKnowledge
     });
     const enrichmentRequest: Promise<AIProviderResult<AIKnowledgeEnrichment>> =
-      draftMode === "cold_start"
+      draftMode === "cold_start" || (isBusinessInquiry && !isBusinessMemoryReuse)
         ? Promise.resolve({
             ok: false,
             providerMode: aiAdapter.config.mode,
@@ -2619,7 +2754,9 @@ export default function Home() {
       },
       response: {
         ...fallbackResponse,
-        fallbackNotice: formatDraftFallbackNotice(
+        fallbackNotice: isBusinessInquiry && !isBusinessMemoryReuse
+          ? "AI assistant unavailable or declined the draft — showing a grounded organization-profile draft for human review."
+          : formatDraftFallbackNotice(
           deterministicSource,
           draftRejectionReason ?? draftResult.error ?? enrichmentResult.error ?? defaultAvailabilityMessage(),
           nextAdvisory.diagnostics
@@ -2665,7 +2802,6 @@ export default function Home() {
       setErrorMessage("Out-of-scope tickets cannot be approved into Organizational Memory.");
       return;
     }
-
     const und = toUnderstanding(aiAnalysis);
     const draftedMatch = resolveDraftSourceMatch();
     const existingMatch = draftedMatch
@@ -2728,6 +2864,9 @@ export default function Home() {
   function applyLessonToItem(item: KnowledgeItem, lessonDraft: LessonDraft, ticketId: string, now: string): KnowledgeItem {
     const existingLessons = item.lessons ?? [];
     const normalizedCustomerResponse = normalizeReusableLessonTemplate(lessonDraft.customerResponse);
+    const lessonSignals = item.category === "Business Inquiry"
+      ? [...new Set([...lessonDraft.signals, ...businessLessonSignalAliases(item.canonicalProblemTitle ?? item.title)])]
+      : lessonDraft.signals;
 
     if (lessonDraft.mode === "new") {
       const lesson: Lesson = {
@@ -2735,9 +2874,9 @@ export default function Home() {
         rootCause: lessonDraft.rootCause,
         solution: lessonDraft.solution,
         customerResponse: normalizedCustomerResponse,
-        signals: lessonDraft.signals,
+        signals: lessonSignals,
         createdAt: now,
-        sourceTicketId: ticketId
+        sourceTicketId: createOpaqueProvenanceId(ticketId)
       };
       const merged = mergeLessonIntoExisting(existingLessons, lesson, item.canonicalProblemId ?? item.id);
       return { ...item, lessons: merged.lessons };
@@ -2749,7 +2888,7 @@ export default function Home() {
         ...item,
         lessons: existingLessons.map(l =>
           l.id === canonicalLessonId
-            ? { ...l, rootCause: lessonDraft.rootCause, solution: lessonDraft.solution, customerResponse: normalizedCustomerResponse, signals: lessonDraft.signals }
+          ? { ...l, rootCause: lessonDraft.rootCause, solution: lessonDraft.solution, customerResponse: normalizedCustomerResponse, signals: lessonSignals }
             : l
         )
       };
@@ -2768,20 +2907,54 @@ export default function Home() {
     const und = toUnderstanding(aiAnalysis);
     const now = new Date().toISOString();
     const lessonDraft = input?.lessonDraft;
+    if (lessonDraft) {
+      const safety = assessReflectionSafety(lessonDraft, {
+        customerName: selectedTicket.customerName,
+        organizationName: organizationProfile.name,
+        sourceTicketId: ticketReferenceId(selectedTicket),
+        sourceTicketText: `${selectedTicket.subject} ${selectedTicket.description}`
+      });
+      if (!safety.safe) {
+        setErrorMessage(`Reflection rejected: remove ${safety.issues.join(", ")} before promoting this lesson.`);
+        return;
+      }
+    }
     let committedItemForReflection: KnowledgeItem | null = null;
+    // Keep the transactional identifiers in this closure. React state updates
+    // are asynchronous, so deriving ticket audit links from validationRecords
+    // immediately after a commit can otherwise produce an apparently resolved
+    // ticket with empty validationRecordIds/knowledgeChanged fields.
+    let committedValidationId: string | null = null;
+    let committedMemoryChangeId: string | null = null;
 
     if (reflectionDecision.action === "create_new") {
       const problemName = input?.problemName?.trim();
       const isUncategorized = !!reflectionDecision.problemNameRequired;
-      const canonicalProblemTitle = isUncategorized ? problemName : identifyCanonicalProblem(und, organizationProfile).title;
+      const businessIntent = und.businessClassification?.intent;
+      const isBusinessInquiry = und.businessClassification?.inquiryType === "business_inquiry";
+      const businessTitle = businessIntent === "multilingual_support"
+        ? "Multilingual Support Inquiry"
+        : businessIntent === "company_information"
+        ? "Company Information Inquiry"
+        : businessIntent === "general_business_inquiry"
+        ? "General Business Inquiry"
+        : "Product Information Inquiry";
+      const canonicalProblemTitle = isBusinessInquiry
+        ? businessTitle
+        : isUncategorized ? problemName : identifyCanonicalProblem(und, organizationProfile).title;
       if (isUncategorized && !canonicalProblemTitle) {
         setErrorMessage("Name the new problem in Reflection before committing it to Organizational Memory.");
         return;
       }
-      const derivedCategory = isUncategorized
-        ? (canonicalProblemTitle!.split(/\s*[—:-]\s*/).filter(Boolean)[0] || canonicalProblemTitle!)
+      const derivedCategory = isBusinessInquiry
+        ? "Business Inquiry"
+        : isUncategorized
+        ? "Uncategorized"
         : und.category;
       const canonicalCustomerResponse = lessonDraft?.customerResponse?.trim() || reviewedResponse;
+      const businessTags = isBusinessInquiry
+        ? businessLessonSignalAliases(canonicalProblemTitle!, businessIntent)
+        : [];
       const candidate = createCandidate({
         action: "create_new",
         sourceTicketIds: [ticketReferenceId(selectedTicket)],
@@ -2799,7 +2972,14 @@ export default function Home() {
         canonicalCustomerResponse,
         organizationProfile,
         now,
-        isUncategorized
+        isBusinessInquiry
+          ? {
+              title: canonicalProblemTitle,
+              category: "Business Inquiry",
+              problemSummary: lessonDraft?.rootCause ?? und.coreProblem,
+              tags: [...new Set([...und.tags, ...businessTags])]
+            }
+          : isUncategorized
           ? {
               title: canonicalProblemTitle,
               category: derivedCategory,
@@ -2809,7 +2989,10 @@ export default function Home() {
           : undefined
       );
       if (lessonDraft) newItem = applyLessonToItem(newItem, { ...lessonDraft, mode: "new" }, ticketReferenceId(selectedTicket), now);
-      const committedItem = commitValidatedMemoryChange(candidate, null, newItem, reflectionDecision.rationale);
+      const committedResult = applyValidatedMemoryChange(candidate, null, newItem, reflectionDecision.rationale);
+      const committedItem = committedResult.validatedItem;
+      committedValidationId = committedResult.validation.id;
+      committedMemoryChangeId = committedResult.memoryChange.id;
       committedItemForReflection = committedItem;
       setSessionCreatedIds((prev) => new Set([...prev, committedItem.id]));
       setLastSavedKnowledgeId(committedItem.id);
@@ -2840,7 +3023,10 @@ export default function Home() {
         });
         let merged = mergeIntoCanonicalProblem(target, selectedTicket, und, undefined, "human", now);
         if (lessonDraft) merged = applyLessonToItem(merged, lessonDraft, ticketReferenceId(selectedTicket), now);
-        const committedItem = commitValidatedMemoryChange(candidate, target, merged, reflectionDecision.rationale);
+        const committedResult = applyValidatedMemoryChange(candidate, target, merged, reflectionDecision.rationale);
+        const committedItem = committedResult.validatedItem;
+        committedValidationId = committedResult.validation.id;
+        committedMemoryChangeId = committedResult.memoryChange.id;
         committedItemForReflection = committedItem;
         setSessionCreatedIds((prev) => new Set([...prev, committedItem.id]));
         setLastSavedKnowledgeId(committedItem.id);
@@ -2888,13 +3074,11 @@ export default function Home() {
             : {}),
           exampleTickets: [
             ...(base.exampleTickets ?? []),
-            {
-              ticketId: ticketReferenceId(selectedTicket),
-              customerName: selectedTicket.customerName,
-              originalIssue: selectedTicket.description,
-              createdAt: selectedTicket.createdAt,
-              resolutionMode: "human" as const
-            }
+            createGeneralizedEvidenceExample(
+              ticketReferenceId(selectedTicket),
+              base.problemSummary ?? base.problem,
+              "human"
+            )
           ],
           knowledgeVersions: updatesGenericTemplate
             ? [
@@ -2916,7 +3100,10 @@ export default function Home() {
           lastValidatedAt: now
         };
         if (lessonDraft) evolved = applyLessonToItem(evolved, lessonDraft, ticketReferenceId(selectedTicket), now);
-        const committedItem = commitValidatedMemoryChange(candidate, target, evolved, reflectionDecision.versionReason ?? reflectionDecision.rationale);
+        const committedResult = applyValidatedMemoryChange(candidate, target, evolved, reflectionDecision.versionReason ?? reflectionDecision.rationale);
+        const committedItem = committedResult.validatedItem;
+        committedValidationId = committedResult.validation.id;
+        committedMemoryChangeId = committedResult.memoryChange.id;
         committedItemForReflection = committedItem;
         setSessionCreatedIds((prev) => new Set([...prev, committedItem.id]));
         setLastSavedKnowledgeId(committedItem.id);
@@ -2969,7 +3156,10 @@ export default function Home() {
           });
           let trustItem = result.item;
           if (lessonDraft) trustItem = applyLessonToItem(trustItem, lessonDraft, ticketReferenceId(selectedTicket), now);
-          const committedItem = commitValidatedMemoryChange(candidate, target, trustItem, reflectionDecision.rationale);
+          const committedResult = applyValidatedMemoryChange(candidate, target, trustItem, reflectionDecision.rationale);
+          const committedItem = committedResult.validatedItem;
+          committedValidationId = committedResult.validation.id;
+          committedMemoryChangeId = committedResult.memoryChange.id;
           committedItemForReflection = committedItem;
           setLastTrustDelta(result.trustDelta);
           setLastSavedKnowledgeId(committedItem.id);
@@ -3014,13 +3204,15 @@ export default function Home() {
           decision: reflectionDecision.action,
           lessonCreatedId: lessonCreated,
           lessonReinforcedId: lessonReinforced,
-          knowledgeChanged: lastSavedKnowledgeId,
+          knowledgeChanged: committedItemForReflection?.id ?? lastSavedKnowledgeId,
         },
-        validationRecordIds: validationRecords
-          .filter((v) => v.candidateId && knowledgeCandidates.some(
-            (c) => c.id === v.candidateId && c.sourceTicketIds.includes(ticketReferenceId(selectedTicket))
-          ))
-          .map((v) => v.id),
+        validationRecordIds: committedValidationId
+          ? [committedValidationId]
+          : validationRecords
+              .filter((v) => v.candidateId && knowledgeCandidates.some(
+                (c) => c.id === v.candidateId && c.sourceTicketIds.includes(ticketReferenceId(selectedTicket))
+              ))
+              .map((v) => v.id),
         status: "resolved",
         // TODO-026: the primary review workspace resolves through human approval.
         resolutionMode: "human",
@@ -3076,14 +3268,16 @@ export default function Home() {
     setDomainClassification(reuseDomain);
 
     const und = understandForProfile(second, organizationProfile);
-    const canonicalProblem = identifyCanonicalProblem(und, organizationProfile);
-    const advisory = await requestAnalysisAdvisory(second, und, {
+    const businessRouting = routeBusinessInquiryUnderstanding(und);
+    const routedUnderstanding = businessRouting.understanding;
+    const canonicalProblem = businessRouting.canonicalProblem ?? identifyCanonicalProblem(routedUnderstanding, organizationProfile);
+    const advisory = await requestAnalysisAdvisory(second, routedUnderstanding, {
       title: canonicalProblem.title,
       problemSummary: canonicalProblem.problemSummary,
       category: canonicalProblem.category
     }, requestGeneration);
     if (!ticketRequestIsCurrent(requestGeneration)) return;
-    const enrichedUnderstanding = applyAdvisoryExtractedFields(und, advisory);
+    const enrichedUnderstanding = applyAdvisoryExtractedFields(routedUnderstanding, advisory);
     const matches = withPreDiscriminationLessonMatches(
       second,
       enrichedUnderstanding,
@@ -3301,14 +3495,16 @@ export default function Home() {
     ]);
 
     const und = understandForProfile(ticket, profile);
-    const canonicalProblem = identifyCanonicalProblem(und, profile);
-    const advisory = await requestAnalysisAdvisory(ticket, und, {
+    const businessRouting = routeBusinessInquiryUnderstanding(und);
+    const routedUnderstanding = businessRouting.understanding;
+    const canonicalProblem = businessRouting.canonicalProblem ?? identifyCanonicalProblem(routedUnderstanding, profile);
+    const advisory = await requestAnalysisAdvisory(ticket, routedUnderstanding, {
       title: canonicalProblem.title,
       problemSummary: canonicalProblem.problemSummary,
       category: canonicalProblem.category
     }, requestGeneration);
     if (!ticketRequestIsCurrent(requestGeneration)) return;
-    const enrichedUnderstanding = applyAdvisoryExtractedFields(und, advisory);
+    const enrichedUnderstanding = applyAdvisoryExtractedFields(routedUnderstanding, advisory);
     const analysis = understandingToAnalysis(enrichedUnderstanding);
 
     // Update record with classification
@@ -3322,7 +3518,11 @@ export default function Home() {
         intent: enrichedUnderstanding.intent ?? "unspecified",
         canonicalProblem: canonicalProblem.title,
         classifiedBy: "deterministic",
-        confidence: domain.confidence,
+        confidence: enrichedUnderstanding.businessClassification?.inquiryType === "business_inquiry"
+          ? enrichedUnderstanding.businessClassification.confidence
+          : domain.confidence,
+        inquiryType: enrichedUnderstanding.businessClassification?.inquiryType,
+        businessIntent: enrichedUnderstanding.businessClassification?.intent,
         language: {
           detected: ticketLanguage.detection.language,
           confidence: ticketLanguage.detection.confidence,
@@ -3348,6 +3548,60 @@ export default function Home() {
     ]);
     updateMetrics({ ticketsProcessed: 1 });
     setCurrentStep(2);
+
+    const hasBusinessMemoryMatch = enrichedUnderstanding.businessClassification?.inquiryType === "business_inquiry"
+      && withPreDiscriminationLessonMatches(
+        ticket,
+        enrichedUnderstanding,
+        retrieveMemory(enrichedUnderstanding, knowledgeItems, sessionCreatedIds),
+        knowledgeItems,
+        canonicalProblem.title
+      ).some((match) => match.item.category === "Business Inquiry" && isCompatibleForDrafting(enrichedUnderstanding, match.item, ticket));
+
+    if (enrichedUnderstanding.businessClassification?.inquiryType === "business_inquiry" && !hasBusinessMemoryMatch) {
+      record = {
+        ...record,
+        memoryMatch: { knowledgeId: null, matchType: "none", lessonId: null },
+      };
+      setActiveTicketRecord(record);
+      persistTicketRecord(record);
+      setSimilarKnowledge([]);
+      addLogEntries([
+        createLogEntry("Business inquiry routed to organization profile", `${enrichedUnderstanding.businessClassification.intent} · operational lessons and resolved tickets were not retrieved`),
+        createLogEntry("Organization knowledge used", `${profile.name} profile: description, products, services, and supported domains`),
+      ]);
+      setCurrentStep(3);
+      const businessDraft = draftBusinessInquiryResponse(
+        ticket,
+        enrichedUnderstanding,
+        profile,
+        ticketLanguage.response.language
+      );
+      const aiDraft = await requestDraftAdvisory(
+        ticket,
+        enrichedUnderstanding,
+        canonicalProblem.title,
+        null,
+        businessDraft.draftResponse,
+        businessDraft.confidenceNote,
+        businessDraft.source ?? "deterministic",
+        advisory,
+        requestGeneration
+      );
+      if (!ticketRequestIsCurrent(requestGeneration)) return;
+      const response = aiDraft.response;
+      record = { ...record, draftSource: response.source as TicketRecord["draftSource"], status: "in_review" };
+      setActiveTicketRecord(record);
+      persistTicketRecord(record);
+      addLogEntries([createLogEntry("Generated grounded business inquiry draft", response.source === "ai_advisory" ? "AI advisory draft reviewed against organization profile" : "Deterministic organization-profile draft")]);
+      setAiAdvisory(aiDraft.advisory);
+      setLastDraftUsedAI(aiDraft.usedAIDraft);
+      setSuggestedResponse(response);
+      setReviewedResponse(response.draftResponse);
+      setSelectedTicket({ ...ticket, status: "drafted" });
+      setCurrentStep(4);
+      return;
+    }
 
     // Phase 2: Memory retrieval
     const matches = withPreDiscriminationLessonMatches(
@@ -3470,7 +3724,7 @@ export default function Home() {
     cancelActiveTicketRequest();
     setActiveView("tickets");
     setTicketIntakeMode("single");
-    if (currentStep >= 8) resetSession();
+    if (currentStep > 0) resetSession();
   };
 
   const handleUploadQueries = () => {
@@ -3614,6 +3868,7 @@ export default function Home() {
                   darkMode={darkMode}
                   onSwitchToSingle={handleNewTicket}
                   onSwitchToBulk={handleUploadQueries}
+                  onPrepareBulkEntries={prepareBulkEntries}
                   onAnalyze={analyzeUploadedQueries}
                   onCommitCluster={commitBulkCluster}
                   onOpenSingleTicket={handleBulkSingleTicket}

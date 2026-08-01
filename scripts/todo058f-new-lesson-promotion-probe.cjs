@@ -25,6 +25,7 @@ const service = require(path.join(root, "lib", "server", "persistenceService.ts"
 const { getPrismaClient } = require(path.join(root, "lib", "server", "prisma.ts"));
 const {
   withCanonicalProblemDefaults,
+  createOpaqueProvenanceId,
   mergeLessonIntoExisting,
   normalizeReusableLessonTemplate
 } = require(path.join(root, "lib", "canonicalProblemEngine.ts"));
@@ -137,7 +138,7 @@ function applyNewLesson(item, lessonId, sourceTicketId) {
     customerResponse: normalizeReusableLessonTemplate(NEW_LESSON_DRAFT.customerResponse),
     signals: NEW_LESSON_DRAFT.signals,
     createdAt: nextTime(),
-    sourceTicketId
+    sourceTicketId: createOpaqueProvenanceId(sourceTicketId)
   };
   const merged = mergeLessonIntoExisting(item.lessons ?? [], lesson, item.canonicalProblemId ?? item.id);
   return { ...item, lessons: merged.lessons };
@@ -209,7 +210,8 @@ async function main() {
       const items = await service.loadKnowledge(ORG);
       assert.equal(items[0].canonicalProblemId, KI, "canonical must be unchanged");
       const promoted = items[0].lessons.find((lesson) => lesson.id !== SEED_LESSON);
-      assert.equal(promoted.sourceTicketId, "todo058f-ticket-ja", "provenance must reference the source ticket");
+      assert.match(promoted.sourceTicketId, /^evidence-[0-9a-f]{8}$/i, "lesson content must use an opaque evidence id");
+      assert.notEqual(promoted.sourceTicketId, "todo058f-ticket-ja", "raw source ticket IDs must remain audit-only");
     });
 
     /* ---------- Part F: internal documentation language ---------- */

@@ -4,7 +4,7 @@ const path = require("node:path");
 const { installProbeHarness } = require("./lib/probe-harness.cjs");
 const { root } = installProbeHarness({ loadEnv: false });
 
-const { createCanonicalProblem, mergeIntoCanonicalProblem, mergeLessonIntoExisting } = require(path.join(root, "lib", "canonicalProblemEngine.ts"));
+const { createCanonicalProblem, createOpaqueProvenanceId, mergeIntoCanonicalProblem, mergeLessonIntoExisting } = require(path.join(root, "lib", "canonicalProblemEngine.ts"));
 const { withStableValidationProvenance, ticketReferenceId } = require(path.join(root, "lib", "knowledgeProvenance.ts"));
 const { recordResolution } = require(path.join(root, "lib", "trustEngine.ts"));
 const { defaultOrganizationProfile } = require(path.join(root, "data", "seedOrganizationProfiles.ts"));
@@ -64,7 +64,8 @@ function main() {
   assert.equal(item.sourceTicketId, "OIP-TEST-0001");
   assert.equal(item.provenance.sourceTicketId, "OIP-TEST-0001");
   assert.ok(item.provenance.contributingTicketIds.includes("OIP-TEST-0002"));
-  assert.ok(item.exampleTickets.some((example) => example.ticketId === "OIP-TEST-0002"));
+  assert.ok(item.exampleTickets.some((example) => example.ticketId === createOpaqueProvenanceId("OIP-TEST-0002")));
+  assert.ok(item.exampleTickets.every((example) => !example.ticketId.includes("OIP-TEST-")));
 
   const lesson = {
     id: "todo043-lesson-c",
@@ -73,7 +74,7 @@ function main() {
     customerResponse: "Hello {{customerName}}, we will verify the issue.",
     signals: ["canonical issue", "supporting lesson"],
     createdAt: "2026-07-22T00:00:03.000Z",
-    sourceTicketId: ticketReferenceId(c)
+    sourceTicketId: createOpaqueProvenanceId(ticketReferenceId(c))
   };
   item = { ...item, lessons: mergeLessonIntoExisting(item.lessons ?? [], lesson, item.canonicalProblemId ?? item.id).lessons };
   item = validate(item, [ticketReferenceId(c)], 3);
@@ -85,7 +86,8 @@ function main() {
   for (const id of ["OIP-TEST-0001", "OIP-TEST-0002", "OIP-TEST-0003", "OIP-TEST-0004"]) {
     assert.ok(item.provenance.contributingTicketIds.includes(id), `Missing supporting provenance ${id}`);
   }
-  assert.ok(item.lessons.some((candidate) => candidate.sourceTicketId === "OIP-TEST-0003"));
+  assert.ok(item.lessons.some((candidate) => candidate.sourceTicketId === createOpaqueProvenanceId("OIP-TEST-0003")));
+  assert.ok(item.lessons.every((candidate) => !candidate.sourceTicketId.includes("OIP-TEST-")));
   console.log("PASS canonical origin remains Ticket A through merge, lesson, reuse, and trust updates");
   console.log(JSON.stringify({
     sourceTicketId: item.sourceTicketId,

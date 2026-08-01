@@ -245,6 +245,56 @@ export function buildDraftCustomerResponsePrompt(input: DraftCustomerResponseInp
   ];
   const extractedFieldSummary = JSON.stringify(fields);
 
+  if (
+    input.deterministicUnderstanding.businessClassification?.inquiryType === "business_inquiry"
+    && input.lessonGrounding
+  ) {
+    return {
+      system: [
+        ...sharedSystemRules,
+        "This is a Business Inquiry memory-reuse request, not an operational support incident.",
+        "Use the validated business lesson and approved organization profile only.",
+        "Do not use operational lessons, resolved tickets, pricing, attachments, public links, roadmap claims, or unsupported integrations.",
+        "Preserve the lesson's meaning and respond in the customer's language.",
+      ].join(" "),
+      user: [
+        profileContext(input.organizationProfile, input.canonicalProblemTitle),
+        `Customer Ticket Subject: ${input.ticket.subject}`,
+        `Customer Ticket Description: ${input.ticket.description}`,
+        `Business Intent: ${input.deterministicUnderstanding.businessClassification.intent}`,
+        `Extracted Ticket Fields: ${extractedFieldSummary}`,
+        `Validated Business Lesson: ${input.groundingLabel}`,
+        "Validated lesson response source:",
+        input.lessonGrounding.customerResponse,
+        'Respond with compact JSON only: {"customerResponse":"", "confidence":90}'
+      ].join("\n")
+    };
+  }
+
+  if (input.deterministicUnderstanding.businessClassification?.inquiryType === "business_inquiry") {
+    return {
+      system: [
+        ...sharedSystemRules,
+        "This is a general business inquiry, not an operational support incident.",
+        "Use only the organization profile fields and the deterministic organization-profile draft below.",
+        "Do not use operational lessons, resolved tickets, troubleshooting knowledge, pricing, attachments, public links, roadmap claims, or unsupported integrations.",
+        "Preserve the customer's language, name, company, and role when those fields are present.",
+        "If requested information is not in the organization profile, state that it is not currently available rather than inventing it."
+      ].join(" "),
+      user: [
+        profileContext(input.organizationProfile, input.canonicalProblemTitle),
+        `Customer Ticket Subject: ${input.ticket.subject}`,
+        `Customer Ticket Description: ${input.ticket.description}`,
+        `Business Intent: ${input.deterministicUnderstanding.businessClassification.intent}`,
+        `Extracted Ticket Fields: ${extractedFieldSummary}`,
+        "Approved organization profile knowledge is the only factual source.",
+        "Deterministic organization-profile draft:",
+        input.deterministicDraft,
+        'Respond with compact JSON only: {"customerResponse":"", "confidence":90}'
+      ].join("\n")
+    };
+  }
+
   if (input.groundingMode === "cold_start") {
     const ticketRefLine = input.ticket.ticketId
       ? `Include this ticket reference in the closing: "${input.ticket.ticketId}".`

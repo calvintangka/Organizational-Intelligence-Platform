@@ -15,6 +15,15 @@ export interface ExtractedTicketFields {
   urgencyIndicators: string[];
 }
 
+export type BusinessIntent = "product_information" | "company_information" | "general_business_inquiry" | "multilingual_support";
+
+export interface BusinessIntentClassification {
+  inquiryType: "operational_support" | "business_inquiry";
+  intent: BusinessIntent | "operational_support";
+  confidence: "high" | "medium" | "low";
+  signals: string[];
+}
+
 export interface Understanding {
   ticketId: string;
   /** Original subject/description retained for deterministic relevance scoring. */
@@ -27,6 +36,7 @@ export interface Understanding {
   tags: string[];
   detectedSignals: string[];
   extractedFields: ExtractedTicketFields;
+  businessClassification?: BusinessIntentClassification;
 }
 
 export interface ReasoningSummary {

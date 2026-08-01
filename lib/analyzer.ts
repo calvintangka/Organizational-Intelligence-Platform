@@ -14,6 +14,7 @@ import {
 import { containsSignal } from "@/lib/textSignal";
 import { extractCustomerContext } from "@/lib/customerContext";
 import { relevanceStrengthForScore } from "@/lib/relevanceLabels";
+import { classifyBusinessIntent } from "@/lib/businessInquiry";
 
 const FALLBACK_PROFILE = defaultOrganizationProfile;
 
@@ -1369,6 +1370,7 @@ export function understandForProfile(ticket: Ticket, inputProfile: OrganizationP
 
 
   const extractedFields = extractFallbackTicketFields(ticket);
+  const businessClassification = classifyBusinessIntent(`${ticket.subject} ${ticket.description}`);
 
  return {
     ticketId: ticket.id,
@@ -1390,9 +1392,60 @@ export function understandForProfile(ticket: Ticket, inputProfile: OrganizationP
     detectedSignals: conceptAssisted
       ? [...detectedSignals, ...conceptExtraction.matches.map((match) => `concept:${match.conceptId}`)].slice(0, 6)
       : detectedSignals.slice(0, 6),
-    extractedFields
+    extractedFields,
+    businessClassification
   };
 }
+
+export interface BusinessInquiryRouting {
+  understanding: Understanding;
+  canonicalProblem: {
+    id: string;
+    title: string;
+    problemSummary: string;
+    category: "Business Inquiry";
+    tags: string[];
+  } | null;
+}
+
+/**
+ * Shared routing step for the single-ticket and bulk pipelines. Business
+ * inquiries are intentionally represented as a Business Inquiry category with
+ * a profile-grounded canonical title before retrieval begins; otherwise the
+ * generic operational classifier sends them to Uncategorized.
+ */
+export function routeBusinessInquiryUnderstanding(understanding: Understanding): BusinessInquiryRouting {
+  const businessIntent = understanding.businessClassification?.inquiryType === "business_inquiry"
+    ? understanding.businessClassification.intent
+    : null;
+  const title = businessIntent === "product_information"
+    ? "Product Information Inquiry"
+    : businessIntent === "multilingual_support"
+    ? "Multilingual Support Inquiry"
+    : businessIntent === "company_information"
+    ? "Company Information Inquiry"
+    : businessIntent === "general_business_inquiry"
+    ? "General Business Inquiry"
+    : null;
+
+  if (!title) return { understanding, canonicalProblem: null };
+  return {
+    understanding: {
+      ...understanding,
+      category: "Business Inquiry",
+      coreProblem: title,
+      intent: businessIntent ?? "general_business_inquiry"
+    },
+    canonicalProblem: {
+      id: `canonical-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+      title,
+      problemSummary: "A general business inquiry grounded in the approved organization profile.",
+      category: "Business Inquiry",
+      tags: [...understanding.tags]
+    }
+  };
+}
+
 function inferIntent(category: string, detectedSignals: string[], fullText: string): string | undefined {
   const hasSignal = (matcher: string | RegExp) =>
     typeof matcher === "string"
@@ -1412,11 +1465,16 @@ function inferIntent(category: string, detectedSignals: string[], fullText: stri
     /\b(?:saved|stored)\s+password\b[^.!?\n]{0,80}\b(?:did not|didnt|does not|doesnt|failed to)\s+(?:transfer|carry|move|sync)\b/.test(fullText) ||
     /\b(?:never|do not|dont|did not|didnt)\s+(?:memorize|remember|know)\s+(?:the\s+)?password\b/.test(fullText) ||
     /\bforgot(?:ten)?\s+(?:my\s+)?password\b/.test(fullText);
+  const hasPasswordResetSignal =
+    /\b(?:password\s+reset|reset\s+password|reset\s+link|forgot(?:ten)?\s+(?:my\s+)?password|password\s+(?:was\s+)?updated|lupa\s+kata\s+sandi|atur\s+ulang\s+(?:kata\s+sandi|password)|tautan\s+reset)\b/.test(fullText);
 
   switch (category) {
     case "Login":
       if (hasEmailRecoverySignal) {
         return "email_recovery";
+      }
+      if (hasPasswordResetSignal) {
+        return "password_reset";
       }
       if (hasCredentialUnavailableSignal) {
         return "credentials_unavailable";

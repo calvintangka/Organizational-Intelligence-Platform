@@ -1,0 +1,43 @@
+{
+  "capturedAt": "2026-07-29T09:24:20.707Z",
+  "organization": "profile-oip-developer-demo",
+  "demo": {
+    "knowledge": 45,
+    "candidates": 1802,
+    "tickets": 5003,
+    "validations": 1801,
+    "memory_changes": 1801,
+    "trust_evidence": 4500,
+    "patterns": 46,
+    "trust_total": 2771,
+    "lessons": 180
+  },
+  "ticketSequenceCounter": 5003,
+  "hero": {
+    "s": "OIP-20230104-0001",
+    "t": 95,
+    "r": 2
+  },
+  "organizations": [
+    {
+      "id": "profile-fastdrop-logistics",
+      "rev": "2",
+      "updatedAt": "2026-07-28T01:19:28.157Z"
+    },
+    {
+      "id": "profile-maesa-tech",
+      "rev": "4",
+      "updatedAt": "2026-07-28T01:19:28.153Z"
+    },
+    {
+      "id": "profile-oip-developer-demo",
+      "rev": "33",
+      "updatedAt": "2026-07-27T18:24:13.533Z"
+    },
+    {
+      "id": "test-oip-regression",
+      "rev": "1",
+      "updatedAt": "2026-07-17T01:40:03.804Z"
+    }
+  ]
+}

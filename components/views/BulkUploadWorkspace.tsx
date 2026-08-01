@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { getBulkUploadLimit, parseBulkUploadFile } from "@/lib/bulkUpload";
+import { bulkUploadKey, getBulkUploadLimit, parseBulkUploadFile } from "@/lib/bulkUpload";
 import type {
   BulkAnalysisProgress,
   BulkAnalysisResult,
@@ -14,12 +14,14 @@ interface BulkUploadWorkspaceProps {
   darkMode: boolean;
   onSwitchToSingle: () => void;
   onSwitchToBulk: () => void;
+  onPrepareBulkEntries: (uploadKey: string, entries: BulkUploadParseResult["entries"]) => Promise<void>;
   onAnalyze: (
     entries: BulkUploadParseResult["entries"],
     onProgress: (progress: BulkAnalysisProgress) => void,
-    signal: AbortSignal
+    signal: AbortSignal,
+    uploadKey: string
   ) => Promise<BulkAnalysisResult>;
-  onCommitCluster: (cluster: BulkCluster) => Promise<{
+  onCommitCluster: (cluster: BulkCluster, uploadKey: string) => Promise<{
     knowledgeId: string;
     candidateId: string;
     validationId: string;
@@ -83,6 +85,7 @@ export function BulkUploadWorkspace({
   darkMode,
   onSwitchToSingle,
   onSwitchToBulk,
+  onPrepareBulkEntries,
   onAnalyze,
   onCommitCluster,
   onOpenSingleTicket
@@ -101,6 +104,9 @@ export function BulkUploadWorkspace({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [expandedClusterId, setExpandedClusterId] = useState<string | null>(null);
   const [committingClusterId, setCommittingClusterId] = useState<string | null>(null);
+  const [uploadKey, setUploadKey] = useState("");
+  const [isPreparing, setIsPreparing] = useState(false);
+  const [preparedUploadKey, setPreparedUploadKey] = useState<string | null>(null);
 
   const card = `rounded-2xl border ${darkMode ? "bg-[#1a2b3c] border-[#2d3f52]" : "bg-white border-slate-200"}`;
   const muted = darkMode ? "text-slate-400" : "text-slate-500";
@@ -113,8 +119,11 @@ export function BulkUploadWorkspace({
 
   async function readFile(file: File) {
     const text = await file.text();
+    const nextUploadKey = bulkUploadKey(file.name, text);
     setFileName(file.name);
     setFileContent(text);
+    setUploadKey(nextUploadKey);
+    setPreparedUploadKey(null);
     setAnalysis(null);
     setClusters([]);
     setUnclustered(null);
@@ -127,13 +136,24 @@ export function BulkUploadWorkspace({
         messageField: nextParse.mappingRequest?.suggestedMessageField ?? "",
         resolutionField: nextParse.mappingRequest?.suggestedResolutionField ?? ""
       });
+      if (!nextParse.needsMapping && nextParse.entries.length > 0) {
+        setIsPreparing(true);
+        try {
+          await onPrepareBulkEntries(nextUploadKey, nextParse.entries);
+          setPreparedUploadKey(nextUploadKey);
+        } catch (error) {
+          setErrorMessage(error instanceof Error ? error.message : "Unable to persist uploaded tickets.");
+        } finally {
+          setIsPreparing(false);
+        }
+      }
     } catch (error) {
       setParseResult(null);
       setErrorMessage(error instanceof Error ? error.message : "Unable to parse this upload.");
     }
   }
 
-  function applyMapping() {
+  async function applyMapping() {
     if (!fileName || !fileContent || !mapping.messageField) return;
     try {
       const nextParse = parseBulkUploadFile(fileName, fileContent, {
@@ -142,13 +162,22 @@ export function BulkUploadWorkspace({
       });
       setParseResult(nextParse);
       setErrorMessage("");
+      setIsPreparing(true);
+      try {
+        await onPrepareBulkEntries(uploadKey, nextParse.entries);
+        setPreparedUploadKey(uploadKey);
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : "Unable to persist uploaded tickets.");
+      } finally {
+        setIsPreparing(false);
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to apply the selected mapping.");
     }
   }
 
   async function startAnalysis() {
-    if (!parseResult || parseResult.entries.length === 0 || parseResult.needsMapping) return;
+    if (!parseResult || parseResult.entries.length === 0 || parseResult.needsMapping || !preparedUploadKey || isPreparing) return;
     const controller = new AbortController();
     analysisControllerRef.current = controller;
     setIsAnalyzing(true);
@@ -162,7 +191,7 @@ export function BulkUploadWorkspace({
       phase: "analyzing"
     });
     try {
-      const result = await onAnalyze(parseResult.entries, setProgress, controller.signal);
+      const result = await onAnalyze(parseResult.entries, setProgress, controller.signal, uploadKey);
       setAnalysis(result);
       setClusters(result.clusters.map(withEditableCluster));
       setUnclustered(withEditableCluster(result.unclustered));
@@ -254,7 +283,7 @@ export function BulkUploadWorkspace({
     setCommittingClusterId(clusterId);
     setErrorMessage("");
     try {
-      const result = await onCommitCluster(nextCluster);
+      const result = await onCommitCluster(nextCluster, uploadKey);
       setClusters((current) =>
         current.map((item) =>
           item.id === clusterId
@@ -280,7 +309,7 @@ export function BulkUploadWorkspace({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className={`text-2xl font-bold ${darkMode ? "text-white" : "text-[#111827]"}`}>Tickets</h1>
-            <p className={`text-sm ${muted}`}>Bulk upload treats uploaded queries as work signals until a human validates a cluster into organizational memory.</p>
+            <p className={`text-sm ${muted}`}>Every uploaded row is durably saved before analysis. Clusters organize review; they do not control ticket existence.</p>
           </div>
           <div className="flex gap-2">
             <button
@@ -390,7 +419,7 @@ export function BulkUploadWorkspace({
               <button
                 type="button"
                 onClick={applyMapping}
-                disabled={!mapping.messageField}
+                disabled={!mapping.messageField || isPreparing}
                 className="mt-4 rounded-xl bg-[#111827] px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40 transition-colors"
               >
                 Apply mapping
@@ -402,7 +431,7 @@ export function BulkUploadWorkspace({
             <button
               type="button"
               onClick={startAnalysis}
-              disabled={!parseResult || parseResult.entries.length === 0 || parseResult.needsMapping || isAnalyzing}
+              disabled={!parseResult || parseResult.entries.length === 0 || parseResult.needsMapping || isAnalyzing || isPreparing || !preparedUploadKey}
               className="rounded-xl bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40 transition-colors"
             >
               {isAnalyzing ? "Analyzing..." : "Analyze queries"}

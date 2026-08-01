@@ -1,4 +1,4 @@
-import type { ExtractedTicketFields } from "./oip";
+import type { BusinessIntentClassification, ExtractedTicketFields } from "./oip";
 
 export interface AIAnalysis {
   ticketId: string;
@@ -10,6 +10,7 @@ export interface AIAnalysis {
   suggestedTags: string[];
   detectedSignals?: string[];
   extractedFields?: ExtractedTicketFields;
+  businessClassification?: BusinessIntentClassification;
 }
 
 export type DraftGroundingMode = "lesson_grounded" | "memory_grounded" | "cold_start";

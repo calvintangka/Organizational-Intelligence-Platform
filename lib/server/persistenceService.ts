@@ -15,6 +15,7 @@ import type {
   OrganizationProfile,
   TicketPage,
   TicketPageRequest,
+  BulkTicketSeed,
   TicketRecord,
   TicketRecordFilter,
   ValidationRecord
@@ -287,6 +288,10 @@ function mapTicket(row: PrismaTicketRecord): TicketRecord {
     ticketId: row.ticketId,
     orgId: row.organizationId,
     createdAt: iso(row.createdAt),
+    bulkUploadKey: row.bulkUploadKey,
+    bulkEntryId: row.bulkEntryId,
+    bulkClusterId: row.bulkClusterId,
+    intakeMode: row.intakeMode === "bulk" ? "bulk" : row.intakeMode === "single" ? "single" : undefined,
     rawMessage: row.rawMessage,
     subject: row.subject,
     classification: nullableJsonRecord(row.classification),
@@ -802,6 +807,10 @@ async function upsertCandidateTx(
 
 function toTicketColumns(record: TicketRecord): Omit<Prisma.TicketRecordUncheckedCreateInput, "id" | "organizationId" | "ticketId"> {
   return {
+    bulkUploadKey: record.bulkUploadKey ?? null,
+    bulkEntryId: record.bulkEntryId ?? null,
+    bulkClusterId: record.bulkClusterId ?? null,
+    intakeMode: record.intakeMode ?? null,
     rawMessage: typeof record.rawMessage === "string" ? record.rawMessage : "",
     subject: record.subject ?? null,
     status: narrowEnum(record.status, TICKET_LIFECYCLES, "open"),
@@ -1088,6 +1097,89 @@ export async function saveTicketRecords(organizationId: string, records: TicketR
   );
 }
 
+/**
+ * Durable bulk-intake boundary. Rows are keyed by (organization, upload key,
+ * entry id), so selecting the same file again returns the original records
+ * instead of allocating a second set of tickets. Allocation and creation are
+ * one transaction; analysis and memory validation happen later.
+ */
+export async function prepareBulkTicketRecords(
+  organizationId: string,
+  seeds: BulkTicketSeed[]
+): Promise<TicketRecord[]> {
+  const organization = await requireOrganization(organizationId);
+  if (!Array.isArray(seeds) || seeds.length > 1000) {
+    throw invalidRequest("Bulk ticket preparation accepts between 1 and 1000 rows.");
+  }
+  if (seeds.length === 0) return [];
+  const uploadKey = seeds[0].uploadKey;
+  if (!uploadKey || seeds.some((seed) => seed.uploadKey !== uploadKey)) {
+    throw invalidRequest("All bulk ticket rows must belong to one upload key.");
+  }
+  const entryIds = seeds.map((seed) => seed.entryId);
+  if (entryIds.some((entryId) => !entryId) || new Set(entryIds).size !== entryIds.length) {
+    throw invalidRequest("Bulk ticket entry IDs must be non-empty and unique.");
+  }
+
+  return writeDatabase("bulk ticket preparation", () =>
+    prisma.$transaction(async (tx) => {
+      const existing = await tx.ticketRecord.findMany({
+        where: {
+          organizationId: organization.id,
+          bulkUploadKey: uploadKey,
+          bulkEntryId: { in: entryIds }
+        }
+      });
+      const existingByEntry = new Map(existing.map((row) => [row.bulkEntryId!, row]));
+      const missing = seeds.filter((seed) => !existingByEntry.has(seed.entryId));
+      const created: PrismaTicketRecord[] = [];
+
+      if (missing.length > 0) {
+        const profile = mapOrganization(organization);
+        const prefix = organizationTicketPrefix(profile);
+        await tx.ticketSequence.createMany({
+          data: [{ organizationId: organization.id, counter: 0 }],
+          skipDuplicates: true
+        });
+        const sequence = await tx.ticketSequence.update({
+          where: { organizationId: organization.id },
+          data: { counter: { increment: missing.length } }
+        });
+        const first = sequence.counter - missing.length + 1;
+        const createdAt = new Date();
+        for (const [index, seed] of missing.entries()) {
+          created.push(await tx.ticketRecord.create({
+            data: {
+              organizationId: organization.id,
+              ticketId: formatTicketIdRange(prefix, ticketDateStamp(), first + index, 1)[0],
+              bulkUploadKey: seed.uploadKey,
+              bulkEntryId: seed.entryId,
+              bulkClusterId: null,
+              intakeMode: "bulk",
+              rawMessage: seed.rawMessage,
+              subject: seed.subject ?? null,
+              status: "in_review",
+              draftSource: null,
+              classification: nullableJson(null),
+              memoryMatch: nullableJson(null),
+              resolution: json({ finalResponse: null, humanEdited: false, editDistanceNote: null, resolvedAt: null }),
+              reflection: json({ decision: null, lessonCreatedId: null, lessonReinforcedId: null, knowledgeChanged: null }),
+              validationRecordIds: json([]),
+              resolutionMode: null,
+              createdAt
+            }
+          }));
+        }
+      }
+
+      const byEntry = new Map(
+        [...existing, ...created].map((row) => [row.bulkEntryId!, row])
+      );
+      return seeds.map((seed) => mapTicket(byEntry.get(seed.entryId)!));
+    })
+  );
+}
+
 /* ----------------------------- Ticket allocation ----------------------------- */
 
 const MAX_TICKET_ALLOCATION = 500;
@@ -1151,6 +1243,7 @@ export interface ValidationCommitResult {
 // create_new establishes initial trust and is intentionally NOT idempotency-guarded.
 const TRUST_ADDING_REUSE_ACTIONS = new Set(["trust_update_only"]);
 const HUMAN_REUSE_TRUST_EVENT = "HUMAN_REUSE";
+const INITIAL_MEMORY_PROMOTION_EVENT = "MEMORY_PROMOTION";
 
 function validateCommitPayload(organizationId: string, payload: unknown): ValidationCommitPayload {
   const body = payload as Partial<ValidationCommitPayload> | null;
@@ -1310,6 +1403,22 @@ export async function commitValidation(
           )
         )
       ];
+      // A first validated promotion is itself trust evidence. Keep the
+      // source-ticket claim in the same transaction so retries remain
+      // idempotent and the audit chain can prove why the initial trust exists.
+      if (payload.candidate.proposedAction === "create_new" && !storedKnowledge && sourceTicketIds.length > 0) {
+        await tx.trustEvidence.createMany({
+          data: sourceTicketIds.map((sourceTicketId) => ({
+            organizationId: organization.id,
+            knowledgeItemId: normalizedKnowledgeItem.id,
+            sourceTicketId,
+            trustEventType: INITIAL_MEMORY_PROMOTION_EVENT,
+            validationRecordId: payload.validation.id,
+            delta: normalizedKnowledgeItem.trustScore ?? 0
+          })),
+          skipDuplicates: true
+        });
+      }
       if (TRUST_ADDING_REUSE_ACTIONS.has(payload.candidate.proposedAction) && sourceTicketIds.length > 0) {
         // The stored trust is the authoritative pre-event base (avoids relying on
         // client-side delta arithmetic or clamping).

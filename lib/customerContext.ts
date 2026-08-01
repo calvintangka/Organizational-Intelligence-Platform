@@ -54,7 +54,8 @@ const NON_NAME_WORDS = new Set([
 const CLAUSE_BOUNDARY_WORDS = new Set([
   "from", "at", "with", "of", "and", "who", "which", "that", "here", "we",
   "i", "but", "so", "because", "since", "please", "our", "the", "however",
-  "regarding", "about", "in", "on", "for", "working", "reporting", "writing"
+  "regarding", "about", "in", "on", "for", "working", "reporting", "writing",
+  "dari", "di", "untuk", "dengan", "yang", "kami", "saya"
 ]);
 
 function titleCaseWord(word: string): string {
@@ -113,6 +114,8 @@ function leadingName(phrase: string): string | null {
 // leadingName() then trims to the valid name span.
 const NAME_INTRO_PATTERNS: RegExp[] = [
   /\bmy name'?s?\s+(?:is\s+)?([A-Za-z][^.,\n;!?]{1,80})/i,
+  /\bnama saya\s+([A-Za-z][^.,\n;!?]{1,80})/i,
+  /\b[Ss]aya\s+([A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){0,3})/,
   /\bthis is\s+([A-Za-z][^.,\n;!?]{1,80})/i,
   /\bi(?:\s*am|'?m)\s+([A-Za-z][^.,\n;!?]{1,80})/i
 ];
@@ -179,7 +182,7 @@ function boundCompany(phrase: string): string | null {
     if (kept.length === 5) break;
   }
   if (kept.length === 0) return null;
-  const company = kept.map((w) => (/^[a-z'’&.\-]+$/.test(w) ? titleCaseWord(w) : w)).join(" ").trim();
+  const company = kept.map((w) => (/^[a-z'’&.\-]+$/.test(w) ? titleCaseWord(w) : w)).join(" ").trim().replace(/[.,!?]+$/g, "");
   // Reject a company that is only a single common function word.
   if (company.length < 2) return null;
   return company;
@@ -190,6 +193,8 @@ const COMPANY_PATTERNS: RegExp[] = [
   /\bi work(?:ing)?\s+(?:at|for|in)\s+([A-Za-z][^.,\n;!?]{1,60})/i,
   /\bi am working\s+(?:at|for|in)\s+([A-Za-z][^.,\n;!?]{1,60})/i,
   /\bi(?:\s*am|'?m)\s+(?:from|with)\s+([A-Za-z][^.,\n;!?]{1,60})/i,
+  /\b(?:dari|di)\s+([A-Za-z][^.,\n;!?]{1,60})/i,
+  /\bat\s+([A-Z][A-Za-z0-9&.'’-]*(?:\s+[A-Z][A-Za-z0-9&.'’-]*){0,4})(?=[.,\n;!?]|$)/,
   /\bour (?:company|organi[sz]ation|org|firm|team|employer) is\s+([A-Za-z][^.,\n;!?]{1,60})/i
 ];
 // "<name> from/at/with <Company>" following a self-introduction.
@@ -211,13 +216,14 @@ function extractCompany(text: string): string | null {
   return null;
 }
 
-const ROLE_KEYWORDS = /(administrator|admin|manager|director|officer|engineer|analyst|owner|lead|specialist|coordinator|supervisor|consultant|developer|architect|president|founder|cto|cio|ceo|cfo|head of|support|billing|it)\b/i;
+const ROLE_KEYWORDS = /(administrator|admin|manager|director|officer|engineer|analyst|owner|lead|specialist|coordinator|supervisor|consultant|developer|architect|president|founder|cto|cio|ceo|cfo|head of|support|billing|it|manajer|direktur|kepala|operasional|teknologi|dukungan|bisnis|pengembangan)\b/i;
 
 // Explicit role statements only. Never inferred from a name or company.
 const ROLE_PATTERNS: RegExp[] = [
   /\bi(?:\s*am|'?m)\s+(?:the|a|an)\s+([A-Za-z][A-Za-z /&.-]{2,50}?)(?:\s+(?:at|for|of|in|here)\b|[.,\n;!?]|$)/i,
   /\bi work as\s+(?:a|an|the)?\s*([A-Za-z][A-Za-z /&.-]{2,50}?)(?:\s+(?:at|for|of|in)\b|[.,\n;!?]|$)/i,
-  /\bi(?:\s*am|'?m)\s+responsible for\s+([A-Za-z][A-Za-z /&.-]{2,50}?)(?:[.,\n;!?]|$)/i
+  /\bi(?:\s*am|'?m)\s+responsible for\s+([A-Za-z][A-Za-z /&.-]{2,50}?)(?:[.,\n;!?]|$)/i,
+  /(?:^|[\n,])\s*((?:cto|cio|ceo|cfo|manajer|direktur|kepala|administrator|admin|manager|director|officer|engineer|analyst|founder|support|billing)(?:\s+[A-Za-z]+){0,2}?)(?:\s+(?:dari|di|untuk|at|for|of)\b|[.,\n;!?]|$)/im
 ];
 
 /** True when the ticket contains an explicit role statement (used to gate AI role). */

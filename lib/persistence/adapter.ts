@@ -9,6 +9,7 @@ import type {
   OrganizationProfile,
   TicketPage,
   TicketPageRequest,
+  BulkTicketSeed,
   TicketRecord,
   ValidationRecord
 } from "@/types";
@@ -67,6 +68,11 @@ export interface PersistenceAdapter {
   loadTicketPage(organizationId: string, request: TicketPageRequest): Promise<TicketPage>;
   saveTicketRecords(organizationId: string, records: TicketRecord[]): Promise<void>;
   saveTicketRecord(organizationId: string, record: TicketRecord): Promise<void>;
+  prepareBulkTicketRecords(
+    organizationId: string,
+    profile: OrganizationProfile,
+    seeds: BulkTicketSeed[]
+  ): Promise<TicketRecord[]>;
 
   generateTicketId(organizationId: string, profile: OrganizationProfile): Promise<string>;
   generateTicketIds(organizationId: string, profile: OrganizationProfile, count: number): Promise<string[]>;

@@ -222,7 +222,9 @@ function getTimelineItems(
     },
     {
       id: "analyze",
-      label: analysis ? `Intent: ${analysis.category}` : "Analyzing issue",
+      label: analysis?.businessClassification?.inquiryType === "business_inquiry"
+        ? `Business intent: ${analysis.businessClassification.intent.replace(/_/g, " ")}`
+        : analysis ? `Intent: ${analysis.category}` : "Analyzing issue",
       detail: analysis?.coreProblem ? `Canonical problem: ${analysis.coreProblem}` : undefined,
       status: step >= 2 ? "done" : step === 1 && isProcessing ? "running" : "pending",
     },
@@ -230,11 +232,15 @@ function getTimelineItems(
       id: "memory",
       label: topMatch
         ? `Memory found: ${topMatch.item.canonicalProblemTitle ?? topMatch.item.title}`
+        : analysis?.businessClassification?.inquiryType === "business_inquiry" && step >= 3
+        ? "Organization profile used"
         : step >= 3
         ? "No knowledge match — cold start"
         : "Searching organizational memory",
       detail: topMatch
         ? `Relevance: ${buildMatchExplainability(topMatch, selectedTicket, suggestedResponse).relevance}`
+        : analysis?.businessClassification?.inquiryType === "business_inquiry" && step >= 3
+        ? "Operational lessons and resolved tickets were not used."
         : undefined,
       status: step >= 3 ? "done" : step === 2 && isProcessing ? "running" : "pending",
     },
@@ -288,7 +294,9 @@ function draftGroundingLabel(response: SuggestedResponse | null): string | undef
     return `AI draft grounded in validated lesson: ${response.groundingLabel ?? "matched lesson"}`;
   }
   if (response.draftMode === "memory_grounded") {
-    return "AI draft grounded in organizational memory";
+    return response.groundingLabel === "organization profile"
+      ? "AI draft grounded in organization profile"
+      : "AI draft grounded in organizational memory";
   }
   if (response.draftMode === "cold_start") {
     return "AI suggestion - no organizational knowledge exists yet; this draft is not based on validated memory. Review carefully before sending.";

@@ -79,6 +79,7 @@ function run(definition, profile, items, prefix = "TODO047") {
     expectedCategory: definition.expectedCategory,
     actualCategory: understanding.category,
     expectedCanonicalId: expected ?? null,
+    acceptedRawTopCanonicalIds: definition.acceptedRawTopCanonicalIds ?? [],
     candidateRecall: expected ? rawRank >= 0 : null,
     rawRank: expected && rawRank >= 0 ? rawRank + 1 : null,
     rawTop1: expected ? rawRank === 0 : null,
@@ -143,7 +144,7 @@ async function main() {
   const before = await snapshots();
   const profile = await persistence.getOrganizationProfile(DEMO);
   const items = await persistence.loadKnowledge(DEMO);
-  assert.equal(items.length, 45, "mature Developer Demo must remain 45 knowledge items");
+  assert.equal(items.length, 47, "current mature Developer Demo must remain 47 knowledge items");
 
   const positives = fixture.domains.flatMap((domain) => domain.paraphrases.map((entry) => run({ ...entry, domain: domain.domain, expectedCategory: domain.expectedCategory, expectedCanonicalId: domain.expectedCanonicalId }, profile, items, "TODO047-TODO041")));
   const unseen = extra.unseen.map((entry) => run(entry, profile, items, "TODO047-UNSEEN"));
@@ -161,7 +162,11 @@ async function main() {
   const afterMetric = metric(positives);
   const byDomain = Object.fromEntries(fixture.domains.map((domain) => [domain.domain, metric(positives.filter((row) => row.domain === domain.domain))]));
   const unseenMetric = metric(unseen);
-  const competitionPass = competition.every((row) => row.actualCategory === row.expectedCategory && row.rawTop3Candidates[0]?.id === row.expectedCanonicalId && row.stableOrder && row.trustIndependent);
+  const competitionPass = competition.every((row) => {
+    const rawTop = row.rawTop3Candidates[0]?.id;
+    const acceptedShadow = row.acceptedRawTopCanonicalIds.includes(rawTop) && row.finalCanonicalCorrect;
+    return row.actualCategory === row.expectedCategory && row.finalCanonicalCorrect && (rawTop === row.expectedCanonicalId || acceptedShadow) && row.stableOrder && row.trustIndependent;
+  });
   const genericPass = generic.every((row) => !row.authorization);
   const wrongDomainPass = wrongDomain.every((row) => row.actualCategory === row.expectedCategory && (!row.authorization || row.finalSelectedCanonicalId === row.expectedCanonicalId));
   const after = await snapshots();

@@ -30,6 +30,13 @@ const { assessRootCauseEvidenceState } = require(path.join(root, "lib", "rootCau
 const { selectPreferredMatch, withPreDiscriminationLessonMatches } = require(path.join(root, "lib", "lessonSelection.ts"));
 
 const DEMO = "profile-oip-developer-demo";
+// TODO-063: these two canonicals were intentionally added by the accepted
+// TODO-062 bulk-learning run and therefore do not have narrative-arc seeds.
+// They are checked with learned-memory safety invariants below.
+const ACCEPTED_LEARNED_CANONICALS = new Set([
+  "canonical-knowledge-ownership-transfer-after-administrator-departure",
+  "canonical-reporting-exports-problem"
+]);
 const lessonRootCore = (rc) => (rc || "").split("; this explains")[0].trim();
 const lessonSolutionCore = (s) => (s || "").split(", then verify the result")[0].trim();
 
@@ -86,7 +93,7 @@ const QA = [
 async function main() {
   const items = await persistence.loadKnowledge(DEMO);
   const profile = await persistence.getOrganizationProfile(DEMO);
-  assert.equal(items.length, 45, `Expected 45 canonicals, got ${items.length}.`);
+  assert.equal(items.length, 47, `Expected 47 current canonicals, got ${items.length}.`);
   const arcById = new Map(developerDemoNarrativeArcs.map((a) => [a.canonical.id, a]));
   const cases = {};
 
@@ -103,7 +110,27 @@ async function main() {
   let totalLessons = 0, incoherentCause = 0, incoherentGuidance = 0, contaminated = 0;
   for (const item of items) {
     const arc = arcById.get(item.id);
-    assert(arc, `No arc for ${item.id}.`);
+    if (!arc) {
+      assert(ACCEPTED_LEARNED_CANONICALS.has(item.id), `Unexpected canonical without a narrative arc: ${item.id}.`);
+      if (item.id === "canonical-reporting-exports-problem") {
+        assert.equal(item.lessons.length, 0, "The accepted reporting canonical has no unvalidated lesson payload.");
+      } else if (item.id === "canonical-knowledge-ownership-transfer-after-administrator-departure") {
+        assert.equal(item.lessons.length, 1, "The accepted ownership-transfer canonical has one promoted lesson.");
+        const lesson = item.lessons[0];
+        assert.ok(lesson.rootCause.trim() && lesson.solution.trim() && lesson.customerResponse.trim(), "The accepted learned lesson must contain reusable content.");
+        // The accepted protected baseline contains one historical promotion
+        // whose source metadata predates TODO-062D hardening. New promotion
+        // probes require opaque IDs; this fixture check preserves the legacy
+        // lineage without requiring a historical rewrite.
+        assert.ok(
+          /^evidence-[0-9a-f]{8}$/i.test(lesson.sourceTicketId) || lesson.sourceTicketId === item.sourceTicketId,
+          "Learned lesson provenance must be opaque or match its preserved historical origin."
+        );
+        assert.ok(!/[@]|\b(?:OD|OIP)-\d{6,}|\b(?:202\d[-/.])/.test(`${lesson.rootCause} ${lesson.solution} ${lesson.customerResponse}`), "Learned lesson text must remain privacy-safe.");
+      }
+      totalLessons += item.lessons.length;
+      continue;
+    }
     const allowedCauses = new Set(arc.content.rootCauses);
     const allowedSolutions = new Set(arc.content.solutionSteps);
     for (const lesson of item.lessons) {
@@ -116,11 +143,11 @@ async function main() {
       if (owners && !(owners.size === 1 && owners.has(item.id))) { contaminated += 1; if (contaminated <= 5) console.log(`  CONTAMINATED ${item.id} uses cause owned by ${[...owners].join(",")}`); }
     }
   }
-  assert.equal(totalLessons, 180, `Expected 180 lessons, got ${totalLessons}.`);
+  assert.equal(totalLessons, 181, `Expected 181 current lessons, got ${totalLessons}.`);
   assert.equal(incoherentCause, 0, `${incoherentCause} lessons have a root cause not authored for their canonical.`);
   assert.equal(incoherentGuidance, 0, `${incoherentGuidance} lessons have guidance not authored for their canonical.`);
   assert.equal(contaminated, 0, `${contaminated} lessons use a cause owned by a different canonical (cross-canonical contamination).`);
-  cases.B_D_lessonCoherence = `PASS (${totalLessons}/180 lessons; every cause & guidance belongs to its canonical; 0 cross-canonical contamination)`;
+  cases.B_D_lessonCoherence = `PASS (${totalLessons}/181 lessons; every cause & guidance belongs to its canonical; 0 cross-canonical contamination)`;
 
   /* Specific TODO-049 contamination checks. */
   const csv = items.find((i) => i.id === "demo-ki-csv-export-encoding");

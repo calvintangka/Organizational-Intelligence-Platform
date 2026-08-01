@@ -24,6 +24,13 @@ interface CanonicalProblemIdentity {
 }
 
 const INTENT_CANONICAL_RULES: Record<string, CanonicalProblemIdentity> = {
+  password_reset: {
+    id: "canonical-password-reset",
+    title: "Password Reset",
+    problemSummary: "Customers need to reset or recover their password after forgetting it, changing devices, or not receiving the reset link.",
+    category: "Login",
+    tags: ["login", "password", "password-reset", "account"]
+  },
   email_recovery: {
     id: "canonical-account-email-recovery",
     title: "Account Email Recovery",
@@ -283,6 +290,39 @@ function makeSlug(value: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function evidenceFingerprint(value: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+/** Keep origin-ticket traceability without placing a raw ID in reusable lesson content. */
+export function createOpaqueProvenanceId(sourceTicketId: string): string {
+  return `evidence-${evidenceFingerprint(sourceTicketId)}`;
+}
+
+/**
+ * Keep supporting-evidence cardinality and duplicate detection without
+ * copying customer names, raw ticket text, dates, or ticket IDs into memory.
+ * The original source ID remains available in candidate/validation audit data.
+ */
+export function createGeneralizedEvidenceExample(
+  sourceTicketId: string,
+  generalizedIssue: string,
+  resolutionMode: "human" | "automatic" | "pending"
+): CanonicalProblemExample {
+  return {
+    ticketId: createOpaqueProvenanceId(sourceTicketId),
+    customerName: "Anonymized customer",
+    originalIssue: generalizedIssue.trim() || "Validated reusable organizational evidence",
+    createdAt: "redacted",
+    resolutionMode
+  };
 }
 
 const GENERIC_GREETING_ADDRESSEES = new Set([
@@ -1049,15 +1089,9 @@ export function createCanonicalProblem(
     autoResponseEligible: false,
     humanReviewCount: 1,
     automaticResolutionCount: 0,
-    exampleTickets: [
-      {
-        ticketId: sourceTicketId,
-        customerName: ticket.customerName,
-        originalIssue: ticket.description,
-        createdAt: ticket.createdAt,
-        resolutionMode: "human"
-      }
-    ],
+    // Source ticket IDs remain in candidate/validation/provenance audit data.
+    // Reusable memory must not retain customer-identifying example content.
+    exampleTickets: [createGeneralizedEvidenceExample(sourceTicketId, identity.problemSummary, "human")],
     knowledgeVersions: [
       {
         versionId: `${identity.id}-v1`,
@@ -1070,7 +1104,7 @@ export function createCanonicalProblem(
       {
         id: `${identity.id}-history-${Date.now()}`,
         event: "Canonical problem created",
-        detail: `Created from ticket ${ticket.id}`,
+        detail: "Created from validated, generalized organizational evidence.",
         createdAt
       }
     ]
@@ -1092,13 +1126,7 @@ export function mergeIntoCanonicalProblem(
     ? base.exampleTickets ?? []
     : [
         ...(base.exampleTickets ?? []),
-        {
-          ticketId: sourceTicketId,
-          customerName: ticket.customerName,
-          originalIssue: ticket.description,
-          createdAt: ticket.createdAt,
-          resolutionMode
-        }
+        createGeneralizedEvidenceExample(sourceTicketId, base.problemSummary ?? base.problem, resolutionMode)
       ];
 
   const shouldCreateVersion = !!reviewedInternalGuidance?.trim() && reviewedInternalGuidance.trim() !== base.internalGuidance;
@@ -1125,7 +1153,7 @@ export function mergeIntoCanonicalProblem(
       {
         id: `${base.canonicalProblemId}-history-${Date.now()}`,
         event: "Ticket merged into canonical problem",
-        detail: `${ticket.customerName}: ${ticket.description}`,
+        detail: "Validated generalized evidence merged into the canonical problem.",
         createdAt: at
       }
     ],

@@ -98,7 +98,7 @@ function isLessonSearchCandidate(
   // considering a lesson that belongs to the already-selected canonical.
   // Final authorization still re-runs isCompatibleForDrafting with the ticket
   // after findMatchingLesson has produced strong evidence.
-  if (!isCompatibleForDrafting(understanding, item)) return false;
+  if (!isCompatibleForDrafting(understanding, item, _ticket)) return false;
   // The raw match at the caller boundary already identifies the canonical.
   // Requiring lexical overlap with the classifier's canonical title would
   // discard valid paraphrases before the semantic lesson matcher runs.

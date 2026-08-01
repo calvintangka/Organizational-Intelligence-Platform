@@ -1,5 +1,6 @@
 import type { Ticket } from "./ticket";
 import type { KnowledgeMatch, ReflectionAction } from "./knowledge";
+import type { RetrievalAudit } from "./ticket";
 import type { Understanding } from "./oip";
 
 export type SupportedBulkUploadFormat = "json" | "csv" | "md" | "txt";
@@ -14,6 +15,7 @@ export interface BulkUploadEntry {
   resolution?: string;
   sourceLabel: string;
 }
+
 
 export interface BulkUploadFieldOption {
   key: string;
@@ -70,6 +72,9 @@ export interface BulkAnalyzedQuery {
     tags: string[];
   };
   existingMatch: KnowledgeMatch | null;
+  /** Selected by the same canonical/lesson retrieval gate as single intake. */
+  retrievedLessonId?: string | null;
+  retrievalAudit?: RetrievalAudit;
   confidence: BulkClusterConfidence;
   reasoning: string;
 }

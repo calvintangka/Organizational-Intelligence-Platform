@@ -191,7 +191,7 @@ async function aiSafety(c02, profile) {
 async function main() {
   const before = await snapshots();
   const [profile, items] = await Promise.all([persistence.getOrganizationProfile(DEMO), persistence.loadKnowledge(DEMO)]);
-  assert.equal(items.length, 45, "Expected the clean 45-item Developer Demo.");
+  assert.equal(items.length, 47, "Expected the current 47-item Developer Demo.");
   const c02Definition = fixture.controls.find((control) => control.id === "C02");
   assert.ok(c02Definition, "TODO-041 C02 fixture is required.");
   const c02Ticket = ticket(c02Definition, "TODO046-C02");
