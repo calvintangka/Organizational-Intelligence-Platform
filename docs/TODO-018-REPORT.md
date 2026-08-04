@@ -28,7 +28,7 @@ The existing synchronous browser path remains the default. The new async intake 
 
 ## 4. Controlled rollout boundaries
 
-Only `ticket.process` is registered in this first worker rollout. `bulk.analyze`, `pattern.discover`, and `reflection.generate` are typed job kinds but are rejected at intake until their browser-owned orchestration and commit boundaries are migrated into independently proven handlers. This prevents a generic queue from silently wrapping workflows that still have mixed browser/server ownership.
+`ticket.process` and `bulk.analyze` are now registered. Bulk analysis prepares rows idempotently, runs the existing deterministic/provider-aware bulk analysis domain service, persists per-row classification/retrieval checkpoints, and returns the complete cluster result for human review. `pattern.discover` and `reflection.generate` remain typed job kinds but are rejected at intake until their browser-owned orchestration and commit boundaries are migrated into independently proven handlers.
 
 The outbox pattern is not introduced in this phase. Durable job creation is the explicit intake transaction; downstream connector/outbox work remains part of TODO-018 follow-up hardening.
 
@@ -48,7 +48,7 @@ The outbox pattern is not introduced in this phase. Durable job creation is the 
 
 The queue has indexes for status/availability, organization/status, priority/creation order, and lease ownership/expiry. Worker concurrency and lease/poll intervals are configurable through constructor options and `OIP_JOB_WORKER_CONCURRENCY`. The worker exposes readiness state and does not call `process.exit` during normal operation; the CLI only exits after graceful drain on a termination signal.
 
-Large-volume throughput/load testing, queue metrics export, connector outbox delivery, and bulk/pattern/reflection handler migration remain follow-up work before broad private-beta enablement.
+Large-volume throughput/load testing, queue metrics export, connector outbox delivery, and pattern/reflection handler migration remain follow-up work before broad private-beta enablement. TODO-072 adds the dedicated 100-row async bulk acceptance coverage.
 
 ## 7. Verdict
 

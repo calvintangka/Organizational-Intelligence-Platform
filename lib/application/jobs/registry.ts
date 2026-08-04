@@ -1,7 +1,11 @@
 import type { AIAdapter } from "@/lib/ai/types";
+import { analyzeBulkEntries, BulkAnalysisCancelledError } from "@/lib/bulkUpload";
 import { processTicket, type ProcessTicketResult, type TicketInput } from "@/lib/application/tickets/processTicket";
 import type { OrganizationPersistenceSession } from "@/lib/persistence/session";
 import type { ClaimedJob, DurableJobRecord, JobProgress, JobType } from "@/lib/application/jobs/types";
+import type { BulkAnalysisResult, BulkUploadEntry, TicketRecord } from "@/types";
+import { detectLanguage, isSupportedLanguage } from "@/lib/languageDetection";
+import { resolveLanguagePolicy, resolveResponseLanguage } from "@/lib/languagePolicy";
 
 export interface JobHandlerContext {
   job: ClaimedJob["job"];
@@ -12,6 +16,12 @@ export interface JobHandlerContext {
 }
 
 export type JobHandler = (context: JobHandlerContext) => Promise<unknown>;
+
+export interface BulkJobResult {
+  uploadKey: string;
+  preparedCount: number;
+  analysis: BulkAnalysisResult;
+}
 
 function asTicketInput(value: unknown): TicketInput {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("The ticket job input is invalid.");
@@ -43,7 +53,8 @@ export class JobHandlerRegistry {
 }
 
 export function createDefaultJobHandlerRegistry(): JobHandlerRegistry {
-  return new JobHandlerRegistry().register("ticket.process", async ({ job, persistence, ai, signal, reportProgress }) => {
+  return new JobHandlerRegistry()
+  .register("ticket.process", async ({ job, persistence, ai, signal, reportProgress }) => {
     const profile = await persistence.loadOrganizationProfile();
     const knowledgeItems = await persistence.loadKnowledge();
     const ticketInput = asTicketInput(job.input.ticketInput);
@@ -68,6 +79,71 @@ export function createDefaultJobHandlerRegistry(): JobHandlerRegistry {
     });
     await reportProgress(ticketProgress("in_review", "Ticket is ready for review"));
     return result satisfies ProcessTicketResult;
+  })
+  .register("bulk.analyze", async ({ job, persistence, ai, signal, reportProgress }) => {
+    const input = job.input as { uploadKey?: unknown; entries?: unknown };
+    const uploadKey = typeof input.uploadKey === "string" ? input.uploadKey.trim() : "";
+    const entries = Array.isArray(input.entries) ? input.entries as BulkUploadEntry[] : [];
+    if (!uploadKey || entries.length === 0 || entries.length > 1000 || entries.some((entry) => !entry || typeof entry.id !== "string" || typeof entry.message !== "string" || !entry.message.trim())) {
+      throw new Error("The durable bulk job input is invalid.");
+    }
+    if (new Set(entries.map((entry) => entry.id)).size !== entries.length) throw new Error("Bulk entry IDs must be unique.");
+    const profile = await persistence.loadOrganizationProfile();
+    const knowledgeItems = await persistence.loadKnowledge();
+    await reportProgress({ stage: "preparing", completed: 0, total: entries.length, percent: 0, message: `Preparing ${entries.length} uploaded rows` });
+    const prepared = await persistence.prepareBulkTicketRecords(profile, entries.map((entry) => ({ uploadKey, entryId: entry.id, rawMessage: entry.message, subject: entry.message.length > 80 ? `${entry.message.slice(0, 80)}…` : entry.message })));
+    if (prepared.length !== entries.length) throw new Error(`Durable bulk preparation returned ${prepared.length} rows for ${entries.length} entries.`);
+    let progressChain = Promise.resolve();
+    const analysis = await analyzeBulkEntries({
+      entries,
+      organizationProfile: profile,
+      knowledgeItems,
+      aiAdapter: ai,
+      signal,
+      onProgress: (progress) => {
+        const phase = progress.phase === "clustering" ? "clustering" : "analyzing";
+        progressChain = progressChain.then(() => reportProgress({
+          stage: phase,
+          completed: progress.completed,
+          total: progress.total,
+          percent: progress.percent,
+          message: `${phase} ${progress.completed}/${progress.total}`
+        }));
+      }
+    });
+    await progressChain;
+    await reportProgress({ stage: "finalizing", completed: entries.length, total: entries.length, percent: 99, message: "Persisting bulk analysis" });
+    const byEntry = new Map<string, { item: BulkAnalysisResult["clusters"][number]["items"][number]; clusterId: string }>();
+    for (const cluster of analysis.clusters) for (const item of cluster.items) byEntry.set(item.entry.id, { item, clusterId: cluster.id });
+    for (const item of analysis.unclustered.items) byEntry.set(item.entry.id, { item, clusterId: analysis.unclustered.id });
+    const preparedByEntry = new Map(prepared.map((record) => [record.bulkEntryId, record]));
+    const policy = resolveLanguagePolicy(profile);
+    const updates: TicketRecord[] = entries.map((entry) => {
+      const analyzed = byEntry.get(entry.id);
+      const record = preparedByEntry.get(entry.id);
+      if (!analyzed || !record) throw new Error(`Bulk analysis did not produce a durable row for ${entry.id}.`);
+      const detection = detectLanguage(entry.message, { defaultLanguage: isSupportedLanguage(policy.organizationLanguage) ? policy.organizationLanguage : undefined });
+      const responseLanguage = resolveResponseLanguage(policy, detection);
+      return {
+        ...record,
+        bulkClusterId: analyzed.clusterId,
+        status: "in_review",
+        classification: {
+          category: analyzed.item.understanding.category,
+          intent: analyzed.item.understanding.intent ?? "unspecified",
+          canonicalProblem: analyzed.item.canonicalProblem.title,
+          classifiedBy: "deterministic",
+          confidence: analyzed.item.confidence,
+          inquiryType: analyzed.item.understanding.businessClassification?.inquiryType,
+          businessIntent: analyzed.item.understanding.businessClassification?.intent,
+          language: { detected: detection.language, confidence: detection.confidence, method: detection.method, responseLanguage: responseLanguage.language }
+        },
+        memoryMatch: analyzed.item.existingMatch ? { knowledgeId: analyzed.item.existingMatch.item.id, matchType: analyzed.item.retrievedLessonId ? "lesson" : "template", lessonId: analyzed.item.retrievedLessonId ?? null, retrievalAudit: analyzed.item.retrievalAudit } : { knowledgeId: null, matchType: "none", lessonId: null, retrievalAudit: analyzed.item.retrievalAudit }
+      };
+    });
+    await persistence.saveTicketRecords(updates);
+    await reportProgress({ stage: "succeeded", completed: entries.length, total: entries.length, percent: 100, message: "Bulk analysis complete" });
+    return { uploadKey, preparedCount: prepared.length, analysis } satisfies BulkJobResult;
   });
 }
 

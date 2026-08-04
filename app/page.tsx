@@ -97,6 +97,7 @@ import {
 } from "@/lib/ticketRecords";
 import { CaseLookupView } from "@/components/views/CaseLookupView";
 import { processTicket, ProcessTicketError } from "@/lib/application/tickets/processTicket";
+import { bulkResult, cancelJob, enqueueBulkJob, getJob } from "@/lib/application/jobs/client";
 import {
   generateReflectionCommand,
   promoteKnowledgeCommand,
@@ -104,6 +105,7 @@ import {
   LearningApplicationError
 } from "@/lib/application/learning/reflectionCommands";
 const PAGE_LOAD_STARTED_AT = Date.now();
+const ASYNC_BULK_INTAKE_ENABLED = process.env.NEXT_PUBLIC_OIP_ASYNC_BULK_INTAKE === "true";
 import type {
   AIAnalysis,
   AIAdvisory,
@@ -1458,6 +1460,29 @@ export default function Home() {
     signal: AbortSignal,
     uploadKey: string
   ) {
+    if (ASYNC_BULK_INTAKE_ENABLED) {
+      const queued = await enqueueBulkJob(organizationProfile.id, uploadKey, entries, { idempotencyKey: uploadKey });
+      let job = queued.data.job;
+      while (true) {
+        if (signal.aborted) {
+          await cancelJob(organizationProfile.id, job.id).catch(() => undefined);
+          throw new Error("Bulk analysis was cancelled.");
+        }
+        job = await getJob(organizationProfile.id, job.id);
+        const stage = job.progress.stage;
+        const phase: BulkAnalysisProgress["phase"] = stage === "clustering" ? "clustering" : stage === "succeeded" ? "complete" : "analyzing";
+        onProgress({
+          completed: Math.min(entries.length, job.progress.completed),
+          total: job.progress.total ?? entries.length,
+          currentLabel: job.progress.message ?? `Bulk job ${stage}`,
+          percent: Math.min(100, Math.max(0, job.progress.percent)),
+          phase
+        });
+        if (job.status === "succeeded") return bulkResult(job);
+        if (["failed", "cancelled", "dead_lettered"].includes(job.status)) throw new Error(job.error?.safeMessage ?? `Bulk job ended in ${job.status}.`);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
     const startedAt = Date.now();
     let lastProgressAt = startedAt;
     return measureTelemetry(

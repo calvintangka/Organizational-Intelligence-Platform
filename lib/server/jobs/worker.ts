@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { createAIAdapter, readAIConfig } from "@/lib/ai/adapter";
+import { BulkAnalysisCancelledError } from "@/lib/bulkUpload";
 import { ProcessTicketError } from "@/lib/application/tickets/processTicket";
 import { digestJobInput, type JobError, type JobRepository, type DurableJobRecord } from "@/lib/application/jobs/types";
 import { createDefaultJobHandlerRegistry, type JobHandlerRegistry } from "@/lib/application/jobs/registry";
@@ -32,6 +33,7 @@ export interface AsyncJobWorkerHealth {
 }
 
 function classify(error: unknown): JobError {
+  if (error instanceof BulkAnalysisCancelledError) return { errorClass: "cancelled", safeMessage: error.message, retryable: false };
   if (error instanceof ProcessTicketError) {
     const failure = error.failure;
     const errorClass: JobError["errorClass"] = failure.errorClass === "authorization_mismatch" ? "tenant_mismatch"

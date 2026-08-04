@@ -305,6 +305,12 @@ export class PrismaJobRepository implements JobRepository {
 
   async complete(jobId: string, workerId: string, result: unknown, resultDigest?: string): Promise<DurableJobRecord> {
     const now = new Date();
+    const current = await prisma.durableJob.findUnique({ where: { id: jobId }, select: { progress: true } });
+    if (!current) throw new JobRepositoryError("JOB_NOT_FOUND", "The durable job was not found.", false, 404);
+    const currentProgress = current.progress && typeof current.progress === "object" && !Array.isArray(current.progress)
+      ? current.progress as { total?: unknown }
+      : {};
+    const total = typeof currentProgress.total === "number" && currentProgress.total > 0 ? currentProgress.total : 1;
     const updated = await prisma.durableJob.updateMany({
       where: { id: jobId, leaseOwner: workerId, status: { in: ["leased", "running", "cancellation_requested"] } },
       data: {
@@ -312,7 +318,7 @@ export class PrismaJobRepository implements JobRepository {
         result: nullableJson(result),
         resultDigest: resultDigest ?? null,
         retryable: false,
-        progress: json({ stage: "completed", completed: 1, total: 1, percent: 100, updatedAt: now.toISOString() }),
+        progress: json({ stage: "succeeded", completed: total, total, percent: 100, updatedAt: now.toISOString() }),
         progressMessage: "Completed",
         leaseOwner: null,
         leaseExpiresAt: null,
