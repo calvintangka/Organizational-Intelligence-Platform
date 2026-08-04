@@ -11,6 +11,7 @@ import { createPersistenceContext } from "@/lib/persistence/context";
 import { createServerJobPersistenceSession } from "@/lib/server/jobs/serverPersistenceAdapter";
 import { prisma } from "@/lib/server/prisma";
 import { durableJobRepository } from "@/lib/server/jobs/jobRepository";
+import { GovernedActionError } from "@/lib/server/actions/actionService";
 
 const WORKER_VERSION = process.env.OIP_VERSION ?? process.env.npm_package_version ?? "dev";
 
@@ -36,6 +37,7 @@ export interface AsyncJobWorkerHealth {
 }
 
 function classify(error: unknown): JobError {
+  if (error instanceof GovernedActionError) return { errorClass: error.code === "AUTHORIZATION_REVOKED" ? "unauthorized" : error.code === "POLICY_DENIED" ? "conflict" : "application_invariant", safeMessage: error.message, retryable: error.retryable };
   if (error instanceof BulkAnalysisCancelledError) return { errorClass: "cancelled", safeMessage: error.message, retryable: false };
   if (error instanceof PatternDiscoveryError) {
     return {

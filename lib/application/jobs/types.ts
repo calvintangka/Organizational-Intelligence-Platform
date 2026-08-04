@@ -13,9 +13,9 @@ export const JOB_STATUSES = [
 ] as const;
 
 export type JobStatus = typeof JOB_STATUSES[number];
-export type JobType = "ticket.process" | "bulk.analyze" | "pattern.discover" | "reflection.generate" | "connector.intake";
+export type JobType = "ticket.process" | "bulk.analyze" | "pattern.discover" | "reflection.generate" | "connector.intake" | "action.execute";
 
-export const JOB_TYPES = ["ticket.process", "bulk.analyze", "pattern.discover", "reflection.generate", "connector.intake"] as const satisfies readonly JobType[];
+export const JOB_TYPES = ["ticket.process", "bulk.analyze", "pattern.discover", "reflection.generate", "connector.intake", "action.execute"] as const satisfies readonly JobType[];
 
 export type JobErrorClass =
   | "invalid_input"

@@ -14,6 +14,7 @@ import { durableJobRepository } from "@/lib/server/jobs/jobRepository";
 import { processConnectorInboundEvent } from "@/lib/server/connectors/connectorService";
 import { buildPatternDiscoveryInput, patternDiscoveryIdempotencyKey, isPatternDiscoverJobInput, type PatternDiscoveryJobResult } from "@/lib/application/jobs/patternTypes";
 import type { ReflectionDecision, Ticket } from "@/types";
+import { executeGovernedAction } from "@/lib/server/actions/actionService";
 
 export interface JobHandlerContext {
   job: ClaimedJob["job"];
@@ -269,6 +270,14 @@ export function createDefaultJobHandlerRegistry(): JobHandlerRegistry {
     });
     await reportProgress({ stage: "prepared", completed: 4, total: 4, percent: 100, message: "Prepared reflection is ready for human review" });
     return { preparedReflection: saved.record, replayed: saved.replayed, reflection: generated.reflection as ReflectionDecision, validation: { accepted: validation.accepted, warnings: validation.warnings, reasons: validation.reasons }, promotionRequired: true };
+  })
+  .register("action.execute", async ({ job, reportProgress }) => {
+    const input = job.input as { governedActionId?: unknown; organizationId?: unknown; actionDigest?: unknown; approvedPolicyVersion?: unknown };
+    if (typeof input.governedActionId !== "string" || input.organizationId !== job.organizationId || typeof input.actionDigest !== "string" || !Number.isInteger(input.approvedPolicyVersion)) throw new Error("The governed action execution job input is invalid.");
+    await reportProgress({ stage: "revalidating", completed: 1, total: 3, percent: 33, message: "Revalidating approved governed action" });
+    const result = await executeGovernedAction({ organizationId: job.organizationId, actionId: input.governedActionId, workerId: job.leaseOwner ?? "durable-worker", actorId: job.actorId });
+    await reportProgress({ stage: "succeeded", completed: 3, total: 3, percent: 100, message: "Governed action completed" });
+    return result;
   });
 }
 

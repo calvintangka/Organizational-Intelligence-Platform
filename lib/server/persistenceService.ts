@@ -312,6 +312,7 @@ function mapTicket(row: PrismaTicketRecord): TicketRecord {
     resolution: asRecord(row.resolution) as unknown as TicketRecord["resolution"],
     reflection: asRecord(row.reflection) as unknown as TicketRecord["reflection"],
     validationRecordIds: stringArray(row.validationRecordIds),
+    labels: stringArray(row.labels),
     status: row.status,
     resolutionMode: row.resolutionMode ?? null,
   };
@@ -882,6 +883,7 @@ function toTicketColumns(record: TicketRecord): Omit<Prisma.TicketRecordUnchecke
     resolution: json(record.resolution ?? {}),
     reflection: json(record.reflection ?? {}),
     validationRecordIds: json(record.validationRecordIds ?? []),
+    labels: json(record.labels ?? []),
     resolutionMode: narrowResolutionMode(record.resolutionMode),
     createdAt: parseDate(record.createdAt, "ticket record createdAt")
   };

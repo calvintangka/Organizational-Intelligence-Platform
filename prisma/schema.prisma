@@ -172,6 +172,9 @@ model Organization {
   connectorInstallations   ConnectorInstallation[]
   connectorInboundEvents   ConnectorInboundEvent[]
   externalObjectMappings   ExternalObjectMapping[]
+  governedActions           GovernedAction[]
+  actionLedgerEntries       ActionLedgerEntry[]
+  actionPolicy              OrganizationActionPolicy?
   memberships               OrganizationMembership[]
   roleAssignments           OrganizationRoleAssignment[]
   authorizationAudits       AuthorizationDecisionAudit[]
@@ -423,6 +426,7 @@ model TicketRecord {
   resolution          Json
   reflection          Json
   validationRecordIds Json
+  labels              Json                  @default("[]")
   actorId             String?
   // TODO-026: nullable so existing rows and unresolved tickets stay distinct
   // from a genuine human resolution. Backfill only via an approved migration.
@@ -437,6 +441,97 @@ model TicketRecord {
   @@index([organizationId, status])
   @@index([organizationId, createdAt])
   @@map("ticket_records")
+}
+
+model OrganizationActionPolicy {
+  id                    String   @id @default(cuid())
+  organizationId        String   @unique
+  version               Int      @default(1)
+  allowedLabels         Json
+  disabledLabels        Json
+  maximumLabelsPerTicket Int     @default(10)
+  duplicateBehavior     String   @default("idempotent_success")
+  updatedByActorId      String?
+  createdAt             DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime @updatedAt @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("organization_action_policies")
+}
+
+model GovernedAction {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  actionType            String
+  actionVersion         Int      @default(1)
+  targetType            String
+  targetId              String
+  status                String
+  riskLevel             String
+  reversibility         String
+  proposedPayload       Json
+  proposedPayloadDigest String
+  preparedByActorId     String?
+  preparedBySystem      Boolean  @default(false)
+  preparationReason     String
+  requiredCapabilities  Json
+  policyDecision        Json
+  policyVersion         Int
+  approvalRequired      Boolean  @default(true)
+  approvedByActorId     String?
+  approvedAt            DateTime? @db.Timestamptz(6)
+  approvalDecision      String?
+  approvalComment       String?
+  executionJobId        String?
+  executionAttemptCount Int      @default(0)
+  executedByActorId     String?
+  executedByWorkerId    String?
+  executedAt            DateTime? @db.Timestamptz(6)
+  externalEffectId      String?
+  result                Json?
+  reversalActionId      String?
+  reversedAt            DateTime? @db.Timestamptz(6)
+  failureClass          String?
+  failureMessage        String?
+  requestId             String
+  correlationId         String
+  idempotencyKey        String
+  createdAt             DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime @updatedAt @db.Timestamptz(6)
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ledgerEntries ActionLedgerEntry[]
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, targetType, targetId, status])
+  @@map("governed_actions")
+}
+
+model ActionLedgerEntry {
+  id             String   @id @default(cuid())
+  actionId       String
+  organizationId String
+  actorId        String?
+  workerId       String?
+  eventType      String
+  previousStatus String?
+  newStatus      String
+  targetType     String
+  targetId       String
+  payloadDigest  String
+  requestId      String
+  correlationId  String
+  safeReason     String
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  action       GovernedAction @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, actionId, createdAt])
+  @@map("action_ledger_entries")
 }
 
 model EmergingPattern {

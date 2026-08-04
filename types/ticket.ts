@@ -117,6 +117,7 @@ export interface TicketRecord {
   resolution: TicketRecordResolution;
   reflection: TicketRecordReflection;
   validationRecordIds: string[];
+  labels?: string[];
   status: TicketRecordStatus;
   /**
    * TODO-026: durable auto-vs-human auditability of a completed resolution.
