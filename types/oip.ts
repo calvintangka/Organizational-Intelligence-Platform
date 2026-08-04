@@ -37,6 +37,11 @@ export interface Understanding {
   detectedSignals: string[];
   extractedFields: ExtractedTicketFields;
   businessClassification?: BusinessIntentClassification;
+  /** Deterministic sentence-level isolation used by retrieval and drafting. */
+  intentIsolation?: import("@/lib/intentIsolation").IntentIsolationResult;
+  /** Retrieval text excludes quoted, negated, and resolved-history material. */
+  retrievalText?: string;
+  ignoredTopics?: string[];
 }
 
 export interface ReasoningSummary {

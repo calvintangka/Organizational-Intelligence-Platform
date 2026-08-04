@@ -1,0 +1,33 @@
+
+> organizational-intelligence-hackathon@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.22
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.18.13:3000
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 3.1s
+ ○ Compiling / ...
+ ✓ Compiled / in 2.7s (692 modules)
+ GET / 200 in 77ms
+ ○ Compiling /api/auth/login ...
+ ✓ Compiled /api/auth/login in 3s (750 modules)
+ ✓ Compiled in 569ms (312 modules)
+ POST /api/auth/login 200 in 3639ms
+ ○ Compiling /api/organizations/[organizationId] ...
+ ✓ Compiled /api/organizations/[organizationId] in 552ms (755 modules)
+ GET /api/organizations/bug009-probe-org-1785855138860 200 in 1854ms
+ GET /api/organizations/bug009-probe-org-1785855138860 200 in 55ms
+ GET /api/organizations/bug009-probe-org-1785855138860 200 in 55ms
+ PUT /api/organizations/bug009-probe-org-1785855138860 200 in 70ms
+ PUT /api/organizations/bug009-probe-org-1785855138860 409 in 56ms
+ GET /api/organizations/bug009-probe-org-1785855138860 200 in 52ms
+ PUT /api/organizations/bug009-probe-org-1785855138860 200 in 64ms
+ GET /api/organizations/bug009-probe-org-1785855138860 200 in 57ms
+ GET /api/organizations/bug009-probe-org-other-1785855138860 200 in 39ms
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 567ms (698 modules)
+ GET / 404 in 1082ms
+ GET / 200 in 177ms

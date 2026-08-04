@@ -10,10 +10,13 @@
  * never become a name. It prefers UNKNOWN over a wrong identity.
  */
 
+import type { ExtractedTicketFields } from "@/types/oip";
+
 export interface CustomerContext {
   senderName: string | null;
   companyName: string | null;
   senderRole: string | null;
+  confidence: { senderName: number; companyName: number; senderRole: number };
 }
 
 // Words that must never appear IN a person's name. Verbs/gerunds and issue
@@ -170,6 +173,8 @@ const COMPANY_STOP_WORDS = new Set([
   "want", "reported", "reporting", "experiencing"
 ]);
 
+const NON_COMPANY_PHRASES = new Set(["perusahaan", "company", "organization", "organisasi", "sejak", "bulan", "lalu", "last", "month", "year", "the", "old", "former"]);
+
 function boundCompany(phrase: string): string | null {
   const words = phrase.trim().split(/\s+/);
   const kept: string[] = [];
@@ -185,6 +190,8 @@ function boundCompany(phrase: string): string | null {
   const company = kept.map((w) => (/^[a-z'’&.\-]+$/.test(w) ? titleCaseWord(w) : w)).join(" ").trim().replace(/[.,!?]+$/g, "");
   // Reject a company that is only a single common function word.
   if (company.length < 2) return null;
+  const companyWords = company.toLowerCase().split(/\s+/);
+  if (companyWords.some((word) => NON_COMPANY_PHRASES.has(word))) return null;
   return company;
 }
 
@@ -201,6 +208,11 @@ const COMPANY_PATTERNS: RegExp[] = [
 const NAME_THEN_COMPANY = /\b(?:my name'?s?\s+(?:is\s+)?|this is\s+|i(?:\s*am|'?m)\s+)[A-Za-z][A-Za-z'’ .-]{1,60}?\s+(?:from|at|with)\s+([A-Za-z][^.,\n;!?]{1,60})/i;
 
 function extractCompany(text: string): string | null {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  for (const line of lines.slice(-4).reverse()) {
+    const signature = line.match(/^((?:PT|CV|LLC|Ltd\.?|Inc\.?|Corp\.?|Company)\s+[A-Za-z0-9&.'’-]+(?:\s+[A-Za-z0-9&.'’-]+){0,5})[.,]?$/i);
+    if (signature?.[1]) return signature[1].replace(/\s+/g, " ").trim();
+  }
   for (const pattern of COMPANY_PATTERNS) {
     const match = text.match(pattern);
     if (match?.[1]) {
@@ -251,9 +263,31 @@ function extractRole(text: string): string | null {
  */
 export function extractCustomerContext(text: string): CustomerContext {
   const source = text ?? "";
+  const senderName = extractName(source);
+  const companyName = extractCompany(source);
+  const senderRole = extractRole(source);
   return {
-    senderName: extractName(source),
-    companyName: extractCompany(source),
-    senderRole: extractRole(source)
+    senderName,
+    companyName,
+    senderRole,
+    confidence: { senderName: senderName ? 0.95 : 0, companyName: companyName ? (/^(PT|CV|LLC|Ltd\.?|Inc\.?|Corp\.?)/i.test(companyName) ? 0.98 : 0.8) : 0, senderRole: senderRole ? 0.9 : 0 }
+  };
+}
+
+export function isLikelyCompanyName(candidate: string | null | undefined): boolean {
+  if (!candidate) return false;
+  const value = candidate.trim().replace(/\s+/g, " ");
+  if (value.length < 2 || value.length > 100 || /[@\d]{2,}/.test(value)) return false;
+  const words = value.toLowerCase().split(/\s+/);
+  if (words.some((word) => NON_COMPANY_PHRASES.has(word))) return false;
+  return /^(pt|cv|llc|ltd\.?|inc\.?|corp\.?|company)\b/i.test(value) || words.length >= 2;
+}
+
+export function validateExtractedTicketFields(fields: ExtractedTicketFields): ExtractedTicketFields {
+  return {
+    ...fields,
+    senderName: isLikelyPersonName(fields.senderName) ? fields.senderName : null,
+    companyName: isLikelyCompanyName(fields.companyName) ? fields.companyName : null,
+    senderRole: fields.senderRole?.trim() || null
   };
 }

@@ -11,7 +11,7 @@ const PRODUCT_SIGNALS = [
 ];
 
 const COMPANY_SIGNALS = [
-  /\b(?:your company|about your company|what services do you provide|what industry do you serve|who are you|organization|company profile)\b/i,
+  /\b(?:your company|about your company|what services do you provide|what industry do you serve|who are you|organization|company profile|company and support model|support model|service coverage)\b/i,
   /\b(?:perusahaan Anda|tentang perusahaan|layanan apa yang disediakan|bergerak di industri apa|profil perusahaan|organisasi Anda)\b/i
 ];
 
@@ -36,33 +36,46 @@ function matches(text: string, patterns: RegExp[]): string[] {
 
 /** Operational symptoms take precedence over business vocabulary. */
 export function classifyBusinessIntent(text: string): BusinessIntentClassification {
-  const operationalSignals = matches(text, OPERATIONAL_SIGNALS);
+  // Boilerplate added by the benchmark and intake UI describes the envelope,
+  // not the customer's intent. Remove it before deciding whether a request is
+  // operational support or a business inquiry.
+  const routingText = text.replace(/\b(?:please focus on the current failure|kami membutuhkan bantuan untuk masalah aktif ini|mohon jangan membuka kembali masalah lama)\b/gi, " ");
+  const operationalSignals = matches(routingText, OPERATIONAL_SIGNALS);
   if (operationalSignals.length > 0) {
     return { inquiryType: "operational_support", intent: "operational_support", confidence: "high", signals: operationalSignals.slice(0, 4) };
   }
 
-  const generalSignals = matches(text, GENERAL_SIGNALS);
-  const multilingualSignals = matches(text, MULTILINGUAL_SIGNALS);
-  const directProductSignals = matches(text, DIRECT_PRODUCT_SIGNALS);
+  const generalSignals = matches(routingText, GENERAL_SIGNALS);
+  const multilingualSignals = matches(routingText, MULTILINGUAL_SIGNALS);
+  const directProductSignals = matches(routingText, DIRECT_PRODUCT_SIGNALS);
   if (multilingualSignals.length > 0) {
     return { inquiryType: "business_inquiry", intent: "multilingual_support", confidence: "high", signals: multilingualSignals.slice(0, 4) };
   }
   if (directProductSignals.length > 0) {
-    const productSignals = matches(text, PRODUCT_SIGNALS);
+    const productSignals = matches(routingText, PRODUCT_SIGNALS);
     return { inquiryType: "business_inquiry", intent: "product_information", confidence: "high", signals: productSignals.slice(0, 4) };
   }
   if (generalSignals.length > 0) {
     return { inquiryType: "business_inquiry", intent: "general_business_inquiry", confidence: "medium", signals: generalSignals.slice(0, 4) };
   }
 
-  const productSignals = matches(text, PRODUCT_SIGNALS);
+  const productSignals = matches(routingText, PRODUCT_SIGNALS);
   if (productSignals.length > 0) {
     return { inquiryType: "business_inquiry", intent: "product_information", confidence: "high", signals: productSignals.slice(0, 4) };
   }
 
-  const companySignals = matches(text, COMPANY_SIGNALS);
+  const companySignals = matches(routingText, COMPANY_SIGNALS);
   if (companySignals.length > 0) {
     return { inquiryType: "business_inquiry", intent: "company_information", confidence: "high", signals: companySignals.slice(0, 4) };
+  }
+
+  // An unsupported legal/medical request is still a request-shaped business
+  // inquiry for routing purposes. Scope and safety policy remain responsible
+  // for refusing the substance; this prevents it from being mistaken for an
+  // operational login or billing problem merely because no product keyword is
+  // present.
+  if (/\b(?:medical|doctor|diagnos(?:e|is)|legal advice|contract advice|lawyer)\b/i.test(routingText)) {
+    return { inquiryType: "business_inquiry", intent: "general_business_inquiry", confidence: "low", signals: ["out_of_scope_request"] };
   }
 
   return { inquiryType: "operational_support", intent: "operational_support", confidence: "low", signals: [] };

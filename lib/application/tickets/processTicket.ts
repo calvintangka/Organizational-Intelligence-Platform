@@ -19,6 +19,8 @@ import { detectLanguage, isSupportedLanguage } from "@/lib/languageDetection";
 import { hasSpecificCanonicalMatch } from "@/lib/patternDiscovery";
 import { identifyCanonicalProblem } from "@/lib/canonicalProblemEngine";
 import { startTelemetrySpan } from "@/lib/telemetry";
+import { securityIncidentDraft } from "@/lib/intentIsolation";
+import { validateExtractedTicketFields } from "@/lib/customerContext";
 import type {
   AIDiagnostics,
   AIAdvisory,
@@ -255,8 +257,23 @@ function mergeExtractedFields(base: ExtractedTicketFields, advisory?: ExtractedT
 function applyAdvisoryFields(understanding: Understanding, advisory: AIAdvisory): Understanding {
   return {
     ...understanding,
-    extractedFields: mergeExtractedFields(understanding.extractedFields ?? emptyExtractedTicketFields(), advisory.analysisSuggestion?.extractedFields)
+    extractedFields: validateExtractedTicketFields(mergeExtractedFields(understanding.extractedFields ?? emptyExtractedTicketFields(), advisory.analysisSuggestion?.extractedFields))
   };
+}
+
+function canonicalForUnderstanding(understanding: Understanding, fallback: { title: string; problemSummary: string; category: string }) {
+  const hint = understanding.intentIsolation?.primaryIssueHint;
+  const overrides: Record<string, { title: string; problemSummary: string; category: string }> = {
+    security_incident: { title: "Security Incident", problemSummary: "A security-sensitive report or unauthorized administrative request requires authorized review.", category: "Security Incident" },
+    activation_failure: { title: "Activation Failure", problemSummary: "Activation or invitation email has not arrived or the activation flow cannot be completed.", category: "Activation" },
+    billing_contact_update: { title: "Billing Contact Update", problemSummary: "Billing contact or invoice recipient information needs correction.", category: "Billing" },
+    refund_investigation: { title: "Refund Investigation", problemSummary: "A refund or renewal charge requires investigation against account activity.", category: "Refund" },
+    report_export_timeout: { title: "Large Report Export Timeout", problemSummary: "A large report or data export is timing out or remaining stuck.", category: "Reporting & Exports" },
+    role_permission: { title: "Role Permission Issue", problemSummary: "A required role or permission is missing or denied.", category: "Permissions & Access" }
+  };
+  const selected = hint ? overrides[hint] : undefined;
+  if (selected) return selected;
+  return fallback.category === understanding.category ? fallback : { ...fallback, category: understanding.category };
 }
 
 function resolveTicketLanguage(ticket: Ticket, profile: OrganizationProfile) {
@@ -553,23 +570,32 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
     const domain = classifyBusinessDomain(`${ticket.subject} ${ticket.description}`, ticket.id, profile);
     const rawUnderstanding = understandForProfile(ticket, profile);
     const routing = routeBusinessInquiryUnderstanding(rawUnderstanding);
-    const understanding = routing.understanding;
-    const canonical = routing.canonicalProblem ?? identifyCanonicalProblem(understanding, profile);
-    const advisory = await requestAnalysisAdvisory(ports, ticket, understanding, profile, canonical);
+    const securityRouted = rawUnderstanding.intentIsolation?.securityIntent.detected === true;
+    const understanding = securityRouted
+      ? { ...rawUnderstanding, category: "Security Incident", intent: "security_incident", coreProblem: "Potential security incident or unauthorized administrative request", tags: ["security", "escalation", "human-review"] }
+      : routing.understanding;
+    const preliminaryCanonical = securityRouted
+      ? canonicalForUnderstanding(understanding, { title: "Security Incident", problemSummary: "Security-sensitive request requiring authorized review.", category: "Security Incident" })
+      : routing.canonicalProblem ?? identifyCanonicalProblem(understanding, profile);
+    const advisory = securityRouted
+      ? defaultAdvisory(adapter, ticket, "Security Incident")
+      : await requestAnalysisAdvisory(ports, ticket, understanding, profile, preliminaryCanonical);
     const enriched = applyAdvisoryFields(understanding, advisory);
+    const canonical = canonicalForUnderstanding(enriched, identifyCanonicalProblem(enriched, profile));
     const language = resolveTicketLanguage(ticket, profile);
     const analysis = analysisFrom(enriched);
     record = {
       ...record,
-      classification: { category: enriched.category, intent: enriched.intent ?? "unspecified", canonicalProblem: canonical.title, classifiedBy: "deterministic", confidence: enriched.businessClassification?.confidence ?? domain.confidence, inquiryType: enriched.businessClassification?.inquiryType, businessIntent: enriched.businessClassification?.intent, language: { detected: language.detection.language, confidence: language.detection.confidence, method: language.detection.method, responseLanguage: language.response.language } }
+      classification: { category: enriched.category, intent: enriched.intent ?? "unspecified", canonicalProblem: canonical.title, classifiedBy: "deterministic", confidence: enriched.businessClassification?.confidence ?? domain.confidence, inquiryType: enriched.businessClassification?.inquiryType, businessIntent: enriched.businessClassification?.intent, securityDetected: enriched.intentIsolation?.securityIntent.detected, securitySeverity: enriched.intentIsolation?.securityIntent.severity, securityReasons: enriched.intentIsolation?.securityIntent.reasons, escalationRequired: enriched.intentIsolation?.securityIntent.escalationRequired, language: { detected: language.detection.language, confidence: language.detection.confidence, method: language.detection.method, responseLanguage: language.response.language } }
     };
     await ports.persistence.saveTicketRecord(record);
+    if (securityRouted) stages.push("security_routed");
     stages.push("analyzing");
     assertNotAborted(command, "analyzing", record);
 
     const knowledgeItems = command.processingOptions?.knowledgeItems ?? [];
     const sessionCreatedIds = command.processingOptions?.sessionCreatedIds ?? new Set<string>();
-    const rawMatches = withPreDiscriminationLessonMatches(ticket, enriched, retrieveMemory(enriched, knowledgeItems, sessionCreatedIds), knowledgeItems, canonical.title);
+    const rawMatches = securityRouted ? [] : withPreDiscriminationLessonMatches(ticket, enriched, retrieveMemory(enriched, knowledgeItems, sessionCreatedIds), knowledgeItems, canonical.title);
     const matches = rawMatches.filter((item) => isCompatibleForDrafting(enriched, item.item, ticket));
     const selected = selectPreferredMatch(ticket, matches);
     const topMatch = selected?.match ?? null;
@@ -578,7 +604,7 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
     const businessMemory = isBusinessInquiry && matches.some((item) => item.item.category === "Business Inquiry");
     let effectiveMatch = isBusinessInquiry && !businessMemory ? null : topMatch;
     if (effectiveMatch) effectiveMatch = await discriminate(ports, ticket, rawUnderstanding, effectiveMatch, lessonMatch);
-    const semantic = !isBusinessInquiry && !businessMemory && matches.length === 0 && rawMatches[0]
+    const semantic = !securityRouted && !isBusinessInquiry && !businessMemory && matches.length === 0 && rawMatches[0] && isCompatibleForDrafting(enriched, rawMatches[0].item, ticket)
       ? await evaluateSemanticLessonCompatibility(adapter.provider, ticket, enriched, rawMatches[0].item).catch(() => ({ authorization: null, aiResults: [], declineReason: "semantic evaluation failed" }))
       : null;
     if (!effectiveMatch && semantic?.authorization && rawMatches[0]) effectiveMatch = rawMatches[0];
@@ -590,11 +616,15 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
     stages.push("retrieved");
     assertNotAborted(command, "retrieved", record);
 
-    const deterministicDraft = enriched.businessClassification?.inquiryType === "business_inquiry" && !businessMemory
+    const deterministicDraft = securityRouted
+      ? securityIncidentDraft(ticket.id)
+      : enriched.businessClassification?.inquiryType === "business_inquiry" && !businessMemory
       ? draftBusinessInquiryResponse(ticket, enriched, profile, language.response.language)
       : draftResponse(ticket, enriched, memoryMatch, profile, knowledgeItems.length === 0, semantic?.authorization ?? null);
     const deterministic: SuggestedResponse = { ticketId: ticket.id, ...deterministicDraft };
-    const draftResult = await requestDraft(ports, ticket, enriched, profile, canonical.title, memoryMatch, deterministic, advisory, semantic?.authorization ?? null);
+    const draftResult = securityRouted
+      ? { response: { ...deterministic, draftMode: "cold_start" as const, groundingLabel: "security escalation" }, advisory, usedAIDraft: false }
+      : await requestDraft(ports, ticket, enriched, profile, canonical.title, memoryMatch, deterministic, advisory, semantic?.authorization ?? null);
     record = { ...record, draftSource: draftResult.response.source as TicketRecord["draftSource"], status: "in_review" };
     await ports.persistence.saveTicketRecord(record);
     stages.push("drafted", "in_review");
@@ -621,7 +651,7 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
       telemetrySummary: { requestId: command.requestId, stages },
       persisted: true,
       replayed: false,
-      followUp: hasSpecificCanonicalMatch(enriched, knowledgeItems)
+      followUp: securityRouted || hasSpecificCanonicalMatch(enriched, knowledgeItems)
         ? []
         : [{ type: "pattern_discovery_requested", ticketId: ticket.id, reason: "no_specific_canonical_match" }],
       similarKnowledge: semantic?.authorization && rawMatches[0]

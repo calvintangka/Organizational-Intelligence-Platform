@@ -239,6 +239,9 @@ export interface KnowledgeMatch {
   matchedTags?: string[];
   matchedKeywords?: string[];
   matchedCategory?: string | null;
+  /** Deterministic TODO-080 compatibility gate, independent of overlap score. */
+  compatibilityScore?: number;
+  compatibilityReason?: string;
   relevanceEvidence?: {
     categoryPoints: number;
     tagPoints: number;

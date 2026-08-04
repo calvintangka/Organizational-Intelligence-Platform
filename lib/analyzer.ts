@@ -12,9 +12,10 @@ import {
   type ConceptExtraction
 } from "@/lib/conceptExtraction";
 import { containsSignal } from "@/lib/textSignal";
-import { extractCustomerContext } from "@/lib/customerContext";
+import { extractCustomerContext, validateExtractedTicketFields } from "@/lib/customerContext";
 import { relevanceStrengthForScore } from "@/lib/relevanceLabels";
 import { classifyBusinessIntent } from "@/lib/businessInquiry";
+import { isolateIntent } from "@/lib/intentIsolation";
 
 const FALLBACK_PROFILE = defaultOrganizationProfile;
 
@@ -221,12 +222,12 @@ function emptyExtractedTicketFields(): ExtractedTicketFields {
 // records.") can never become the sender.
 function extractFallbackTicketFields(ticket: Ticket): ExtractedTicketFields {
   const context = extractCustomerContext(ticket.description);
-  return {
+  return validateExtractedTicketFields({
     ...emptyExtractedTicketFields(),
     senderName: context.senderName,
     companyName: context.companyName,
     senderRole: context.senderRole
-  };
+  });
 }
 
 export function assessBusinessRelevance(ticketText: string): BusinessRelevance {
@@ -1021,7 +1022,9 @@ const LOGIN_CONTRADICTION_PATTERNS: RegExp[] = [
   /\bi remember my password\b/,
   /\bpassword is working\b/,
   /\bnot a login issue\b/,
-  /\bsign in normally\b/
+  /\bsign in normally\b/,
+  /\bcomplete ordinary login\b/,
+  /\b(?:can|able to|successfully)\s+(?:sign|log) in\b/
 ];
 
 const URGENCY_HIGH_WORDS = ["urgent", "immediately", "asap", "today", "blocked", "emergency", "critical", "right now", "cannot wait", "important"];
@@ -1116,6 +1119,7 @@ export function understandForProfile(ticket: Ticket, inputProfile: OrganizationP
   // Normalize contractions while preserving the stem of possessives such as
   // "provider's webhook" for bounded classifier concepts.
   const fullText = normalizeAnalyzerText(`${ticket.subject} ${ticket.description}`);
+  const intentIsolation = isolateIntent(ticket);
 
   let bestCategory = "General";
   let bestScore = 0;
@@ -1123,7 +1127,7 @@ export function understandForProfile(ticket: Ticket, inputProfile: OrganizationP
   let explicitCategoryMatched = false;
 
   const rules = CATEGORY_RULES.filter((rule) => categoryAllowedByProfile(rule, profile));
-  const loginContradiction = hasExplicitLoginContradiction(fullText);
+  const loginContradiction = hasExplicitLoginContradiction(fullText) || intentIsolation.ignoredTopics.includes("login");
   // TODO-058B: one extraction per ticket, reused by every rule below.
   const conceptExtraction = extractConcepts(`${ticket.subject} ${ticket.description}`, profile);
   const rankedCategories = rules.map((rule) => {
@@ -1313,7 +1317,7 @@ export function understandForProfile(ticket: Ticket, inputProfile: OrganizationP
     if (detectedSignals.length >= 8) break;
   }
 
-  const tags = [...new Set([...detectedCategoryTags])];
+  let tags = [...new Set([...detectedCategoryTags])];
   if (fullText.includes("purchase") || fullText.includes("bought") || fullText.includes("buy")) {
  
 
@@ -1337,8 +1341,13 @@ export function understandForProfile(ticket: Ticket, inputProfile: OrganizationP
 
 
 
- const coreProblem = isUncategorized ? ticket.subject : CORE_PROBLEM_MAP[bestCategory] ?? ticket.subject;
-  const lexicalIntent = isUncategorized ? UNCATEGORIZED_INTENT : inferIntent(bestCategory, detectedSignals, fullText);
+  let coreProblem = isUncategorized ? ticket.subject : CORE_PROBLEM_MAP[bestCategory] ?? ticket.subject;
+  // TODO-080A: intent inference uses the current actionable request. The
+  // category layer may still inspect the full ticket for broad evidence, but
+  // quoted, resolved, and explicitly negated phrases cannot choose a
+  // canonical sub-intent such as Password Reset.
+  const intentText = intentIsolation.currentRequestText ?? intentIsolation.retrievalText;
+  const lexicalIntent = isUncategorized ? UNCATEGORIZED_INTENT : inferIntent(bestCategory, detectedSignals, intentText);
   // TODO-058C Part G: canonical SUB-selection keys off intent, which is inferred
   // from English phrasing. A non-English ticket therefore reached the category's
   // general canonical ("Billing & Charge Issue") instead of the specific one
@@ -1349,10 +1358,62 @@ export function understandForProfile(ticket: Ticket, inputProfile: OrganizationP
   // concept evidence — i.e. one the English layer could not read at all — may
   // have its intent refined. An English ticket mentioning "invoice" or "bill"
   // already reaches invoice_question lexically, so its canonical is untouched.
-  const intent =
+  let intent =
     !isUncategorized && conceptAssisted && isRefinableGenericIntent(lexicalIntent)
       ? conceptIntentForCategory(bestCategory, conceptExtraction) ?? lexicalIntent
       : lexicalIntent;
+
+  // TODO-080: strong deterministic intent hints override neighboring lexical
+  // categories. This keeps activation/invitation, report export, role access,
+  // and billing-contact requests from collapsing into generic Login/Billing.
+  const hint = intentIsolation.primaryIssueHint;
+  if (intentIsolation.securityIntent.detected) {
+    bestCategory = "Security Incident";
+    intent = "security_incident";
+    coreProblem = "Potential security incident or unauthorized administrative request";
+    detectedCategoryTags = ["security", "escalation", "human-review"];
+  } else if (hint === "sso_certificate") {
+    bestCategory = "Authentication";
+    intent = "sso_certificate";
+    coreProblem = "Customer has an authentication infrastructure issue";
+    detectedCategoryTags = ["authentication", "sso", "identity-provider"];
+  } else if (hint === "duplicate_invoice") {
+    bestCategory = "Billing";
+    intent = "duplicate_invoice";
+    coreProblem = "Customer reports duplicate invoices or a possible duplicate charge";
+    detectedCategoryTags = ["billing", "invoice", "duplicate", "investigation"];
+  } else if (hint === "activation_failure") {
+    bestCategory = "Activation";
+    intent = "activation_failure";
+    coreProblem = "Activation or invitation email has not arrived or the activation flow cannot be completed";
+    detectedCategoryTags = ["activation", "invitation"];
+  } else if (hint === "report_export_timeout") {
+    bestCategory = "Reporting & Exports";
+    intent = "report_export_timeout";
+    coreProblem = "A large report or data export is timing out or remaining stuck";
+    detectedCategoryTags = ["reporting", "export", "timeout"];
+  } else if (hint === "role_permission") {
+    bestCategory = "Permissions & Access";
+    intent = "role_permission";
+    coreProblem = "A required role or permission is missing or denied";
+    detectedCategoryTags = ["permissions", "role", "access-control"];
+  } else if (hint === "billing_contact_update") {
+    bestCategory = "Billing";
+    intent = "billing_contact_update";
+    coreProblem = "Billing contact or invoice recipient information needs correction";
+    detectedCategoryTags = ["billing", "invoice", "contact"];
+  } else if (hint === "refund_investigation") {
+    bestCategory = "Refund";
+    intent = "refund_investigation";
+    coreProblem = "A refund or renewal charge requires investigation against account activity";
+    detectedCategoryTags = ["refund", "billing", "investigation"];
+  } else if (hint === "delivery_delay") {
+    bestCategory = "Delivery Delay";
+    intent = "delivery_delay";
+    coreProblem = "Customer reports a delayed delivery or stale tracking update";
+    detectedCategoryTags = ["delivery", "delay", "tracking"];
+  }
+  tags = [...new Set([...tags, ...detectedCategoryTags])];
   const signalSummary = detectedSignals.slice(0, 3).join(", ");
   const summary = isUncategorized
     ? UNCATEGORIZED_REASONING
@@ -1370,7 +1431,10 @@ export function understandForProfile(ticket: Ticket, inputProfile: OrganizationP
 
 
   const extractedFields = extractFallbackTicketFields(ticket);
-  const businessClassification = classifyBusinessIntent(`${ticket.subject} ${ticket.description}`);
+  // TODO-080A: classify the current request, not quoted or resolved context.
+  // This keeps a historical login/billing thread from stealing a present
+  // product, company, or operational request.
+  const businessClassification = classifyBusinessIntent(intentIsolation.currentRequestText ?? intentIsolation.retrievalText);
 
  return {
     ticketId: ticket.id,
@@ -1393,7 +1457,10 @@ export function understandForProfile(ticket: Ticket, inputProfile: OrganizationP
       ? [...detectedSignals, ...conceptExtraction.matches.map((match) => `concept:${match.conceptId}`)].slice(0, 6)
       : detectedSignals.slice(0, 6),
     extractedFields,
-    businessClassification
+    businessClassification,
+    intentIsolation,
+    retrievalText: intentIsolation.retrievalText,
+    ignoredTopics: intentIsolation.ignoredTopics
   };
 }
 

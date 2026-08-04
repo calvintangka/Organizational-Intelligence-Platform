@@ -55,6 +55,86 @@ const INTENT_CANONICAL_RULES: Record<string, CanonicalProblemIdentity> = {
     problemSummary: "Customers report a general billing or charge concern without payment-authorization evidence.",
     category: "Billing",
     tags: ["billing", "payment"]
+  },
+  billing_contact_update: {
+    id: "canonical-billing-contact-update",
+    title: "Billing Contact Update",
+    problemSummary: "Customers need to correct the billing recipient or invoice contact information.",
+    category: "Billing",
+    tags: ["billing", "invoice", "contact"]
+  },
+  duplicate_invoice: {
+    id: "canonical-duplicate-invoice",
+    title: "Billing Duplicate Invoice Investigation",
+    problemSummary: "Customers report duplicate invoices or a possible duplicate charge that requires investigation before any refund or adjustment.",
+    category: "Billing",
+    tags: ["billing", "invoice", "duplicate", "investigation"]
+  },
+  refund_investigation: {
+    id: "canonical-refund-investigation",
+    title: "Refund Investigation",
+    problemSummary: "Customers request a refund or eligibility review where account activity, renewal, or cancellation history must be checked first.",
+    category: "Refund",
+    tags: ["refund", "billing", "investigation"]
+  },
+  sso_certificate: {
+    id: "canonical-authentication-infrastructure",
+    title: "Authentication Infrastructure Issue",
+    problemSummary: "Customers report an identity-provider, SSO, federation, or authentication certificate problem rather than an ordinary password login issue.",
+    category: "Authentication",
+    tags: ["authentication", "sso", "identity-provider"]
+  },
+  security_incident: {
+    id: "canonical-security-incident",
+    title: "Security Incident",
+    problemSummary: "Customers report phishing, compromise, unauthorized access, or an unauthorized administrative request requiring security review.",
+    category: "Security Incident",
+    tags: ["security", "escalation", "human-review"]
+  }
+};
+
+const CATEGORY_CANONICAL_RULES: Record<string, CanonicalProblemIdentity> = {
+  "API & Integrations": {
+    id: "canonical-api-integration-issue",
+    title: "API Integration Issue",
+    problemSummary: "Customers report a webhook, API, connector, callback, or external integration issue.",
+    category: "API & Integrations",
+    tags: ["api", "integrations", "webhook"]
+  },
+  "Notifications & Email": {
+    id: "canonical-notification-delivery",
+    title: "Notification Delivery Issue",
+    problemSummary: "Customers report that notifications or product email are not reaching the intended recipients.",
+    category: "Notifications & Email",
+    tags: ["notifications", "email-delivery"]
+  },
+  "Mobile Application": {
+    id: "canonical-mobile-application-issue",
+    title: "Mobile Application Issue",
+    problemSummary: "Customers report a mobile application, device, offline, or synchronization issue.",
+    category: "Mobile Application",
+    tags: ["mobile", "device", "sync"]
+  },
+  "Reporting & Exports": {
+    id: "canonical-report-export-issue",
+    title: "Report Export Issue",
+    problemSummary: "Customers report a reporting, dashboard, download, CSV, or data-export issue.",
+    category: "Reporting & Exports",
+    tags: ["reporting", "export"]
+  },
+  "Permissions & Access": {
+    id: "canonical-permissions-access",
+    title: "Permissions & Access Issue",
+    problemSummary: "Customers report a role, permission, inheritance, grant, or other access-control administration issue.",
+    category: "Permissions & Access",
+    tags: ["permissions", "role", "access-control"]
+  },
+  "Security Incident": {
+    id: "canonical-security-incident",
+    title: "Security Incident",
+    problemSummary: "Customers report phishing, compromise, unauthorized access, or an unauthorized administrative request requiring security review.",
+    category: "Security Incident",
+    tags: ["security", "escalation", "human-review"]
   }
 };
 
@@ -913,6 +993,11 @@ export function identifyCanonicalProblem(
       ...intentRule,
       tags: unique([...intentRule.tags, ...understanding.tags])
     };
+  }
+
+  const categoryRule = CATEGORY_CANONICAL_RULES[understanding.category];
+  if (categoryRule) {
+    return { ...categoryRule, tags: unique([...categoryRule.tags, ...understanding.tags]) };
   }
 
   // Exclude generated reasoning prose (for example, "Key signals detected")

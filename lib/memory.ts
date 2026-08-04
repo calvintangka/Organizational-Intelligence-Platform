@@ -52,12 +52,14 @@ export function retrieveMemory(
   knowledgeItems: KnowledgeItem[],
   sessionCreatedIds: Set<string> = new Set()
 ): KnowledgeMatch[] {
+  if (understanding.intentIsolation?.securityIntent.detected) return [];
   const analysisTokens = tokenize(
-    `${understanding.originalText ?? ""} ${understanding.summary} ${understanding.coreProblem} ${understanding.category} ${understanding.tags.join(" ")}`
+    `${understanding.retrievalText ?? understanding.originalText ?? ""} ${understanding.summary} ${understanding.coreProblem} ${understanding.category} ${understanding.tags.join(" ")}`
   );
   const analysisKeywords = new Set(analysisTokens);
   const normalizedAnalysis = analysisTokens.join(" ");
-  const analysisConcepts = conceptEvidence(`${understanding.originalText ?? ""} ${understanding.summary} ${understanding.coreProblem} ${understanding.category} ${understanding.tags.join(" ")}`, understanding.category);
+  const analysisSource = `${understanding.retrievalText ?? understanding.originalText ?? ""} ${understanding.summary} ${understanding.coreProblem} ${understanding.category} ${understanding.tags.join(" ")}`;
+  const analysisConcepts = conceptEvidence(analysisSource, understanding.category);
 
   const mapped = knowledgeItems
     .map((rawItem) => {
@@ -86,6 +88,7 @@ export function retrieveMemory(
       const conceptPoints = Math.min(matchedConcepts.length * 14, 28);
       const phrasePoints = exactCanonicalPhrase ? 20 : 0;
       const sessionPoints = isSessionCreated ? 8 : 0;
+      const compatibility = assessIntentCompatibility(understanding, item);
 
       const matchScore =
         categoryPoints +
@@ -94,7 +97,8 @@ export function retrieveMemory(
         conceptPoints +
         phrasePoints +
         sessionPoints +
-        reuseBoost;
+        reuseBoost +
+        (compatibility.score > 0 ? compatibility.score : 0);
 
       const reasonParts = [
         categoryMatch ? `category match: "${item.category}"` : "",
@@ -106,7 +110,8 @@ export function retrieveMemory(
         typeof item.trustScore === "number" ? `trust ${item.trustScore}/100` : "",
         item.timesSeen ? `examples seen: ${item.timesSeen}` : "",
         item.knowledgeVersions?.length ? `knowledge versions: ${item.knowledgeVersions.length}` : "",
-        item.timesReused > 0 ? `validated and reused ${item.timesReused}x before` : ""
+        item.timesReused > 0 ? `validated and reused ${item.timesReused}x before` : "",
+        compatibility.reason
       ].filter(Boolean);
 
       const matchReason =
@@ -121,6 +126,8 @@ export function retrieveMemory(
         matchedTags,
         matchedKeywords: matchedKeywords.slice(0, 4),
         matchedCategory: categoryMatch ? item.category : null,
+        compatibilityScore: compatibility.score,
+        compatibilityReason: compatibility.reason,
         relevanceEvidence: {
           categoryPoints,
           tagPoints,
@@ -133,7 +140,7 @@ export function retrieveMemory(
         }
       };
     })
-    .filter((match) => match.matchScore > 0);
+    .filter((match) => match.matchScore > 0 && (match.compatibilityScore ?? 1) > 0);
 
   // Deduplicate by canonical problem id — the same canonical problem must never
   // appear twice in retrieval. When duplicates exist, keep the better candidate.
@@ -148,6 +155,30 @@ export function retrieveMemory(
   return [...byId.values()].sort((a, b) =>
     b.matchScore - a.matchScore || a.item.id.localeCompare(b.item.id)
   );
+}
+
+/**
+ * TODO-080 compatibility is intentionally conservative. A historical item
+ * must agree with the active object/outcome; category and word overlap alone
+ * are not enough to reuse it.
+ */
+function assessIntentCompatibility(understanding: Understanding, item: KnowledgeItem): { score: number; reason: string } {
+  const isolation = understanding.intentIsolation;
+  if (!isolation) return { score: 0, reason: "legacy retrieval compatibility" };
+  const text = `${item.canonicalProblemTitle ?? item.title} ${item.problemSummary ?? item.problem} ${(item.tags ?? []).join(" ")}`.toLowerCase();
+  const active = `${isolation.activeProblemText} ${isolation.requestedOutcome ?? ""}`.toLowerCase();
+  const has = (pattern: RegExp) => pattern.test(text);
+  const activeHas = (pattern: RegExp) => pattern.test(active);
+  const negated = (pattern: RegExp) => isolation.negatedTopics.some((topic) => pattern.test(topic));
+
+  if (isolation.securityIntent.detected) return { score: -100, reason: "security override: retrieval prohibited" };
+  if (isolation.primaryIssueHint === "role_permission" && has(/guest|workspace|collaborator|external invitation/) && !activeHas(/guest|collaborator|invitation|workspace/)) return { score: -100, reason: "object mismatch: guest/workspace lesson is not the active role-permission issue" };
+  if (isolation.primaryIssueHint === "refund_investigation" && has(/duplicate|invoice duplication|two charges/) && !activeHas(/duplicate|twice|two charges|doubled/)) return { score: -100, reason: "object mismatch: duplicate-charge lesson is not the refund investigation" };
+  if (isolation.primaryIssueHint === "report_export_timeout" && has(/encoding|csv|garbled|character|spreadsheet/) && !activeHas(/encoding|csv|garbled|character/)) return { score: -100, reason: "stage mismatch: encoding lesson is not the report timeout" };
+  if (isolation.primaryIssueHint === "activation_failure" && has(/login|password reset|account access/) && !activeHas(/login|password|masuk|kata sandi/)) return { score: -100, reason: "intent mismatch: login lesson is not activation/invitation failure" };
+  if (isolation.negatedTopics.length > 0 && has(new RegExp(isolation.negatedTopics.join("|"), "i")) && !activeHas(new RegExp(isolation.negatedTopics.join("|"), "i"))) return { score: -100, reason: "negated topic veto" };
+  if (isolation.object && has(new RegExp(isolation.object.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"))) return { score: 12, reason: `compatible object: ${isolation.object}` };
+  return { score: 1, reason: "category-compatible candidate; no stronger object confirmation" };
 }
 
 /**

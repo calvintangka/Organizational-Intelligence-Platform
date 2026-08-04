@@ -21,6 +21,10 @@ export interface TicketRecordClassification {
   confidence: string;
   inquiryType?: "operational_support" | "business_inquiry";
   businessIntent?: string;
+  securityDetected?: boolean;
+  securitySeverity?: "low" | "medium" | "high" | "critical";
+  securityReasons?: string[];
+  escalationRequired?: boolean;
   /**
    * TODO-058: detected language of the INCOMING ticket, plus the language the
    * outgoing draft used. Both are metadata about this ticket only — knowledge,
