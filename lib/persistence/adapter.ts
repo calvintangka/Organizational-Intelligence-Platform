@@ -66,8 +66,10 @@ export interface ValidationCommitResult {
 export interface PersistenceAdapter {
   prepareOrganization(organizationId: string): PersistencePreparationResult | Promise<PersistencePreparationResult>;
 
-  loadOrganizationProfile(): Promise<OrganizationProfile>;
-  saveOrganizationProfile(profile: OrganizationProfile): Promise<OrganizationProfile>;
+  /** Optional id is retained only for legacy shell callers; sessions always pass it. */
+  loadOrganizationProfile(organizationId?: string): Promise<OrganizationProfile>;
+  /** Optional second argument is retained only for legacy callers; sessions always pass it. */
+  saveOrganizationProfile(profile: OrganizationProfile, organizationId?: string): Promise<OrganizationProfile>;
   loadOrganizationList(): Promise<OrganizationProfile[]>;
   saveOrganizationList(list: OrganizationProfile[]): Promise<void>;
 

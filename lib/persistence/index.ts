@@ -2,6 +2,8 @@ import { LocalStorageAdapter } from "@/lib/persistence/localStorageAdapter";
 import type { PersistenceAdapter, PersistencePreparationResult, ValidationCommitRequest, ValidationCommitResult } from "@/lib/persistence/adapter";
 import { ServerPersistenceAdapter } from "@/lib/persistence/serverPersistenceAdapter";
 import { startTelemetrySpan } from "@/lib/telemetry";
+import { createPersistenceContext, type PersistenceContextInput } from "@/lib/persistence/context";
+import { bindPersistenceSession, type OrganizationPersistenceSession } from "@/lib/persistence/session";
 export { ServerPersistenceAdapterError } from "@/lib/persistence/serverPersistenceAdapter";
 import {
   globalPersistenceMode,
@@ -70,11 +72,11 @@ export function createPersistenceAdapter(mode?: string): PersistenceAdapter {
 
 // Shared singletons. The routing adapter dispatches per organization between
 // these two concrete adapters; both are cheap and stateless enough to share.
-const localAdapter = new LocalStorageAdapter();
-const serverAdapter = new ServerPersistenceAdapter();
-
 export function persistenceAdapterForAuthority(authority: PersistenceAuthority): PersistenceAdapter {
-  return instrumentPersistenceAdapter(authority === "server" ? serverAdapter : localAdapter);
+  // Each call returns an independent adapter. Both concrete implementations
+  // are now stateless with respect to organization selection, so concurrent
+  // sessions cannot retarget one another.
+  return instrumentPersistenceAdapter(authority === "server" ? new ServerPersistenceAdapter() : new LocalStorageAdapter());
 }
 
 /**
@@ -104,18 +106,15 @@ export async function getPersistenceAdapterForOrganization(organizationId: strin
  */
 class RoutingPersistenceAdapter implements PersistenceAdapter {
   private readonly shellAdapter: PersistenceAdapter = persistenceAdapterForAuthority(globalPersistenceMode());
-  private activeResourceAdapter: PersistenceAdapter = this.shellAdapter;
-  private currentAuthority: PersistenceAuthority = globalPersistenceMode();
-  /** Resolve and select the adapter for one organization. */
+  private readonly activeResourceAdapter: PersistenceAdapter = new StatelessOrganizationRouter();
+
+  /** Resolve authority for compatibility callers without mutating shared state. */
   async activateOrganization(organizationId: string): Promise<PersistenceAuthority> {
-    const authority = await resolveOrganizationAuthority(organizationId);
-    this.currentAuthority = authority;
-    this.activeResourceAdapter = persistenceAdapterForAuthority(authority);
-    return authority;
+    return resolveOrganizationAuthority(organizationId);
   }
 
   activeAuthority(): PersistenceAuthority {
-    return this.currentAuthority;
+    return globalPersistenceMode();
   }
 
   /* ---- Cross-organization selection state routes to the shell adapter ---- */
@@ -139,6 +138,9 @@ class RoutingPersistenceAdapter implements PersistenceAdapter {
   /* ---- Organization-owned resources route to the active resource adapter ---- */
 
   prepareOrganization(organizationId: string): PersistencePreparationResult | Promise<PersistencePreparationResult> {
+    // Preserve the synchronous local migration contract for compatibility
+    // probes/UI initialization while keeping server-capable routing explicit.
+    if (globalPersistenceMode() === "local") return this.shellAdapter.prepareOrganization(organizationId);
     return this.activeResourceAdapter.prepareOrganization(organizationId);
   }
 
@@ -259,6 +261,53 @@ class RoutingPersistenceAdapter implements PersistenceAdapter {
   }
 }
 
+/**
+ * Compatibility routing for the old `persistence` facade. It resolves the
+ * authority from the explicit organization argument on every operation and
+ * never stores an active organization or adapter. New durable callers should
+ * use `OrganizationPersistenceSession`, which binds this same boundary once
+ * for the operation.
+ */
+class StatelessOrganizationRouter implements PersistenceAdapter {
+  private async adapter(organizationId: string): Promise<PersistenceAdapter> {
+    return persistenceAdapterForAuthority(await resolveOrganizationAuthority(organizationId));
+  }
+
+  prepareOrganization(organizationId: string) { return this.adapter(organizationId).then((adapter) => adapter.prepareOrganization(organizationId)); }
+  loadOrganizationProfile(organizationId?: string) { return organizationId ? this.adapter(organizationId).then((adapter) => adapter.loadOrganizationProfile(organizationId)) : persistenceAdapterForAuthority(globalPersistenceMode()).loadOrganizationProfile(); }
+  saveOrganizationProfile(profile: OrganizationProfile, organizationId?: string) { const id = organizationId ?? profile.id; return this.adapter(id).then((adapter) => adapter.saveOrganizationProfile(profile, id)); }
+  loadOrganizationList() { return persistenceAdapterForAuthority(globalPersistenceMode()).loadOrganizationList(); }
+  saveOrganizationList(list: OrganizationProfile[]) { return persistenceAdapterForAuthority(globalPersistenceMode()).saveOrganizationList(list); }
+  loadKnowledge(organizationId: string) { return this.adapter(organizationId).then((adapter) => adapter.loadKnowledge(organizationId)); }
+  saveKnowledge(organizationId: string, items: KnowledgeItem[]) { return this.adapter(organizationId).then((adapter) => adapter.saveKnowledge(organizationId, items)); }
+  loadKnowledgeCandidates(organizationId: string) { return this.adapter(organizationId).then((adapter) => adapter.loadKnowledgeCandidates(organizationId)); }
+  saveKnowledgeCandidates(organizationId: string, items: KnowledgeCandidate[]) { return this.adapter(organizationId).then((adapter) => adapter.saveKnowledgeCandidates(organizationId, items)); }
+  loadValidationRecords(organizationId: string) { return this.adapter(organizationId).then((adapter) => adapter.loadValidationRecords(organizationId)); }
+  saveValidationRecords(organizationId: string, records: ValidationRecord[]) { return this.adapter(organizationId).then((adapter) => adapter.saveValidationRecords(organizationId, records)); }
+  loadMemoryChangeRecords(organizationId: string) { return this.adapter(organizationId).then((adapter) => adapter.loadMemoryChangeRecords(organizationId)); }
+  loadKnowledgeHistory(organizationId: string, knowledgeId: string) { return this.adapter(organizationId).then((adapter) => adapter.loadKnowledgeHistory(organizationId, knowledgeId)); }
+  saveMemoryChangeRecords(organizationId: string, records: MemoryChangeRecord[]) { return this.adapter(organizationId).then((adapter) => adapter.saveMemoryChangeRecords(organizationId, records)); }
+  loadOrgMetrics(organizationId: string) { return this.adapter(organizationId).then((adapter) => adapter.loadOrgMetrics(organizationId)); }
+  saveOrgMetrics(organizationId: string, metrics: OrgMetrics) { return this.adapter(organizationId).then((adapter) => adapter.saveOrgMetrics(organizationId, metrics)); }
+  loadOrgLog(organizationId: string) { return this.adapter(organizationId).then((adapter) => adapter.loadOrgLog(organizationId)); }
+  saveOrgLog(organizationId: string, entries: IntelligenceLogEntry[]) { return this.adapter(organizationId).then((adapter) => adapter.saveOrgLog(organizationId, entries)); }
+  loadEmergingPatterns(organizationId: string) { return this.adapter(organizationId).then((adapter) => adapter.loadEmergingPatterns(organizationId)); }
+  saveEmergingPatterns(organizationId: string, patterns: EmergingPattern[]) { return this.adapter(organizationId).then((adapter) => adapter.saveEmergingPatterns(organizationId, patterns)); }
+  loadTicketRecords(organizationId: string) { return this.adapter(organizationId).then((adapter) => adapter.loadTicketRecords(organizationId)); }
+  loadTicketPage(organizationId: string, request: TicketPageRequest) { return this.adapter(organizationId).then((adapter) => adapter.loadTicketPage(organizationId, request)); }
+  saveTicketRecords(organizationId: string, records: TicketRecord[]) { return this.adapter(organizationId).then((adapter) => adapter.saveTicketRecords(organizationId, records)); }
+  saveTicketRecord(organizationId: string, record: TicketRecord) { return this.adapter(organizationId).then((adapter) => adapter.saveTicketRecord(organizationId, record)); }
+  prepareBulkTicketRecords(organizationId: string, profile: OrganizationProfile, seeds: BulkTicketSeed[]) { return this.adapter(organizationId).then((adapter) => adapter.prepareBulkTicketRecords(organizationId, profile, seeds)); }
+  generateTicketId(organizationId: string, profile: OrganizationProfile) { return this.adapter(organizationId).then((adapter) => adapter.generateTicketId(organizationId, profile)); }
+  generateTicketIds(organizationId: string, profile: OrganizationProfile, count: number) { return this.adapter(organizationId).then((adapter) => adapter.generateTicketIds(organizationId, profile, count)); }
+  commitValidatedMemoryChange(organizationId: string, request: ValidationCommitRequest) { return this.adapter(organizationId).then((adapter) => adapter.commitValidatedMemoryChange(organizationId, request)); }
+  resetOrganization(organizationId: string) { return this.adapter(organizationId).then((adapter) => adapter.resetOrganization(organizationId)); }
+  deleteOrganization(organizationId: string) { return this.adapter(organizationId).then((adapter) => adapter.deleteOrganization(organizationId)); }
+  seedKnowledge() { return persistenceAdapterForAuthority(globalPersistenceMode()).seedKnowledge(); }
+  seedOrgMetrics(organizationId: string) { return persistenceAdapterForAuthority(globalPersistenceMode()).seedOrgMetrics(organizationId); }
+  seedEmergingPatterns() { return persistenceAdapterForAuthority(globalPersistenceMode()).seedEmergingPatterns(); }
+}
+
 // The single active adapter. Local remains the explicit default. Per-organization
 // server authority is opt-in through an explicit verified cutover; the global
 // NEXT_PUBLIC_OIP_PERSISTENCE_MODE flag only decides whether server routing is
@@ -291,6 +340,20 @@ export function activatePersistenceOrganization(organizationId: string): Promise
   return routingPersistence.activateOrganization(organizationId);
 }
 
+/** Create a frozen organization/authority boundary for one operation. */
+export function createPersistenceSession(input: PersistenceContextInput): OrganizationPersistenceSession {
+  return bindPersistenceSession(createPersistenceContext(input), persistenceAdapterForAuthority(input.authority));
+}
+
+/** Resolve durable authority once, then return an immutable operation session. */
+export async function createPersistenceSessionForOrganization(
+  input: Omit<PersistenceContextInput, "authority">
+): Promise<OrganizationPersistenceSession> {
+  const authority = await resolveOrganizationAuthority(input.organizationId);
+  const context = createPersistenceContext({ ...input, authority });
+  return bindPersistenceSession(context, persistenceAdapterForAuthority(authority));
+}
+
 export function getPersistenceAdapter(): PersistenceAdapter {
   return persistence;
 }
@@ -300,3 +363,10 @@ export type { PersistenceAuthority } from "@/lib/persistence/authorityRouting";
 export { LocalStorageAdapter } from "@/lib/persistence/localStorageAdapter";
 export { ServerPersistenceAdapter } from "@/lib/persistence/serverPersistenceAdapter";
 export type { PersistenceAdapter, PersistencePreparationResult } from "@/lib/persistence/adapter";
+export type { OrganizationPersistenceSession } from "@/lib/persistence/session";
+export {
+  createPersistenceContext,
+  PersistenceContextError,
+  assertPersistenceContextOrganization
+} from "@/lib/persistence/context";
+export type { PersistenceActorContext, PersistenceContext, PersistenceContextInput } from "@/lib/persistence/context";

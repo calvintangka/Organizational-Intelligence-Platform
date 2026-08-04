@@ -39,8 +39,10 @@ import {
 import {
   loadOrganizationList,
   loadOrganizationProfile,
+  loadOrganizationProfileForOrganization,
   saveOrganizationList,
-  saveOrganizationProfile
+  saveOrganizationProfile,
+  saveOrganizationProfileForOrganization
 } from "@/lib/organizationProfile";
 import {
   createTicketRecord,
@@ -63,12 +65,12 @@ export class LocalStorageAdapter implements PersistenceAdapter {
     return migrateLegacyOrganizationStorage(organizationId);
   }
 
-  loadOrganizationProfile(): Promise<OrganizationProfile> {
-    return loadOrganizationProfile();
+  loadOrganizationProfile(organizationId?: string): Promise<OrganizationProfile> {
+    return organizationId ? loadOrganizationProfileForOrganization(organizationId) : loadOrganizationProfile();
   }
 
-  saveOrganizationProfile(profile: OrganizationProfile): Promise<OrganizationProfile> {
-    return saveOrganizationProfile(profile);
+  saveOrganizationProfile(profile: OrganizationProfile, organizationId?: string): Promise<OrganizationProfile> {
+    return organizationId ? saveOrganizationProfileForOrganization(organizationId, profile) : saveOrganizationProfile(profile);
   }
 
   loadOrganizationList(): Promise<OrganizationProfile[]> {

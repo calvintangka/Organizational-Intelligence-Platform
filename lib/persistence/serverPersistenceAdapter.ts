@@ -47,16 +47,14 @@ function emptyOrgMetrics(organizationId: string): OrgMetrics {
 }
 
 export class ServerPersistenceAdapter implements PersistenceAdapter {
-  private activeOrganizationId = this.configuredOrganizationId();
-
   async prepareOrganization(organizationId: string): Promise<PersistencePreparationResult> {
-    const id = this.rememberOrganization(organizationId);
+    const id = this.requireOrganization(organizationId);
     await this.requestData<OrganizationProfile>(this.organizationPath(id));
     return { organizationId: id, warnings: [] };
   }
 
-  loadOrganizationProfile(): Promise<OrganizationProfile> {
-    return this.requestData<OrganizationProfile>(this.organizationPath(this.activeOrganizationId));
+  loadOrganizationProfile(organizationId?: string): Promise<OrganizationProfile> {
+    return this.requestData<OrganizationProfile>(this.organizationPath(this.requireOrganization(organizationId ?? this.configuredOrganizationId())));
   }
 
   loadOrganizationList(): Promise<OrganizationProfile[]> {
@@ -80,7 +78,7 @@ export class ServerPersistenceAdapter implements PersistenceAdapter {
   }
 
   async loadKnowledgeHistory(organizationId: string, knowledgeId: string): Promise<KnowledgeHistory> {
-    const id = this.rememberOrganization(organizationId);
+    const id = this.requireOrganization(organizationId);
     return this.requestData<KnowledgeHistory>(
       `${this.organizationPath(id)}/knowledge/${encodeURIComponent(knowledgeId)}/history`
     );
@@ -99,12 +97,12 @@ export class ServerPersistenceAdapter implements PersistenceAdapter {
   }
 
   async loadTicketRecords(organizationId: string): Promise<TicketRecord[]> {
-    const id = this.rememberOrganization(organizationId);
+    const id = this.requireOrganization(organizationId);
     return this.requestData<TicketRecord[]>(`${this.organizationPath(id)}/tickets?full=true`);
   }
 
   async loadTicketPage(organizationId: string, request: TicketPageRequest): Promise<TicketPage> {
-    const id = this.rememberOrganization(organizationId);
+    const id = this.requireOrganization(organizationId);
     const search = new URLSearchParams({
       page: String(request.page),
       pageSize: String(request.pageSize),
@@ -114,8 +112,11 @@ export class ServerPersistenceAdapter implements PersistenceAdapter {
     return this.requestData<TicketPage>(`${this.organizationPath(id)}/tickets?${search.toString()}`);
   }
 
-  async saveOrganizationProfile(profile: OrganizationProfile): Promise<OrganizationProfile> {
-    const id = this.rememberOrganization(profile.id);
+  async saveOrganizationProfile(profile: OrganizationProfile, organizationId?: string): Promise<OrganizationProfile> {
+    const id = this.requireOrganization(organizationId ?? profile.id);
+    if (profile.id !== id) {
+      throw new ServerPersistenceAdapterError("PERSISTENCE_CROSS_TENANT_PAYLOAD", "The organization profile does not match the explicit organization scope.", 400);
+    }
     return this.requestData<OrganizationProfile>(`/api/organizations/${encodeURIComponent(id)}`, "PUT", profile);
   }
 
@@ -164,7 +165,7 @@ export class ServerPersistenceAdapter implements PersistenceAdapter {
     _profile: OrganizationProfile,
     seeds: BulkTicketSeed[]
   ): Promise<TicketRecord[]> {
-    const id = this.rememberOrganization(organizationId);
+    const id = this.requireOrganization(organizationId);
     return this.requestData<TicketRecord[]>(
       `${this.organizationPath(id)}/tickets/bulk-prepare`,
       "POST",
@@ -178,7 +179,7 @@ export class ServerPersistenceAdapter implements PersistenceAdapter {
 
   async generateTicketIds(organizationId: string, _profile: OrganizationProfile, count: number): Promise<string[]> {
     if (count <= 0) return [];
-    const id = this.rememberOrganization(organizationId);
+    const id = this.requireOrganization(organizationId);
     const result = await this.requestData<{ ticketIds: string[] }>(
       `${this.organizationPath(id)}/tickets/allocate`,
       "POST",
@@ -188,17 +189,17 @@ export class ServerPersistenceAdapter implements PersistenceAdapter {
   }
 
   async commitValidatedMemoryChange(organizationId: string, request: ValidationCommitRequest): Promise<ValidationCommitResult> {
-    const id = this.rememberOrganization(organizationId);
+    const id = this.requireOrganization(organizationId);
     return this.requestData<ValidationCommitResult>(`${this.organizationPath(id)}/commits/validation`, "POST", request);
   }
 
   async resetOrganization(organizationId: string): Promise<void> {
-    const id = this.rememberOrganization(organizationId);
+    const id = this.requireOrganization(organizationId);
     await this.requestData(`${this.organizationPath(id)}/reset`, "POST", {});
   }
 
   async deleteOrganization(organizationId: string): Promise<void> {
-    const id = this.rememberOrganization(organizationId);
+    const id = this.requireOrganization(organizationId);
     await this.requestData(`/api/organizations/${encodeURIComponent(id)}`, "DELETE");
   }
 
@@ -219,23 +220,21 @@ export class ServerPersistenceAdapter implements PersistenceAdapter {
     return configured || DEFAULT_ORGANIZATION_ID;
   }
 
-  private rememberOrganization(organizationId: string): string {
-    const id = requireOrganizationId(organizationId, "Server persistence adapter");
-    this.activeOrganizationId = id;
-    return id;
+  private requireOrganization(organizationId: string): string {
+    return requireOrganizationId(organizationId, "Server persistence adapter");
   }
 
   private organizationPath(organizationId: string): string {
-    return `/api/organizations/${encodeURIComponent(this.rememberOrganization(organizationId))}`;
+    return `/api/organizations/${encodeURIComponent(this.requireOrganization(organizationId))}`;
   }
 
   private async requestResource<T>(organizationId: string, resource: string): Promise<T> {
-    const id = this.rememberOrganization(organizationId);
+    const id = this.requireOrganization(organizationId);
     return this.requestData<T>(`${this.organizationPath(id)}/${resource}`);
   }
 
   private async writeResource(organizationId: string, resource: string, payload: unknown): Promise<void> {
-    const id = this.rememberOrganization(organizationId);
+    const id = this.requireOrganization(organizationId);
     await this.requestData(`${this.organizationPath(id)}/${resource}`, "PUT", payload);
   }
 

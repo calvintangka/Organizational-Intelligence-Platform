@@ -88,6 +88,8 @@
     "probe:todo065-historical-audit": "node scripts/todo065-historical-audit-probe.cjs",
     "probe:todo067-atomic-validation": "node scripts/todo067-atomic-validation-probe.cjs",
     "probe:todo068-ticket-application-service": "node scripts/todo068-ticket-application-service-probe.cjs",
+    "probe:todo069-learning-application-service": "node scripts/todo069-learning-application-service-probe.cjs",
+    "probe:todo070-stateless-persistence": "node scripts/todo070-stateless-persistence-probe.cjs",
     "probe:todo060-business-inquiry": "node scripts/todo060-business-inquiry-probe.cjs",
     "probe:todo061-business-memory": "node scripts/todo061-business-memory-probe.cjs",
     "probe:todo056-controlled-threshold": "node scripts/todo056-controlled-threshold-probe.cjs",

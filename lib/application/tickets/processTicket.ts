@@ -13,7 +13,7 @@ import {
   withPreDiscriminationLessonMatches
 } from "@/lib/lessonSelection";
 import { createTicketRecord } from "@/lib/ticketRecords";
-import type { PersistenceAdapter } from "@/lib/persistence/adapter";
+import type { OrganizationPersistenceSession } from "@/lib/persistence/session";
 import { resolveLanguagePolicy, resolveResponseLanguage } from "@/lib/languagePolicy";
 import { detectLanguage, isSupportedLanguage } from "@/lib/languageDetection";
 import { hasSpecificCanonicalMatch } from "@/lib/patternDiscovery";
@@ -138,7 +138,7 @@ export interface ProcessTicketResult {
 }
 
 export interface ProcessTicketPorts {
-  persistence: Pick<PersistenceAdapter, "generateTicketId" | "saveTicketRecord" | "loadTicketRecords" | "loadKnowledgeHistory">;
+  persistence: Pick<OrganizationPersistenceSession, "context" | "generateTicketId" | "saveTicketRecord" | "loadTicketRecords" | "loadKnowledgeHistory">;
   ai: AIAdapter;
   now?: () => string;
   onEvent?: (event: { name: string; detail?: string }) => void;
@@ -487,6 +487,18 @@ function replaySnapshot(result: ProcessTicketResult): ProcessTicketResult {
 
 export async function processTicket(command: ProcessTicketCommand, ports: ProcessTicketPorts): Promise<ProcessTicketResult> {
   requireCommand(command);
+  if (
+    ports.persistence.context.organizationId !== command.organizationId
+    || ports.persistence.context.authority !== command.authority
+  ) {
+    throw new ProcessTicketError({
+      requestId: command.requestId,
+      stage: "received",
+      errorClass: "authorization_mismatch",
+      retryable: false,
+      safeMessage: "Ticket processing persistence scope does not match the explicit command context."
+    });
+  }
   const idempotency = ports.idempotency ?? defaultIdempotency;
   const key = command.idempotencyKey?.trim();
   const payloadHash = fingerprint(command);
@@ -508,7 +520,7 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
   const span = startTelemetrySpan("ticket_processing", "pipeline", { unit: "tickets", tags: { organizationId: command.organizationId, requestId: command.requestId, authority: command.authority } });
   try {
     assertNotAborted(command, "received");
-    const existingRecords = await ports.persistence.loadTicketRecords(command.organizationId);
+    const existingRecords = await ports.persistence.loadTicketRecords();
     if (key) {
       const existing = existingRecords.find((item) => item.processingIdempotencyKey === key);
       if (existing) {
@@ -521,10 +533,10 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
         throw new ProcessTicketError({ requestId: command.requestId, stage: "received", errorClass: "persistence_conflict", retryable: true, persistedTicket: existing, safeMessage: "The original ticket is already persisted, but its processing result is not available for safe replay." });
       }
     }
-    const ticketId = await ports.persistence.generateTicketId(command.organizationId, profile);
+    const ticketId = await ports.persistence.generateTicketId(profile);
     const ticket = makeTicket(command.ticketInput, ticketId, now);
     record = { ...createTicketRecord(ticketId, command.organizationId, ticket.description, ticket.subject), actorId: command.actorContext.id, processingIdempotencyKey: key, processingPayloadHash: payloadHash, processingRequestId: command.requestId };
-    await ports.persistence.saveTicketRecord(command.organizationId, record);
+    await ports.persistence.saveTicketRecord(record);
     stages.push("persisted");
     emit(ports, "Ticket received", ticketId);
     assertNotAborted(command, "persisted", record);
@@ -533,7 +545,7 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
     stages.push("business_relevance");
     if (!relevance.isRelevant && relevance.status === "out_of_scope") {
       record = { ...record, status: "rejected" };
-      await ports.persistence.saveTicketRecord(command.organizationId, record);
+      await ports.persistence.saveTicketRecord(record);
       throw new ProcessTicketError({ requestId: command.requestId, stage: "failed", errorClass: "permanent_analysis_failure", retryable: false, persistedTicket: record, safeMessage: `Rejected by Business Relevance Guardrail: ${relevance.reason}` });
     }
     const domain = classifyBusinessDomain(`${ticket.subject} ${ticket.description}`, ticket.id, profile);
@@ -549,7 +561,7 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
       ...record,
       classification: { category: enriched.category, intent: enriched.intent ?? "unspecified", canonicalProblem: canonical.title, classifiedBy: "deterministic", confidence: enriched.businessClassification?.confidence ?? domain.confidence, inquiryType: enriched.businessClassification?.inquiryType, businessIntent: enriched.businessClassification?.intent, language: { detected: language.detection.language, confidence: language.detection.confidence, method: language.detection.method, responseLanguage: language.response.language } }
     };
-    await ports.persistence.saveTicketRecord(command.organizationId, record);
+    await ports.persistence.saveTicketRecord(record);
     stages.push("analyzing");
     assertNotAborted(command, "analyzing", record);
 
@@ -572,7 +584,7 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
     const selectedLesson = memoryMatch ? findMatchingLesson(ticket, memoryMatch.item) : null;
     const persistedLesson = topMatch ? lessonMatch : null;
     record = { ...record, memoryMatch: { knowledgeId: topMatch?.item.id ?? null, matchType: persistedLesson ? "lesson" : topMatch ? "template" : "none", lessonId: persistedLesson?.lesson.id ?? null } };
-    await ports.persistence.saveTicketRecord(command.organizationId, record);
+    await ports.persistence.saveTicketRecord(record);
     stages.push("retrieved");
     assertNotAborted(command, "retrieved", record);
 
@@ -582,7 +594,7 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
     const deterministic: SuggestedResponse = { ticketId: ticket.id, ...deterministicDraft };
     const draftResult = await requestDraft(ports, ticket, enriched, profile, canonical.title, memoryMatch, deterministic, advisory, semantic?.authorization ?? null);
     record = { ...record, draftSource: draftResult.response.source as TicketRecord["draftSource"], status: "in_review" };
-    await ports.persistence.saveTicketRecord(command.organizationId, record);
+    await ports.persistence.saveTicketRecord(record);
     stages.push("drafted", "in_review");
     assertNotAborted(command, "in_review", record);
     const result: ProcessTicketResult = {
@@ -623,7 +635,7 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
       const persistedRecord = { ...record, processingResult: snapshot };
       result.persistedTicket = persistedRecord;
       record = persistedRecord;
-      await ports.persistence.saveTicketRecord(command.organizationId, persistedRecord);
+    await ports.persistence.saveTicketRecord(persistedRecord);
       idempotency.set(`${command.organizationId}:${key}`, { payloadHash, result });
     }
     span.end(true);

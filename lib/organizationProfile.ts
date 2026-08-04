@@ -5,6 +5,7 @@ import { resolveLanguagePolicy } from "@/lib/languagePolicy";
 
 export const ORGANIZATION_PROFILE_KEY = "oip.organizationProfile.v1";
 export const ORGANIZATION_LIST_KEY = "oip.organizationList.v1";
+export const ORGANIZATION_PROFILE_SCOPED_PREFIX = "oip.organizationProfile.v2.";
 
 const DEFAULT_ACCENT = "#2563EB";
 
@@ -110,10 +111,47 @@ function readOrganizationProfileFromStorage(): OrganizationProfile {
   return normalizeOrganizationProfile(JSON.parse(raw) as OrganizationProfile);
 }
 
+function scopedOrganizationProfileKey(organizationId: string): string {
+  return `${ORGANIZATION_PROFILE_SCOPED_PREFIX}${encodeURIComponent(organizationId)}`;
+}
+
+/**
+ * Explicit organization-scoped profile read. The v1 selected-profile key is
+ * read only when it belongs to the requested organization; otherwise the
+ * organization list/seed provides a safe compatibility baseline.
+ */
+export async function loadOrganizationProfileForOrganization(organizationId: string): Promise<OrganizationProfile> {
+  if (!organizationId.trim()) throw new Error("Organization profile reads require an explicit organizationId.");
+  if (!hasStorage()) return findSeedOrganizationProfile(organizationId);
+  const scopedRaw = window.localStorage.getItem(scopedOrganizationProfileKey(organizationId));
+  if (scopedRaw) return normalizeOrganizationProfile(JSON.parse(scopedRaw) as OrganizationProfile);
+  const legacy = readOrganizationProfileFromStorage();
+  if (legacy.id === organizationId) return legacy;
+  const listed = (await loadOrganizationList()).find((profile) => profile.id === organizationId);
+  return listed ?? findSeedOrganizationProfile(organizationId);
+}
+
 export async function saveOrganizationProfile(profile: OrganizationProfile): Promise<OrganizationProfile> {
   const normalized = normalizeOrganizationProfile(profile);
   if (!hasStorage()) return normalized;
   window.localStorage.setItem(ORGANIZATION_PROFILE_KEY, JSON.stringify(normalized));
+  return normalized;
+}
+
+/** Save to the immutable organization namespace while retaining the v1
+ * selected-profile mirror for older UI-only callers. */
+export async function saveOrganizationProfileForOrganization(
+  organizationId: string,
+  profile: OrganizationProfile
+): Promise<OrganizationProfile> {
+  if (!organizationId.trim() || profile.id !== organizationId) {
+    throw new Error("Organization profile writes require a matching explicit organizationId.");
+  }
+  const normalized = normalizeOrganizationProfile(profile);
+  if (hasStorage()) {
+    window.localStorage.setItem(scopedOrganizationProfileKey(organizationId), JSON.stringify(normalized));
+    window.localStorage.setItem(ORGANIZATION_PROFILE_KEY, JSON.stringify(normalized));
+  }
   return normalized;
 }
 

@@ -72,12 +72,11 @@ import { ticketReferenceId, withStableValidationProvenance } from "@/lib/knowled
 import {
   persistence,
   persistenceMode,
-  activePersistenceMode,
-  activatePersistenceOrganization,
-  getPersistenceAdapterForOrganization,
+  createPersistenceSessionForOrganization,
   migrationWarningForMode,
   ServerPersistenceAdapterError,
 } from "@/lib/persistence";
+import type { OrganizationPersistenceSession } from "@/lib/persistence";
 import {
   LEGACY_MEMORY_FALLBACK_WARNING,
   readsMemoryChangeHistoryFromLegacy,
@@ -98,6 +97,12 @@ import {
 } from "@/lib/ticketRecords";
 import { CaseLookupView } from "@/components/views/CaseLookupView";
 import { processTicket, ProcessTicketError } from "@/lib/application/tickets/processTicket";
+import {
+  generateReflectionCommand,
+  promoteKnowledgeCommand,
+  validateReflectionCommand,
+  LearningApplicationError
+} from "@/lib/application/learning/reflectionCommands";
 const PAGE_LOAD_STARTED_AT = Date.now();
 import type {
   AIAnalysis,
@@ -495,6 +500,16 @@ export default function Home() {
   // BUG-009: non-blocking notice shown after stale-profile conflict recovery.
   const [profileConflictNotice, setProfileConflictNotice] = useState("");
 
+  async function openPersistenceSession(organizationId: string, operation: string, requestId?: string): Promise<OrganizationPersistenceSession> {
+    const id = requestId ?? `${operation}:${organizationId}:${Date.now()}`;
+    return createPersistenceSessionForOrganization({
+      organizationId,
+      actorContext: authUser ? { id: authUser.id, name: authUser.name, email: authUser.email } : { id: "ui-anonymous", name: "UI" },
+      requestId: id,
+      correlationId: id
+    });
+  }
+
   // TODO-055: the browser tab follows the active organization. It reads the
   // organization state the app already holds — no extra request, no polling, no
   // extra global state. Anything short of a hydrated authenticated organization
@@ -548,6 +563,7 @@ export default function Home() {
   const organizationSwitchGeneration = useRef(0);
   const ticketRequestGuard = useRef(new TicketRequestGuard());
   const ticketAbortController = useRef<AbortController | null>(null);
+  const learningCommandContext = useRef<{ requestId: string; idempotencyKey: string } | null>(null);
   const knowledgeHistoryCache = useRef<Record<string, KnowledgeHistory>>({});
   const knowledgeHistoryRequests = useRef<Record<string, Promise<KnowledgeHistory>>>({});
   const validationCommitInFlight = useRef(false);
@@ -589,7 +605,8 @@ export default function Home() {
 
     const generation = organizationSwitchGeneration.current;
     setHistoryLoadState((current) => ({ ...current, [knowledgeId]: { state: "loading" } }));
-    const request = persistence.loadKnowledgeHistory(organizationId, knowledgeId);
+    const request = openPersistenceSession(organizationId, "knowledge-history")
+      .then((session) => session.loadKnowledgeHistory(knowledgeId));
     knowledgeHistoryRequests.current[key] = request;
     try {
       const history = await request;
@@ -688,16 +705,15 @@ export default function Home() {
         }
         const activeOrganizationContext = activeContext.organization;
         const orgId = activeContext.activeOrganizationId;
-        // Resolve this organization's durable authority and select its adapter
-        // BEFORE touching any organization-owned resource. A discovery failure
-        // for a non-local organization throws here and hydration is left
-        // incomplete rather than forking into localStorage.
-        await activatePersistenceOrganization(orgId);
-        const migration = await persistence.prepareOrganization(orgId);
+        // Resolve one immutable organization session before touching any
+        // organization-owned resource. Switching organizations later cannot
+        // retarget this in-flight hydration.
+        const session = await openPersistenceSession(orgId, "hydrate-organization");
+        const migration = await session.prepareOrganization();
         // Authority-aware: the legacy localStorage migration notice is only
         // relevant while the active organization operates locally. A
         // server-authoritative organization reads memory history from PostgreSQL.
-        setMigrationWarning(migrationWarningForMode(activePersistenceMode(), migration.warnings));
+        setMigrationWarning(migrationWarningForMode(session.context.authority, migration.warnings));
         const [
           loadedOrganizationList,
           loadedKnowledge,
@@ -709,13 +725,13 @@ export default function Home() {
           loadedPatterns
         ] = await Promise.all([
           persistence.loadOrganizationList(),
-          persistence.loadKnowledge(orgId),
-          persistence.loadKnowledgeCandidates(orgId),
+          session.loadKnowledge(),
+          session.loadKnowledgeCandidates(),
           Promise.resolve([] as ValidationRecord[]),
           Promise.resolve([] as MemoryChangeRecord[]),
-          persistence.loadOrgMetrics(orgId),
-          persistence.loadOrgLog(orgId),
-          persistence.loadEmergingPatterns(orgId)
+          session.loadOrgMetrics(),
+          session.loadOrgLog(),
+          session.loadEmergingPatterns()
         ]);
 
         if (cancelled) return;
@@ -748,7 +764,7 @@ export default function Home() {
         setValidationRecords(loadedValidationRecords);
         setMemoryChangeRecords(loadedMemoryChangeRecords);
         setOrgMetrics({
-          ...(loadedOrgMetrics ?? persistence.seedOrgMetrics(orgId)),
+          ...(loadedOrgMetrics ?? session.seedOrgMetrics()),
           organizationId: loadedOrgMetrics?.organizationId ?? orgId
         });
         setIntelligenceLog(loadedIntelligenceLog);
@@ -785,7 +801,10 @@ export default function Home() {
     const previous = ticketSaveChains.current[organizationId] ?? Promise.resolve();
     const operation = previous
       .catch(() => undefined)
-      .then(() => persistence.saveTicketRecord(organizationId, record));
+      .then(async () => {
+        const session = await openPersistenceSession(organizationId, "save-ticket");
+        await session.saveTicketRecord(record);
+      });
     ticketSaveChains.current[organizationId] = operation;
     queuePersistenceSave("saveTicketRecord", operation);
   }
@@ -800,7 +819,7 @@ export default function Home() {
 
   const loadCasePage = useCallback(
     (organizationId: string, request: TicketPageRequest) =>
-      persistence.loadTicketPage(organizationId, request),
+      openPersistenceSession(organizationId, "load-ticket-page").then((session) => session.loadTicketPage(request)),
     []
   );
 
@@ -821,7 +840,8 @@ export default function Home() {
       return;
     }
     try {
-      const latest = await persistence.loadOrganizationProfile();
+      const session = await openPersistenceSession(savingOrgId, "recover-profile");
+      const latest = await session.loadOrganizationProfile();
       // Race safety: abandon recovery if the user switched organizations while
       // the fetch was in flight, or if the authoritative profile no longer
       // belongs to the organization whose write was rejected. This prevents a
@@ -844,24 +864,26 @@ export default function Home() {
   }
 
   async function persistOrganizationState(orgId: string): Promise<void> {
+    const session = await openPersistenceSession(orgId, "save-organization-state");
     await Promise.all([
-      persistence.saveKnowledge(orgId, knowledgeItems),
-      persistence.saveKnowledgeCandidates(orgId, knowledgeCandidates),
-      persistence.saveOrgMetrics(orgId, orgMetrics),
-      persistence.saveOrgLog(orgId, intelligenceLog),
-      persistence.saveEmergingPatterns(orgId, emergingPatterns)
+      session.saveKnowledge(knowledgeItems),
+      session.saveKnowledgeCandidates(knowledgeCandidates),
+      session.saveOrgMetrics(orgMetrics),
+      session.saveOrgLog(intelligenceLog),
+      session.saveEmergingPatterns(emergingPatterns)
     ]);
   }
 
   async function loadOrganizationStateInternal(orgId: string) {
+    const session = await openPersistenceSession(orgId, "load-organization-state");
     const [knowledge, candidates, validations, changes, loadedMetrics, log, patterns] = await Promise.all([
-      persistence.loadKnowledge(orgId),
-      persistence.loadKnowledgeCandidates(orgId),
+      session.loadKnowledge(),
+      session.loadKnowledgeCandidates(),
       Promise.resolve([] as ValidationRecord[]),
       Promise.resolve([] as MemoryChangeRecord[]),
-      persistence.loadOrgMetrics(orgId),
-      persistence.loadOrgLog(orgId),
-      persistence.loadEmergingPatterns(orgId)
+      session.loadOrgMetrics(),
+      session.loadOrgLog(),
+      session.loadEmergingPatterns()
     ]);
     return {
       knowledge,
@@ -869,7 +891,7 @@ export default function Home() {
       validations,
       changes,
       metrics: {
-        ...(loadedMetrics ?? persistence.seedOrgMetrics(orgId)),
+        ...(loadedMetrics ?? session.seedOrgMetrics()),
         organizationId: loadedMetrics?.organizationId ?? orgId
       },
       log,
@@ -880,23 +902,23 @@ export default function Home() {
   // Validation and memory-change history persist through the validated-memory
   // commit boundary, never through partial client snapshots.
   useEffect(() => {
-    if (hydrated && activePersistenceMode() === "local") queuePersistenceSave("saveKnowledge", persistence.saveKnowledge(organizationProfile.id, knowledgeItems));
+    if (hydrated) queuePersistenceSave("saveKnowledge", openPersistenceSession(organizationProfile.id, "save-knowledge").then((session) => session.saveKnowledge(knowledgeItems)));
   }, [knowledgeItems, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveKnowledgeCandidates", persistence.saveKnowledgeCandidates(organizationProfile.id, knowledgeCandidates));
+    if (hydrated) queuePersistenceSave("saveKnowledgeCandidates", openPersistenceSession(organizationProfile.id, "save-candidates").then((session) => session.saveKnowledgeCandidates(knowledgeCandidates)));
   }, [knowledgeCandidates, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveOrgMetrics", persistence.saveOrgMetrics(organizationProfile.id, orgMetrics));
+    if (hydrated) queuePersistenceSave("saveOrgMetrics", openPersistenceSession(organizationProfile.id, "save-metrics").then((session) => session.saveOrgMetrics(orgMetrics)));
   }, [orgMetrics, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveOrgLog", persistence.saveOrgLog(organizationProfile.id, intelligenceLog));
+    if (hydrated) queuePersistenceSave("saveOrgLog", openPersistenceSession(organizationProfile.id, "save-log").then((session) => session.saveOrgLog(intelligenceLog)));
   }, [intelligenceLog, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveEmergingPatterns", persistence.saveEmergingPatterns(organizationProfile.id, emergingPatterns));
+    if (hydrated) queuePersistenceSave("saveEmergingPatterns", openPersistenceSession(organizationProfile.id, "save-patterns").then((session) => session.saveEmergingPatterns(emergingPatterns)));
   }, [emergingPatterns, organizationProfile.id, hydrated]);
 
   useEffect(() => {
@@ -915,7 +937,8 @@ export default function Home() {
     };
     const savingOrgId = snapshot.id;
     const generation = organizationSwitchGeneration.current;
-    void persistence.saveOrganizationProfile(snapshot)
+    void openPersistenceSession(savingOrgId, "save-profile")
+      .then((session) => session.saveOrganizationProfile(snapshot))
       .then((saved) => {
         profileRevisionByOrganization.current[saved.id] = saved.updatedAt;
         profileSettingsRevisionByOrganization.current[saved.id] = saved.profileRevision ?? 0;
@@ -1134,7 +1157,8 @@ export default function Home() {
     try {
       // The adapter owns the complete transition. React state is reconciled
       // only from the committed aggregate returned by that command.
-      const committed = await persistence.commitValidatedMemoryChange(organizationId, {
+      const learningSession = await openPersistenceSession(organizationId, "commit-validation", validation.id);
+      const committed = await learningSession.commitValidatedMemoryChange({
         candidate: validatedCandidate,
         validation,
         memoryChange,
@@ -1459,8 +1483,8 @@ export default function Home() {
   }
 
   async function prepareBulkEntries(uploadKey: string, entries: BulkUploadEntry[]): Promise<void> {
-    const prepared = await persistence.prepareBulkTicketRecords(
-      organizationProfile.id,
+    const bulkSession = await openPersistenceSession(organizationProfile.id, "prepare-bulk");
+    const prepared = await bulkSession.prepareBulkTicketRecords(
       organizationProfile,
       entries.map((entry) => ({
         uploadKey,
@@ -1962,19 +1986,21 @@ export default function Home() {
     cancelActiveTicketRequest();
     try {
       await flushTicketSaves(organizationProfile.id);
-      await persistence.resetOrganization(organizationProfile.id);
+      const session = await openPersistenceSession(organizationProfile.id, "reset-organization");
+      await session.resetOrganization();
     } catch (error) {
       reportPersistenceError("resetOrganization", error);
       return;
     }
-    setKnowledgeItems(persistence.seedKnowledge().map((item) => ({ ...item, organizationId: organizationProfile.id })));
+    const seedSession = await openPersistenceSession(organizationProfile.id, "reset-seeds");
+    setKnowledgeItems(seedSession.seedKnowledge().map((item) => ({ ...item, organizationId: organizationProfile.id })));
     setKnowledgeCandidates([]);
     clearKnowledgeHistoryCache();
     setValidationRecords([]);
     setMemoryChangeRecords([]);
-    setOrgMetrics(persistence.seedOrgMetrics(organizationProfile.id));
+    setOrgMetrics(seedSession.seedOrgMetrics());
     setIntelligenceLog([]);
-    setEmergingPatterns(persistence.seedEmergingPatterns());
+    setEmergingPatterns(seedSession.seedEmergingPatterns());
     setActiveTicketRecord(null);
     resetWorkflowState();
     setCurrentStep(0);
@@ -2088,13 +2114,16 @@ export default function Home() {
       // authority before any new organization can become active. The outgoing
       // authority is still active here (activation for the incoming org happens
       // after these saves), so cross-source writes are impossible.
-      if (activePersistenceMode() === "local" && persistCurrent && wasHydrated) {
+      if (persistCurrent && wasHydrated) {
         await persistOrganizationState(organizationProfile.id);
       }
-      if (persistenceMode === "local" && persistCurrent) await persistence.saveOrganizationProfile(organizationProfile);
+      if (persistCurrent) {
+        const outgoingSession = await openPersistenceSession(organizationProfile.id, "save-profile-before-switch");
+        await outgoingSession.saveOrganizationProfile(organizationProfile);
+      }
       if (persistenceMode === "local") await persistence.saveOrganizationList(availableOrganizations);
-      // Select the INCOMING organization's adapter before loading its resources.
-      await activatePersistenceOrganization(found.id);
+      // The incoming load creates a new immutable session; the outgoing
+      // session above remains scoped to the outgoing organization.
       const loaded = await loadOrganizationState(found.id);
        if (generation !== organizationSwitchGeneration.current) {
          switchSpan.end(false, { superseded: true });
@@ -2129,7 +2158,7 @@ export default function Home() {
       // clear it; local orgs surface it only when they still read memory history
       // from legacy storage. This is read-only — it never rewrites the marker.
       setMigrationWarning(
-        activePersistenceMode() === "local" && readsMemoryChangeHistoryFromLegacy(incomingProfile.id)
+        persistenceMode === "local" && readsMemoryChangeHistoryFromLegacy(incomingProfile.id)
           ? LEGACY_MEMORY_FALLBACK_WARNING
           : ""
       );
@@ -2160,14 +2189,14 @@ export default function Home() {
     if (nextList.length === organizationList.length) return;
     try {
       await flushTicketSaves(id);
-      if (activePersistenceMode() === "local" && id === organizationProfile.id && hydrated) {
+      if (id === organizationProfile.id && hydrated) {
         await persistOrganizationState(id);
       }
       // Route deletion through the DELETED organization's own authority so a
       // server-authoritative organization is removed from PostgreSQL and a
       // local-authoritative one from localStorage — never the wrong backend.
-      const targetAdapter = await getPersistenceAdapterForOrganization(id);
-      await targetAdapter.deleteOrganization(id);
+      const targetSession = await openPersistenceSession(id, "delete-organization");
+      await targetSession.deleteOrganization();
       if (id === organizationProfile.id) {
         await selectOrganization(nextList[0].id, nextList, false);
       } else {
@@ -2951,7 +2980,7 @@ export default function Home() {
     return similarKnowledge[0] ?? null;
   }
 
-  function approveResponse() {
+  async function approveResponse() {
     if (!selectedTicket || !aiAnalysis || !reviewedResponse.trim()) {
       setErrorMessage("Review the response before approving it as knowledge.");
       return;
@@ -2977,18 +3006,28 @@ export default function Home() {
     // different language from the organization's documentation, so a
     // policy-compliant translation is never mistaken for a rewritten answer.
     const reflectionLanguage = resolveTicketLanguage(selectedTicket, organizationProfile);
+    const reflectionRequestId = `reflection-${ticketReferenceId(selectedTicket)}-${Date.now()}`;
+    const reflectionIdempotencyKey = `reflection:${ticketReferenceId(selectedTicket)}:${Date.now()}`;
+    const reflectionSession = await openPersistenceSession(organizationProfile.id, "generate-reflection", reflectionRequestId);
     const reflection = measureTelemetrySync(
       "reflection",
       "pipeline",
-      () => generateReflection(und, reviewedResponse, existingMatch, {
-        draftMode: suggestedResponse?.draftMode,
-        matchedLesson
-      }, {
-        responseLanguage: reflectionLanguage.response.language,
-        internalLanguage: reflectionLanguage.policy.internalLanguage
-      }),
+      () => generateReflectionCommand({
+        organizationId: organizationProfile.id,
+        actor: { id: authUser?.id ?? "ui-reviewer", name: authUser?.name ?? "Prototype Knowledge Validator", email: authUser?.email },
+        authority: reflectionSession.context.authority,
+        requestId: reflectionRequestId,
+        organizationProfile,
+        ticket: selectedTicket,
+        understanding: und,
+        reviewedResponse,
+        existingMatch,
+        selectedDraft: { draftMode: suggestedResponse?.draftMode, matchedLesson },
+        languageContext: { responseLanguage: reflectionLanguage.response.language, internalLanguage: reflectionLanguage.policy.internalLanguage }
+      }).reflection,
       { unit: "tickets" }
     );
+    learningCommandContext.current = { requestId: reflectionRequestId, idempotencyKey: reflectionIdempotencyKey };
     setReflectionDecision(reflection);
 
     // Update ticket record with resolution
@@ -3064,7 +3103,106 @@ export default function Home() {
     return item;
   }
 
-  async function confirmReflection(input?: ReflectionCommitInput) {
+  /** Thin UI controller for the extracted reflection/learning commands. */
+  async function confirmReflectionApplication(input?: ReflectionCommitInput) {
+    if (!selectedTicket || !aiAnalysis || !reflectionDecision) return;
+    const context = learningCommandContext.current ?? {
+      requestId: `reflection-${ticketReferenceId(selectedTicket)}-${Date.now()}`,
+      idempotencyKey: `reflection:${ticketReferenceId(selectedTicket)}:${Date.now()}`
+    };
+    learningCommandContext.current = context;
+    const lessonDraft = input?.lessonDraft;
+    const resourcePersistence = await openPersistenceSession(organizationProfile.id, "promote-knowledge", context.requestId);
+    const validation = validateReflectionCommand({
+      organizationId: organizationProfile.id,
+      actor: { id: authUser?.id ?? "ui-reviewer", name: authUser?.name ?? "Prototype Knowledge Validator", email: authUser?.email },
+      authority: resourcePersistence.context.authority,
+      requestId: context.requestId,
+      reflection: reflectionDecision,
+      lessonDraft,
+      safetyContext: {
+        customerName: selectedTicket.customerName,
+        organizationName: organizationProfile.name,
+        sourceTicketId: ticketReferenceId(selectedTicket),
+        sourceTicketText: `${selectedTicket.subject} ${selectedTicket.description}`
+      }
+    });
+    if (!validation.accepted) {
+      setErrorMessage(`Reflection rejected: ${validation.reasons.join(", ")} before promoting this lesson.`);
+      setCurrentStep(7);
+      return;
+    }
+    try {
+      const result = await promoteKnowledgeCommand({
+        organizationId: organizationProfile.id,
+        actor: { id: authUser?.id ?? "ui-reviewer", name: authUser?.name ?? "Prototype Knowledge Validator", email: authUser?.email },
+        authority: resourcePersistence.context.authority,
+        requestId: context.requestId,
+        idempotencyKey: context.idempotencyKey,
+        organizationProfile,
+        ticket: selectedTicket,
+        understanding: toUnderstanding(aiAnalysis),
+        reviewedResponse,
+        suggestedResponse,
+        reflection: reflectionDecision,
+        lessonDraft: validation.normalizedLessonDraft,
+        problemName: input?.problemName,
+        knowledgeItems,
+        validationRecords,
+        currentOrgMetrics: orgMetrics
+      }, {
+        persistence: resourcePersistence,
+        onEvent: (event) => addLogEntries([createLogEntry(event.name, event.detail)])
+      });
+      const committedItem = result.knowledgeItem;
+      setKnowledgeCandidates((prev) => {
+        const exists = prev.some((item) => item.id === result.candidate.id);
+        return exists ? prev.map((item) => item.id === result.candidate.id ? result.candidate : item) : [...prev, result.candidate];
+      });
+      setValidationRecords((prev) => mergeRecordsById(prev, [result.validation]));
+      setMemoryChangeRecords((prev) => mergeRecordsById(prev, [result.memoryChange]));
+      setKnowledgeItems((prev) => upsertCanonicalProblem(prev, committedItem));
+      setSimilarKnowledge((prev) => prev.map((match) => match.item.id === committedItem.id ? { ...match, item: committedItem } : match));
+      if (result.action === "create_new") setSessionCreatedIds((prev) => new Set([...prev, committedItem.id]));
+      setLastSavedKnowledgeId(committedItem.id);
+      setLastTrustDelta(result.trustDelta);
+      updateMetrics(result.metricsPatch);
+      setOrgMetrics((prev) => ({ ...prev, ...result.orgMetricsPatch, lastUpdatedAt: new Date().toISOString() }));
+      if (lastDraftUsedAI) recordHumanAcceptedAISuggestion();
+      if (activeTicketRecord) {
+        const updated: TicketRecord = {
+          ...activeTicketRecord,
+          reflection: result.ticketReflection,
+          validationRecordIds: [result.validation.id],
+          status: "resolved",
+          resolutionMode: "human"
+        };
+        setActiveTicketRecord(updated);
+        persistTicketRecord(updated);
+      }
+      addLogEntries([
+        createLogEntry("Reflection confirmed", `${result.action.replace(/_/g, " ")} · ${committedItem.title}`),
+        createLogEntry("Validation record created", result.validation.id),
+        createLogEntry("Memory change recorded", result.memoryChange.id),
+        ...(result.ticketReflection.lessonCreatedId ? [createLogEntry("Lesson authored", result.ticketReflection.lessonCreatedId)] : []),
+        ...(result.ticketReflection.lessonReinforcedId ? [createLogEntry("Lesson strengthened", result.ticketReflection.lessonReinforcedId)] : [])
+      ]);
+      setErrorMessage("");
+      setCurrentStep(8);
+    } catch (error) {
+      if (error instanceof LearningApplicationError) setErrorMessage(error.failure.safeMessage);
+      else {
+        reportPersistenceError("promoteKnowledge", error);
+        setErrorMessage("Knowledge promotion failed. No success state was applied; retry is safe.");
+      }
+      setCurrentStep(7);
+    }
+  }
+
+  // Retained temporarily for parity comparison while the extracted command
+  // path is exercised; it is not wired to the UI. Remove after TODO-069 parity
+  // evidence is archived.
+  async function confirmReflectionLegacy(input?: ReflectionCommitInput) {
     if (!selectedTicket || !aiAnalysis || !reflectionDecision) return;
     const commitSpan = startTelemetrySpan("commit", "ui", { unit: "operations" });
 
@@ -3619,12 +3757,12 @@ export default function Home() {
     const profile = normalizeOrganizationProfile(organizationProfile);
     const requestId = `ticket-request-${profile.id}-${Date.now()}-${requestGeneration}`;
     try {
-      const resourcePersistence = await getPersistenceAdapterForOrganization(profile.id);
+      const resourcePersistence = await openPersistenceSession(profile.id, "process-ticket", requestId);
       const result = await processTicket(
         {
           organizationId: profile.id,
           actorContext: authUser ? { id: authUser.id, name: authUser.name, email: authUser.email } : {},
-          authority: activePersistenceMode(),
+          authority: resourcePersistence.context.authority,
           requestId,
           idempotencyKey: `ui:${requestId}`,
           ticketInput: curatedScenario
@@ -3821,7 +3959,7 @@ export default function Home() {
                   onUpdateReviewedResponse={updateReviewedResponse}
                   onApproveResponse={approveResponse}
                   onViewReflection={() => setCurrentStep(7)}
-                  onConfirmReflection={confirmReflection}
+                  onConfirmReflection={confirmReflectionApplication}
                   isValidationSubmitting={isValidationSubmitting}
                   onApproveReuse={approveReuse}
                   onProcessReuse={(text) => { void processSecondTicket(text); }}

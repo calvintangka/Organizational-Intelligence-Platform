@@ -15,12 +15,13 @@ function fakePersistence({ fail = false } = {}) {
   let sequence = 0;
   return {
     records,
-    async generateTicketId(organizationId) { return `${organizationId}-TODO068-${++sequence}`; },
-    async loadTicketRecords(organizationId) { return [...records.values()].filter((record) => record.orgId === organizationId); },
-    async saveTicketRecord(organizationId, record) {
+    context: { organizationId: profile.id, authority: "local", requestId: "todo068-probe", actorContext: { id: "todo068-actor", name: "TODO-068 Probe" } },
+    async generateTicketId() { return `${profile.id}-TODO068-${++sequence}`; },
+    async loadTicketRecords() { return [...records.values()].filter((record) => record.orgId === profile.id); },
+    async saveTicketRecord(record) {
       if (fail) throw new Error("injected persistence failure");
-      assert.equal(record.orgId, organizationId, "persistence port must enforce organization scope");
-      records.set(`${organizationId}:${record.ticketId}`, record);
+      assert.equal(record.orgId, profile.id, "persistence port must enforce organization scope");
+      records.set(`${profile.id}:${record.ticketId}`, record);
     },
     async loadKnowledgeHistory() { return { validationRecords: [], memoryChangeRecords: [] }; }
   };
