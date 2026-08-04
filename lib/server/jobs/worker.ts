@@ -12,6 +12,8 @@ import { createServerJobPersistenceSession } from "@/lib/server/jobs/serverPersi
 import { prisma } from "@/lib/server/prisma";
 import { durableJobRepository } from "@/lib/server/jobs/jobRepository";
 
+const WORKER_VERSION = process.env.OIP_VERSION ?? process.env.npm_package_version ?? "dev";
+
 export interface AsyncJobWorkerOptions {
   repository?: JobRepository;
   registry?: JobHandlerRegistry;
@@ -74,6 +76,7 @@ export class AsyncJobWorker {
   private running = false;
   private lastPollAt?: string;
   private lastError?: string;
+  private readonly startedAt = new Date();
 
   constructor(options: AsyncJobWorkerOptions = {}) {
     this.workerId = options.workerId ?? `worker-${randomUUID()}`;
@@ -93,6 +96,7 @@ export class AsyncJobWorker {
     if (this.loopPromise) return;
     this.running = true;
     this.stopping = false;
+    void this.persistHeartbeat({ status: "running", lastErrorSafe: null });
     this.loopPromise = this.loop().finally(() => { this.running = false; this.loopPromise = null; });
   }
 
@@ -101,14 +105,17 @@ export class AsyncJobWorker {
     const deadline = Date.now() + this.drainTimeoutMs;
     while (this.active.size && Date.now() < deadline) await Promise.race([...this.active, new Promise((resolve) => setTimeout(resolve, 100))]);
     if (this.loopPromise) await this.loopPromise;
+    await this.persistHeartbeat({ status: "stopped", currentJobId: null, currentLeaseExpiresAt: null });
   }
 
   async runOnce(): Promise<void> {
     this.lastPollAt = new Date().toISOString();
+    await this.persistHeartbeat({ status: this.stopping ? "stopping" : "running", lastPollAt: new Date(), lastErrorSafe: null });
     await this.repository.releaseExpiredLeases();
     while (!this.stopping && this.active.size < this.concurrency) {
       const claimed = await this.repository.claimNext(this.workerId, { leaseMs: this.leaseMs });
       if (!claimed) break;
+      await this.persistHeartbeat({ currentJobId: claimed.job.id, currentLeaseExpiresAt: claimed.job.leaseExpiresAt ? new Date(claimed.job.leaseExpiresAt) : null });
       const task = this.execute(claimed.job);
       this.active.add(task);
       void task.finally(() => this.active.delete(task));
@@ -118,13 +125,16 @@ export class AsyncJobWorker {
   private async loop(): Promise<void> {
     while (!this.stopping) {
       try { await this.runOnce(); this.lastError = undefined; }
-      catch (error) { this.lastError = error instanceof Error ? error.message : "Worker polling failed"; }
+      catch (error) { this.lastError = error instanceof Error ? "Worker polling failed" : "Worker polling failed"; await this.persistHeartbeat({ status: "error", lastErrorSafe: this.lastError }); }
       if (!this.stopping) await new Promise((resolve) => setTimeout(resolve, this.pollMs));
     }
     await Promise.allSettled([...this.active]);
   }
 
   private async execute(job: DurableJobRecord): Promise<void> {
+    const executionStartedAt = Date.now();
+    const aiConfig = readAIConfig();
+    const provider = aiConfig.mode;
     const controller = new AbortController();
     const heartbeat = setInterval(async () => {
       try {
@@ -139,12 +149,36 @@ export class AsyncJobWorker {
       const persistence = createServerJobPersistenceSession(context);
       const handler = this.registry.get(job.type);
       if (!handler) throw new Error(`No durable handler is registered for ${job.type}.`);
-      const result = await handler({ job, actor: actorContext, persistence, ai: createAIAdapter(readAIConfig()), signal: controller.signal, reportProgress: async (progress) => {
+      const result = await handler({ job, actor: actorContext, persistence, ai: createAIAdapter(aiConfig), signal: controller.signal, reportProgress: async (progress) => {
         await this.repository.recordProgress(job.id, this.workerId, { ...progress, updatedAt: new Date().toISOString() });
       } });
-      await this.repository.complete(job.id, this.workerId, result, digestJobInput(result));
+      await this.repository.complete(job.id, this.workerId, result, digestJobInput(result), { provider, durationMs: Date.now() - executionStartedAt, safeDiagnostics: { jobType: job.type } });
+      await this.persistHeartbeat({ processedJobs: { increment: 1 }, succeededJobs: { increment: 1 }, currentJobId: null, currentLeaseExpiresAt: null, lastHeartbeatAt: new Date(), lastErrorSafe: null });
     } catch (error) {
-      try { await this.repository.fail(job.id, this.workerId, classify(error)); } catch (failure) { if (!(failure instanceof Error && /lease/i.test(failure.message))) throw failure; }
-    } finally { clearInterval(heartbeat); }
+      try {
+        const classified = classify(error);
+        const failed = await this.repository.fail(job.id, this.workerId, classified, { provider, durationMs: Date.now() - executionStartedAt, safeDiagnostics: { jobType: job.type } });
+        await this.persistHeartbeat({ processedJobs: { increment: 1 }, failedJobs: { increment: failed.status === "cancelled" ? 0 : 1 }, cancelledJobs: { increment: failed.status === "cancelled" ? 1 : 0 }, retryCount: { increment: failed.status === "retry_scheduled" || failed.status === "dead_lettered" ? 1 : 0 }, currentJobId: null, currentLeaseExpiresAt: null, lastHeartbeatAt: new Date(), lastErrorSafe: null });
+      } catch (failure) { if (!(failure instanceof Error && /lease/i.test(failure.message))) throw failure; }
+    } finally { clearInterval(heartbeat); await this.persistHeartbeat({ currentJobId: null, currentLeaseExpiresAt: null, lastHeartbeatAt: new Date() }); }
+  }
+
+  private async persistHeartbeat(update: Record<string, unknown>): Promise<void> {
+    const now = new Date();
+    const create = {
+      workerId: this.workerId,
+      status: "running",
+      version: WORKER_VERSION,
+      startedAt: this.startedAt,
+      lastHeartbeatAt: now,
+      lastPollAt: this.lastPollAt ? new Date(this.lastPollAt) : null,
+      concurrency: this.concurrency,
+      ...update
+    } as Parameters<typeof prisma.durableWorkerHeartbeat.upsert>[0]["create"];
+    await prisma.durableWorkerHeartbeat.upsert({
+      where: { workerId: this.workerId },
+      create,
+      update: { ...update, lastHeartbeatAt: update.lastHeartbeatAt ?? now }
+    });
   }
 }

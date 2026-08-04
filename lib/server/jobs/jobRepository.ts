@@ -14,6 +14,7 @@ import {
   type EnqueueJobResult,
   type JobAttemptRecord,
   type JobError,
+  type JobAttemptDiagnostics,
   type JobListOptions,
   type JobProgress,
   type JobRepository,
@@ -303,7 +304,7 @@ export class PrismaJobRepository implements JobRepository {
     return mapJob(row);
   }
 
-  async complete(jobId: string, workerId: string, result: unknown, resultDigest?: string): Promise<DurableJobRecord> {
+  async complete(jobId: string, workerId: string, result: unknown, resultDigest?: string, diagnostics?: JobAttemptDiagnostics): Promise<DurableJobRecord> {
     const now = new Date();
     const current = await prisma.durableJob.findUnique({ where: { id: jobId }, select: { progress: true } });
     if (!current) throw new JobRepositoryError("JOB_NOT_FOUND", "The durable job was not found.", false, 404);
@@ -326,13 +327,13 @@ export class PrismaJobRepository implements JobRepository {
       }
     });
     if (updated.count !== 1) throw new JobRepositoryError("LEASE_LOST", "The worker could not complete the job because its lease was lost.", true, 409);
-    await prisma.durableJobAttempt.updateMany({ where: { jobId, workerId, finishedAt: null }, data: { finishedAt: now, heartbeatAt: now, outcome: "succeeded" } });
+    await prisma.durableJobAttempt.updateMany({ where: { jobId, workerId, finishedAt: null }, data: { finishedAt: now, heartbeatAt: now, outcome: "succeeded", provider: diagnostics?.provider, durationMs: diagnostics?.durationMs, safeDiagnostics: diagnostics?.safeDiagnostics as Prisma.InputJsonValue | undefined } });
     const row = await prisma.durableJob.findUnique({ where: { id: jobId } });
     if (!row) throw new JobRepositoryError("JOB_NOT_FOUND", "The durable job was not found.", false, 404);
     return mapJob(row);
   }
 
-  async fail(jobId: string, workerId: string, error: JobError): Promise<DurableJobRecord> {
+  async fail(jobId: string, workerId: string, error: JobError, diagnostics?: JobAttemptDiagnostics): Promise<DurableJobRecord> {
     const current = await this.getForWorker(jobId);
     if (!current || current.leaseOwner !== workerId) throw new JobRepositoryError("LEASE_LOST", "The worker lease is no longer valid.", true, 409);
     const now = new Date();
@@ -358,7 +359,7 @@ export class PrismaJobRepository implements JobRepository {
     if (updated.count !== 1) throw new JobRepositoryError("LEASE_LOST", "The worker could not record the failure because its lease was lost.", true, 409);
     await prisma.durableJobAttempt.updateMany({
       where: { jobId, workerId, finishedAt: null },
-      data: { finishedAt: now, heartbeatAt: now, outcome: status, errorClass: error.errorClass, retryable: error.retryable }
+      data: { finishedAt: now, heartbeatAt: now, outcome: status, errorClass: error.errorClass, retryable: error.retryable, provider: diagnostics?.provider, durationMs: diagnostics?.durationMs, safeDiagnostics: diagnostics?.safeDiagnostics as Prisma.InputJsonValue | undefined }
     });
     const row = await prisma.durableJob.findUnique({ where: { id: jobId } });
     if (!row) throw new JobRepositoryError("JOB_NOT_FOUND", "The durable job was not found.", false, 404);

@@ -1,6 +1,6 @@
 "use client";
 
-export type ActiveView = "home" | "tickets" | "cases" | "knowledge" | "dashboard" | "organization" | "settings";
+export type ActiveView = "home" | "tickets" | "cases" | "knowledge" | "dashboard" | "operations" | "organization" | "settings";
 
 interface SidebarProps {
   activeView: ActiveView;
@@ -90,12 +90,18 @@ function SettingsIcon({ active, darkMode, accent }: { active: boolean; darkMode:
   );
 }
 
+function OperationsIcon({ active, darkMode, accent }: { active: boolean; darkMode: boolean; accent: string }) {
+  const color = active ? (darkMode ? "#fff" : accent) : "#667085";
+  return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 12.5h12M3 10V6m3 4V3m3 7V7m3 3V4" stroke={color} strokeWidth="1.5" strokeLinecap="round" /></svg>;
+}
+
 const NAV_ITEMS: { id: ActiveView; label: string }[] = [
   { id: "home", label: "Home" },
   { id: "tickets", label: "Tickets" },
   { id: "cases", label: "Cases" },
   { id: "knowledge", label: "Knowledge" },
   { id: "dashboard", label: "Dashboard" },
+  { id: "operations", label: "Operations" },
   { id: "organization", label: "Organization" },
   { id: "settings", label: "Settings" },
 ];
@@ -107,6 +113,7 @@ function NavIcon({ id, active, darkMode, accent }: { id: ActiveView; active: boo
   if (id === "knowledge") return <KnowledgeIcon active={active} darkMode={darkMode} accent={accent} />;
   if (id === "dashboard") return <DashboardIcon active={active} darkMode={darkMode} accent={accent} />;
   if (id === "organization") return <OrgIcon active={active} darkMode={darkMode} accent={accent} />;
+  if (id === "operations") return <OperationsIcon active={active} darkMode={darkMode} accent={accent} />;
   return <SettingsIcon active={active} darkMode={darkMode} accent={accent} />;
 }
 

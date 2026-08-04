@@ -616,6 +616,31 @@ model DurableJobAttempt {
   @@map("durable_job_attempts")
 }
 
+// TODO-075: process-level worker health is persisted so operations views do
+// not depend on the memory of a particular web or worker process.
+model DurableWorkerHeartbeat {
+  id                   String   @id @default(cuid())
+  workerId             String   @unique
+  status               String
+  version              String
+  startedAt            DateTime @db.Timestamptz(6)
+  lastHeartbeatAt      DateTime @db.Timestamptz(6)
+  lastPollAt           DateTime? @db.Timestamptz(6)
+  currentJobId         String?
+  currentLeaseExpiresAt DateTime? @db.Timestamptz(6)
+  processedJobs        Int      @default(0)
+  succeededJobs        Int      @default(0)
+  failedJobs           Int      @default(0)
+  cancelledJobs        Int      @default(0)
+  retryCount           Int      @default(0)
+  concurrency          Int      @default(1)
+  lastErrorSafe        String?
+  updatedAt            DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([status, lastHeartbeatAt])
+  @@map("durable_worker_heartbeats")
+}
+
 model PreparedReflection {
   id                String   @id @default(cuid())
   organizationId    String

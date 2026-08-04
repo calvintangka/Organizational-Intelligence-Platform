@@ -101,6 +101,12 @@ export interface JobAttemptRecord {
   safeDiagnostics?: Record<string, unknown>;
 }
 
+export interface JobAttemptDiagnostics {
+  provider?: string;
+  durationMs?: number;
+  safeDiagnostics?: Record<string, unknown>;
+}
+
 export interface EnqueueJobRequest {
   context: PersistenceContext;
   type: JobType;
@@ -134,8 +140,8 @@ export interface JobRepository {
   claimNext(workerId: string, options?: { leaseMs?: number; now?: Date }): Promise<ClaimedJob | null>;
   renewLease(jobId: string, workerId: string, leaseMs?: number): Promise<DurableJobRecord>;
   recordProgress(jobId: string, workerId: string, progress: JobProgress): Promise<DurableJobRecord>;
-  complete(jobId: string, workerId: string, result: unknown, resultDigest?: string): Promise<DurableJobRecord>;
-  fail(jobId: string, workerId: string, error: JobError): Promise<DurableJobRecord>;
+  complete(jobId: string, workerId: string, result: unknown, resultDigest?: string, diagnostics?: JobAttemptDiagnostics): Promise<DurableJobRecord>;
+  fail(jobId: string, workerId: string, error: JobError, diagnostics?: JobAttemptDiagnostics): Promise<DurableJobRecord>;
   requestCancellation(context: PersistenceContext, jobId: string): Promise<DurableJobRecord>;
   retry(context: PersistenceContext, jobId: string): Promise<DurableJobRecord>;
   releaseExpiredLeases(now?: Date): Promise<number>;

@@ -9,6 +9,7 @@ import type { TicketPhase } from "@/components/views/TicketWorkspace";
 import { BulkUploadWorkspace } from "@/components/views/BulkUploadWorkspace";
 import { KnowledgeView } from "@/components/views/KnowledgeView";
 import { DashboardView } from "@/components/views/DashboardView";
+import { OperationsView } from "@/components/views/OperationsView";
 import { OrganizationView } from "@/components/views/OrganizationView";
 import { AccentPicker } from "@/components/AccentPicker";
 import { AccountWorkspaceMenu } from "@/components/AccountWorkspaceMenu";
@@ -4046,6 +4047,10 @@ export default function Home() {
               darkMode={darkMode}
               onPromote={promotePattern}
             />
+          )}
+
+          {activeView === "operations" && (
+            <OperationsView organizationId={organizationProfile.id} darkMode={darkMode} accentColor={accent} />
           )}
 
           {activeView === "organization" && (
