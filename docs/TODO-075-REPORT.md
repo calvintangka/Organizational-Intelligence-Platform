@@ -116,4 +116,4 @@ COMPLETED_WITH_LIMITATIONS. The dashboard and its safe durable observability fou
 
 ## Commit
 
-Pending final verification and commit.
+`4b56521` — Add TODO-075 worker operations dashboard.
