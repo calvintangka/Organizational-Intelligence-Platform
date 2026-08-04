@@ -80,6 +80,7 @@ export interface OperationsSnapshot {
   performance: Record<string, unknown>;
   failures: Array<Record<string, unknown>>;
   deadLetters: SafeOperationJob[];
+  connectors: Array<Record<string, unknown>>;
 }
 
 function asNumber(value: unknown): number | undefined {
@@ -192,6 +193,8 @@ export async function getOperationsSnapshot(organizationId: string, userId: stri
   });
   const failures = [...new Set(rows.map((row) => row.error?.errorClass).filter(Boolean))].map((errorClass) => ({ errorClass, count: rows.filter((row) => row.error?.errorClass === errorClass).length, retryableCount: rows.filter((row) => row.error?.errorClass === errorClass && row.retryable).length }));
   const organizations = memberships.map((membership) => ({ organizationId: membership.organization.id, name: membership.organization.name, jobCount: rows.filter((row) => row.organizationId === membership.organizationId).length, activeJobs: rows.filter((row) => row.organizationId === membership.organizationId && ["queued", "leased", "running", "retry_scheduled", "cancellation_requested"].includes(row.status)).length }));
+  const connectorInstallations = await prisma.connectorInstallation.findMany({ where: { organizationId: { in: organizationIds } }, include: { _count: { select: { inboundEvents: true, externalMappings: true } } }, orderBy: { updatedAt: "desc" }, take: 100 });
+  const connectors = connectorInstallations.map((installation) => ({ id: installation.id, organizationId: installation.organizationId, connectorType: installation.connectorType, name: installation.name, status: installation.status, eventCount: installation._count.inboundEvents, mappingCount: installation._count.externalMappings, lastSuccessAt: installation.lastSuccessAt?.toISOString(), lastFailureAt: installation.lastFailureAt?.toISOString(), lastFailureSafe: installation.lastFailureSafe, credentialConfigured: Boolean(installation.activeCredentialId) }));
   const longest = rows.filter((row) => ["leased", "running", "cancellation_requested"].includes(row.status)).sort((left, right) => new Date(left.startedAt ?? left.createdAt).getTime() - new Date(right.startedAt ?? right.createdAt).getTime())[0];
   return {
     generatedAt: new Date().toISOString(), organizationId, accessibleOrganizationCount: memberships.length,
@@ -203,7 +206,8 @@ export async function getOperationsSnapshot(organizationId: string, userId: stri
     providers,
     performance: { queueWait: { sampleCount: queueWaits.length, averageMs: average(queueWaits), p95Ms: percentile(queueWaits, 0.95) }, runtime: { sampleCount: runtimes.length, averageMs: average(runtimes), p95Ms: percentile(runtimes, 0.95) }, stageBreakdown: [], source: "durable job attempts" },
     failures,
-    deadLetters: rows.filter((row) => row.status === "dead_lettered").map((row) => safeOperationJob(row, row.attempts))
+    deadLetters: rows.filter((row) => row.status === "dead_lettered").map((row) => safeOperationJob(row, row.attempts)),
+    connectors
   };
 }
 

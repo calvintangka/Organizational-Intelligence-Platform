@@ -11,6 +11,7 @@ import { generateReflectionCommand, validateReflectionCommand } from "@/lib/appl
 import { preparedReflectionStore } from "@/lib/server/jobs/preparedReflectionStore";
 import { patternDiscoveryStore, PatternDiscoveryError } from "@/lib/server/jobs/patternDiscoveryStore";
 import { durableJobRepository } from "@/lib/server/jobs/jobRepository";
+import { processConnectorInboundEvent } from "@/lib/server/connectors/connectorService";
 import { buildPatternDiscoveryInput, patternDiscoveryIdempotencyKey, isPatternDiscoverJobInput, type PatternDiscoveryJobResult } from "@/lib/application/jobs/patternTypes";
 import type { ReflectionDecision, Ticket } from "@/types";
 
@@ -86,6 +87,14 @@ export class JobHandlerRegistry {
 
 export function createDefaultJobHandlerRegistry(): JobHandlerRegistry {
   return new JobHandlerRegistry()
+  .register("connector.intake", async ({ job, persistence, ai, signal, reportProgress }) => {
+    const input = job.input as { connectorInstallationId?: unknown; inboundEventId?: unknown };
+    if (typeof input.connectorInstallationId !== "string" || typeof input.inboundEventId !== "string") throw new Error("The connector intake job input is invalid.");
+    await reportProgress({ stage: "loading", completed: 1, total: 3, percent: 33, message: "Loading verified connector event" });
+    const result = await processConnectorInboundEvent({ organizationId: job.organizationId, jobId: job.id, eventId: input.inboundEventId, requestId: job.requestId, persistence, ai, signal });
+    await reportProgress({ stage: "processed", completed: 3, total: 3, percent: 100, message: result.action === "ticket_created" ? "Connector ticket is ready for review" : `Connector event ${result.action}` });
+    return result;
+  })
   .register("ticket.process", async ({ job, persistence, ai, signal, reportProgress }) => {
     const profile = await persistence.loadOrganizationProfile();
     const knowledgeItems = await persistence.loadKnowledge();

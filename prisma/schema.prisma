@@ -166,6 +166,9 @@ model Organization {
   preparedReflections      PreparedReflection[]
   patternDiscoveryOutcomes PatternDiscoveryOutcome[]
   patternDiscoveryEvidence PatternDiscoveryEvidence[]
+  connectorInstallations   ConnectorInstallation[]
+  connectorInboundEvents   ConnectorInboundEvent[]
+  externalObjectMappings   ExternalObjectMapping[]
   memberships               OrganizationMembership[]
   activeUsers               User[]                   @relation("UserActiveOrganization")
 
@@ -586,6 +589,7 @@ model DurableJob {
   attempts     DurableJobAttempt[]
   preparedReflection PreparedReflection?
   patternDiscoveryOutcome PatternDiscoveryOutcome?
+  connectorInboundEvent   ConnectorInboundEvent?
 
   @@unique([organizationId, idempotencyKey])
   @@index([status, nextAttemptAt, priority, createdAt])
@@ -639,6 +643,114 @@ model DurableWorkerHeartbeat {
 
   @@index([status, lastHeartbeatAt])
   @@map("durable_worker_heartbeats")
+}
+
+// TODO-076: connector state is durable, organization-scoped, and contains no
+// plaintext credentials or raw webhook payloads.
+model ConnectorInstallation {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  connectorType        String
+  adapterVersion       Int      @default(1)
+  name                 String
+  status               String   @default("draft")
+  configuration        Json
+  capabilities         Json
+  externalAccountId    String?
+  externalWorkspaceId  String?
+  activeCredentialId   String?
+  cursor               Json?
+  lastSyncAt           DateTime? @db.Timestamptz(6)
+  lastSuccessAt        DateTime? @db.Timestamptz(6)
+  lastFailureAt        DateTime? @db.Timestamptz(6)
+  lastFailureSafe      String?
+  createdBy            String?
+  createdAt            DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime @updatedAt @db.Timestamptz(6)
+
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  credentials       ConnectorCredential[] @relation("InstallationCredentials")
+  activeCredential  ConnectorCredential?  @relation("ActiveConnectorCredential", fields: [activeCredentialId], references: [id], onDelete: SetNull)
+  inboundEvents     ConnectorInboundEvent[]
+  externalMappings  ExternalObjectMapping[]
+
+  @@index([organizationId, status, createdAt])
+  @@index([connectorType, status])
+  @@map("connector_installations")
+}
+
+model ConnectorCredential {
+  id                String   @id @default(cuid())
+  installationId    String
+  encryptedMaterial String
+  keyVersion        String   @default("local-v1")
+  status            String   @default("active")
+  createdBy         String?
+  rotatedAt         DateTime? @db.Timestamptz(6)
+  revokedAt         DateTime? @db.Timestamptz(6)
+  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+
+  installation ConnectorInstallation   @relation("InstallationCredentials", fields: [installationId], references: [id], onDelete: Cascade)
+  activeFor    ConnectorInstallation[] @relation("ActiveConnectorCredential")
+
+  @@index([installationId, status, createdAt])
+  @@map("connector_credentials")
+}
+
+model ConnectorInboundEvent {
+  id                      String   @id @default(cuid())
+  organizationId          String
+  connectorInstallationId String
+  connectorType           String
+  externalEventId         String
+  eventType               String
+  eventVersion            String?
+  payloadDigest           String
+  receivedAt              DateTime @default(now()) @db.Timestamptz(6)
+  sourceTimestamp         DateTime? @db.Timestamptz(6)
+  normalizedAt            DateTime? @db.Timestamptz(6)
+  status                  String
+  jobId                   String?  @unique
+  replayCount             Int      @default(0)
+  safeMetadata            Json
+  normalizedSignal        Json?
+  errorClass              String?
+  errorMessage            String?
+  completedAt             DateTime? @db.Timestamptz(6)
+  createdAt               DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime @updatedAt @db.Timestamptz(6)
+
+  organization  Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  installation  ConnectorInstallation @relation(fields: [connectorInstallationId], references: [id], onDelete: Cascade)
+  job           DurableJob?           @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@unique([connectorInstallationId, externalEventId, eventType])
+  @@index([organizationId, status, receivedAt])
+  @@index([connectorInstallationId, receivedAt])
+  @@map("connector_inbound_events")
+}
+
+model ExternalObjectMapping {
+  id                      String   @id @default(cuid())
+  organizationId          String
+  connectorInstallationId String
+  externalObjectType      String
+  externalObjectId        String
+  oipResourceType         String
+  oipResourceId           String
+  externalVersion         String?
+  lastExternalUpdatedAt   DateTime? @db.Timestamptz(6)
+  lastOipUpdatedAt        DateTime? @db.Timestamptz(6)
+  syncState               String   @default("active")
+  createdAt               DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime @updatedAt @db.Timestamptz(6)
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  installation ConnectorInstallation @relation(fields: [connectorInstallationId], references: [id], onDelete: Cascade)
+
+  @@unique([connectorInstallationId, externalObjectType, externalObjectId])
+  @@index([organizationId, oipResourceType, oipResourceId])
+  @@map("external_object_mappings")
 }
 
 model PreparedReflection {

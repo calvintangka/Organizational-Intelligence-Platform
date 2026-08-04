@@ -14,6 +14,7 @@ export const GET = withOrganizationRoute<{ organizationId: string; resource: str
     : resource === "performance" ? snapshot.performance
     : resource === "dead-letter" ? snapshot.deadLetters
     : resource === "organizations" ? snapshot.organizations
+    : resource === "connectors" ? snapshot.connectors
     : resource === "failures" ? snapshot.failures
     : null;
   if (!data) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Unknown operations resource." } }, { status: 404 });
