@@ -4,7 +4,7 @@ import { getOperationsSnapshot } from "@/lib/server/operations/operationsService
 
 export const dynamic = "force-dynamic";
 
-export const GET = withOrganizationRoute<{ organizationId: string; resource: string }>(async ({ request, organizationId, params, user }) => {
+export const GET = withOrganizationRoute<{ organizationId: string; resource: string }>("operations.read", async ({ request, organizationId, params, user }) => {
   const snapshot = await getOperationsSnapshot(organizationId, user.id, { limit: Number(new URL(request.url).searchParams.get("limit") ?? "100") });
   const resource = params.resource;
   const data = resource === "workers" ? snapshot.workers

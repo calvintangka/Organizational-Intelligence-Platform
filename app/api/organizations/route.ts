@@ -5,7 +5,7 @@ import {
   upsertOrganizationProfiles,
   validateOrganizationId
 } from "@/lib/server/persistenceService";
-import { requireAuthenticatedUser, requireOrganizationMembership } from "@/lib/server/authorization";
+import { requireAuthenticatedUser, requireCapability } from "@/lib/server/authorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,7 +41,7 @@ export async function PUT(request: Request) {
     }
     for (const profile of body) {
       const id = validateOrganizationId((profile as { id?: unknown } | null)?.id);
-      await requireOrganizationMembership(id);
+      await requireCapability(id, "organization.profile.update", { request, resource: "organizations:bulk_update" });
     }
     return NextResponse.json({ data: await upsertOrganizationProfiles(body) }, { status: 200 });
   } catch (error) {

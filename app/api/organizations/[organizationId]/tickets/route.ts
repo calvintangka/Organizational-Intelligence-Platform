@@ -52,7 +52,7 @@ export const GET = withOrganizationRoute(async ({ request, organizationId }) => 
   return NextResponse.json({ data }, { status: 200 });
 });
 
-export const PUT = withOrganizationRoute(async ({ request, organizationId }) => {
+export const PUT = withOrganizationRoute("ticket.submit", async ({ request, organizationId }) => {
   let body: unknown;
   try {
     body = await request.json();

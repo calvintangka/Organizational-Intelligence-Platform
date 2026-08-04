@@ -7,7 +7,7 @@ import type { BulkTicketSeed } from "@/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export const POST = withOrganizationRoute(async ({ request, organizationId }) => {
+export const POST = withOrganizationRoute("ticket.bulk_prepare", async ({ request, organizationId }) => {
   let body: { seeds?: unknown };
   try {
     body = await request.json() as { seeds?: unknown };

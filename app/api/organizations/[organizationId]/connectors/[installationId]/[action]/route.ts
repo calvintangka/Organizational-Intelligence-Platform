@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withOrganizationRoute } from "@/lib/server/organizationRoute";
+import { requireCapability } from "@/lib/server/authorization";
 import { connectorErrorResponse } from "@/lib/server/connectors/http";
 import { rotateConnectorSecret, setConnectorStatus, testConnectorInstallation } from "@/lib/server/connectors/connectorService";
 
@@ -7,6 +8,12 @@ export const dynamic = "force-dynamic";
 
 export const POST = withOrganizationRoute<{ organizationId: string; installationId: string; action: string }>(async ({ request, organizationId, params, user }) => {
   try {
+    const capability = params.action === "test" ? "connector.inspect"
+      : params.action === "activate" ? "connector.activate"
+      : params.action === "rotate-secret" ? "connector.rotate_credentials"
+      : ["pause", "disable", "revoke"].includes(params.action) ? "connector.pause"
+      : "connector.read";
+    await requireCapability(organizationId, capability, { request, resource: `connector:${params.installationId}:${params.action}` });
     if (params.action === "test") return NextResponse.json({ data: await testConnectorInstallation(organizationId, params.installationId) });
     if (["activate", "pause", "disable", "revoke"].includes(params.action)) {
       const status = params.action === "pause" ? "paused" : params.action === "disable" ? "disabled" : params.action === "revoke" ? "revoked" : "active";

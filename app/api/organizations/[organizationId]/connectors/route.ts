@@ -5,12 +5,12 @@ import { createConnectorInstallation, listConnectorInstallations } from "@/lib/s
 
 export const dynamic = "force-dynamic";
 
-export const GET = withOrganizationRoute(async ({ organizationId }) => {
+export const GET = withOrganizationRoute("connector.read", async ({ organizationId }) => {
   try { return NextResponse.json({ data: await listConnectorInstallations(organizationId) }); }
   catch (error) { return connectorErrorResponse(error); }
 });
 
-export const POST = withOrganizationRoute(async ({ request, organizationId, user }) => {
+export const POST = withOrganizationRoute("connector.install", async ({ request, organizationId, user }) => {
   try {
     const body = await request.json() as { connectorType?: unknown; name?: unknown; configuration?: unknown; signingSecret?: unknown };
     if (typeof body.connectorType !== "string" || typeof body.name !== "string" || typeof body.signingSecret !== "string") return NextResponse.json({ error: { code: "INVALID_CONFIGURATION", message: "connectorType, name, and signingSecret are required." } }, { status: 400 });

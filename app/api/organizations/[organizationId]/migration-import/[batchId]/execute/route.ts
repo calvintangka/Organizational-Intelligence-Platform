@@ -4,18 +4,18 @@ import {
   executeMigrationImport
 } from "@/lib/server/migrationImportExecutionService";
 import { toSafeMigrationImportError } from "@/lib/server/migrationImportService";
-import { requireOrganizationMembership } from "@/lib/server/authorization";
+import { requireCapability } from "@/lib/server/authorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ organizationId: string; batchId: string }> }
 ) {
   try {
     const { organizationId, batchId } = await context.params;
-    await requireOrganizationMembership(organizationId);
+    await requireCapability(organizationId, "migration.import", { request, resource: `migration_import:${batchId}:execute` });
     const result = await executeMigrationImport(organizationId, batchId);
     return NextResponse.json({ data: result }, { status: 200 });
   } catch (error) {

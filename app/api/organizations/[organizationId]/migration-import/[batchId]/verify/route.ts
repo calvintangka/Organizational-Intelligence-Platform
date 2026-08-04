@@ -5,18 +5,18 @@ import {
   verifyMigrationImport
 } from "@/lib/server/migrationVerificationService";
 import { toSafeMigrationImportError } from "@/lib/server/migrationImportService";
-import { requireOrganizationMembership } from "@/lib/server/authorization";
+import { requireCapability } from "@/lib/server/authorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ organizationId: string; batchId: string }> }
 ) {
   try {
     const { organizationId, batchId } = await context.params;
-    await requireOrganizationMembership(organizationId);
+    await requireCapability(organizationId, "migration.verify", { request, resource: `migration_import:${batchId}:verify` });
     const result = await verifyMigrationImport(organizationId, batchId);
     return NextResponse.json({ data: result }, { status: result.status === "passed" ? 200 : 409 });
   } catch (error) {
@@ -26,12 +26,12 @@ export async function POST(
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ organizationId: string; batchId: string }> }
 ) {
   try {
     const { organizationId, batchId } = await context.params;
-    await requireOrganizationMembership(organizationId);
+    await requireCapability(organizationId, "migration.verify", { request, resource: `migration_import:${batchId}:verification` });
     const result = await getMigrationVerification(organizationId, batchId);
     return NextResponse.json({ data: result }, { status: 200 });
   } catch (error) {

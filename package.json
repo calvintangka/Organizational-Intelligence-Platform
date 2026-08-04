@@ -114,6 +114,7 @@
     "probe:todo076-connector-worker": "node scripts/todo076-probe.cjs connector-worker",
     "probe:todo076-connector-mapping": "node scripts/todo076-probe.cjs connector-mapping",
     "probe:todo076-connector-tenancy": "node scripts/todo076-probe.cjs connector-tenancy",
+    "probe:todo078-rbac": "node scripts/todo078-probe.cjs",
     "worker:jobs": "node scripts/async-worker.cjs",
     "probe:todo060-business-inquiry": "node scripts/todo060-business-inquiry-probe.cjs",
     "probe:todo061-business-memory": "node scripts/todo061-business-memory-probe.cjs",

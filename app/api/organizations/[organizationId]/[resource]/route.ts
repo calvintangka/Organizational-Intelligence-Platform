@@ -17,6 +17,7 @@ import {
   saveTicketRecords
 } from "@/lib/server/persistenceService";
 import { withOrganizationRoute } from "@/lib/server/organizationRoute";
+import { requireCapability } from "@/lib/server/authorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,7 +39,7 @@ const resourceHandlers: Record<string, (organizationId: string) => Promise<unkno
   "ticket-sequence": loadTicketSequence
 };
 
-export const GET = withOrganizationRoute<ResourceRouteParams>(async ({ organizationId, params }) => {
+export const GET = withOrganizationRoute<ResourceRouteParams>(async ({ request, organizationId, params }) => {
   const handler = resourceHandlers[params.resource];
   if (!handler) {
     return NextResponse.json(
@@ -46,6 +47,11 @@ export const GET = withOrganizationRoute<ResourceRouteParams>(async ({ organizat
       { status: 404 }
     );
   }
+  const capability = params.resource === "metrics" ? "metrics.read"
+    : ["validation-records", "memory-change-records", "intelligence-log"].includes(params.resource) ? "organization.audit.read"
+    : params.resource === "ticket-sequence" || params.resource === "tickets" ? "ticket.read"
+    : "knowledge.read";
+  await requireCapability(organizationId, capability, { request, resource: `organization_resource:${params.resource}` });
   return NextResponse.json({ data: await handler(organizationId) }, { status: 200 });
 });
 
@@ -79,6 +85,12 @@ export const PUT = withOrganizationRoute<ResourceRouteParams>(async ({ request, 
       { status: 404 }
     );
   }
+  const capability = resource === "tickets" ? "ticket.submit"
+    : resource === "knowledge-candidates" ? "knowledge.promote"
+    : resource === "knowledge" ? "knowledge.version.create"
+    : resource === "metrics" ? "metrics.read"
+    : "organization.profile.update";
+  await requireCapability(organizationId, capability, { request, resource: `organization_resource_write:${resource}` });
   let body: unknown;
   try {
     body = await request.json();

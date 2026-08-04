@@ -5,7 +5,7 @@ import {
   toSafePersistenceAuthorityError,
   validateOrganizationId
 } from "@/lib/server/persistenceAuthorityService";
-import { requireOrganizationMembership } from "@/lib/server/authorization";
+import { requireCapability } from "@/lib/server/authorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,7 +27,7 @@ export async function POST(request: Request, context: CutoverRouteContext) {
   try {
     const { organizationId } = await context.params;
     validateOrganizationId(organizationId);
-    await requireOrganizationMembership(organizationId);
+    await requireCapability(organizationId, "persistence.authority.manage", { request, resource: "persistence_authority:cutover" });
     let body: unknown;
     try {
       body = await request.json();

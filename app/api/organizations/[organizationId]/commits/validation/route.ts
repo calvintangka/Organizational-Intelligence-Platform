@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  * update, ValidationRecord, MemoryChangeRecord, and knowledge item write
  * (including trust and version data) commit together or not at all.
  */
-export const POST = withOrganizationRoute(async ({ request, organizationId, user }) => {
+export const POST = withOrganizationRoute("ticket.review", async ({ request, organizationId, user }) => {
   // The authenticated session user is the only trusted actor identity; the
   // request body can never control validation attribution.
   let body: unknown;

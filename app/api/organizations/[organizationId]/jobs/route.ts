@@ -4,10 +4,11 @@ import { withOrganizationRoute } from "@/lib/server/organizationRoute";
 import { durableJobRepository } from "@/lib/server/jobs/jobRepository";
 import { digestJobInput, isJobType } from "@/lib/application/jobs/types";
 import { jobContext, safeJob } from "@/lib/server/jobs/http";
+import { requireCapability } from "@/lib/server/authorization";
 
 function text(value: unknown, fallback = ""): string { return typeof value === "string" ? value.trim() : fallback; }
 
-export const GET = withOrganizationRoute(async ({ request, organizationId, user }) => {
+export const GET = withOrganizationRoute("worker.read", async ({ request, organizationId, user }) => {
   const url = new URL(request.url);
   const status = text(url.searchParams.get("status"));
   const context = jobContext(organizationId, user, randomUUID());
@@ -15,10 +16,12 @@ export const GET = withOrganizationRoute(async ({ request, organizationId, user 
   return NextResponse.json({ data: jobs.map(safeJob) });
 });
 
-export const POST = withOrganizationRoute(async ({ request, organizationId, user }) => {
+export const POST = withOrganizationRoute("ticket.submit", async ({ request, organizationId, user }) => {
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const type = body?.type;
   if (!isJobType(type)) return NextResponse.json({ error: { code: "INVALID_JOB", message: "A supported durable job type is required." } }, { status: 400 });
+  if (type === "reflection.generate") await requireCapability(organizationId, "reflection.generate", { request, resource: "durable_job:reflection.generate" });
+  if (type === "pattern.discover" || type === "bulk.analyze") await requireCapability(organizationId, "action.prepare", { request, resource: `durable_job:${type}` });
   if (type !== "ticket.process" && type !== "bulk.analyze" && type !== "pattern.discover" && type !== "reflection.generate") return NextResponse.json({ error: { code: "JOB_HANDLER_UNAVAILABLE", message: `${type} is not enabled in this rollout.` } }, { status: 409 });
   const rawInput = body?.input;
   if (!rawInput || typeof rawInput !== "object" || Array.isArray(rawInput)) return NextResponse.json({ error: { code: "INVALID_JOB", message: "Job input must be an object." } }, { status: 400 });

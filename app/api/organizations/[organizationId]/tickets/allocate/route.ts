@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  * database-backed TicketSequence. Success is only reported after the counter
  * increment has committed; a failed allocation claims no IDs.
  */
-export const POST = withOrganizationRoute(async ({ request, organizationId }) => {
+export const POST = withOrganizationRoute("ticket.allocate", async ({ request, organizationId }) => {
   let body: unknown;
   try {
     body = await request.json();

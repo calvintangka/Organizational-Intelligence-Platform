@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  * audit records, patterns, log, tickets, metrics, ticket sequence) without
  * deleting the organization itself. Other organizations are never touched.
  */
-export const POST = withOrganizationRoute(async ({ organizationId }) => {
+export const POST = withOrganizationRoute("organization.reset", async ({ organizationId }) => {
   await resetOrganizationData(organizationId);
   return NextResponse.json({ data: { reset: true } }, { status: 200 });
 });

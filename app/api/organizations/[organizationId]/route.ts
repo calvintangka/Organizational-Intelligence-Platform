@@ -15,7 +15,7 @@ export const GET = withOrganizationRoute(async ({ organizationId }) => {
 });
 
 /** Upsert this organization's profile. The route id is authoritative. */
-export const PUT = withOrganizationRoute(async ({ request, organizationId }) => {
+export const PUT = withOrganizationRoute("organization.profile.update", async ({ request, organizationId }) => {
   let body: unknown;
   try {
     body = await request.json();
@@ -42,7 +42,7 @@ export const PUT = withOrganizationRoute(async ({ request, organizationId }) => 
 });
 
 /** Delete this organization and all of its owned data (verified cascade). */
-export const DELETE = withOrganizationRoute(async ({ organizationId }) => {
+export const DELETE = withOrganizationRoute("organization.delete", async ({ organizationId }) => {
   await deleteOrganization(organizationId);
   return NextResponse.json({ data: { deleted: true } }, { status: 200 });
 });

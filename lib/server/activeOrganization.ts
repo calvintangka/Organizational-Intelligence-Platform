@@ -1,7 +1,7 @@
 import "server-only";
 
 import { requireOrganizationId } from "@/lib/organizationId";
-import { AuthorizationError, requireAuthenticatedUser } from "@/lib/server/authorization";
+import { AuthorizationError, requireAuthenticatedUser, requireCapability } from "@/lib/server/authorization";
 import { prisma } from "@/lib/server/prisma";
 
 export type ActiveOrganization = {
@@ -99,6 +99,8 @@ export async function setActiveOrganizationForCurrentUser(value: unknown): Promi
   if (!membership) {
     throw new AuthorizationError("FORBIDDEN", "You do not have access to this organization.", 403);
   }
+
+  await requireCapability(organizationId, "organization.read", { resource: "active_organization:set" });
 
   await prisma.user.update({ where: { id: user.id }, data: { activeOrganizationId: organizationId } });
   return { activeOrganizationId: organization.id, organization: mapOrganization(organization) };

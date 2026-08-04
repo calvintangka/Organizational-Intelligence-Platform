@@ -11,7 +11,7 @@ interface KnowledgeHistoryRouteParams {
   knowledgeId: string;
 }
 
-export const GET = withOrganizationRoute<KnowledgeHistoryRouteParams>(async ({ organizationId, params }) => {
+export const GET = withOrganizationRoute<KnowledgeHistoryRouteParams>("knowledge.read", async ({ organizationId, params }) => {
   return NextResponse.json(
     { data: await loadKnowledgeHistory(organizationId, params.knowledgeId) },
     { status: 200 }

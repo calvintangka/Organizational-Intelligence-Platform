@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuthorization } from "@/components/AuthorizationContext";
 
 type OperationsSnapshot = {
   generatedAt: string;
@@ -35,6 +36,7 @@ function tone(status: unknown) {
 }
 
 export function OperationsView({ organizationId, darkMode, accentColor }: { organizationId: string; darkMode: boolean; accentColor: string }) {
+  const { can } = useAuthorization();
   const [snapshot, setSnapshot] = useState<OperationsSnapshot | null>(null);
   const [selectedJob, setSelectedJob] = useState<Record<string, unknown> | null>(null);
   const [statusFilter, setStatusFilter] = useState("");
@@ -83,6 +85,7 @@ export function OperationsView({ organizationId, darkMode, accentColor }: { orga
   };
 
   const operate = async (jobId: string, action: "retry" | "cancel") => {
+    if (!can(action === "retry" ? "worker.retry" : "worker.cancel")) return;
     try {
       const response = await fetch(`/api/organizations/${encodeURIComponent(organizationId)}/jobs/${encodeURIComponent(jobId)}/${action}`, { method: "POST" });
       const payload = await response.json() as { error?: { message?: string } };
@@ -131,7 +134,7 @@ export function OperationsView({ organizationId, darkMode, accentColor }: { orga
 
       <section className={`mt-5 rounded-2xl border p-5 ${panel}`}>
         <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className={`font-bold ${heading}`}>Jobs</h2><p className={`mt-1 text-xs ${muted}`}>Safe metadata only. Payloads, ticket text, customer context, prompts, and chain-of-thought are excluded.</p></div><div className="flex flex-wrap gap-2"><input aria-label="Search jobs" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search id, request, correlation" className={`rounded-lg border px-3 py-2 text-sm ${darkMode ? "border-[#31445f] bg-[#0b1220]" : "border-slate-200 bg-white"}`} /><select aria-label="Filter by type" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm"><option value="">All types</option><option value="ticket.process">ticket.process</option><option value="bulk.analyze">bulk.analyze</option><option value="reflection.generate">reflection.generate</option><option value="pattern.discover">pattern.discover</option></select><select aria-label="Filter by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm"><option value="">All statuses</option><option value="queued">queued</option><option value="running">running</option><option value="succeeded">succeeded</option><option value="failed">failed</option><option value="dead_lettered">dead_lettered</option><option value="cancelled">cancelled</option></select></div></div>
-        <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead className={muted}><tr><th className="pb-2">Job</th><th className="pb-2">Type</th><th className="pb-2">Status</th><th className="pb-2">Progress</th><th className="pb-2">Attempts</th><th className="pb-2">Created</th><th className="pb-2">Actions</th></tr></thead><tbody>{(snapshot?.jobs ?? []).map((job) => <tr key={String(job.id)} className="border-t border-slate-200/20"><td className="py-3"><button type="button" className="font-semibold hover:underline" onClick={() => setSelectedJob(job)}>{String(job.id).slice(0, 12)}…</button><p className={`text-xs ${muted}`}>{String(job.correlationId).slice(0, 18)}</p></td><td className="py-3">{value(job.type)}</td><td className="py-3"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${tone(job.status)}`}>{value(job.status)}</span></td><td className="py-3">{value((job.progress as Record<string, unknown>)?.percent, "0")}%</td><td className="py-3">{value(job.attemptCount, "0")}/{value(job.maxAttempts, "0")}</td><td className="py-3">{formatDate(job.createdAt)}</td><td className="py-3"><div className="flex gap-2">{["failed", "dead_lettered"].includes(String(job.status)) && <button type="button" className="text-xs font-semibold text-blue-600" onClick={() => void operate(String(job.id), "retry")}>Retry</button>}{["queued", "running", "leased", "retry_scheduled", "cancellation_requested"].includes(String(job.status)) && <button type="button" className="text-xs font-semibold text-rose-600" onClick={() => void operate(String(job.id), "cancel")}>Cancel</button>}</div></td></tr>)}</tbody></table>{!snapshot?.jobs.length && <p className={`pt-3 text-sm ${muted}`}>No jobs match the current filters.</p>}</div>
+        <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead className={muted}><tr><th className="pb-2">Job</th><th className="pb-2">Type</th><th className="pb-2">Status</th><th className="pb-2">Progress</th><th className="pb-2">Attempts</th><th className="pb-2">Created</th><th className="pb-2">Actions</th></tr></thead><tbody>{(snapshot?.jobs ?? []).map((job) => <tr key={String(job.id)} className="border-t border-slate-200/20"><td className="py-3"><button type="button" className="font-semibold hover:underline" onClick={() => setSelectedJob(job)}>{String(job.id).slice(0, 12)}…</button><p className={`text-xs ${muted}`}>{String(job.correlationId).slice(0, 18)}</p></td><td className="py-3">{value(job.type)}</td><td className="py-3"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${tone(job.status)}`}>{value(job.status)}</span></td><td className="py-3">{value((job.progress as Record<string, unknown>)?.percent, "0")}%</td><td className="py-3">{value(job.attemptCount, "0")}/{value(job.maxAttempts, "0")}</td><td className="py-3">{formatDate(job.createdAt)}</td><td className="py-3"><div className="flex gap-2">{can("worker.retry") && ["failed", "dead_lettered"].includes(String(job.status)) && <button type="button" className="text-xs font-semibold text-blue-600" onClick={() => void operate(String(job.id), "retry")}>Retry</button>}{can("worker.cancel") && ["queued", "running", "leased", "retry_scheduled", "cancellation_requested"].includes(String(job.status)) && <button type="button" className="text-xs font-semibold text-rose-600" onClick={() => void operate(String(job.id), "cancel")}>Cancel</button>}</div></td></tr>)}</tbody></table>{!snapshot?.jobs.length && <p className={`pt-3 text-sm ${muted}`}>No jobs match the current filters.</p>}</div>
       </section>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-3">

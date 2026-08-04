@@ -4,7 +4,7 @@ import {
   intakeMigrationExportPackage,
   toSafeMigrationImportError
 } from "@/lib/server/migrationImportService";
-import { requireOrganizationMembership } from "@/lib/server/authorization";
+import { requireCapability } from "@/lib/server/authorization";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ export async function POST(
 ) {
   const { organizationId } = await context.params;
   try {
-    await requireOrganizationMembership(organizationId);
+    await requireCapability(organizationId, "migration.import", { request, resource: "migration_import:intake" });
     const advertisedLength = Number(request.headers.get("content-length") ?? "0");
     if (advertisedLength > MAX_PACKAGE_BYTES) {
       return NextResponse.json(

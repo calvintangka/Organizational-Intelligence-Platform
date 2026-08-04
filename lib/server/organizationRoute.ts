@@ -3,7 +3,8 @@ import "server-only";
 import { NextResponse } from "next/server";
 
 import type { AuthenticatedUser } from "@/lib/auth";
-import { requireOrganizationMembership } from "@/lib/server/authorization";
+import { requireCapability } from "@/lib/server/authorization";
+import type { CapabilityKey } from "@/lib/server/rbac/definitions";
 import { toSafePersistenceError, validateOrganizationId } from "@/lib/server/persistenceService";
 
 /**
@@ -53,12 +54,22 @@ type OrganizationRouteHandler<P extends OrganizationRouteParams> = (
  */
 export function withOrganizationRoute<P extends OrganizationRouteParams = OrganizationRouteParams>(
   handler: OrganizationRouteHandler<P>
+): (request: Request, context: OrganizationRouteContext<P>) => Promise<Response>;
+export function withOrganizationRoute<P extends OrganizationRouteParams = OrganizationRouteParams>(
+  capability: CapabilityKey,
+  handler: OrganizationRouteHandler<P>
+): (request: Request, context: OrganizationRouteContext<P>) => Promise<Response>;
+export function withOrganizationRoute<P extends OrganizationRouteParams = OrganizationRouteParams>(
+  capabilityOrHandler: CapabilityKey | OrganizationRouteHandler<P>,
+  maybeHandler?: OrganizationRouteHandler<P>
 ): (request: Request, context: OrganizationRouteContext<P>) => Promise<Response> {
+  const capability = typeof capabilityOrHandler === "string" ? capabilityOrHandler : "organization.read";
+  const handler = typeof capabilityOrHandler === "function" ? capabilityOrHandler : maybeHandler!;
   return async (request, context) => {
     try {
       const params = await context.params;
       const organizationId = validateOrganizationId(params.organizationId);
-      const { user } = await requireOrganizationMembership(organizationId);
+      const { user } = await requireCapability(organizationId, capability, { request, resource: new URL(request.url).pathname });
       return await handler({ request, organizationId, params, user });
     } catch (error) {
       const safe = toSafePersistenceError(error);

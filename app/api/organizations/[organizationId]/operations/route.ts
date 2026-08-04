@@ -4,7 +4,7 @@ import { getOperationsSnapshot } from "@/lib/server/operations/operationsService
 
 export const dynamic = "force-dynamic";
 
-export const GET = withOrganizationRoute(async ({ request, organizationId, user }) => {
+export const GET = withOrganizationRoute("operations.read", async ({ request, organizationId, user }) => {
   const url = new URL(request.url);
   const limit = Number(url.searchParams.get("limit") ?? "100");
   const data = await getOperationsSnapshot(organizationId, user.id, {

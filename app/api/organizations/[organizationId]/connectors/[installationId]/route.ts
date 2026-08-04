@@ -4,7 +4,7 @@ import { connectorErrorResponse } from "@/lib/server/connectors/http";
 import { getConnectorInstallation } from "@/lib/server/connectors/connectorService";
 
 export const dynamic = "force-dynamic";
-export const GET = withOrganizationRoute<{ organizationId: string; installationId: string }>(async ({ organizationId, params }) => {
+export const GET = withOrganizationRoute<{ organizationId: string; installationId: string }>("connector.read", async ({ organizationId, params }) => {
   try { return NextResponse.json({ data: await getConnectorInstallation(organizationId, params.installationId) }); }
   catch (error) { return connectorErrorResponse(error); }
 });

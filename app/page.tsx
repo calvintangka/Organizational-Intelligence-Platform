@@ -95,6 +95,7 @@ import {
   computeEditDistance,
 } from "@/lib/ticketRecords";
 import { CaseLookupView } from "@/components/views/CaseLookupView";
+import { AuthorizationProvider } from "@/components/AuthorizationContext";
 import { processTicket, ProcessTicketError } from "@/lib/application/tickets/processTicket";
 import { bulkResult, cancelJob, enqueueBulkJob, enqueuePatternDiscoveryJob, enqueueReflectionJob, getJob, reflectionResult } from "@/lib/application/jobs/client";
 import { digestJobInput } from "@/lib/application/jobs/types";
@@ -3927,6 +3928,7 @@ export default function Home() {
         )}
 
         {/* View content */}
+        <AuthorizationProvider organizationId={organizationProfile.id}>
         <main className={`flex-1 overflow-y-auto ${darkMode ? "bg-[#0b1220]" : "bg-[#F3F6FA]"}`}>
           {activeView === "home" && (
             <HomeView
@@ -4147,6 +4149,7 @@ export default function Home() {
             </div>
           )}
         </main>
+        </AuthorizationProvider>
       </div>
     </div>
   );

@@ -119,6 +119,9 @@ model User {
 
   sessions AuthSession[]
   memberships OrganizationMembership[]
+  roleAssignments OrganizationRoleAssignment[] @relation("RoleAssignmentUser")
+  assignedRoleAssignments OrganizationRoleAssignment[] @relation("RoleAssignmentActor")
+  authorizationAudits AuthorizationDecisionAudit[] @relation("AuthorizationAuditActor")
   activeOrganization Organization? @relation("UserActiveOrganization", fields: [activeOrganizationId], references: [id], onDelete: SetNull)
 
   @@index([activeOrganizationId])
@@ -170,6 +173,8 @@ model Organization {
   connectorInboundEvents   ConnectorInboundEvent[]
   externalObjectMappings   ExternalObjectMapping[]
   memberships               OrganizationMembership[]
+  roleAssignments           OrganizationRoleAssignment[]
+  authorizationAudits       AuthorizationDecisionAudit[]
   activeUsers               User[]                   @relation("UserActiveOrganization")
 
   @@map("organizations")
@@ -183,10 +188,93 @@ model OrganizationMembership {
 
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  roleAssignment OrganizationRoleAssignment?
 
   @@id([userId, organizationId])
   @@index([organizationId])
   @@map("organization_memberships")
+}
+
+model Role {
+  id          String   @id
+  key         String   @unique
+  label       String
+  description String
+  isSystem    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+
+  capabilities RoleCapability[]
+  assignments  OrganizationRoleAssignment[]
+
+  @@map("rbac_roles")
+}
+
+model Capability {
+  id          String   @id
+  key         String   @unique
+  description String
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  roles RoleCapability[]
+
+  @@map("rbac_capabilities")
+}
+
+model RoleCapability {
+  roleId       String
+  capabilityId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  capability Capability @relation(fields: [capabilityId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, capabilityId])
+  @@index([capabilityId])
+  @@map("rbac_role_capabilities")
+}
+
+model OrganizationRoleAssignment {
+  id               String   @id @default(cuid())
+  organizationId   String
+  userId           String
+  roleId           String
+  assignedByUserId String?
+  createdAt        DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @db.Timestamptz(6)
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User                  @relation("RoleAssignmentUser", fields: [userId], references: [id], onDelete: Cascade)
+  role         Role                  @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  assignedBy   User?                 @relation("RoleAssignmentActor", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+  membership   OrganizationMembership @relation(fields: [userId, organizationId], references: [userId, organizationId], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@unique([userId, organizationId])
+  @@index([organizationId, roleId])
+  @@index([userId])
+  @@map("organization_role_assignments")
+}
+
+model AuthorizationDecisionAudit {
+  id             String   @id @default(cuid())
+  organizationId String
+  actorUserId    String
+  roleKey        String?
+  capabilityKey  String
+  resource       String
+  decision       String
+  reason         String?
+  requestId      String?
+  correlationId  String?
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        User         @relation("AuthorizationAuditActor", fields: [actorUserId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, capabilityKey, decision, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("authorization_decision_audits")
 }
 
 model KnowledgeItem {

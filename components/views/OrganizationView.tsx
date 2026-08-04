@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useAuthorization } from "@/components/AuthorizationContext";
 import type { CustomerTone, OrganizationProfile } from "@/types";
 import { ACCENT_SWATCHES } from "@/components/AccentPicker";
 import {
@@ -87,6 +88,8 @@ export function OrganizationView({
   onDeleteOrg,
   darkMode,
 }: OrganizationViewProps) {
+  const { can } = useAuthorization();
+  const canEditProfile = can("organization.profile.update");
   const accent = normalizeAccentColor(profile.accentColor);
   const initials = initialsFor(profile);
   const vocabulary = profile.businessVocabulary ?? [];
@@ -215,14 +218,14 @@ export function OrganizationView({
               <p className={label}>Organization profiles</p>
               <p className={`text-xs ${darkMode ? "text-slate-500" : "text-slate-400"}`}>Use the account menu for global workspace switching.</p>
             </div>
-            <button
+            {canEditProfile && <button
               type="button"
               onClick={() => setAddOpen((v) => !v)}
               className="rounded-lg px-2.5 py-1 text-xs font-semibold text-white transition-colors"
               style={{ backgroundColor: accent }}
             >
               {addOpen ? "Close" : "＋ Add organization"}
-            </button>
+            </button>}
           </div>
 
           <div className="mt-2 flex flex-wrap gap-2">
@@ -248,7 +251,7 @@ export function OrganizationView({
                     />
                     {org.name}
                   </button>
-                  {organizations.length > 1 && (
+                  {can("organization.delete") && organizations.length > 1 && (
                     <button
                       type="button"
                       aria-label={`Delete ${org.name}`}
@@ -269,7 +272,7 @@ export function OrganizationView({
           </p>
 
           {/* Add organization form */}
-          {addOpen && (
+          {canEditProfile && addOpen && (
             <div className={`mt-4 rounded-2xl border p-4 ${darkMode ? "border-[#2d3f52] bg-[#111827]" : "border-slate-200 bg-slate-50"}`}>
               <div className="flex items-start gap-4">
                 <div
