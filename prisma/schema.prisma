@@ -162,6 +162,7 @@ model Organization {
   migrationImportBatches    MigrationImportBatch[]
   migrationImportConflicts  MigrationImportConflict[]
   persistenceAuthority      OrganizationPersistenceAuthority?
+  durableJobs              DurableJob[]
   memberships               OrganizationMembership[]
   activeUsers               User[]                   @relation("UserActiveOrganization")
 
@@ -538,4 +539,72 @@ model OrganizationPersistenceAuthority {
   @@index([authority])
   @@index([migrationBatchId])
   @@map("organization_persistence_authority")
+}
+
+// TODO-018: durable asynchronous work. Status/type/outcome stay strings so
+// handlers can evolve by version without a flag-day Prisma enum migration.
+model DurableJob {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  actorId               String?
+  type                  String
+  version               Int      @default(1)
+  status                String
+  priority              Int      @default(100)
+  authority             String
+  input                 Json
+  inputDigest           String
+  idempotencyKey        String
+  correlationId         String
+  requestId             String
+  progress              Json
+  progressMessage       String?
+  result                Json?
+  resultDigest          String?
+  error                 Json?
+  retryable             Boolean  @default(false)
+  attemptCount          Int      @default(0)
+  maxAttempts           Int      @default(3)
+  nextAttemptAt         DateTime?
+  leaseOwner            String?
+  leaseExpiresAt        DateTime?
+  cancellationRequestedAt DateTime?
+  cancelledAt           DateTime?
+  startedAt             DateTime?
+  completedAt           DateTime?
+  failedAt              DateTime?
+  deadLetteredAt        DateTime?
+  createdAt             DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime @updatedAt @db.Timestamptz(6)
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  attempts     DurableJobAttempt[]
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([status, nextAttemptAt, priority, createdAt])
+  @@index([organizationId, status, createdAt])
+  @@index([leaseOwner, leaseExpiresAt])
+  @@map("durable_jobs")
+}
+
+model DurableJobAttempt {
+  id              String   @id @default(cuid())
+  jobId           String
+  attemptNumber   Int
+  workerId        String
+  startedAt       DateTime @db.Timestamptz(6)
+  heartbeatAt     DateTime? @db.Timestamptz(6)
+  finishedAt      DateTime? @db.Timestamptz(6)
+  outcome         String
+  errorClass      String?
+  retryable       Boolean?
+  provider        String?
+  durationMs      Int?
+  safeDiagnostics Json?
+
+  job DurableJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, attemptNumber])
+  @@index([jobId, startedAt])
+  @@map("durable_job_attempts")
 }

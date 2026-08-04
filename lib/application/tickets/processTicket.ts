@@ -17,6 +17,7 @@ import type { OrganizationPersistenceSession } from "@/lib/persistence/session";
 import { resolveLanguagePolicy, resolveResponseLanguage } from "@/lib/languagePolicy";
 import { detectLanguage, isSupportedLanguage } from "@/lib/languageDetection";
 import { hasSpecificCanonicalMatch } from "@/lib/patternDiscovery";
+import { identifyCanonicalProblem } from "@/lib/canonicalProblemEngine";
 import { startTelemetrySpan } from "@/lib/telemetry";
 import type {
   AIDiagnostics,
@@ -552,7 +553,7 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
     const rawUnderstanding = understandForProfile(ticket, profile);
     const routing = routeBusinessInquiryUnderstanding(rawUnderstanding);
     const understanding = routing.understanding;
-    const canonical = routing.canonicalProblem ?? (await import("@/lib/canonicalProblemEngine")).identifyCanonicalProblem(understanding, profile);
+    const canonical = routing.canonicalProblem ?? identifyCanonicalProblem(understanding, profile);
     const advisory = await requestAnalysisAdvisory(ports, ticket, understanding, profile, canonical);
     const enriched = applyAdvisoryFields(understanding, advisory);
     const language = resolveTicketLanguage(ticket, profile);

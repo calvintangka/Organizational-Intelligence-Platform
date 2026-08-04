@@ -90,6 +90,8 @@
     "probe:todo068-ticket-application-service": "node scripts/todo068-ticket-application-service-probe.cjs",
     "probe:todo069-learning-application-service": "node scripts/todo069-learning-application-service-probe.cjs",
     "probe:todo070-stateless-persistence": "node scripts/todo070-stateless-persistence-probe.cjs",
+    "probe:todo018-async-foundation": "node scripts/todo018-async-foundation-probe.cjs",
+    "worker:jobs": "node scripts/async-worker.cjs",
     "probe:todo060-business-inquiry": "node scripts/todo060-business-inquiry-probe.cjs",
     "probe:todo061-business-memory": "node scripts/todo061-business-memory-probe.cjs",
     "probe:todo056-controlled-threshold": "node scripts/todo056-controlled-threshold-probe.cjs",
