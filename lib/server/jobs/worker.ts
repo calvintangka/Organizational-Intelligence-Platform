@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { createAIAdapter, readAIConfig } from "@/lib/ai/adapter";
 import { BulkAnalysisCancelledError } from "@/lib/bulkUpload";
 import { ProcessTicketError } from "@/lib/application/tickets/processTicket";
+import { PatternDiscoveryError } from "@/lib/server/jobs/patternDiscoveryStore";
 import { digestJobInput, type JobError, type JobRepository, type DurableJobRecord } from "@/lib/application/jobs/types";
 import { createDefaultJobHandlerRegistry, type JobHandlerRegistry } from "@/lib/application/jobs/registry";
 import { createPersistenceContext } from "@/lib/persistence/context";
@@ -34,6 +35,13 @@ export interface AsyncJobWorkerHealth {
 
 function classify(error: unknown): JobError {
   if (error instanceof BulkAnalysisCancelledError) return { errorClass: "cancelled", safeMessage: error.message, retryable: false };
+  if (error instanceof PatternDiscoveryError) {
+    return {
+      errorClass: error.code === "INVALID_INPUT" ? "invalid_input" : error.code === "TENANT_MISMATCH" ? "tenant_mismatch" : error.code === "DATABASE_TRANSIENT" ? "database_transient" : "application_invariant",
+      safeMessage: error.message,
+      retryable: error.retryable
+    };
+  }
   if (error instanceof ProcessTicketError) {
     const failure = error.failure;
     const errorClass: JobError["errorClass"] = failure.errorClass === "authorization_mismatch" ? "tenant_mismatch"

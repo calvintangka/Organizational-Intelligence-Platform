@@ -135,6 +135,7 @@ export interface ProcessTicketResult {
   persisted: true;
   replayed: boolean;
   followUp: ProcessTicketFollowUp[];
+  followUpEnqueue?: { status: "enqueued" | "not_requested" | "failed"; jobId?: string; replayed?: boolean; safeMessage?: string };
   similarKnowledge: KnowledgeMatch[];
 }
 

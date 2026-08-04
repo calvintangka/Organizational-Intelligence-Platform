@@ -164,6 +164,8 @@ model Organization {
   persistenceAuthority      OrganizationPersistenceAuthority?
   durableJobs              DurableJob[]
   preparedReflections      PreparedReflection[]
+  patternDiscoveryOutcomes PatternDiscoveryOutcome[]
+  patternDiscoveryEvidence PatternDiscoveryEvidence[]
   memberships               OrganizationMembership[]
   activeUsers               User[]                   @relation("UserActiveOrganization")
 
@@ -363,6 +365,8 @@ model EmergingPattern {
   lastSeenAt                DateTime                 @db.Timestamptz(6)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  discoveryEvidence PatternDiscoveryEvidence[]
+  discoveryOutcomes PatternDiscoveryOutcome[]
 
   @@index([organizationId])
   @@index([organizationId, status])
@@ -581,6 +585,7 @@ model DurableJob {
   organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   attempts     DurableJobAttempt[]
   preparedReflection PreparedReflection?
+  patternDiscoveryOutcome PatternDiscoveryOutcome?
 
   @@unique([organizationId, idempotencyKey])
   @@index([status, nextAttemptAt, priority, createdAt])
@@ -638,4 +643,52 @@ model PreparedReflection {
   @@unique([organizationId, idempotencyKey])
   @@index([organizationId, ticketId, createdAt])
   @@map("prepared_reflections")
+}
+
+model PatternDiscoveryOutcome {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  jobId              String   @unique
+  idempotencyKey     String
+  sourceTicketId     String?
+  sourceJobId        String?
+  patternId          String?
+  action             String
+  patternFound       Boolean
+  created            Boolean
+  strengthened       Boolean
+  evidenceCount      Int
+  matchedTicketCount Int
+  confidence         Float?
+  reason             String
+  auditSummary       Json
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  job          DurableJob   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  pattern      EmergingPattern? @relation(fields: [patternId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, sourceTicketId])
+  @@index([organizationId, patternId])
+  @@map("pattern_discovery_outcomes")
+}
+
+model PatternDiscoveryEvidence {
+  id             String   @id @default(cuid())
+  organizationId String
+  patternId      String
+  ticketId       String
+  evidenceDigest String
+  safeSummary    String
+  language       String?
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pattern      EmergingPattern @relation(fields: [patternId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, patternId, ticketId])
+  @@index([organizationId, ticketId])
+  @@map("pattern_discovery_evidence")
 }

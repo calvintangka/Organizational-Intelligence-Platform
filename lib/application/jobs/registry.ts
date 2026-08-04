@@ -2,12 +2,16 @@ import type { AIAdapter } from "@/lib/ai/types";
 import { analyzeBulkEntries } from "@/lib/bulkUpload";
 import { processTicket, type ProcessTicketResult, type TicketInput } from "@/lib/application/tickets/processTicket";
 import type { OrganizationPersistenceSession } from "@/lib/persistence/session";
-import type { ClaimedJob, JobProgress, JobType } from "@/lib/application/jobs/types";
+import { createPersistenceContext } from "@/lib/persistence/context";
+import { digestJobInput, type ClaimedJob, type JobProgress, type JobType } from "@/lib/application/jobs/types";
 import type { BulkAnalysisResult, BulkUploadEntry, TicketRecord } from "@/types";
 import { detectLanguage, isSupportedLanguage } from "@/lib/languageDetection";
 import { resolveLanguagePolicy, resolveResponseLanguage } from "@/lib/languagePolicy";
 import { generateReflectionCommand, validateReflectionCommand } from "@/lib/application/learning/reflectionCommands";
 import { preparedReflectionStore } from "@/lib/server/jobs/preparedReflectionStore";
+import { patternDiscoveryStore, PatternDiscoveryError } from "@/lib/server/jobs/patternDiscoveryStore";
+import { durableJobRepository } from "@/lib/server/jobs/jobRepository";
+import { buildPatternDiscoveryInput, patternDiscoveryIdempotencyKey, isPatternDiscoverJobInput, type PatternDiscoveryJobResult } from "@/lib/application/jobs/patternTypes";
 import type { ReflectionDecision, Ticket } from "@/types";
 
 export interface JobHandlerContext {
@@ -25,6 +29,30 @@ export interface BulkJobResult {
   uploadKey: string;
   preparedCount: number;
   analysis: BulkAnalysisResult;
+}
+
+async function enqueuePatternFollowUp(result: ProcessTicketResult, persistence: OrganizationPersistenceSession, sourceJobId?: string, actorId?: string): Promise<{ status: "enqueued" | "not_requested" | "failed"; jobId?: string; replayed?: boolean; safeMessage?: string }> {
+  const followUp = result.followUp.find((entry) => entry.type === "pattern_discovery_requested");
+  if (!followUp) return { status: "not_requested" };
+  const input = buildPatternDiscoveryInput({
+    organizationId: persistence.context.organizationId,
+    actorId,
+    sourceTicketId: followUp.ticketId,
+    sourceJobId,
+    understandingSummary: result.understanding.coreProblem || result.understanding.summary,
+    detectedSignals: result.understanding.detectedSignals,
+    tags: result.understanding.tags,
+    category: result.understanding.category,
+    language: result.language.detection.language
+  });
+  const idempotencyKey = patternDiscoveryIdempotencyKey(persistence.context.organizationId, followUp.ticketId);
+  try {
+    const context = createPersistenceContext({ ...persistence.context, idempotencyKey });
+    const enqueued = await durableJobRepository.enqueue({ context, type: "pattern.discover", version: 1, input: input as unknown as Record<string, unknown>, inputDigest: digestJobInput(input), idempotencyKey, maxAttempts: 3 });
+    return { status: "enqueued", jobId: enqueued.job.id, replayed: enqueued.replayed };
+  } catch {
+    return { status: "failed", safeMessage: "Pattern discovery follow-up could not be queued; the ticket result remains authoritative." };
+  }
 }
 
 function asTicketInput(value: unknown): TicketInput {
@@ -82,7 +110,8 @@ export function createDefaultJobHandlerRegistry(): JobHandlerRegistry {
       }
     });
     await reportProgress(ticketProgress("in_review", "Ticket is ready for review"));
-    return result satisfies ProcessTicketResult;
+    const followUpEnqueue = await enqueuePatternFollowUp(result, persistence, job.id, job.actorId);
+    return { ...result, followUpEnqueue };
   })
   .register("bulk.analyze", async ({ job, persistence, ai, signal, reportProgress }) => {
     const input = job.input as { uploadKey?: unknown; entries?: unknown };
@@ -148,6 +177,22 @@ export function createDefaultJobHandlerRegistry(): JobHandlerRegistry {
     await persistence.saveTicketRecords(updates);
     await reportProgress({ stage: "succeeded", completed: entries.length, total: entries.length, percent: 100, message: "Bulk analysis complete" });
     return { uploadKey, preparedCount: prepared.length, analysis } satisfies BulkJobResult;
+  })
+  .register("pattern.discover", async ({ job, persistence, signal, reportProgress }) => {
+    if (signal.aborted) throw new PatternDiscoveryError("INVALID_INPUT", "Pattern discovery was cancelled before analysis.");
+    const input = job.input as unknown;
+    if (!isPatternDiscoverJobInput(input) || input.organizationId !== job.organizationId) throw new PatternDiscoveryError("INVALID_INPUT", "The durable pattern job input is invalid or outside its organization scope.");
+    const knowledgeItems = await persistence.loadKnowledge();
+    await reportProgress({ stage: "loading", completed: 1, total: 4, percent: 25, message: "Loading organization-scoped pattern evidence" });
+    const discovered = await patternDiscoveryStore.discover({ context: persistence.context, jobId: job.id, attemptNumber: Math.max(1, job.attemptCount), input, knowledgeItems });
+    await reportProgress({ stage: "persisting", completed: 3, total: 4, percent: 75, message: "Persisting auditable pattern outcome" });
+    const result: PatternDiscoveryJobResult = {
+      ...discovered.result,
+      auditSummary: { ...discovered.result.auditSummary, workerAttempt: Math.max(1, job.attemptCount), replayed: discovered.replayed },
+      cancelledAfterCommit: signal.aborted || undefined
+    };
+    await reportProgress({ stage: "succeeded", completed: 4, total: 4, percent: 100, message: result.patternFound ? `Pattern ${result.action}` : "No actionable pattern found" });
+    return result;
   })
   .register("reflection.generate", async ({ job, actor, persistence, signal, reportProgress }) => {
     if (signal.aborted) throw new Error("Reflection generation was cancelled.");

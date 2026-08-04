@@ -14,7 +14,7 @@ import { AccentPicker } from "@/components/AccentPicker";
 import { AccountWorkspaceMenu } from "@/components/AccountWorkspaceMenu";
 import { defaultOrganizationProfile, seedOrganizationProfiles } from "@/data/seedOrganizationProfiles";
 import { createAIAdapter } from "@/lib/ai/adapter";
-import { buildAIAdvisory, shouldAcceptPatternSuggestion } from "@/lib/ai/deterministic";
+import { buildAIAdvisory } from "@/lib/ai/deterministic";
 import type { AIProviderResult } from "@/lib/ai/types";
 import { assessBusinessRelevanceForProfile, routeBusinessInquiryUnderstanding, understandForProfile } from "@/lib/analyzer";
 import { extractCustomerContext, isLikelyPersonName, textHasExplicitRole } from "@/lib/customerContext";
@@ -58,8 +58,6 @@ import { createLogEntry } from "@/lib/intelligenceLog";
 import { TicketRequestGuard } from "@/lib/ticketRequestGuard";
 import {
   hasSpecificCanonicalMatch,
-  detectEmergingPattern,
-  upsertEmergingPattern,
   promotePatternToCanonicalProblem
 } from "@/lib/patternDiscovery";
 import { defaultMetrics } from "@/lib/metrics";
@@ -97,8 +95,9 @@ import {
 } from "@/lib/ticketRecords";
 import { CaseLookupView } from "@/components/views/CaseLookupView";
 import { processTicket, ProcessTicketError } from "@/lib/application/tickets/processTicket";
-import { bulkResult, cancelJob, enqueueBulkJob, enqueueReflectionJob, getJob, reflectionResult } from "@/lib/application/jobs/client";
+import { bulkResult, cancelJob, enqueueBulkJob, enqueuePatternDiscoveryJob, enqueueReflectionJob, getJob, reflectionResult } from "@/lib/application/jobs/client";
 import { digestJobInput } from "@/lib/application/jobs/types";
+import { buildPatternDiscoveryInput, patternDiscoveryIdempotencyKey } from "@/lib/application/jobs/patternTypes";
 import {
   generateReflectionCommand,
   promoteKnowledgeCommand,
@@ -1062,10 +1061,6 @@ export default function Home() {
     return item ? stampKnowledgeItemOrganization(snapshotKnowledgeItem(item)!) : null;
   }
 
-  function stampPatternOrganization(pattern: EmergingPattern): EmergingPattern {
-    return { ...pattern, organizationId: pattern.organizationId ?? organizationProfile.id };
-  }
-
   function latestVersionId(item: KnowledgeItem): string | undefined {
     const versions = item.knowledgeVersions ?? [];
     return versions.length > 0 ? versions[versions.length - 1].versionId : undefined;
@@ -1658,68 +1653,25 @@ export default function Home() {
   async function checkPatternDiscovery(ticket: Ticket, analysis: AIAnalysis, requestGeneration?: number) {
     const und = toUnderstanding(analysis);
     if (hasSpecificCanonicalMatch(und, knowledgeItems)) return;
-
-    const result = detectEmergingPattern(ticket, und, emergingPatterns);
-    if (!result) return;
-    let pattern = stampPatternOrganization(result.pattern);
-    if (aiAdapter.config.mode !== "disabled") {
-      const patternResult = await aiAdapter.provider.suggestPatternName({
-        ticket,
-        organizationProfile,
-        deterministicUnderstanding: und,
-        deterministicPatternTitle: pattern.title,
-        patternSummary: pattern.summary
-      });
-      if (!ticketRequestIsCurrent(requestGeneration)) return;
-      if (patternResult.ok && patternResult.data) {
-        recordAIResults([patternResult], undefined, undefined, requestGeneration);
-        if (shouldAcceptPatternSuggestion(pattern.title, patternResult.data)) {
-          pattern = { ...pattern, title: patternResult.data.title };
-          addLogEntries([createLogEntry("AI suggested pattern name accepted", `${result.pattern.title} -> ${pattern.title}`)]);
-        }
-      } else if (patternResult.error) {
-        recordAIResults([patternResult], undefined, undefined, requestGeneration);
-      }
-    }
-
     if (!ticketRequestIsCurrent(requestGeneration)) return;
-
-    if (result.isNew) {
-      setEmergingPatterns((prev) => [...prev, pattern]);
-      addLogEntries([
-        createLogEntry("New emerging pattern detected", `"${result.pattern.title}" — monitoring begins`),
-        createLogEntry("Pattern details", `Category: ${result.pattern.category} · Tags: ${result.pattern.tags.join(", ")}`)
-      ]);
-    } else {
-      setEmergingPatterns((prev) =>
-        upsertEmergingPattern(prev, ticket, und, pattern).map((entry) => stampPatternOrganization(entry))
-      );
-      const updated = upsertEmergingPattern(emergingPatterns, ticket, und, pattern).map((entry) =>
-        stampPatternOrganization(entry)
-      );
-      const updatedPattern = updated.find((p) => p.id === pattern.id);
-      const statusChanged = updatedPattern && updatedPattern.status !== pattern.status;
-      const entries = [
-        createLogEntry(
-          "Emerging pattern updated",
-          `"${result.pattern.title}" seen ${updatedPattern?.timesSeen ?? result.pattern.timesSeen + 1} times`
-        )
-      ];
-      if (statusChanged && updatedPattern?.status === "suggested") {
-        entries.push(createLogEntry("Pattern status → suggested", `Confidence: ${updatedPattern.confidenceScore}%`));
-      }
-      if (updatedPattern?.suggestedCanonicalProblem && !result.pattern.suggestedCanonicalProblem) {
-        entries.push(createLogEntry("Pattern ready for promotion", `"${result.pattern.title}" meets canonical problem threshold`));
-      }
-      addLogEntries(entries);
+    const patternInput = buildPatternDiscoveryInput({
+      organizationId: organizationProfile.id,
+      actorId: authUser?.id,
+      sourceTicketId: ticketReferenceId(ticket),
+      understandingSummary: und.coreProblem || und.summary,
+      detectedSignals: und.detectedSignals,
+      tags: und.tags,
+      category: und.category,
+      language: detectLanguage(`${ticket.subject} ${ticket.description}`).language
+    });
+    const patternKey = patternDiscoveryIdempotencyKey(organizationProfile.id, ticketReferenceId(ticket));
+    try {
+      const queued = await enqueuePatternDiscoveryJob(organizationProfile.id, patternInput, { idempotencyKey: patternKey, correlationId: `pattern-follow-up-${ticketReferenceId(ticket)}` });
+      if (!ticketRequestIsCurrent(requestGeneration)) return;
+      addLogEntries([createLogEntry("Pattern discovery queued", queued.data.replayed ? "Existing durable follow-up reused" : `Job ${queued.data.jobId} queued for background analysis`)]);
+    } catch {
+      addLogEntries([createLogEntry("Pattern discovery follow-up unavailable", "The ticket workflow remains authoritative; the durable follow-up can be retried by operations.")]);
     }
-
-    updateMetrics({ emergingPatternsDetected: 1 });
-    setOrgMetrics((prev) => ({
-      ...prev,
-      emergingPatternsDetected: (prev.emergingPatternsDetected ?? 0) + 1,
-      lastUpdatedAt: new Date().toISOString()
-    }));
   }
 
   async function promotePattern(patternId: string) {
@@ -3847,6 +3799,23 @@ export default function Home() {
         createLogEntry("Canonical problem proposed", result.canonicalSelection.title),
         createLogEntry("Generated draft response", result.draft.source === "ai_advisory" ? "AI advisory draft" : "Deterministic draft")
       ]);
+      const patternFollowUp = result.followUp.find((entry) => entry.type === "pattern_discovery_requested");
+      if (patternFollowUp) {
+        const patternInput = buildPatternDiscoveryInput({
+          organizationId: profile.id,
+          actorId: authUser?.id,
+          sourceTicketId: patternFollowUp.ticketId,
+          understandingSummary: result.understanding.coreProblem || result.understanding.summary,
+          detectedSignals: result.understanding.detectedSignals,
+          tags: result.understanding.tags,
+          category: result.understanding.category,
+          language: result.language.detection.language
+        });
+        const patternKey = patternDiscoveryIdempotencyKey(profile.id, patternFollowUp.ticketId);
+        void enqueuePatternDiscoveryJob(profile.id, patternInput, { idempotencyKey: patternKey, correlationId: requestId })
+          .then((queued) => addLogEntries([createLogEntry("Pattern discovery queued", queued.data.replayed ? "Existing durable follow-up reused" : `Job ${queued.data.jobId} queued after ticket success`)]))
+          .catch(() => addLogEntries([createLogEntry("Pattern discovery follow-up unavailable", "The ticket result succeeded; retry the visible durable follow-up when the job service recovers.")]));
+      }
       updateMetrics({ ticketsProcessed: 1, memoryRetrievals: 1, repeatedIssuesDetected: result.memoryMatch ? 1 : 0 });
       setCurrentStep(4);
     } catch (error) {
