@@ -17,6 +17,7 @@ import {
 } from "@/lib/canonicalProblemEngine";
 import { requireOrganizationId } from "@/lib/organizationId";
 import { clearTicketRecords } from "@/lib/ticketRecords";
+import type { ValidationCommitRequest, ValidationCommitResult } from "@/lib/persistence/adapter";
 
 /**
  * Persistent Organizational Memory (prototype) — backed by localStorage.
@@ -36,6 +37,7 @@ const PATTERNS_KEY = `oip.emergingPatterns.${STORAGE_VERSION}`;
 const CANDIDATES_KEY = `oip.knowledgeCandidates.${STORAGE_VERSION}`;
 const VALIDATION_RECORDS_KEY = `oip.validationRecords.${STORAGE_VERSION}`;
 const MEMORY_CHANGES_KEY = `oip.memoryChanges.${STORAGE_VERSION}`;
+const VALIDATION_COMMIT_BUNDLE_KEY = `oip.validationCommitBundle.${STORAGE_VERSION}`;
 const ORGANIZATION_PROFILE_KEY = "oip.organizationProfile.v1";
 const ORGANIZATION_LIST_KEY = "oip.organizationList.v1";
 // Pre-isolation v2 data belonged to the original Maesa workspace in this repository.
@@ -148,6 +150,34 @@ function resolveScopedStorageKey(baseKey: string, organizationId: string): strin
   requireOrganizationId(organizationId, "Organization storage key resolution");
   const resource = baseKey.replace(/^oip\./, "").replace(`.${STORAGE_VERSION}`, "");
   return `oip.organization.${encodeURIComponent(organizationId)}.${resource}.${ISOLATED_STORAGE_VERSION}`;
+}
+
+interface ValidationCommitBundle {
+  knowledge: KnowledgeItem[];
+  candidates: KnowledgeCandidate[];
+  validationRecords: ValidationRecord[];
+  memoryChangeRecords: MemoryChangeRecord[];
+}
+
+function readValidationCommitBundle(organizationId: string): ValidationCommitBundle | null {
+  try {
+    const bundle = read<ValidationCommitBundle>(resolveScopedStorageKey(VALIDATION_COMMIT_BUNDLE_KEY, organizationId));
+    if (!bundle || !Array.isArray(bundle.knowledge) || !Array.isArray(bundle.candidates)
+      || !Array.isArray(bundle.validationRecords) || !Array.isArray(bundle.memoryChangeRecords)) return null;
+    return bundle;
+  } catch {
+    return null;
+  }
+}
+
+function writeValidationCommitBundle(organizationId: string, bundle: ValidationCommitBundle): void {
+  write(resolveScopedStorageKey(VALIDATION_COMMIT_BUNDLE_KEY, organizationId), bundle);
+}
+
+function localConflict(message: string): Error & { code: "CONFLICT" } {
+  const error = new Error(message) as Error & { code: "CONFLICT" };
+  error.code = "CONFLICT";
+  return error;
 }
 
 function hasKey(key: string): boolean {
@@ -716,6 +746,8 @@ export function normalizePersistedKnowledgeSnapshot(
 
 export async function loadKnowledge(organizationId: string): Promise<KnowledgeItem[]> {
   requireOrganizationId(organizationId, "loadKnowledge");
+  const bundle = readValidationCommitBundle(organizationId);
+  if (bundle) return bundle.knowledge;
   const stored = readOrganizationResource<KnowledgeItem[]>(organizationId, "knowledge", KNOWLEDGE_KEY, resolveScopedStorageKey(KNOWLEDGE_KEY, organizationId));
   if (stored && Array.isArray(stored) && stored.length > 0) {
     const normalized = normalizePersistedKnowledgeSnapshotDetails(organizationId, stored);
@@ -735,6 +767,11 @@ export async function loadKnowledge(organizationId: string): Promise<KnowledgeIt
 
 export async function saveKnowledge(organizationId: string, items: KnowledgeItem[]): Promise<void> {
   requireOrganizationId(organizationId, "saveKnowledge");
+  const bundle = readValidationCommitBundle(organizationId);
+  if (bundle) {
+    writeValidationCommitBundle(organizationId, { ...bundle, knowledge: items });
+    return;
+  }
   write(resolveScopedStorageKey(KNOWLEDGE_KEY, organizationId), items);
 }
 
@@ -742,6 +779,8 @@ export async function saveKnowledge(organizationId: string, items: KnowledgeItem
 
 export async function loadKnowledgeCandidates(organizationId: string): Promise<KnowledgeCandidate[]> {
   requireOrganizationId(organizationId, "loadKnowledgeCandidates");
+  const bundle = readValidationCommitBundle(organizationId);
+  if (bundle) return bundle.candidates;
   const stored = readOrganizationResource<KnowledgeCandidate[]>(organizationId, "candidates", CANDIDATES_KEY, resolveScopedStorageKey(CANDIDATES_KEY, organizationId));
   return stored && Array.isArray(stored) ? stored.map((candidate) => ({ ...candidate, organizationId: candidate.organizationId ?? organizationId })) : [];
 }
@@ -751,11 +790,29 @@ export async function saveKnowledgeCandidates(
   candidates: KnowledgeCandidate[]
 ): Promise<void> {
   requireOrganizationId(organizationId, "saveKnowledgeCandidates");
-  write(resolveScopedStorageKey(CANDIDATES_KEY, organizationId), candidates);
+  const bundle = readValidationCommitBundle(organizationId);
+  const current = bundle?.candidates ?? await loadKnowledgeCandidates(organizationId);
+  const currentById = new Map(current.map((candidate) => [candidate.id, candidate]));
+  for (const candidate of candidates) {
+    const stored = currentById.get(candidate.id);
+    if (candidate.status === "validated" && stored?.status !== "validated") {
+      throw localConflict(`Knowledge candidate ${candidate.id} can only enter validated state through the validation commit operation.`);
+    }
+  }
+  const submittedIds = new Set(candidates.map((candidate) => candidate.id));
+  const protectedValidated = current.filter((candidate) => candidate.status === "validated" && !submittedIds.has(candidate.id));
+  const next = [...candidates, ...protectedValidated];
+  if (bundle) {
+    writeValidationCommitBundle(organizationId, { ...bundle, candidates: next });
+    return;
+  }
+  write(resolveScopedStorageKey(CANDIDATES_KEY, organizationId), next);
 }
 
 export async function loadValidationRecords(organizationId: string): Promise<ValidationRecord[]> {
   requireOrganizationId(organizationId, "loadValidationRecords");
+  const bundle = readValidationCommitBundle(organizationId);
+  if (bundle) return bundle.validationRecords;
   const stored = readOrganizationResource<ValidationRecord[]>(organizationId, "validationRecords", VALIDATION_RECORDS_KEY, resolveScopedStorageKey(VALIDATION_RECORDS_KEY, organizationId));
   return stored && Array.isArray(stored) ? stored.map((record) => ({ ...record, organizationId: record.organizationId ?? organizationId })) : [];
 }
@@ -765,11 +822,18 @@ export async function saveValidationRecords(
   records: ValidationRecord[]
 ): Promise<void> {
   requireOrganizationId(organizationId, "saveValidationRecords");
+  const bundle = readValidationCommitBundle(organizationId);
+  if (bundle) {
+    writeValidationCommitBundle(organizationId, { ...bundle, validationRecords: records });
+    return;
+  }
   write(resolveScopedStorageKey(VALIDATION_RECORDS_KEY, organizationId), records);
 }
 
 export async function loadMemoryChangeRecords(organizationId: string): Promise<MemoryChangeRecord[]> {
   requireOrganizationId(organizationId, "loadMemoryChangeRecords");
+  const bundle = readValidationCommitBundle(organizationId);
+  if (bundle) return bundle.memoryChangeRecords;
   const scoped = read<MemoryChangeRecord[]>(resolveScopedStorageKey(MEMORY_CHANGES_KEY, organizationId));
   const legacy = hasLegacyFallback(organizationId, "memoryChanges")
     ? read<MemoryChangeRecord[]>(MEMORY_CHANGES_KEY)
@@ -794,6 +858,11 @@ export async function saveMemoryChangeRecords(
   records: MemoryChangeRecord[]
 ): Promise<void> {
   requireOrganizationId(organizationId, "saveMemoryChangeRecords");
+  const bundle = readValidationCommitBundle(organizationId);
+  if (bundle) {
+    writeValidationCommitBundle(organizationId, { ...bundle, memoryChangeRecords: records });
+    return;
+  }
   if (hasLegacyFallback(organizationId, "memoryChanges")) {
     // Preserve the complete legacy history and only keep a small scoped tail
     // for new writes. This avoids repeatedly attempting the known-too-large
@@ -806,6 +875,127 @@ export async function saveMemoryChangeRecords(
     return;
   }
   write(resolveScopedStorageKey(MEMORY_CHANGES_KEY, organizationId), records);
+}
+
+/**
+ * LocalStorage counterpart of the server validation command. The complete
+ * next aggregate is built in memory and written under one organization-scoped
+ * bundle key. Once the bundle exists, the four lifecycle loaders and writers
+ * use it as their local authority, so a candidate snapshot cannot advance a
+ * validated lifecycle independently.
+ */
+export async function commitValidatedMemoryChangeLocalStorage(
+  organizationId: string,
+  request: ValidationCommitRequest
+): Promise<ValidationCommitResult> {
+  const id = requireOrganizationId(organizationId, "Validated memory change commit");
+  for (const [label, value] of [
+    ["candidate", request.candidate.organizationId],
+    ["validation", request.validation.organizationId],
+    ["memory change", request.memoryChange.organizationId],
+    ["knowledge item", request.knowledgeItem.organizationId]
+  ] as const) {
+    if (value !== undefined && value !== id) throw localConflict(`The ${label} belongs to another organization.`);
+  }
+  const currentBundle = readValidationCommitBundle(id);
+  const [knowledge, candidates, validationRecords, memoryChangeRecords] = await Promise.all([
+    currentBundle?.knowledge ?? loadKnowledge(id),
+    currentBundle?.candidates ?? loadKnowledgeCandidates(id),
+    currentBundle?.validationRecords ?? loadValidationRecords(id),
+    currentBundle?.memoryChangeRecords ?? loadMemoryChangeRecords(id)
+  ]);
+  const existingValidation = validationRecords.find((record) => record.id === request.validation.id);
+  const existingMemoryChange = memoryChangeRecords.find((record) => record.validationRecordId === request.validation.id);
+  const expectedKnowledgeId = request.validation.knowledgeId ?? request.knowledgeItem.id;
+
+  if (existingValidation) {
+    if (
+      existingValidation.candidateId !== request.candidate.id
+      || existingValidation.decision !== request.validation.decision
+      || existingValidation.knowledgeId !== expectedKnowledgeId
+      || existingMemoryChange?.id !== request.memoryChange.id
+    ) {
+      throw localConflict(`Idempotency key ${request.idempotencyKey ?? request.validation.id} was already used with a different validation command.`);
+    }
+    const replayCandidate = candidates.find((candidate) => candidate.id === request.candidate.id);
+    const replayKnowledge = knowledge.find((item) => item.id === expectedKnowledgeId);
+    if (!replayCandidate || !existingMemoryChange || !replayKnowledge) {
+      throw localConflict("The local validation replay has an incomplete audit aggregate.");
+    }
+    return {
+      replayed: true,
+      knowledgeRevision: replayKnowledge.revision ?? 0,
+      trustApplied: true,
+      candidate: replayCandidate,
+      validation: existingValidation,
+      memoryChange: existingMemoryChange,
+      knowledgeItem: replayKnowledge,
+      auditSummary: {
+        organizationId: id,
+        actorId: undefined,
+        actor: existingValidation.actor,
+        sourceTicketIds: [...replayCandidate.sourceTicketIds],
+        decision: existingValidation.decision,
+        changeType: existingMemoryChange.changeType
+      }
+    };
+  }
+
+  const existingCandidate = candidates.find((candidate) => candidate.id === request.candidate.id);
+  if (existingCandidate?.status === "validated") {
+    throw localConflict(`Knowledge candidate ${request.candidate.id} has already been validated.`);
+  }
+  const existingKnowledge = knowledge.find((item) => item.id === expectedKnowledgeId);
+  const expectedRevision = request.expectedKnowledgeRevision;
+  if (expectedRevision === null && existingKnowledge) {
+    throw localConflict(`Knowledge item ${expectedKnowledgeId} already exists; reload before committing.`);
+  }
+  if (expectedRevision !== null && (existingKnowledge?.revision ?? 0) !== expectedRevision) {
+    throw localConflict(`Knowledge item ${expectedKnowledgeId} changed before the local validation commit.`);
+  }
+
+  const committedCandidate: KnowledgeCandidate = {
+    ...request.candidate,
+    organizationId: id,
+    status: "validated"
+  };
+  const committedKnowledge: KnowledgeItem = {
+    ...request.knowledgeItem,
+    organizationId: id,
+    revision: (expectedRevision ?? 0) + 1
+  };
+  const nextBundle: ValidationCommitBundle = {
+    knowledge: [
+      ...knowledge.filter((item) => item.id !== committedKnowledge.id),
+      committedKnowledge
+    ],
+    candidates: [
+      ...candidates.filter((candidate) => candidate.id !== committedCandidate.id),
+      committedCandidate
+    ],
+    validationRecords: [...validationRecords, request.validation],
+    memoryChangeRecords: [...memoryChangeRecords, request.memoryChange]
+  };
+
+  // This is the only localStorage write for the lifecycle transition.
+  writeValidationCommitBundle(id, nextBundle);
+  return {
+    replayed: false,
+    knowledgeRevision: committedKnowledge.revision ?? 0,
+    trustApplied: true,
+    candidate: committedCandidate,
+    validation: request.validation,
+    memoryChange: request.memoryChange,
+    knowledgeItem: committedKnowledge,
+    auditSummary: {
+      organizationId: id,
+      actorId: undefined,
+      actor: request.validation.actor,
+      sourceTicketIds: [...committedCandidate.sourceTicketIds],
+      decision: request.validation.decision,
+      changeType: request.memoryChange.changeType
+    }
+  };
 }
 
 /* ---------------------------- Org metrics ---------------------------- */
@@ -898,7 +1088,7 @@ export async function saveEmergingPatterns(
 
 function clearScopedOrganizationStorage(organizationId: string): void {
   requireOrganizationId(organizationId, "Scoped organization storage cleanup");
-  const keys = [KNOWLEDGE_KEY, ORG_METRICS_KEY, LOG_KEY, PATTERNS_KEY, CANDIDATES_KEY, VALIDATION_RECORDS_KEY, MEMORY_CHANGES_KEY];
+  const keys = [KNOWLEDGE_KEY, ORG_METRICS_KEY, LOG_KEY, PATTERNS_KEY, CANDIDATES_KEY, VALIDATION_RECORDS_KEY, MEMORY_CHANGES_KEY, VALIDATION_COMMIT_BUNDLE_KEY];
   keys.forEach((key) => window.localStorage.removeItem(resolveScopedStorageKey(key, organizationId)));
   clearTicketRecords(organizationId);
 }

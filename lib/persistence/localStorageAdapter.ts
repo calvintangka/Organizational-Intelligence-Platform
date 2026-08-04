@@ -28,6 +28,7 @@ import {
   saveKnowledge,
   saveKnowledgeCandidates,
   saveMemoryChangeRecords,
+  commitValidatedMemoryChangeLocalStorage,
   saveOrgLog,
   saveOrgMetrics,
   saveValidationRecords,
@@ -50,7 +51,7 @@ import {
   saveTicketRecords as saveLocalStorageTicketRecords
 } from "@/lib/ticketRecords";
 import { requireOrganizationId } from "@/lib/organizationId";
-import type { PersistenceAdapter, ValidationCommitRequest } from "@/lib/persistence/adapter";
+import type { PersistenceAdapter, ValidationCommitRequest, ValidationCommitResult } from "@/lib/persistence/adapter";
 
 /**
  * Thin localStorage implementation. All migration, fallback, quota, reset,
@@ -208,22 +209,8 @@ export class LocalStorageAdapter implements PersistenceAdapter {
     return generateTicketIds(profile, count);
   }
 
-  async commitValidatedMemoryChange(organizationId: string, request: ValidationCommitRequest): Promise<void> {
-    const id = requireOrganizationId(organizationId, "Validated memory change commit");
-    const [validations, memoryChanges] = await Promise.all([
-      loadValidationRecords(id),
-      loadMemoryChangeRecords(id)
-    ]);
-    const nextValidations = validations.some((record) => record.id === request.validation.id)
-      ? validations
-      : [...validations, request.validation];
-    const nextMemoryChanges = memoryChanges.some((record) => record.id === request.memoryChange.id)
-      ? memoryChanges
-      : [...memoryChanges, request.memoryChange];
-    await Promise.all([
-      saveValidationRecords(id, nextValidations),
-      saveMemoryChangeRecords(id, nextMemoryChanges)
-    ]);
+  async commitValidatedMemoryChange(organizationId: string, request: ValidationCommitRequest): Promise<ValidationCommitResult> {
+    return commitValidatedMemoryChangeLocalStorage(organizationId, request);
   }
 
   async resetOrganization(organizationId: string): Promise<void> {

@@ -31,6 +31,28 @@ export interface ValidationCommitRequest {
   memoryChange: MemoryChangeRecord;
   knowledgeItem: KnowledgeItem;
   expectedKnowledgeRevision: number | null;
+  /** Organization-scoped replay identity. Defaults to validation.id. */
+  idempotencyKey?: string;
+}
+
+export interface ValidationCommitAuditSummary {
+  organizationId: string;
+  actorId?: string;
+  actor: string;
+  sourceTicketIds: string[];
+  decision: ValidationRecord["decision"];
+  changeType: MemoryChangeRecord["changeType"];
+}
+
+export interface ValidationCommitResult {
+  replayed: boolean;
+  knowledgeRevision: number;
+  trustApplied?: boolean;
+  candidate: KnowledgeCandidate;
+  validation: ValidationRecord;
+  memoryChange: MemoryChangeRecord;
+  knowledgeItem: KnowledgeItem;
+  auditSummary: ValidationCommitAuditSummary;
 }
 
 /**
@@ -78,11 +100,11 @@ export interface PersistenceAdapter {
   generateTicketIds(organizationId: string, profile: OrganizationProfile, count: number): Promise<string[]>;
 
   /**
-   * Persist one validated memory change atomically. The localStorage adapter
-   * resolves without writing (its state flows through the snapshot saves);
-   * the server adapter runs the payload as one database transaction.
+   * Persist one validated memory change atomically. Both adapters return the
+   * committed aggregate; server mode uses one database transaction and local
+   * mode uses one organization-scoped commit bundle.
    */
-  commitValidatedMemoryChange(organizationId: string, request: ValidationCommitRequest): Promise<void>;
+  commitValidatedMemoryChange(organizationId: string, request: ValidationCommitRequest): Promise<ValidationCommitResult>;
 
   resetOrganization(organizationId: string): Promise<void>;
   deleteOrganization(organizationId: string): Promise<void>;

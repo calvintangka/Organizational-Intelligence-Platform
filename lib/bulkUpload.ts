@@ -15,6 +15,7 @@ import {
 } from "@/lib/lessonSelection";
 import { ticketContradictsLesson } from "@/lib/drafting";
 import { ticketReferenceId } from "@/lib/knowledgeProvenance";
+import { measureTelemetry, measureTelemetrySync, recordTelemetryEvent } from "@/lib/telemetry";
 import type {
   BulkAnalyzedQuery,
   BulkAnalysisProgress,
@@ -404,7 +405,7 @@ function parseTextEntries(content: string, sourcePrefix: "md" | "txt"): { entrie
   return { entries, skippedRows: 0 };
 }
 
-export function parseBulkUploadFile(
+function parseBulkUploadFileInternal(
   fileName: string,
   content: string,
   mapping?: BulkUploadMappingSelection
@@ -457,6 +458,19 @@ export function parseBulkUploadFile(
     needsMapping,
     mappingRequest
   };
+}
+
+export function parseBulkUploadFile(
+  fileName: string,
+  content: string,
+  mapping?: BulkUploadMappingSelection
+): BulkUploadParseResult {
+  return measureTelemetrySync(
+    "csv_parsing",
+    "bulk",
+    () => parseBulkUploadFileInternal(fileName, content, mapping),
+    { unit: "rows", tags: { format: fileName.split(".").pop()?.toLowerCase() ?? "unknown" } }
+  );
 }
 
 function buildBulkTicket(entry: BulkUploadEntry): Ticket {
@@ -650,7 +664,7 @@ async function callAdvisory<T>(
   }
 }
 
-export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promise<BulkAnalysisResult> {
+async function analyzeBulkEntriesInternal(input: AnalyzeBulkEntriesInput): Promise<BulkAnalysisResult> {
   const { entries, organizationProfile, knowledgeItems, aiAdapter, onProgress, signal } = input;
   // TODO-062A: the run must terminate regardless of how the provider behaves.
   // `aiDeadline` bounds total advisory time; `watchdogMs` bounds any single
@@ -689,23 +703,36 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
   for (let index = 0; index < entries.length; index += 1) {
     throwIfCancelled(signal);
     const entry = entries[index];
+    const rowStartedAt = Date.now();
     updateProgress(onProgress, "analyzing", index, entries.length, `Analyzing ${entry.sourceLabel}`);
-    const ticket = buildBulkTicket(entry);
-    const relevance = assessBusinessRelevanceForProfile(`${ticket.subject} ${ticket.description}`, organizationProfile);
-    const understanding = understandForProfile(ticket, organizationProfile);
-    const businessRouting = routeBusinessInquiryUnderstanding(understanding);
+    const ticket = measureTelemetrySync("ticket_creation", "bulk", () => buildBulkTicket(entry), { unit: "rows" });
+    const relevance = measureTelemetrySync(
+      "business_relevance",
+      "bulk",
+      () => assessBusinessRelevanceForProfile(`${ticket.subject} ${ticket.description}`, organizationProfile),
+      { unit: "rows" }
+    );
+    const understanding = measureTelemetrySync("classification", "bulk", () => understandForProfile(ticket, organizationProfile), { unit: "rows" });
+    const businessRouting = measureTelemetrySync("canonical_selection", "bulk", () => routeBusinessInquiryUnderstanding(understanding), { unit: "rows" });
     const routedUnderstanding = businessRouting.understanding;
-    const canonicalProblem = businessRouting.canonicalProblem ?? identifyCanonicalProblem(routedUnderstanding, organizationProfile);
+    const canonicalProblem = measureTelemetrySync(
+      "canonical_selection",
+      "bulk",
+      () => businessRouting.canonicalProblem ?? identifyCanonicalProblem(routedUnderstanding, organizationProfile),
+      { unit: "rows" }
+    );
     const relevanceStatus = relevance.status;
-    const rawMemoryMatches = relevanceStatus === "out_of_scope"
-      ? []
-      : retrieveMemory(routedUnderstanding, knowledgeItems);
-    const memoryMatches = withPreDiscriminationLessonMatches(
-      ticket,
-      routedUnderstanding,
-      rawMemoryMatches,
-      knowledgeItems,
-      canonicalProblem.title
+    const rawMemoryMatches = measureTelemetrySync(
+      "retrieval",
+      "bulk",
+      () => relevanceStatus === "out_of_scope" ? [] : retrieveMemory(routedUnderstanding, knowledgeItems),
+      { unit: "rows" }
+    );
+    const memoryMatches = measureTelemetrySync(
+      "lesson_matching",
+      "bulk",
+      () => withPreDiscriminationLessonMatches(ticket, routedUnderstanding, rawMemoryMatches, knowledgeItems, canonicalProblem.title),
+      { unit: "rows" }
     );
     const compatibleMatches = memoryMatches.filter((match) => isCompatibleForDrafting(routedUnderstanding, match.item, ticket));
     const selectedMatchInfo = compatibleMatches.length > 0 ? selectPreferredMatch(ticket, compatibleMatches) : null;
@@ -824,6 +851,16 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
       confidence,
       relevanceStatus
     });
+    recordTelemetryEvent({
+      name: "analysis",
+      category: "bulk",
+      durationMs: Date.now() - rowStartedAt,
+      startedAt: rowStartedAt,
+      endedAt: Date.now(),
+      success: true,
+      unit: "rows",
+      tags: { rows: entries.length }
+    });
 
     if (index > 0 && index % 25 === 0) {
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -871,6 +908,7 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
   for (let index = 0; index < groupedEntries.length; index += 1) {
     throwIfCancelled(signal);
     const [key, items] = groupedEntries[index];
+    const clusterStartedAt = Date.now();
     const representative = items[0];
     const existingKnowledge = representative.existingMatch
       ? withCanonicalProblemDefaults(representative.existingMatch.item)
@@ -969,6 +1007,16 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
       // function has run (see the final pass below via applyMode/applyLabel).
       providerLabel: aiAdapter.provider.label
     });
+    recordTelemetryEvent({
+      name: "clustering",
+      category: "bulk",
+      durationMs: Date.now() - clusterStartedAt,
+      startedAt: clusterStartedAt,
+      endedAt: Date.now(),
+      success: true,
+      unit: "rows",
+      tags: { rows: entries.length, clusterSize: items.length }
+    });
   }
 
   unclustered.count = unclustered.items.length;
@@ -1006,6 +1054,15 @@ export async function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promis
     analysisMode,
     providerLabel
   };
+}
+
+export function analyzeBulkEntries(input: AnalyzeBulkEntriesInput): Promise<BulkAnalysisResult> {
+  return measureTelemetry(
+    "overall_runtime",
+    "bulk",
+    () => analyzeBulkEntriesInternal(input),
+    { unit: "rows", quantity: input.entries.length, tags: { rows: input.entries.length } }
+  );
 }
 
 export function getBulkUploadLimit(): number {

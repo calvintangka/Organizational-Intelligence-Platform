@@ -42,9 +42,10 @@ interface ReflectionPanelProps {
   existingLessons?: Lesson[];
   reviewedResponse?: string;
   darkMode?: boolean;
+  isSubmitting?: boolean;
 }
 
-export function ReflectionPanel({ decision, onConfirm, existingLessons = [], reviewedResponse = "", darkMode = false }: ReflectionPanelProps) {
+export function ReflectionPanel({ decision, onConfirm, existingLessons = [], reviewedResponse = "", darkMode = false, isSubmitting = false }: ReflectionPanelProps) {
   const actionColor = ACTION_COLORS[decision.action];
   const trustColor = TRUST_IMPACT_COLORS[decision.trustImpact];
   const requiresProblemName = !!decision.problemNameRequired;
@@ -92,6 +93,7 @@ export function ReflectionPanel({ decision, onConfirm, existingLessons = [], rev
   }
 
   function handleConfirm() {
+    if (isSubmitting) return;
     setValidationMessage("");
 
     if (requiresProblemName && !problemName.trim()) {
@@ -317,8 +319,8 @@ export function ReflectionPanel({ decision, onConfirm, existingLessons = [], rev
             </p>
             {validationMessage && <p className="mt-2 text-sm font-medium text-red-600">{validationMessage}</p>}
           </div>
-          <button type="button" onClick={handleConfirm} className={`rounded-2xl px-6 py-3 font-semibold text-white transition ${darkMode ? "bg-[#27469e] hover:bg-[#1e3a8a]" : "bg-ink hover:bg-slate-700"}`}>
-            Validate &amp; Commit to Organizational Memory
+          <button type="button" onClick={handleConfirm} disabled={isSubmitting} className={`rounded-2xl px-6 py-3 font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${darkMode ? "bg-[#27469e] hover:bg-[#1e3a8a]" : "bg-ink hover:bg-slate-700"}`}>
+            {isSubmitting ? "Committing validation…" : "Validate & Commit to Organizational Memory"}
           </button>
         </div>
       </section>

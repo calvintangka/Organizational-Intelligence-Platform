@@ -91,11 +91,14 @@ import {
 import { useOrganizationDocumentTitle } from "@/lib/documentTitle";
 import { detectLanguage, isSupportedLanguage, languageLabel, type SupportedLanguageCode } from "@/lib/languageDetection";
 import { resolveLanguagePolicy, resolveResponseLanguage } from "@/lib/languagePolicy";
+import { measureTelemetry, measureTelemetrySync, recordTelemetryEvent, startTelemetrySpan } from "@/lib/telemetry";
 import {
   createTicketRecord,
   computeEditDistance,
 } from "@/lib/ticketRecords";
 import { CaseLookupView } from "@/components/views/CaseLookupView";
+import { processTicket, ProcessTicketError } from "@/lib/application/tickets/processTicket";
+const PAGE_LOAD_STARTED_AT = Date.now();
 import type {
   AIAnalysis,
   AIAdvisory,
@@ -534,6 +537,7 @@ export default function Home() {
   // Reflection / Knowledge Evolution
   const [reflectionDecision, setReflectionDecision] = useState<ReflectionDecision | null>(null);
   const [lastSavedKnowledgeId, setLastSavedKnowledgeId] = useState<string | null>(null);
+  const [isValidationSubmitting, setIsValidationSubmitting] = useState(false);
 
   // Maesa Tech UI state
   const [activeView, setActiveView] = useState<ActiveView>("home");
@@ -543,8 +547,10 @@ export default function Home() {
   const [isRetryingDraft, setIsRetryingDraft] = useState(false);
   const organizationSwitchGeneration = useRef(0);
   const ticketRequestGuard = useRef(new TicketRequestGuard());
+  const ticketAbortController = useRef<AbortController | null>(null);
   const knowledgeHistoryCache = useRef<Record<string, KnowledgeHistory>>({});
   const knowledgeHistoryRequests = useRef<Record<string, Promise<KnowledgeHistory>>>({});
+  const validationCommitInFlight = useRef(false);
   // The server returns a fresh organization revision after each profile write.
   // Keep that revision outside React state so a successful save does not
   // trigger another save, while later legitimate edits still carry the
@@ -559,6 +565,8 @@ export default function Home() {
 
   function cancelActiveTicketRequest() {
     ticketRequestGuard.current.cancel();
+    ticketAbortController.current?.abort();
+    ticketAbortController.current = null;
     setIsProcessing(false);
   }
 
@@ -606,6 +614,20 @@ export default function Home() {
       if (knowledgeHistoryRequests.current[key] === request) delete knowledgeHistoryRequests.current[key];
     }
   }
+
+  useEffect(() => {
+    const startedAt = PAGE_LOAD_STARTED_AT;
+    recordTelemetryEvent({
+      name: "page_load",
+      category: "ui",
+      durationMs: Date.now() - startedAt,
+      startedAt,
+      endedAt: Date.now(),
+      success: true,
+      unit: "operations",
+      tags: { measuredAt: "first_effect" }
+    });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -831,7 +853,7 @@ export default function Home() {
     ]);
   }
 
-  async function loadOrganizationState(orgId: string) {
+  async function loadOrganizationStateInternal(orgId: string) {
     const [knowledge, candidates, validations, changes, loadedMetrics, log, patterns] = await Promise.all([
       persistence.loadKnowledge(orgId),
       persistence.loadKnowledgeCandidates(orgId),
@@ -965,7 +987,7 @@ export default function Home() {
     }));
   }
 
-  function updateMetrics(updates: Partial<Record<keyof Metrics, number>>) {
+  function updateMetricsInternal(updates: Partial<Record<keyof Metrics, number>>) {
     setMetrics((current) => {
       const next = { ...current };
       for (const [key, value] of Object.entries(updates) as Array<[keyof Metrics, number]>) {
@@ -975,7 +997,12 @@ export default function Home() {
     });
   }
 
+  function updateMetrics(updates: Partial<Record<keyof Metrics, number>>) {
+    measureTelemetrySync("organization_metrics_update", "pipeline", () => updateMetricsInternal(updates), { unit: "operations" });
+  }
+
   function recordOrgResolution(mode: ResolutionMode, opts?: { createdKnowledge?: boolean }) {
+    const metricsSpan = startTelemetrySpan("organization_metrics_update", "pipeline", { unit: "operations" });
     const isAuto = mode === "automatic";
     const timeSec = isAuto ? 18 : 95;
     setOrgMetrics((prev) => ({
@@ -989,6 +1016,7 @@ export default function Home() {
       memoryGrowthToday: prev.memoryGrowthToday + (opts?.createdKnowledge ? 1 : 0),
       lastUpdatedAt: new Date().toISOString()
     }));
+    metricsSpan.end(true);
   }
 
   function makeRecordId(prefix: string): string {
@@ -1039,17 +1067,32 @@ export default function Home() {
     };
   }
 
-  function applyValidatedMemoryChange(
+  async function applyValidatedMemoryChangeInternal(
     candidate: KnowledgeCandidate,
     beforeState: KnowledgeItem | null,
     afterState: KnowledgeItem,
     rationale = "Prototype knowledge validation"
-  ): {
+  ): Promise<{
     validatedItem: KnowledgeItem;
     validatedCandidate: KnowledgeCandidate;
     validation: ValidationRecord;
     memoryChange: MemoryChangeRecord;
-  } {
+    replayed: boolean;
+    trustApplied?: boolean;
+    auditSummary: {
+      organizationId: string;
+      actorId?: string;
+      actor: string;
+      sourceTicketIds: string[];
+      decision: ValidationRecord["decision"];
+      changeType: MemoryChangeRecord["changeType"];
+    };
+  }> {
+    if (validationCommitInFlight.current) {
+      throw new Error("A validation commit is already in progress. Wait for it to finish before retrying.");
+    }
+    validationCommitInFlight.current = true;
+    setIsValidationSubmitting(true);
     const timestamp = new Date().toISOString();
     const organizationId = candidate.organizationId ?? organizationProfile.id;
     const stampedAfterState = stampKnowledgeItemOrganization(afterState);
@@ -1088,55 +1131,96 @@ export default function Home() {
       timestamp
     };
 
-    // Server mode: the full logical commit (candidate lifecycle, validation
-    // record, memory change record, knowledge/trust update) persists as ONE
-    // database transaction. A failure persists nothing server-side and is
-    // surfaced through the standard persistence error channel.
-    queuePersistenceSave(
-      "commitValidatedMemoryChange",
-      persistence.commitValidatedMemoryChange(organizationId, {
+    try {
+      // The adapter owns the complete transition. React state is reconciled
+      // only from the committed aggregate returned by that command.
+      const committed = await persistence.commitValidatedMemoryChange(organizationId, {
         candidate: validatedCandidate,
         validation,
         memoryChange,
         knowledgeItem: validatedItem,
-        expectedKnowledgeRevision
-      })
-    );
+        expectedKnowledgeRevision,
+        idempotencyKey: validation.id
+      });
+      const committedItem = committed.knowledgeItem;
+      const committedCandidate = committed.candidate;
+      const committedValidation = committed.validation;
+      const committedMemoryChange = committed.memoryChange;
+      setKnowledgeCandidates((prev) => {
+        const exists = prev.some((item) => item.id === committedCandidate.id);
+        return exists
+          ? prev.map((item) => (item.id === committedCandidate.id ? committedCandidate : item))
+          : [...prev, committedCandidate];
+      });
+      const historyKey = `${organizationId}:${committedItem.id}`;
+      const cachedHistory = knowledgeHistoryCache.current[historyKey];
+      if (cachedHistory) {
+        knowledgeHistoryCache.current[historyKey] = {
+          validationRecords: mergeRecordsById(cachedHistory.validationRecords, [committedValidation]),
+          memoryChangeRecords: mergeRecordsById(cachedHistory.memoryChangeRecords, [committedMemoryChange])
+        };
+      }
+      setValidationRecords((prev) => mergeRecordsById(prev, [committedValidation]));
+      setMemoryChangeRecords((prev) => mergeRecordsById(prev, [committedMemoryChange]));
+      setKnowledgeItems((prev) => upsertCanonicalProblem(prev, committedItem));
+      setSimilarKnowledge((prev) => prev.map((m) => (m.item.id === committedItem.id ? { ...m, item: committedItem } : m)));
 
-    setKnowledgeCandidates((prev) => {
-      const exists = prev.some((item) => item.id === validatedCandidate.id);
-      return exists
-        ? prev.map((item) => (item.id === validatedCandidate.id ? validatedCandidate : item))
-        : [...prev, validatedCandidate];
-    });
-    const historyKey = `${organizationId}:${validatedItem.id}`;
-    const cachedHistory = knowledgeHistoryCache.current[historyKey];
-    if (cachedHistory) {
-      knowledgeHistoryCache.current[historyKey] = {
-        validationRecords: mergeRecordsById(cachedHistory.validationRecords, [validation]),
-        memoryChangeRecords: mergeRecordsById(cachedHistory.memoryChangeRecords, [memoryChange])
+      return {
+        ...committed,
+        validatedItem: committedItem,
+        validatedCandidate: committedCandidate,
+        validation: committedValidation,
+        memoryChange: committedMemoryChange
       };
+    } catch (error) {
+      reportPersistenceError("commitValidatedMemoryChange", error);
+      throw error;
+    } finally {
+      validationCommitInFlight.current = false;
+      setIsValidationSubmitting(false);
     }
-    setValidationRecords((prev) => [...prev, validation]);
-    setMemoryChangeRecords((prev) => [...prev, memoryChange]);
-    setKnowledgeItems((prev) => upsertCanonicalProblem(prev, validatedItem));
-    setSimilarKnowledge((prev) => prev.map((m) => (m.item.id === validatedItem.id ? { ...m, item: validatedItem } : m)));
-
-    return {
-      validatedItem,
-      validatedCandidate,
-      validation,
-      memoryChange
-    };
   }
 
-  function commitValidatedMemoryChange(
+  async function applyValidatedMemoryChange(
     candidate: KnowledgeCandidate,
     beforeState: KnowledgeItem | null,
     afterState: KnowledgeItem,
     rationale = "Prototype knowledge validation"
-  ): KnowledgeItem {
-    return applyValidatedMemoryChange(candidate, beforeState, afterState, rationale).validatedItem;
+  ) {
+    return measureTelemetry(
+      "knowledge_promotion",
+      "pipeline",
+      () => measureTelemetry(
+        "validation_commit",
+        "pipeline",
+        () => measureTelemetry(
+          "memory_change_commit",
+          "pipeline",
+          () => applyValidatedMemoryChangeInternal(candidate, beforeState, afterState, rationale),
+          { unit: "operations", tags: { action: candidate.proposedAction } }
+        ),
+        { unit: "operations", tags: { action: candidate.proposedAction } }
+      ),
+      { unit: "operations", tags: { action: candidate.proposedAction } }
+    );
+  }
+
+  async function loadOrganizationState(orgId: string) {
+    return measureTelemetry(
+      "refresh",
+      "ui",
+      () => loadOrganizationStateInternal(orgId),
+      { unit: "operations", tags: { organizationId: orgId } }
+    );
+  }
+
+  async function commitValidatedMemoryChange(
+    candidate: KnowledgeCandidate,
+    beforeState: KnowledgeItem | null,
+    afterState: KnowledgeItem,
+    rationale = "Prototype knowledge validation"
+  ): Promise<KnowledgeItem> {
+    return (await applyValidatedMemoryChange(candidate, beforeState, afterState, rationale)).validatedItem;
   }
 
   function createCandidate(input: {
@@ -1207,10 +1291,10 @@ export default function Home() {
     return candidate;
   }
 
-  function validateKnowledgePackCandidate(
+  async function validateKnowledgePackCandidate(
     candidateId: string,
     draft: KnowledgePackCandidateDraft
-  ): KnowledgeItem | null {
+  ): Promise<KnowledgeItem | null> {
     const candidate = knowledgeCandidates.find((item) => item.id === candidateId && item.status === "proposed");
     if (!candidate) {
       setErrorMessage("This imported knowledge pack candidate is no longer available for validation.");
@@ -1241,7 +1325,7 @@ export default function Home() {
       }
     };
     const afterState = buildKnowledgeItemFromPackCandidate(updatedCandidate, draft, organizationProfile, now);
-    const result = applyValidatedMemoryChange(
+    const result = await applyValidatedMemoryChange(
       updatedCandidate,
       null,
       afterState,
@@ -1277,7 +1361,7 @@ export default function Home() {
     ]);
   }
 
-  async function analyzeUploadedQueries(
+  async function analyzeUploadedQueriesInternal(
     entries: BulkUploadEntry[],
     onProgress: (progress: BulkAnalysisProgress) => void,
     signal: AbortSignal,
@@ -1344,6 +1428,36 @@ export default function Home() {
     return result;
   }
 
+  async function analyzeUploadedQueries(
+    entries: BulkUploadEntry[],
+    onProgress: (progress: BulkAnalysisProgress) => void,
+    signal: AbortSignal,
+    uploadKey: string
+  ) {
+    const startedAt = Date.now();
+    let lastProgressAt = startedAt;
+    return measureTelemetry(
+      "bulk_upload",
+      "ui",
+      () => analyzeUploadedQueriesInternal(entries, (progress) => {
+        const now = Date.now();
+        recordTelemetryEvent({
+          name: "analysis_progress",
+          category: "ui",
+          durationMs: now - lastProgressAt,
+          startedAt: lastProgressAt,
+          endedAt: now,
+          success: true,
+          unit: "rows",
+          tags: { phase: progress.phase, completed: progress.completed, total: progress.total }
+        });
+        lastProgressAt = now;
+        onProgress(progress);
+      }, signal, uploadKey),
+      { unit: "rows", quantity: entries.length, tags: { rows: entries.length } }
+    );
+  }
+
   async function prepareBulkEntries(uploadKey: string, entries: BulkUploadEntry[]): Promise<void> {
     const prepared = await persistence.prepareBulkTicketRecords(
       organizationProfile.id,
@@ -1383,7 +1497,7 @@ export default function Home() {
       rationale: prepared.rationale,
       createdAt: now
     });
-    const result = applyValidatedMemoryChange(candidate, prepared.beforeState, prepared.afterState, prepared.rationale);
+    const result = await applyValidatedMemoryChange(candidate, prepared.beforeState, prepared.afterState, prepared.rationale);
     setSessionCreatedIds((prev) => new Set([...prev, result.validatedItem.id]));
     setLastSavedKnowledgeId(result.validatedItem.id);
     if (prepared.action === "create_new") {
@@ -1395,7 +1509,7 @@ export default function Home() {
       updateMetrics({ humanApprovedResponses: 1, canonicalProblemsTouched: 1, knowledgeVersionsCreated: 1 });
     }
     // Create ticket records for each bulk-uploaded query
-    const bulkRecords: TicketRecord[] = (cluster.items ?? []).map((item, index) => {
+    const bulkRecords: TicketRecord[] = (cluster.items ?? []).map((item) => {
       const rec = bulkTicketRecords.current[`${uploadKey}:${item.entry.id}`];
       if (!rec) {
         throw new Error(`Durable bulk ticket missing for uploaded row ${item.entry.id}.`);
@@ -1456,7 +1570,7 @@ export default function Home() {
   }
 
   /** Apply a successful resolution outcome to a knowledge item and record learning. */
-  function applyResolution(itemId: string, mode: ResolutionMode, evidenceTicket?: Ticket) {
+  async function applyResolution(itemId: string, mode: ResolutionMode, evidenceTicket?: Ticket) {
     const target = knowledgeItems.find((i) => i.id === itemId);
     if (!target) return;
 
@@ -1475,7 +1589,7 @@ export default function Home() {
       relatedKnowledgeId: itemId,
       rationale: `${mode === "automatic" ? "Automatic" : "Human-approved"} successful reuse updated trust from ${result.trustFrom} to ${result.trustTo}.`
     });
-    const committedItem = commitValidatedMemoryChange(candidate, target, result.item, candidate.rationale);
+    const committedItem = await commitValidatedMemoryChange(candidate, target, result.item, candidate.rationale);
     setLastTrustDelta(result.trustDelta);
     addLogEntries(result.events.map((e) => createLogEntry(e.event, e.detail)));
     addLogEntries([
@@ -1557,7 +1671,7 @@ export default function Home() {
     }));
   }
 
-  function promotePattern(patternId: string) {
+  async function promotePattern(patternId: string) {
     const pattern = emergingPatterns.find((p) => p.id === patternId);
     if (!pattern) return;
 
@@ -1572,7 +1686,7 @@ export default function Home() {
       category: pattern.category,
       rationale: `Emerging pattern promoted after ${pattern.timesSeen} examples with ${pattern.confidenceScore}% confidence.`
     });
-    const committedItem = commitValidatedMemoryChange(candidate, null, newKnowledge, candidate.rationale);
+    const committedItem = await commitValidatedMemoryChange(candidate, null, newKnowledge, candidate.rationale);
     setEmergingPatterns((prev) =>
       prev.map((p) => (p.id === patternId ? { ...p, status: "promoted" as const } : p))
     );
@@ -1927,6 +2041,10 @@ export default function Home() {
   ) {
     const found = availableOrganizations.find((org) => org.id === id);
     if (!found || found.id === organizationProfile.id) return;
+    const switchSpan = startTelemetrySpan("organization_switch", "ui", {
+      unit: "operations",
+      tags: { from: organizationProfile.id, to: found.id }
+    });
     const generation = ++organizationSwitchGeneration.current;
     let authorizedContext: ActiveOrganizationContext | null = null;
     // Membership authorization happens before any outgoing state is reset or
@@ -1951,6 +2069,7 @@ export default function Home() {
       if (generation === organizationSwitchGeneration.current) {
         setErrorMessage(error instanceof Error ? error.message : "You do not have access to that organization.");
       }
+      switchSpan.end(false);
       return;
     }
     // Invalidate any in-flight ticket analysis before clearing the outgoing
@@ -1977,7 +2096,10 @@ export default function Home() {
       // Select the INCOMING organization's adapter before loading its resources.
       await activatePersistenceOrganization(found.id);
       const loaded = await loadOrganizationState(found.id);
-      if (generation !== organizationSwitchGeneration.current) return;
+       if (generation !== organizationSwitchGeneration.current) {
+         switchSpan.end(false, { superseded: true });
+         return;
+       }
       // TODO-056: the active-organization response is an authorization context,
       // not a profile. It confirms the switch was authorized for this id; the
       // complete profile comes from the organization list so no profile field
@@ -2012,10 +2134,15 @@ export default function Home() {
           : ""
       );
       setHydrated(true);
+      switchSpan.end(true);
     } catch (error) {
-      if (generation !== organizationSwitchGeneration.current) return;
+      if (generation !== organizationSwitchGeneration.current) {
+        switchSpan.end(false, { superseded: true });
+        return;
+      }
       console.error("Failed to switch organization.", error);
       setErrorMessage("Failed to load the selected organization. The organization switch was not completed.");
+      switchSpan.end(false);
     }
   }
 
@@ -2525,7 +2652,7 @@ export default function Home() {
     return advisory;
   }
 
-  async function requestDraftAdvisory(
+  async function requestDraftAdvisoryInternal(
     ticket: Ticket,
     understanding: ReturnType<typeof toUnderstanding>,
     canonicalProblemTitle: string,
@@ -2770,6 +2897,37 @@ export default function Home() {
     };
   }
 
+  async function requestDraftAdvisory(
+    ticket: Ticket,
+    understanding: ReturnType<typeof toUnderstanding>,
+    canonicalProblemTitle: string,
+    matchedKnowledge: KnowledgeMatch | null,
+    deterministicDraft: string,
+    deterministicConfidenceNote: string,
+    deterministicSource: SuggestedResponse["source"],
+    baseAdvisory: AIAdvisory | null,
+    requestGeneration?: number,
+    semanticAuthorization?: SemanticLessonAuthorization | null
+  ) {
+    return measureTelemetry(
+      "ai_drafting",
+      "pipeline",
+      () => requestDraftAdvisoryInternal(
+        ticket,
+        understanding,
+        canonicalProblemTitle,
+        matchedKnowledge,
+        deterministicDraft,
+        deterministicConfidenceNote,
+        deterministicSource,
+        baseAdvisory,
+        requestGeneration,
+        semanticAuthorization
+      ),
+      { unit: "requests", tags: { providerMode: aiAdapter.config.mode } }
+    );
+  }
+
   function updateReviewedResponse(value: string) {
     setReviewedResponse(value);
   }
@@ -2819,13 +2977,18 @@ export default function Home() {
     // different language from the organization's documentation, so a
     // policy-compliant translation is never mistaken for a rewritten answer.
     const reflectionLanguage = resolveTicketLanguage(selectedTicket, organizationProfile);
-    const reflection = generateReflection(und, reviewedResponse, existingMatch, {
-      draftMode: suggestedResponse?.draftMode,
-      matchedLesson
-    }, {
-      responseLanguage: reflectionLanguage.response.language,
-      internalLanguage: reflectionLanguage.policy.internalLanguage
-    });
+    const reflection = measureTelemetrySync(
+      "reflection",
+      "pipeline",
+      () => generateReflection(und, reviewedResponse, existingMatch, {
+        draftMode: suggestedResponse?.draftMode,
+        matchedLesson
+      }, {
+        responseLanguage: reflectionLanguage.response.language,
+        internalLanguage: reflectionLanguage.policy.internalLanguage
+      }),
+      { unit: "tickets" }
+    );
     setReflectionDecision(reflection);
 
     // Update ticket record with resolution
@@ -2901,9 +3064,11 @@ export default function Home() {
     return item;
   }
 
-  function confirmReflection(input?: ReflectionCommitInput) {
+  async function confirmReflection(input?: ReflectionCommitInput) {
     if (!selectedTicket || !aiAnalysis || !reflectionDecision) return;
+    const commitSpan = startTelemetrySpan("commit", "ui", { unit: "operations" });
 
+    try {
     const und = toUnderstanding(aiAnalysis);
     const now = new Date().toISOString();
     const lessonDraft = input?.lessonDraft;
@@ -2916,6 +3081,7 @@ export default function Home() {
       });
       if (!safety.safe) {
         setErrorMessage(`Reflection rejected: remove ${safety.issues.join(", ")} before promoting this lesson.`);
+        commitSpan.end(false);
         return;
       }
     }
@@ -2925,7 +3091,6 @@ export default function Home() {
     // immediately after a commit can otherwise produce an apparently resolved
     // ticket with empty validationRecordIds/knowledgeChanged fields.
     let committedValidationId: string | null = null;
-    let committedMemoryChangeId: string | null = null;
 
     if (reflectionDecision.action === "create_new") {
       const problemName = input?.problemName?.trim();
@@ -2944,6 +3109,7 @@ export default function Home() {
         : isUncategorized ? problemName : identifyCanonicalProblem(und, organizationProfile).title;
       if (isUncategorized && !canonicalProblemTitle) {
         setErrorMessage("Name the new problem in Reflection before committing it to Organizational Memory.");
+        commitSpan.end(false);
         return;
       }
       const derivedCategory = isBusinessInquiry
@@ -2989,10 +3155,9 @@ export default function Home() {
           : undefined
       );
       if (lessonDraft) newItem = applyLessonToItem(newItem, { ...lessonDraft, mode: "new" }, ticketReferenceId(selectedTicket), now);
-      const committedResult = applyValidatedMemoryChange(candidate, null, newItem, reflectionDecision.rationale);
+      const committedResult = await applyValidatedMemoryChange(candidate, null, newItem, reflectionDecision.rationale);
       const committedItem = committedResult.validatedItem;
       committedValidationId = committedResult.validation.id;
-      committedMemoryChangeId = committedResult.memoryChange.id;
       committedItemForReflection = committedItem;
       setSessionCreatedIds((prev) => new Set([...prev, committedItem.id]));
       setLastSavedKnowledgeId(committedItem.id);
@@ -3023,10 +3188,9 @@ export default function Home() {
         });
         let merged = mergeIntoCanonicalProblem(target, selectedTicket, und, undefined, "human", now);
         if (lessonDraft) merged = applyLessonToItem(merged, lessonDraft, ticketReferenceId(selectedTicket), now);
-        const committedResult = applyValidatedMemoryChange(candidate, target, merged, reflectionDecision.rationale);
+        const committedResult = await applyValidatedMemoryChange(candidate, target, merged, reflectionDecision.rationale);
         const committedItem = committedResult.validatedItem;
         committedValidationId = committedResult.validation.id;
-        committedMemoryChangeId = committedResult.memoryChange.id;
         committedItemForReflection = committedItem;
         setSessionCreatedIds((prev) => new Set([...prev, committedItem.id]));
         setLastSavedKnowledgeId(committedItem.id);
@@ -3100,10 +3264,9 @@ export default function Home() {
           lastValidatedAt: now
         };
         if (lessonDraft) evolved = applyLessonToItem(evolved, lessonDraft, ticketReferenceId(selectedTicket), now);
-        const committedResult = applyValidatedMemoryChange(candidate, target, evolved, reflectionDecision.versionReason ?? reflectionDecision.rationale);
+        const committedResult = await applyValidatedMemoryChange(candidate, target, evolved, reflectionDecision.versionReason ?? reflectionDecision.rationale);
         const committedItem = committedResult.validatedItem;
         committedValidationId = committedResult.validation.id;
-        committedMemoryChangeId = committedResult.memoryChange.id;
         committedItemForReflection = committedItem;
         setSessionCreatedIds((prev) => new Set([...prev, committedItem.id]));
         setLastSavedKnowledgeId(committedItem.id);
@@ -3156,10 +3319,9 @@ export default function Home() {
           });
           let trustItem = result.item;
           if (lessonDraft) trustItem = applyLessonToItem(trustItem, lessonDraft, ticketReferenceId(selectedTicket), now);
-          const committedResult = applyValidatedMemoryChange(candidate, target, trustItem, reflectionDecision.rationale);
+          const committedResult = await applyValidatedMemoryChange(candidate, target, trustItem, reflectionDecision.rationale);
           const committedItem = committedResult.validatedItem;
           committedValidationId = committedResult.validation.id;
-          committedMemoryChangeId = committedResult.memoryChange.id;
           committedItemForReflection = committedItem;
           setLastTrustDelta(result.trustDelta);
           setLastSavedKnowledgeId(committedItem.id);
@@ -3223,6 +3385,13 @@ export default function Home() {
 
     setErrorMessage("");
     setCurrentStep(8);
+    commitSpan.end(true);
+    } catch {
+      // The authoritative command rejected or failed. Keep the review open so
+      // the reviewer can retry; no success state or resolved ticket is shown.
+      setCurrentStep(7);
+      commitSpan.end(false);
+    }
   }
 
   /**
@@ -3407,7 +3576,7 @@ export default function Home() {
     if (effectiveReuseDecision === "auto_resolution") {
       setReuseResolvedMode("automatic");
       addLogEntries([createLogEntry("Auto-resolution path", `Trust >= ${organizationProfile.autoResolutionThreshold} - validated template rendered from organizational memory`)]);
-      applyResolution(effectiveReuseMatch.item.id, "automatic", second);
+      await applyResolution(effectiveReuseMatch.item.id, "automatic", second);
     } else {
       setReuseResolvedMode(null);
       addLogEntries([
@@ -3428,9 +3597,9 @@ export default function Home() {
   }
 
   /** Human approves the reuse — records a human-approved successful resolution (+trust). */
-  function approveReuse() {
+  async function approveReuse() {
     if (!reuseMatchId) return;
-    applyResolution(reuseMatchId, "human", secondTicket ?? undefined);
+    await applyResolution(reuseMatchId, "human", secondTicket ?? undefined);
     setReuseResolvedMode("human");
     if (lastDraftUsedAI) {
       recordHumanAcceptedAISuggestion();
@@ -3438,274 +3607,75 @@ export default function Home() {
     addLogEntries([createLogEntry("Human approved reuse", "Knowledge confirmed correct — trust increased")]);
   }
 
-  /** Auto-process a ticket through the full analysis → memory → draft pipeline. */
+  /** Submit a ticket to the transport-independent application service. */
   async function processTicketPipeline(text: string, curatedScenario?: CuratedDeveloperDemoScenario) {
     if (!text.trim() || isProcessing) return;
     const requestGeneration = ticketRequestGuard.current.begin();
+    const abortController = new AbortController();
+    ticketAbortController.current = abortController;
     setIsProcessing(true);
     setErrorMessage("");
-    const profile = normalizeOrganizationProfile(organizationProfile);
-    try {
-      let tId: string;
-      try {
-        tId = await persistence.generateTicketId(profile.id, profile);
-        if (!ticketRequestIsCurrent(requestGeneration)) return;
-      } catch (error) {
-        if (!ticketRequestIsCurrent(requestGeneration)) return;
-        reportPersistenceError("generateTicketId", error);
-        return;
-      }
-      const ticket = curatedScenario
-        ? {
-            ...makeCustomTicket(curatedScenario.ticketBody, tId),
-            subject: curatedScenario.ticketSubject,
-            description: curatedScenario.ticketBody,
-          }
-        : makeCustomTicket(text.trim(), tId);
-    setSelectedTicket(ticket);
     setCurrentStep(1);
-
-    // Create ticket record at submission
-    let record = createTicketRecord(tId, profile.id, text.trim(), ticket.subject);
-    setActiveTicketRecord(record);
-    persistTicketRecord(record);
-
-    // Phase 1: Analysis
-    const relevance = assessBusinessRelevanceForProfile(`${ticket.subject} ${ticket.description}`, profile);
-    setBusinessRelevance(relevance);
-    addLogEntries(createRelevanceLogEntries(relevance));
-
-    if (!relevance.isRelevant && relevance.status === "out_of_scope") {
-      setErrorMessage(`Rejected by Business Relevance Guardrail: ${relevance.reason}`);
-      record = { ...record, status: "rejected" };
-      setActiveTicketRecord(record);
-      persistTicketRecord(record);
-      return;
-    }
-
-    // Phase 1b: Business Domain Classification
-    const domain = classifyBusinessDomain(
-      `${ticket.subject} ${ticket.description}`,
-      ticket.id,
-      profile
-    );
-    setDomainClassification(domain);
-    addLogEntries([
-      createLogEntry("Business domain classified", `Primary: ${domain.primaryDomain} · All: ${domain.domains.join(", ")} (${domain.confidence} confidence)`)
-    ]);
-
-    const und = understandForProfile(ticket, profile);
-    const businessRouting = routeBusinessInquiryUnderstanding(und);
-    const routedUnderstanding = businessRouting.understanding;
-    const canonicalProblem = businessRouting.canonicalProblem ?? identifyCanonicalProblem(routedUnderstanding, profile);
-    const advisory = await requestAnalysisAdvisory(ticket, routedUnderstanding, {
-      title: canonicalProblem.title,
-      problemSummary: canonicalProblem.problemSummary,
-      category: canonicalProblem.category
-    }, requestGeneration);
-    if (!ticketRequestIsCurrent(requestGeneration)) return;
-    const enrichedUnderstanding = applyAdvisoryExtractedFields(routedUnderstanding, advisory);
-    const analysis = understandingToAnalysis(enrichedUnderstanding);
-
-    // Update record with classification
-    // TODO-058: language is recorded as ticket metadata alongside the
-    // classification. Knowledge, canonicals, and lessons stay language-neutral.
-    const ticketLanguage = resolveTicketLanguage(ticket, organizationProfile);
-    record = {
-      ...record,
-      classification: {
-        category: enrichedUnderstanding.category,
-        intent: enrichedUnderstanding.intent ?? "unspecified",
-        canonicalProblem: canonicalProblem.title,
-        classifiedBy: "deterministic",
-        confidence: enrichedUnderstanding.businessClassification?.inquiryType === "business_inquiry"
-          ? enrichedUnderstanding.businessClassification.confidence
-          : domain.confidence,
-        inquiryType: enrichedUnderstanding.businessClassification?.inquiryType,
-        businessIntent: enrichedUnderstanding.businessClassification?.intent,
-        language: {
-          detected: ticketLanguage.detection.language,
-          confidence: ticketLanguage.detection.confidence,
-          method: ticketLanguage.detection.method,
-          responseLanguage: ticketLanguage.response.language,
+    const profile = normalizeOrganizationProfile(organizationProfile);
+    const requestId = `ticket-request-${profile.id}-${Date.now()}-${requestGeneration}`;
+    try {
+      const resourcePersistence = await getPersistenceAdapterForOrganization(profile.id);
+      const result = await processTicket(
+        {
+          organizationId: profile.id,
+          actorContext: authUser ? { id: authUser.id, name: authUser.name, email: authUser.email } : {},
+          authority: activePersistenceMode(),
+          requestId,
+          idempotencyKey: `ui:${requestId}`,
+          ticketInput: curatedScenario
+            ? { subject: curatedScenario.ticketSubject, description: curatedScenario.ticketBody, customerName: "Demo User", intakeMode: "single" }
+            : { description: text.trim(), customerName: "Demo User", intakeMode: "single" },
+          organizationProfile: profile,
+          processingOptions: { knowledgeItems, sessionCreatedIds, aiAdapter },
+          signal: abortController.signal
         },
-      },
-    };
-    setActiveTicketRecord(record);
-    persistTicketRecord(record);
-
-    setAiAnalysis(analysis);
-    setAiAdvisory(advisory);
-    setSelectedTicket({ ...ticket, status: "analyzed" });
-    addLogEntries([
-      createLogEntry("Observed ticket input", `Ticket: ${tId}`),
-      createLogEntry(
-        `Detected language: ${languageLabel(ticketLanguage.detection.language)}`,
-        `Confidence ${ticketLanguage.detection.confidence.toFixed(2)} (${ticketLanguage.detection.method}). ${ticketLanguage.response.explanation}`
-      ),
-      createLogEntry(`Extracted category: ${enrichedUnderstanding.category}`, `Urgency: ${enrichedUnderstanding.urgency}`),
-      createLogEntry("Canonical problem proposed", canonicalProblem.title),
-    ]);
-    updateMetrics({ ticketsProcessed: 1 });
-    setCurrentStep(2);
-
-    const hasBusinessMemoryMatch = enrichedUnderstanding.businessClassification?.inquiryType === "business_inquiry"
-      && withPreDiscriminationLessonMatches(
-        ticket,
-        enrichedUnderstanding,
-        retrieveMemory(enrichedUnderstanding, knowledgeItems, sessionCreatedIds),
-        knowledgeItems,
-        canonicalProblem.title
-      ).some((match) => match.item.category === "Business Inquiry" && isCompatibleForDrafting(enrichedUnderstanding, match.item, ticket));
-
-    if (enrichedUnderstanding.businessClassification?.inquiryType === "business_inquiry" && !hasBusinessMemoryMatch) {
-      record = {
-        ...record,
-        memoryMatch: { knowledgeId: null, matchType: "none", lessonId: null },
-      };
-      setActiveTicketRecord(record);
-      persistTicketRecord(record);
-      setSimilarKnowledge([]);
+        {
+          persistence: resourcePersistence,
+          ai: aiAdapter,
+          onEvent: (event) => addLogEntries([createLogEntry(event.name, event.detail)])
+        }
+      );
+      if (!ticketRequestIsCurrent(requestGeneration)) return;
+      setSelectedTicket(result.ticket);
+      setActiveTicketRecord(result.persistedTicket);
+      setBusinessRelevance(result.businessRelevance);
+      setDomainClassification(result.domainClassification);
+      setAiAnalysis(result.analysis);
+      setAiAdvisory(result.advisory);
+      setSimilarKnowledge(result.similarKnowledge);
+      setSuggestedResponse(result.draft);
+      setReviewedResponse(result.draft.source === "no_template" ? "" : result.draft.draftResponse);
+      setLastDraftUsedAI(result.draft.source === "ai_advisory");
+      setDiscriminationReasoning(null);
+      setDiscriminatedMatchTitle(null);
       addLogEntries([
-        createLogEntry("Business inquiry routed to organization profile", `${enrichedUnderstanding.businessClassification.intent} · operational lessons and resolved tickets were not retrieved`),
-        createLogEntry("Organization knowledge used", `${profile.name} profile: description, products, services, and supported domains`),
+        createLogEntry("Observed ticket input", `Ticket: ${result.ticket.ticketId}`),
+        createLogEntry(`Detected language: ${languageLabel(result.language.detection.language)}`, `Confidence ${result.language.detection.confidence.toFixed(2)} (${result.language.detection.method}). ${result.language.response.explanation}`),
+        createLogEntry(`Extracted category: ${result.understanding.category}`, `Urgency: ${result.understanding.urgency}`),
+        createLogEntry("Canonical problem proposed", result.canonicalSelection.title),
+        createLogEntry("Generated draft response", result.draft.source === "ai_advisory" ? "AI advisory draft" : "Deterministic draft")
       ]);
-      setCurrentStep(3);
-      const businessDraft = draftBusinessInquiryResponse(
-        ticket,
-        enrichedUnderstanding,
-        profile,
-        ticketLanguage.response.language
-      );
-      const aiDraft = await requestDraftAdvisory(
-        ticket,
-        enrichedUnderstanding,
-        canonicalProblem.title,
-        null,
-        businessDraft.draftResponse,
-        businessDraft.confidenceNote,
-        businessDraft.source ?? "deterministic",
-        advisory,
-        requestGeneration
-      );
-      if (!ticketRequestIsCurrent(requestGeneration)) return;
-      const response = aiDraft.response;
-      record = { ...record, draftSource: response.source as TicketRecord["draftSource"], status: "in_review" };
-      setActiveTicketRecord(record);
-      persistTicketRecord(record);
-      addLogEntries([createLogEntry("Generated grounded business inquiry draft", response.source === "ai_advisory" ? "AI advisory draft reviewed against organization profile" : "Deterministic organization-profile draft")]);
-      setAiAdvisory(aiDraft.advisory);
-      setLastDraftUsedAI(aiDraft.usedAIDraft);
-      setSuggestedResponse(response);
-      setReviewedResponse(response.draftResponse);
-      setSelectedTicket({ ...ticket, status: "drafted" });
+      updateMetrics({ ticketsProcessed: 1, memoryRetrievals: 1, repeatedIssuesDetected: result.memoryMatch ? 1 : 0 });
       setCurrentStep(4);
-      return;
-    }
-
-    // Phase 2: Memory retrieval
-    const matches = withPreDiscriminationLessonMatches(
-      ticket,
-      enrichedUnderstanding,
-      retrieveMemory(enrichedUnderstanding, knowledgeItems, sessionCreatedIds),
-      knowledgeItems,
-      canonicalProblem.title
-    );
-    const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(enrichedUnderstanding, m.item, ticket));
-    const selectedMatchInfo = compatibleMatches.length > 0 ? selectPreferredMatch(ticket, compatibleMatches) : null;
-    const topMatch = selectedMatchInfo?.match ?? null;
-    const lessonMatchForRecord = selectedMatchInfo?.lessonMatch ?? null;
-    let topValidationHistory: ValidationRecord[] = [];
-    if (topMatch) {
-      try {
-        topValidationHistory = (await ensureKnowledgeHistory(profile.id, topMatch.item.id)).validationRecords;
-      } catch (error) {
-        reportPersistenceError("loadKnowledgeHistory", error);
-      }
+    } catch (error) {
       if (!ticketRequestIsCurrent(requestGeneration)) return;
+      if (error instanceof ProcessTicketError) {
+        if (error.failure.persistedTicket) setActiveTicketRecord(error.failure.persistedTicket);
+        if (error.failure.errorClass === "cancelled") return;
+        setErrorMessage(error.failure.safeMessage);
+      } else {
+        console.error("Ticket application service failed.", error);
+        setErrorMessage("Ticket processing could not be completed. Retry is safe.");
+      }
+    } finally {
+      if (ticketRequestIsCurrent(requestGeneration)) setIsProcessing(false);
+      if (ticketAbortController.current === abortController) ticketAbortController.current = null;
     }
-    const topTrust = topMatch ? evaluateTrust(topMatch.item, profile, topValidationHistory) : null;
-
-    record = {
-      ...record,
-      memoryMatch: {
-        knowledgeId: topMatch?.item.id ?? null,
-        matchType: lessonMatchForRecord ? "lesson" : topMatch ? "template" : "none",
-        lessonId: lessonMatchForRecord?.lesson.id ?? null,
-      },
-    };
-    setActiveTicketRecord(record);
-    persistTicketRecord(record);
-
-    setSimilarKnowledge(topMatch ? moveMatchToFront(compatibleMatches, topMatch.item.id) : []);
-    addLogEntries([
-      createLogEntry(
-        `Retrieved ${matches.length} memory candidate${matches.length !== 1 ? "s" : ""}`,
-        topMatch ? `Top candidate: "${topMatch.item.title}" (intrinsic relevance retained for ranking)` : "No knowledge matches"
-      ),
-      topTrust
-        ? createLogEntry(`Trust evaluated: ${topTrust.score}/100 → ${topTrust.decisionLabel}`)
-        : createLogEntry("Trust evaluation skipped: no match"),
-    ]);
-    updateMetrics({ memoryRetrievals: 1, repeatedIssuesDetected: compatibleMatches.length > 0 ? 1 : 0 });
-    void checkPatternDiscovery(ticket, analysis, requestGeneration);
-    setCurrentStep(3);
-
-    // Phase 3: Draft generation (with LLM discrimination on the top match)
-    setDiscriminationReasoning(null);
-    setDiscriminatedMatchTitle(null);
-    const effectiveTopMatch = topMatch
-      ? await requestMatchDiscrimination(ticket, topMatch, und, lessonMatchForRecord ?? undefined, requestGeneration)
-      : null;
-    if (!ticketRequestIsCurrent(requestGeneration)) return;
-    if (topMatch && !effectiveTopMatch) {
-      // Discrimination rejected the retrieval match as a distinct problem.
-      // The Organizational Memory panel and pipeline "memory found"/"trust"
-      // steps read similarKnowledge[0] (see TicketWorkspace.tsx) — without
-      // this, they kept showing the rejected match while the draft correctly
-      // treated the ticket as unmatched, producing a contradictory UI state.
-      setSimilarKnowledge((prev) => stripRejectedMatch(prev, topMatch.item.id));
-    }
-    // Semantic fallback (TODO-009 Step 2): only when the deterministic gate
-    // produced no compatible match at all — never after discrimination rejection.
-    const semanticFallback = compatibleMatches.length === 0
-      ? await requestSemanticCompatibilityFallback(ticket, enrichedUnderstanding, matches, requestGeneration)
-      : null;
-    if (!ticketRequestIsCurrent(requestGeneration)) return;
-    if (semanticFallback) setSimilarKnowledge([semanticFallback.match]);
-    const draftMatch = effectiveTopMatch ?? semanticFallback?.match ?? null;
-    const draft = draftResponse(ticket, enrichedUnderstanding, draftMatch, profile, knowledgeItems.length === 0, semanticFallback?.authorization ?? null);
-    const aiDraft = await requestDraftAdvisory(ticket, enrichedUnderstanding, canonicalProblem.title, draftMatch, draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", advisory, requestGeneration, semanticFallback?.authorization ?? null);
-    if (!ticketRequestIsCurrent(requestGeneration)) return;
-    const response = aiDraft.response;
-
-    // Update record with draft source and move to in_review
-    record = {
-      ...record,
-      draftSource: response.source as TicketRecord["draftSource"],
-      status: "in_review",
-    };
-    setActiveTicketRecord(record);
-    persistTicketRecord(record);
-
-    addLogEntries([
-      createLogEntry("Generated draft response", response.source === "ai_advisory" ? "AI advisory draft" : "Deterministic draft")
-    ]);
-
-    setAiAdvisory(aiDraft.advisory);
-    setLastDraftUsedAI(aiDraft.usedAIDraft);
-    setSuggestedResponse(response);
-    setReviewedResponse(response.source === "no_template" ? "" : response.draftResponse);
-    setSelectedTicket({ ...ticket, status: "drafted" });
-    setCurrentStep(4);
-  } catch (error) {
-    if (!ticketRequestIsCurrent(requestGeneration)) return;
-    console.error("Ticket pipeline failed.", error);
-    const detail = error instanceof Error ? error.message : "The ticket could not be analyzed.";
-    setErrorMessage(`Ticket processing failed: ${detail}`);
-  } finally {
-    if (ticketRequestIsCurrent(requestGeneration)) setIsProcessing(false);
-  }
   }
 
 
@@ -3852,6 +3822,7 @@ export default function Home() {
                   onApproveResponse={approveResponse}
                   onViewReflection={() => setCurrentStep(7)}
                   onConfirmReflection={confirmReflection}
+                  isValidationSubmitting={isValidationSubmitting}
                   onApproveReuse={approveReuse}
                   onProcessReuse={(text) => { void processSecondTicket(text); }}
                   onRunAgain={() => { void processSecondTicket(); }}

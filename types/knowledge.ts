@@ -17,6 +17,18 @@ export interface KnowledgeValidation {
   status: "validated" | "pending" | "rejected";
 }
 
+/**
+ * Audit-only state for historical evidence repair. This is deliberately
+ * metadata: it must never participate in retrieval, trust, promotion, or
+ * authorization decisions.
+ */
+export type HistoricalAuditCompleteness =
+  | "complete"
+  | "migrated_complete"
+  | "historical_incomplete"
+  | "conflicted"
+  | "legacy_unverified";
+
 export type KnowledgeCandidateStatus = "proposed" | "validated" | "rejected";
 
 export interface KnowledgeCandidateContent {
@@ -180,6 +192,7 @@ export interface KnowledgeItem {
   lifecycleState?: "active" | "candidate" | "deprecated";
   provenance?: KnowledgeProvenance;
   validation?: KnowledgeValidation;
+  auditCompleteness?: HistoricalAuditCompleteness;
 
   // Phase 4.3 — Organizational Learning metadata
   timesSeen?: number;

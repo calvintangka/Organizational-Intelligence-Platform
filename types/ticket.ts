@@ -97,6 +97,12 @@ export interface TicketRecordReflection {
 export interface TicketRecord {
   ticketId: string;
   orgId: string;
+  actorId?: string;
+  /** Application-service replay metadata. Kept optional for historical rows. */
+  processingIdempotencyKey?: string;
+  processingPayloadHash?: string;
+  processingRequestId?: string;
+  processingResult?: unknown;
   createdAt: string;
   /** Stable idempotency metadata for rows originating from a bulk upload. */
   bulkUploadKey?: string | null;

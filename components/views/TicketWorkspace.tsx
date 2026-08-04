@@ -76,6 +76,7 @@ interface TicketWorkspaceProps {
   lastSavedKnowledgeId: string | null;
   aiModeEnabled: boolean;
   isRetryingDraft: boolean;
+  isValidationSubmitting: boolean;
   // Callbacks
   onSubmitTicket: (text: string, scenario?: CuratedDeveloperDemoScenario) => void;
   onUpdateReviewedResponse: (text: string) => void;
@@ -334,6 +335,7 @@ export function TicketWorkspace({
   lastSavedKnowledgeId,
   aiModeEnabled,
   isRetryingDraft,
+  isValidationSubmitting,
   onSubmitTicket,
   onUpdateReviewedResponse,
   onApproveResponse,
@@ -605,6 +607,7 @@ export function TicketWorkspace({
             <ReflectionPanel
               decision={reflectionDecision}
               onConfirm={onConfirmReflection}
+              isSubmitting={isValidationSubmitting}
               existingLessons={reflectionDecision.existingItemId ? knowledgeItems.find(k => k.id === reflectionDecision.existingItemId)?.lessons : undefined}
               reviewedResponse={reviewedResponse}
               darkMode={darkMode}

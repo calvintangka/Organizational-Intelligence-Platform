@@ -137,6 +137,13 @@ export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized
   const exampleTickets = item.exampleTickets ?? [];
   const provenance = item.provenance;
   const lastUpdatedDisplay = formatLastUpdatedDisplay([item.lastUpdated, item.lastValidated, item.approvedAt, item.createdAt]);
+  const auditWarning = item.auditCompleteness === "conflicted"
+    ? "Historical evidence is conflicted. OIP preserved the record and will not infer which history is correct."
+    : item.auditCompleteness === "historical_incomplete"
+      ? "Historical evidence is incomplete. OIP preserved the record and will not infer missing actors, events, or safeguards."
+      : item.auditCompleteness === "legacy_unverified"
+        ? "Some legacy evidence remains unverified. OIP preserved the historical record and did not rewrite its meaning."
+        : null;
 
   if (response?.source === "no_template") {
     return (
@@ -160,6 +167,12 @@ export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized
           ? `OIP matched this ticket to a validated lesson: "${response?.groundingLabel ?? lessonMatch?.lesson.title ?? lessonMatch?.lesson.rootCause ?? "matched lesson"}". The response below uses this lesson's specific guidance.`
           : "OIP matched this ticket to an approved knowledge entry and used it to draft the response below."}
       </p>
+
+      {auditWarning && (
+        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-3 text-xs leading-5 text-amber-900">
+          <span className="font-bold">Historical audit note:</span> {auditWarning}
+        </div>
+      )}
 
       {lessonMatch && (
         <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/60 p-4">

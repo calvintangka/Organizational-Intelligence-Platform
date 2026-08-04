@@ -37,6 +37,8 @@ import { formatTicketIdRange, organizationTicketPrefix, ticketDateStamp } from "
 import { AuthorizationError } from "@/lib/server/authorization";
 import { dedupeLessonCollection, dedupeNewLessonProposals } from "@/lib/canonicalProblemEngine";
 import { withStableValidationProvenance } from "@/lib/knowledgeProvenance";
+import { startTelemetrySpan } from "@/lib/telemetry";
+import type { ValidationCommitResult as AtomicValidationCommitResult } from "@/lib/persistence/adapter";
 
 export type PersistenceServiceErrorCode =
   | "UNAUTHENTICATED"
@@ -144,6 +146,7 @@ function mapOrganization(row: PrismaOrganization): OrganizationProfile {
 
 function mapKnowledge(row: PrismaKnowledgeItem): KnowledgeItem {
   const content = asRecord(row.content);
+  const historicalAudit = optionalJsonRecord(content._todo065HistoricalAudit) as { auditCompleteness?: KnowledgeItem["auditCompleteness"] } | undefined;
   return {
     id: row.id,
     organizationId: row.organizationId,
@@ -160,6 +163,7 @@ function mapKnowledge(row: PrismaKnowledgeItem): KnowledgeItem {
     lifecycleState: row.lifecycleState,
     provenance: optionalJsonRecord(content.provenance),
     validation: optionalJsonRecord(content.validation),
+    ...(historicalAudit?.auditCompleteness ? { auditCompleteness: historicalAudit.auditCompleteness } : {}),
     timesSeen: row.timesSeen ?? undefined,
     successfulResolutions: row.successfulResolutions ?? undefined,
     failedResolutions: row.failedResolutions ?? undefined,
@@ -284,9 +288,13 @@ function mapPattern(row: PrismaEmergingPattern): EmergingPattern {
 }
 
 function mapTicket(row: PrismaTicketRecord): TicketRecord {
+  const rawClassification = nullableJsonRecord(row.classification) as (Record<string, unknown> & { _processing?: Record<string, unknown> }) | null;
+  const processing = rawClassification?._processing;
+  const { _processing: _ignoredProcessing, ...classification } = rawClassification ?? {};
   return {
     ticketId: row.ticketId,
     orgId: row.organizationId,
+    actorId: row.actorId ?? undefined,
     createdAt: iso(row.createdAt),
     bulkUploadKey: row.bulkUploadKey,
     bulkEntryId: row.bulkEntryId,
@@ -294,7 +302,11 @@ function mapTicket(row: PrismaTicketRecord): TicketRecord {
     intakeMode: row.intakeMode === "bulk" ? "bulk" : row.intakeMode === "single" ? "single" : undefined,
     rawMessage: row.rawMessage,
     subject: row.subject,
-    classification: nullableJsonRecord(row.classification),
+    classification: Object.keys(classification).length > 0 ? classification as unknown as TicketRecord["classification"] : null,
+    processingIdempotencyKey: typeof processing?.idempotencyKey === "string" ? processing.idempotencyKey : undefined,
+    processingPayloadHash: typeof processing?.payloadHash === "string" ? processing.payloadHash : undefined,
+    processingRequestId: typeof processing?.requestId === "string" ? processing.requestId : undefined,
+    processingResult: processing?.result,
     memoryMatch: nullableJsonRecord(row.memoryMatch),
     draftSource: row.draftSource as TicketRecord["draftSource"],
     resolution: asRecord(row.resolution) as unknown as TicketRecord["resolution"],
@@ -319,11 +331,38 @@ function classifyDatabaseError(error: unknown, operation: string): PersistenceSe
 }
 
 async function readDatabase<T>(operation: string, read: () => Promise<T>): Promise<T> {
+  const span = startTelemetrySpan("read", "database", { unit: "operations", tags: { operation } });
   try {
-    return await read();
+    const result = await read();
+    span.end(true);
+    return result;
   } catch (error) {
+    span.end(false, { error: error instanceof Error ? error.name : "unknown" });
     throw classifyDatabaseError(error, operation);
   }
+}
+
+/**
+ * Test-only fault injection for the disposable TODO-067 probe. The hook is
+ * never called unless a test explicitly installs it in the server module; it
+ * is not exposed through an HTTP or environment-controlled production path.
+ */
+export interface ValidationCommitTestHooks {
+  afterCandidateUpdate?: () => void | Promise<void>;
+  afterValidationCreate?: () => void | Promise<void>;
+  afterMemoryChangeCreate?: () => void | Promise<void>;
+  afterTrustEvidenceCreate?: () => void | Promise<void>;
+  afterKnowledgeUpdate?: () => void | Promise<void>;
+}
+
+let validationCommitTestHooks: ValidationCommitTestHooks | null = null;
+
+export function configureValidationCommitTestHooks(hooks: ValidationCommitTestHooks | null): void {
+  validationCommitTestHooks = hooks;
+}
+
+async function runValidationCommitTestHook(name: keyof ValidationCommitTestHooks): Promise<void> {
+  await validationCommitTestHooks?.[name]?.();
 }
 
 export function validateOrganizationId(value: unknown): string {
@@ -587,9 +626,13 @@ function nullableJson(value: unknown): Prisma.InputJsonValue | typeof Prisma.DbN
 }
 
 async function writeDatabase<T>(operation: string, write: () => Promise<T>): Promise<T> {
+  const span = startTelemetrySpan("transaction", "database", { unit: "operations", tags: { operation } });
   try {
-    return await write();
+    const result = await write();
+    span.end(true);
+    return result;
   } catch (error) {
+    span.end(false, { error: error instanceof Error ? error.name : "unknown" });
     throw classifyDatabaseError(error, operation);
   }
 }
@@ -781,7 +824,8 @@ async function upsertKnowledgeItemTx(
 async function upsertCandidateTx(
   tx: TransactionClient,
   organizationId: string,
-  candidate: KnowledgeCandidate
+  candidate: KnowledgeCandidate,
+  options?: { authoritativeLifecycle?: boolean }
 ): Promise<void> {
   const id = requireString(candidate.id, "knowledge candidate id");
   assertPayloadOrganization(organizationId, candidate.organizationId, "knowledge candidate");
@@ -794,9 +838,15 @@ async function upsertCandidateTx(
     status: narrowEnum(candidate.status, CANDIDATE_LIFECYCLES, "proposed"),
     createdAt: parseDate(candidate.createdAt, "knowledge candidate createdAt")
   };
-  const existing = await tx.knowledgeCandidate.findUnique({ where: { id }, select: { organizationId: true } });
+  const existing = await tx.knowledgeCandidate.findUnique({ where: { id }, select: { organizationId: true, status: true } });
   if (existing && existing.organizationId !== organizationId) {
     throw conflict(`Knowledge candidate ${id} belongs to a different organization.`);
+  }
+  if (!options?.authoritativeLifecycle && candidate.status === "validated" && existing?.status !== "validated") {
+    throw conflict(`Knowledge candidate ${id} can only enter validated state through the validation commit operation.`);
+  }
+  if (!options?.authoritativeLifecycle && existing?.status === "validated") {
+    data.status = existing.status;
   }
   if (existing) {
     await tx.knowledgeCandidate.update({ where: { id }, data });
@@ -806,7 +856,19 @@ async function upsertCandidateTx(
 }
 
 function toTicketColumns(record: TicketRecord): Omit<Prisma.TicketRecordUncheckedCreateInput, "id" | "organizationId" | "ticketId"> {
+  const processing = record.processingIdempotencyKey || record.processingPayloadHash || record.processingRequestId
+    ? {
+        idempotencyKey: record.processingIdempotencyKey,
+        payloadHash: record.processingPayloadHash,
+        requestId: record.processingRequestId,
+        result: record.processingResult
+      }
+    : undefined;
+  const classification = record.classification
+    ? processing ? { ...record.classification, _processing: processing } : record.classification
+    : processing ? { _processing: processing } : null;
   return {
+    actorId: record.actorId ?? null,
     bulkUploadKey: record.bulkUploadKey ?? null,
     bulkEntryId: record.bulkEntryId ?? null,
     bulkClusterId: record.bulkClusterId ?? null,
@@ -815,7 +877,7 @@ function toTicketColumns(record: TicketRecord): Omit<Prisma.TicketRecordUnchecke
     subject: record.subject ?? null,
     status: narrowEnum(record.status, TICKET_LIFECYCLES, "open"),
     draftSource: record.draftSource ?? null,
-    classification: nullableJson(record.classification),
+    classification: nullableJson(classification),
     memoryMatch: nullableJson(record.memoryMatch),
     resolution: json(record.resolution ?? {}),
     reflection: json(record.reflection ?? {}),
@@ -973,8 +1035,15 @@ export async function saveKnowledgeCandidates(organizationId: string, candidates
       for (const candidate of candidates) {
         await upsertCandidateTx(tx, organization.id, candidate);
       }
+      // A client snapshot must never be able to delete an already committed
+      // candidate and leave its validation/memory audit chain orphaned.
+      const submittedIds = candidates.map((candidate) => candidate.id);
+      const committed = await tx.validationRecord.findMany({
+        where: { organizationId: organization.id, candidateId: { notIn: submittedIds } },
+        select: { candidateId: true }
+      });
       await tx.knowledgeCandidate.deleteMany({
-        where: { organizationId: organization.id, id: { notIn: candidates.map((candidate) => candidate.id) } }
+        where: { organizationId: organization.id, id: { notIn: [...submittedIds, ...committed.map((record) => record.candidateId)] } }
       });
     })
   );
@@ -1225,18 +1294,10 @@ export interface ValidationCommitPayload {
   knowledgeItem: KnowledgeItem;
   /** Revision of the knowledge item before this commit; null asserts creation. */
   expectedKnowledgeRevision: number | null;
+  idempotencyKey: string;
 }
 
-export interface ValidationCommitResult {
-  replayed: boolean;
-  knowledgeRevision: number;
-  /**
-   * TODO-015: whether this commit applied a trust delta. False when the source
-   * ticket had already contributed a trust-adding event to this KnowledgeItem
-   * (the audit records are still written; only the trust delta is withheld).
-   */
-  trustApplied?: boolean;
-}
+export type ValidationCommitResult = AtomicValidationCommitResult;
 
 // TODO-015: the only trust-adding reuse event today is `trust_update_only`
 // (lib/reflection.ts -> lib/trustEngine.ts recordResolution, TRUST_HUMAN_REUSE).
@@ -1273,12 +1334,67 @@ function validateCommitPayload(organizationId: string, payload: unknown): Valida
   if (expected !== null && expected !== undefined && (!Number.isInteger(expected) || expected < 0)) {
     throw invalidRequest("expectedKnowledgeRevision must be null or a non-negative integer.");
   }
+  const idempotencyKey = body.idempotencyKey ?? validation.id;
+  if (typeof idempotencyKey !== "string" || idempotencyKey.trim().length === 0) {
+    throw invalidRequest("idempotencyKey must be a non-empty string.");
+  }
   return {
     candidate: candidate as KnowledgeCandidate,
     validation: validation as ValidationRecord,
     memoryChange: memoryChange as MemoryChangeRecord,
     knowledgeItem: knowledgeItem as KnowledgeItem,
-    expectedKnowledgeRevision: expected ?? null
+    expectedKnowledgeRevision: expected ?? null,
+    idempotencyKey
+  };
+}
+
+async function loadCommittedValidationAggregate(
+  tx: TransactionClient,
+  organizationId: string,
+  candidateId: string,
+  validationId: string,
+  memoryChangeId: string,
+  knowledgeItemId: string,
+  actor: { id: string; name: string },
+  sourceTicketIds: string[],
+  decision: ValidationRecord["decision"],
+  changeType: MemoryChangeRecord["changeType"],
+  replayed: boolean,
+  knowledgeRevision: number,
+  trustApplied: boolean
+): Promise<ValidationCommitResult> {
+  const [candidateRow, validationRow, memoryChangeRow, knowledgeRow] = await Promise.all([
+    tx.knowledgeCandidate.findUnique({ where: { id: candidateId } }),
+    tx.validationRecord.findUnique({ where: { id: validationId } }),
+    tx.memoryChangeRecord.findUnique({ where: { id: memoryChangeId } }),
+    tx.knowledgeItem.findUnique({ where: { id: knowledgeItemId } })
+  ]);
+  if (!candidateRow || !validationRow || !memoryChangeRow || !knowledgeRow) {
+    throw new PersistenceServiceError(
+      "DATABASE_ERROR",
+      "The validation commit completed without a complete auditable aggregate.",
+      500
+    );
+  }
+  if ([candidateRow, validationRow, memoryChangeRow, knowledgeRow].some((row) => row.organizationId !== organizationId)) {
+    throw conflict("The committed validation aggregate crossed organization ownership boundaries.");
+  }
+  return {
+    replayed,
+    knowledgeRevision,
+    trustApplied,
+    candidate: mapCandidate(candidateRow),
+    validation: mapValidation(validationRow),
+    memoryChange: mapMemoryChange(memoryChangeRow),
+    knowledgeItem: mapKnowledge(knowledgeRow),
+    auditSummary: {
+      organizationId,
+      actorId: actor.id,
+      actor: actor.name,
+      sourceTicketIds: [...sourceTicketIds],
+      decision,
+      changeType
+    }
   };
 }
 
@@ -1313,18 +1429,43 @@ export async function commitValidation(
           || existingValidation.candidateId !== payload.candidate.id) {
           throw conflict(`Validation record ${payload.validation.id} already exists with different ownership.`);
         }
-        const knowledge = await tx.knowledgeItem.findUnique({
-          where: { id: payload.knowledgeItem.id },
-          select: { revision: true, organizationId: true }
+        const existingMemoryChange = await tx.memoryChangeRecord.findFirst({
+          where: { organizationId: organization.id, validationRecordId: payload.validation.id }
         });
-        return {
-          replayed: true,
-          knowledgeRevision: knowledge && knowledge.organizationId === organization.id ? knowledge.revision : 0,
-          trustApplied: true
-        };
+        const expectedKnowledgeId = payload.validation.knowledgeId ?? payload.knowledgeItem.id;
+        if (
+          !existingMemoryChange
+          || existingMemoryChange.id !== payload.memoryChange.id
+          || existingValidation.decision !== payload.validation.decision
+          || existingValidation.knowledgeItemId !== expectedKnowledgeId
+        ) {
+          throw conflict(`Idempotency key ${payload.idempotencyKey} was already used with a different validation command.`);
+        }
+        const knowledge = await tx.knowledgeItem.findUnique({ where: { id: expectedKnowledgeId } });
+        if (!knowledge || knowledge.organizationId !== organization.id) {
+          throw conflict(`Validation replay ${payload.validation.id} has no knowledge item in this organization.`);
+        }
+        return loadCommittedValidationAggregate(
+          tx,
+          organization.id,
+          payload.candidate.id,
+          payload.validation.id,
+          existingMemoryChange.id,
+          knowledge.id,
+          actor,
+          payload.candidate.sourceTicketIds ?? [],
+          existingValidation.decision,
+          payload.memoryChange.changeType,
+          true,
+          knowledge.revision,
+          true
+        );
       }
 
       const existingKnowledgeRow = await tx.knowledgeItem.findUnique({ where: { id: payload.knowledgeItem.id } });
+      if (existingKnowledgeRow && existingKnowledgeRow.organizationId !== organization.id) {
+        throw conflict(`Knowledge item ${payload.knowledgeItem.id} belongs to a different organization.`);
+      }
       const storedKnowledge = existingKnowledgeRow && existingKnowledgeRow.organizationId === organization.id
         ? mapKnowledge(existingKnowledgeRow)
         : null;
@@ -1341,7 +1482,22 @@ export async function commitValidation(
         storedKnowledge
       );
 
-      await upsertCandidateTx(tx, organization.id, { ...payload.candidate, status: "validated" });
+      const sourceTicketIds = [
+        ...new Set(
+          (payload.candidate.sourceTicketIds ?? []).filter(
+            (ticketId): ticketId is string => typeof ticketId === "string" && ticketId.length > 0
+          )
+        )
+      ];
+      const sourceTickets = sourceTicketIds.length > 0
+        ? await tx.ticketRecord.findMany({ where: { ticketId: { in: sourceTicketIds } }, select: { organizationId: true } })
+        : [];
+      if (sourceTickets.some((ticket) => ticket.organizationId !== organization.id)) {
+        throw conflict("A validation candidate references a source ticket from another organization.");
+      }
+
+      await upsertCandidateTx(tx, organization.id, { ...payload.candidate, status: "validated" }, { authoritativeLifecycle: true });
+      await runValidationCommitTestHook("afterCandidateUpdate");
 
       try {
         await tx.validationRecord.create({
@@ -1365,6 +1521,7 @@ export async function commitValidation(
         }
         throw error;
       }
+      await runValidationCommitTestHook("afterValidationCreate");
 
       try {
         await tx.memoryChangeRecord.create({
@@ -1387,6 +1544,7 @@ export async function commitValidation(
         }
         throw error;
       }
+      await runValidationCommitTestHook("afterMemoryChangeCreate");
 
       // TODO-015: claim source-ticket trust evidence inside this same transaction.
       // A trust-adding reuse event applies its delta only if at least one of its
@@ -1396,13 +1554,6 @@ export async function commitValidation(
       // claim shares this transaction, a later rollback also removes the evidence.
       let knowledgeToPersist = stableKnowledgeItem;
       let trustApplied = true;
-      const sourceTicketIds = [
-        ...new Set(
-          (payload.candidate.sourceTicketIds ?? []).filter(
-            (ticketId): ticketId is string => typeof ticketId === "string" && ticketId.length > 0
-          )
-        )
-      ];
       // A first validated promotion is itself trust evidence. Keep the
       // source-ticket claim in the same transaction so retries remain
       // idempotent and the audit chain can prove why the initial trust exists.
@@ -1449,6 +1600,7 @@ export async function commitValidation(
           knowledgeToPersist = { ...normalizedKnowledgeItem, trustScore: storedTrust };
         }
       }
+      await runValidationCommitTestHook("afterTrustEvidenceCreate");
 
       const knowledgeRevision = await upsertKnowledgeItemTx(
         tx,
@@ -1456,7 +1608,22 @@ export async function commitValidation(
         knowledgeToPersist,
         payload.expectedKnowledgeRevision
       );
-      return { replayed: false, knowledgeRevision, trustApplied };
+      await runValidationCommitTestHook("afterKnowledgeUpdate");
+      return loadCommittedValidationAggregate(
+        tx,
+        organization.id,
+        payload.candidate.id,
+        payload.validation.id,
+        payload.memoryChange.id,
+        payload.knowledgeItem.id,
+        actor,
+        sourceTicketIds,
+        payload.validation.decision,
+        payload.memoryChange.changeType,
+        false,
+        knowledgeRevision,
+        trustApplied
+      );
     })
   );
 }

@@ -144,12 +144,14 @@ export function createTicketRecord(
   ticketId: string,
   orgId: string,
   rawMessage: string,
-  subject: string | null
+  subject: string | null,
+  options?: Pick<TicketRecord, "actorId" | "processingIdempotencyKey" | "processingPayloadHash" | "processingRequestId">
 ): TicketRecord {
   requireOrganizationId(orgId, "Ticket record creation");
   return {
     ticketId,
     orgId,
+    ...options,
     createdAt: new Date().toISOString(),
     rawMessage,
     subject,

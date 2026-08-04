@@ -3,6 +3,7 @@ import { createLMStudioProvider } from "@/lib/ai/lmStudio";
 import type { AIAdapter, AIConfig, AIProvider, AIProviderResult } from "@/lib/ai/types";
 import type { AIDiagnostics } from "@/types";
 import type { AIChainAttempt } from "@/types";
+import { recordTelemetryEvent } from "@/lib/telemetry";
 
 const DEFAULT_AI_BASE_URL = "http://127.0.0.1:1234/v1";
 const DEFAULT_AI_MODEL = "google/gemma-4-e4b";
@@ -93,9 +94,37 @@ function createChainProvider(config: AIConfig): AIProvider {
         : undefined,
       attempts
     });
+    const chainStartedAt = Date.now();
     for (let i = 0; i < tiers.length; i++) {
       const tier = tiers[i];
-      last = await tier.call();
+      const provider = readableProviderLabel(tier.label);
+      const startedAt = Date.now();
+      let thrown: unknown = null;
+      try {
+        last = await tier.call();
+      } catch (error) {
+        thrown = error;
+        throw error;
+      } finally {
+        const succeeded = thrown === null && last.ok;
+        recordTelemetryEvent({
+          name: "request_latency",
+          category: "provider",
+          durationMs: Date.now() - startedAt,
+          startedAt,
+          endedAt: Date.now(),
+          success: succeeded,
+          unit: "requests",
+          tags: {
+            provider,
+            operation: methodName,
+            attempt: i + 1,
+            fallback: i > 0,
+            timeout: (thrown instanceof Error && /timeout|timed out|watchdog/i.test(thrown.message))
+              || /timeout|timed out|watchdog/i.test(last.error ?? "")
+          }
+        });
+      }
       attempts.push({
         label: tier.label,
         provider: last.providerLabel,
@@ -121,6 +150,16 @@ function createChainProvider(config: AIConfig): AIProvider {
         : "Falling through to deterministic.";
       console.warn(`[ai-chain] ${tiers[i].label} failed for ${methodName}: ${last.error ?? "unknown"}. ${next}`);
     }
+    recordTelemetryEvent({
+      name: "fallback_duration",
+      category: "provider",
+      durationMs: Date.now() - chainStartedAt,
+      startedAt: chainStartedAt,
+      endedAt: Date.now(),
+      success: true,
+      unit: "requests",
+      tags: { operation: methodName, provider: "deterministic fallback", fallback: true }
+    });
     return {
       ...last,
       diagnostics: mergeDiagnostics(last)

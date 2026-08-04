@@ -42,6 +42,7 @@ export type {
   MatchExplainability,
   KnowledgeProvenance,
   KnowledgeValidation,
+  HistoricalAuditCompleteness,
   KnowledgeCandidate,
   KnowledgeCandidateContent,
   KnowledgeCandidateStatus,

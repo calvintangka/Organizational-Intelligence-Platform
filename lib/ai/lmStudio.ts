@@ -27,6 +27,7 @@ import type {
   AIPatternSuggestion,
   MatchDiscriminationResult
 } from "@/types";
+import { recordTelemetryEvent } from "@/lib/telemetry";
 
 interface ChatCompletionOptions {
   maxTokens?: number;
@@ -35,6 +36,7 @@ interface ChatCompletionOptions {
    * Capped at MAX_AI_TIMEOUT_MS. Defaults to config.timeoutMs.
    */
   timeoutMs?: number;
+  providerLabel?: string;
 }
 
 const MAX_AI_TIMEOUT_MS = 120000;
@@ -134,6 +136,17 @@ async function callChatCompletion<T>(
       }),
       signal: controller.signal
     });
+    const responseReceivedAt = Date.now();
+    recordTelemetryEvent({
+      name: "request_latency",
+      category: "provider",
+      durationMs: responseReceivedAt - startedAt,
+      startedAt,
+      endedAt: responseReceivedAt,
+      success: response.ok,
+      unit: "requests",
+      tags: { provider: options.providerLabel ?? "LM Studio", operation: "http_request", timeout: false }
+    });
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => "");
@@ -149,12 +162,23 @@ async function callChatCompletion<T>(
       };
     }
 
+    const bodyStartedAt = Date.now();
     const payload = (await response.json()) as {
       choices?: Array<{
         finish_reason?: string;
         message?: { content?: string; reasoning_content?: string };
       }>;
     };
+    recordTelemetryEvent({
+      name: "response_latency",
+      category: "provider",
+      durationMs: Date.now() - bodyStartedAt,
+      startedAt: bodyStartedAt,
+      endedAt: Date.now(),
+      success: true,
+      unit: "requests",
+      tags: { provider: options.providerLabel ?? "LM Studio", operation: "response_body" }
+    });
     const firstChoice = payload.choices?.[0];
     const finishReason = firstChoice?.finish_reason;
     const content = firstChoice?.message?.content?.trim();
@@ -175,7 +199,18 @@ async function callChatCompletion<T>(
     if (!content && reasoningContent) {
       // Thinking models (e.g. Gemma QAT) sometimes emit the JSON answer in
       // reasoning_content and leave content null. Try parsing it as a fallback.
+      const parseStartedAt = Date.now();
       const parsedFromReasoning = parseJsonObject(reasoningContent);
+      recordTelemetryEvent({
+        name: "json_parsing",
+        category: "provider",
+        durationMs: Date.now() - parseStartedAt,
+        startedAt: parseStartedAt,
+        endedAt: Date.now(),
+        success: !!parsedFromReasoning,
+        unit: "requests",
+        tags: { provider: options.providerLabel ?? "LM Studio" }
+      });
       if (parsedFromReasoning && typeof parsedFromReasoning === "object") {
         console.warn(`[callChatCompletion] ${tier}: 200 OK — content empty, used reasoning_content fallback (thinking model path)`);
         return {
@@ -224,7 +259,18 @@ async function callChatCompletion<T>(
       };
     }
 
+    const parseStartedAt = Date.now();
     const parsed = parseJsonObject(content);
+    recordTelemetryEvent({
+      name: "json_parsing",
+      category: "provider",
+      durationMs: Date.now() - parseStartedAt,
+      startedAt: parseStartedAt,
+      endedAt: Date.now(),
+      success: !!parsed,
+      unit: "requests",
+      tags: { provider: options.providerLabel ?? "LM Studio" }
+    });
     if (!parsed || typeof parsed !== "object") {
       console.warn(
         `[callChatCompletion] ${tier}: 200 OK — parseJsonObject failed.`,
@@ -323,7 +369,7 @@ export function createLMStudioProvider(config: AIConfig, labelOverride?: string)
     mode: "lmstudio",
     label: lbl,
     async analyzeTicket(input: AnalyzeTicketInput) {
-      const result = await callChatCompletion<Record<string, unknown>>(config, buildAnalyzeTicketPrompt(input));
+      const result = await callChatCompletion<Record<string, unknown>>(config, buildAnalyzeTicketPrompt(input), { providerLabel: lbl });
       if (!result.ok || !result.data) return relabel(mapFailure<AIAnalysisSuggestion>(result));
       return relabel({
         ...result,
@@ -358,7 +404,7 @@ export function createLMStudioProvider(config: AIConfig, labelOverride?: string)
       const result = await callChatCompletion<Record<string, unknown>>(
         config,
         buildCanonicalProblemPrompt(input),
-        { maxTokens: 700, timeoutMs: 90000 }
+        { maxTokens: 700, timeoutMs: 90000, providerLabel: lbl }
       );
       if (!result.ok || !result.data) return relabel(mapFailure<AICanonicalProblemSuggestion>(result));
       return relabel({
@@ -371,7 +417,7 @@ export function createLMStudioProvider(config: AIConfig, labelOverride?: string)
       });
     },
     async suggestPatternName(input: PatternNameInput) {
-      const result = await callChatCompletion<Record<string, unknown>>(config, buildPatternNamePrompt(input));
+      const result = await callChatCompletion<Record<string, unknown>>(config, buildPatternNamePrompt(input), { providerLabel: lbl });
       if (!result.ok || !result.data) return relabel(mapFailure<AIPatternSuggestion>(result));
       return relabel({
         ...result,
@@ -383,7 +429,7 @@ export function createLMStudioProvider(config: AIConfig, labelOverride?: string)
       });
     },
     async enrichKnowledge(input: KnowledgeEnrichmentInput) {
-      const result = await callChatCompletion<Record<string, unknown>>(config, buildKnowledgeEnrichmentPrompt(input));
+      const result = await callChatCompletion<Record<string, unknown>>(config, buildKnowledgeEnrichmentPrompt(input), { providerLabel: lbl });
       if (!result.ok || !result.data) return relabel(mapFailure<AIKnowledgeEnrichment>(result));
       return relabel({
         ...result,
@@ -400,7 +446,7 @@ export function createLMStudioProvider(config: AIConfig, labelOverride?: string)
       const result = await callChatCompletion<Record<string, unknown>>(
         config,
         buildDraftCustomerResponsePrompt(input),
-        { maxTokens: 650 }
+        { maxTokens: 650, providerLabel: lbl }
       );
       if (!result.ok || !result.data) return relabel(mapFailure<AICustomerResponseSuggestion>(result));
       return relabel({
@@ -426,7 +472,7 @@ export function createLMStudioProvider(config: AIConfig, labelOverride?: string)
       const result = await callChatCompletion<Record<string, unknown>>(
         config,
         buildMatchDiscriminationPrompt(input),
-        { maxTokens: 700, timeoutMs: 90000 }
+        { maxTokens: 700, timeoutMs: 90000, providerLabel: lbl }
       );
       if (!result.ok || !result.data) return relabel(mapFailure<MatchDiscriminationResult>(result));
       const confidence = result.data.confidence === "high" || result.data.confidence === "low"

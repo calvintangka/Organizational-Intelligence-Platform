@@ -14,7 +14,7 @@ import type {
   ValidationRecord
 } from "@/types";
 import { requireOrganizationId } from "@/lib/organizationId";
-import type { PersistenceAdapter, PersistencePreparationResult, ValidationCommitRequest } from "@/lib/persistence/adapter";
+import type { PersistenceAdapter, PersistencePreparationResult, ValidationCommitRequest, ValidationCommitResult } from "@/lib/persistence/adapter";
 
 const DEFAULT_ORGANIZATION_ID = "profile-maesa-tech";
 
@@ -187,9 +187,9 @@ export class ServerPersistenceAdapter implements PersistenceAdapter {
     return result.ticketIds;
   }
 
-  async commitValidatedMemoryChange(organizationId: string, request: ValidationCommitRequest): Promise<void> {
+  async commitValidatedMemoryChange(organizationId: string, request: ValidationCommitRequest): Promise<ValidationCommitResult> {
     const id = this.rememberOrganization(organizationId);
-    await this.requestData(`${this.organizationPath(id)}/commits/validation`, "POST", request);
+    return this.requestData<ValidationCommitResult>(`${this.organizationPath(id)}/commits/validation`, "POST", request);
   }
 
   async resetOrganization(organizationId: string): Promise<void> {

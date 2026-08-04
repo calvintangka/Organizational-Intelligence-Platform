@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import type { Metrics, OrgMetrics, EmergingPattern, KnowledgeItem } from "@/types";
+import { getTelemetrySnapshot, subscribeTelemetry, type TelemetrySnapshot, type TelemetrySummary } from "@/lib/telemetry";
 
 interface DashboardViewProps {
   orgMetrics: OrgMetrics;
@@ -70,9 +72,54 @@ function TrustGrowthChart({ items, darkMode }: { items: KnowledgeItem[]; darkMod
   );
 }
 
+function measured(summary: TelemetrySummary | undefined, field: "averageMs" | "throughput"): string {
+  if (!summary || summary.sampleCount === 0) return "—";
+  return field === "throughput"
+    ? `${summary.throughput.toFixed(2)}/${summary.unit === "rows" ? "sec" : "sec"}`
+    : `${summary.averageMs.toFixed(1)} ms`;
+}
+
+function rate(summary: TelemetrySummary | undefined, field: "successRate" | "failureRate" | "timeoutRate" | "fallbackRate"): string {
+  if (!summary || summary.sampleCount === 0) return "—";
+  return `${(summary[field] * 100).toFixed(1)}%`;
+}
+
+function summaryFor(snapshot: TelemetrySnapshot, name: string, category?: string, tag?: [string, string]): TelemetrySummary | undefined {
+  return snapshot.summaries.find((summary) =>
+    summary.name === name &&
+    (!category || summary.category === category) &&
+    (!tag || String(summary.tags[tag[0]]) === tag[1])
+  );
+}
+
 const CATEGORY_COLORS = ["#2563EB", "#14B8A6", "#7C3AED", "#22C55E", "#F59E0B"];
 
 export function DashboardView({ orgMetrics, metrics, knowledgeItems, emergingPatterns, darkMode, onPromote }: DashboardViewProps) {
+  const [telemetry, setTelemetry] = useState<TelemetrySnapshot>(() => getTelemetrySnapshot());
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const unsubscribe = subscribeTelemetry(() => {
+      if (refreshTimer.current) return;
+      refreshTimer.current = setTimeout(() => {
+        refreshTimer.current = null;
+        setTelemetry(getTelemetrySnapshot());
+      }, 250);
+    });
+    return () => {
+      unsubscribe();
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    };
+  }, []);
+
+  const ticketTiming = summaryFor(telemetry, "ticket_processing", "pipeline");
+  const stageSummaries = telemetry.summaries.filter((summary) => summary.category === "pipeline" && summary.name !== "ticket_processing");
+  const slowestStage = stageSummaries[0];
+  const providerSummaries = telemetry.summaries.filter((summary) => summary.category === "provider" && summary.name === "request_latency");
+  const bulkSummary = summaryFor(telemetry, "overall_runtime", "bulk");
+  const retrievalSummary = summaryFor(telemetry, "memory_retrieval", "pipeline");
+  const draftingSummary = summaryFor(telemetry, "ai_drafting", "pipeline");
+  const reflectionSummary = summaryFor(telemetry, "reflection", "pipeline");
+  const promotionSummary = summaryFor(telemetry, "knowledge_promotion", "pipeline");
   const totalResolved = (orgMetrics.autoResolutions ?? 0) + (orgMetrics.humanResolutions ?? 0);
   const reuseRate = totalResolved > 0 ? Math.round(((orgMetrics.knowledgeReused ?? 0) / totalResolved) * 100) : 0;
   const autoRate = totalResolved > 0 ? Math.round(((orgMetrics.autoResolutions ?? 0) / totalResolved) * 100) : 0;
@@ -200,6 +247,67 @@ export function DashboardView({ orgMetrics, metrics, knowledgeItems, emergingPat
               <p className={`text-xl font-bold mt-0.5 ${darkMode ? "text-white" : "text-[#111827]"}`}>{m.value}</p>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className={`mt-4 rounded-2xl border p-5 ${darkMode ? "bg-[#1a2b3c] border-[#2d3f52]" : "bg-white border-slate-200"}`}>
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <h2 className={`font-bold ${darkMode ? "text-white" : "text-[#111827]"}`}>Performance instrumentation</h2>
+            <p className={`mt-1 text-xs ${darkMode ? "text-slate-400" : "text-[#667085]"}`}>
+              Developer diagnostics · measured samples only · {telemetry.events.length} retained events
+            </p>
+          </div>
+          <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${darkMode ? "bg-emerald-900/40 text-emerald-300" : "bg-emerald-50 text-emerald-700"}`}>LIVE</span>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            ["Average ticket time", measured(ticketTiming, "averageMs")],
+            ["Average retrieval", measured(retrievalSummary, "averageMs")],
+            ["Average drafting", measured(draftingSummary, "averageMs")],
+            ["Average reflection", measured(reflectionSummary, "averageMs")],
+            ["Average promotion", measured(promotionSummary, "averageMs")],
+            ["Bulk throughput", measured(bulkSummary, "throughput")],
+            ["Slowest stage", slowestStage ? `${slowestStage.name.replace(/_/g, " ")} · ${slowestStage.averageMs.toFixed(1)} ms` : "—"],
+            ["Current bottleneck", slowestStage?.name.replace(/_/g, " ") ?? "—"]
+          ].map(([label, value]) => (
+            <div key={label} className={`rounded-xl p-3 ${darkMode ? "bg-[#111827]" : "bg-slate-50"}`}>
+              <p className={`text-xs ${darkMode ? "text-slate-400" : "text-[#667085]"}`}>{label}</p>
+              <p className={`mt-1 text-sm font-bold ${darkMode ? "text-white" : "text-[#111827]"}`}>{value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <div>
+            <h3 className={`mb-2 text-sm font-semibold ${darkMode ? "text-slate-200" : "text-[#111827]"}`}>Latency distribution</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className={darkMode ? "text-slate-500" : "text-slate-500"}><tr><th className="py-1">Stage</th><th>n</th><th>min</th><th>max</th><th>avg</th><th>median</th><th>P95</th><th>P99</th><th>σ</th></tr></thead>
+                <tbody>
+                  {[ticketTiming, retrievalSummary, draftingSummary, reflectionSummary, promotionSummary].filter(Boolean).map((summary) => (
+                    <tr key={summary!.key} className={`border-t ${darkMode ? "border-[#2d3f52] text-slate-300" : "border-slate-100 text-slate-700"}`}>
+                      <td className="py-1.5 pr-2">{summary!.name.replace(/_/g, " ")}</td><td>{summary!.sampleCount}</td><td>{summary!.minimumMs.toFixed(1)}</td><td>{summary!.maximumMs.toFixed(1)}</td><td>{summary!.averageMs.toFixed(1)}</td><td>{summary!.medianMs.toFixed(1)}</td><td>{summary!.p95Ms.toFixed(1)}</td><td>{summary!.p99Ms.toFixed(1)}</td><td>{summary!.standardDeviationMs.toFixed(1)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <h3 className={`mb-2 text-sm font-semibold ${darkMode ? "text-slate-200" : "text-[#111827]"}`}>Provider and failure rates</h3>
+            {providerSummaries.length === 0 ? <p className={`text-xs ${darkMode ? "text-slate-400" : "text-slate-500"}`}>No provider requests measured.</p> : (
+              <div className="space-y-2">
+                {providerSummaries.map((summary) => (
+                  <div key={summary.key} className={`rounded-xl p-3 ${darkMode ? "bg-[#111827]" : "bg-slate-50"}`}>
+                    <div className="flex items-center justify-between"><span className={`text-sm font-semibold ${darkMode ? "text-white" : "text-[#111827]"}`}>{String(summary.tags.provider)}</span><span className="text-xs text-slate-500">{summary.sampleCount} requests</span></div>
+                    <div className={`mt-1 grid grid-cols-5 gap-2 text-[11px] ${darkMode ? "text-slate-400" : "text-slate-500"}`}><span>avg {summary.averageMs.toFixed(1)}ms</span><span>ok {rate(summary, "successRate")}</span><span>fail {rate(summary, "failureRate")}</span><span>timeout {rate(summary, "timeoutRate")}</span><span>fallback {rate(summary, "fallbackRate")}</span></div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

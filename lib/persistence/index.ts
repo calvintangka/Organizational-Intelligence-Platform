@@ -1,6 +1,7 @@
 import { LocalStorageAdapter } from "@/lib/persistence/localStorageAdapter";
-import type { PersistenceAdapter, PersistencePreparationResult, ValidationCommitRequest } from "@/lib/persistence/adapter";
+import type { PersistenceAdapter, PersistencePreparationResult, ValidationCommitRequest, ValidationCommitResult } from "@/lib/persistence/adapter";
 import { ServerPersistenceAdapter } from "@/lib/persistence/serverPersistenceAdapter";
+import { startTelemetrySpan } from "@/lib/telemetry";
 export { ServerPersistenceAdapterError } from "@/lib/persistence/serverPersistenceAdapter";
 import {
   globalPersistenceMode,
@@ -24,10 +25,46 @@ import type {
 
 export type PersistenceMode = "local" | "server";
 
+const instrumentedAdapters = new WeakMap<object, PersistenceAdapter>();
+
+function instrumentPersistenceAdapter(adapter: PersistenceAdapter): PersistenceAdapter {
+  const existing = instrumentedAdapters.get(adapter as object);
+  if (existing) return existing;
+  const instrumented = new Proxy(adapter, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (typeof value !== "function" || property === "constructor") return value;
+      return (...args: unknown[]) => {
+        const operation = String(property);
+        const span = startTelemetrySpan(operation, "database", {
+          unit: "operations",
+          tags: { operation, backend: target.constructor.name }
+        });
+        try {
+          const result = value.apply(target, args);
+          if (result && typeof (result as { then?: unknown }).then === "function") {
+            return Promise.resolve(result).then(
+              (resolved) => { span.end(true); return resolved; },
+              (error) => { span.end(false, { error: error instanceof Error ? error.name : "unknown" }); throw error; }
+            );
+          }
+          span.end(true);
+          return result;
+        } catch (error) {
+          span.end(false, { error: error instanceof Error ? error.name : "unknown" });
+          throw error;
+        }
+      };
+    }
+  }) as PersistenceAdapter;
+  instrumentedAdapters.set(adapter as object, instrumented);
+  return instrumented;
+}
+
 export function createPersistenceAdapter(mode?: string): PersistenceAdapter {
   const configured = (mode ?? process.env.NEXT_PUBLIC_OIP_PERSISTENCE_MODE ?? "local").trim().toLowerCase();
-  if (configured === "local") return new LocalStorageAdapter();
-  if (configured === "server") return new ServerPersistenceAdapter();
+  if (configured === "local") return instrumentPersistenceAdapter(new LocalStorageAdapter());
+  if (configured === "server") return instrumentPersistenceAdapter(new ServerPersistenceAdapter());
   throw new Error(`Unsupported OIP persistence mode: ${configured}. Use "local" or "server".`);
 }
 
@@ -37,7 +74,7 @@ const localAdapter = new LocalStorageAdapter();
 const serverAdapter = new ServerPersistenceAdapter();
 
 export function persistenceAdapterForAuthority(authority: PersistenceAuthority): PersistenceAdapter {
-  return authority === "server" ? serverAdapter : localAdapter;
+  return instrumentPersistenceAdapter(authority === "server" ? serverAdapter : localAdapter);
 }
 
 /**
@@ -197,7 +234,7 @@ class RoutingPersistenceAdapter implements PersistenceAdapter {
     return this.activeResourceAdapter.generateTicketIds(organizationId, profile, count);
   }
 
-  commitValidatedMemoryChange(organizationId: string, request: ValidationCommitRequest): Promise<void> {
+  commitValidatedMemoryChange(organizationId: string, request: ValidationCommitRequest): Promise<ValidationCommitResult> {
     return this.activeResourceAdapter.commitValidatedMemoryChange(organizationId, request);
   }
 
