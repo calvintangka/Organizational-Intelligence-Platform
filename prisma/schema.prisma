@@ -163,6 +163,7 @@ model Organization {
   migrationImportConflicts  MigrationImportConflict[]
   persistenceAuthority      OrganizationPersistenceAuthority?
   durableJobs              DurableJob[]
+  preparedReflections      PreparedReflection[]
   memberships               OrganizationMembership[]
   activeUsers               User[]                   @relation("UserActiveOrganization")
 
@@ -579,6 +580,7 @@ model DurableJob {
 
   organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   attempts     DurableJobAttempt[]
+  preparedReflection PreparedReflection?
 
   @@unique([organizationId, idempotencyKey])
   @@index([status, nextAttemptAt, priority, createdAt])
@@ -607,4 +609,33 @@ model DurableJobAttempt {
   @@unique([jobId, attemptNumber])
   @@index([jobId, startedAt])
   @@map("durable_job_attempts")
+}
+
+model PreparedReflection {
+  id                String   @id @default(cuid())
+  organizationId    String
+  jobId             String   @unique
+  ticketId          String
+  actorId           String?
+  requestId         String
+  correlationId     String
+  idempotencyKey    String
+  inputDigest       String
+  status            String   @default("prepared")
+  ticket            Json
+  understanding    Json
+  reviewedResponse String
+  reflection       Json
+  warnings         Json
+  reasons          Json
+  generationMetadata Json
+  createdAt        DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  job          DurableJob   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, ticketId, createdAt])
+  @@map("prepared_reflections")
 }

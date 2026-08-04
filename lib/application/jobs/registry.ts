@@ -1,14 +1,18 @@
 import type { AIAdapter } from "@/lib/ai/types";
-import { analyzeBulkEntries, BulkAnalysisCancelledError } from "@/lib/bulkUpload";
+import { analyzeBulkEntries } from "@/lib/bulkUpload";
 import { processTicket, type ProcessTicketResult, type TicketInput } from "@/lib/application/tickets/processTicket";
 import type { OrganizationPersistenceSession } from "@/lib/persistence/session";
-import type { ClaimedJob, DurableJobRecord, JobProgress, JobType } from "@/lib/application/jobs/types";
+import type { ClaimedJob, JobProgress, JobType } from "@/lib/application/jobs/types";
 import type { BulkAnalysisResult, BulkUploadEntry, TicketRecord } from "@/types";
 import { detectLanguage, isSupportedLanguage } from "@/lib/languageDetection";
 import { resolveLanguagePolicy, resolveResponseLanguage } from "@/lib/languagePolicy";
+import { generateReflectionCommand, validateReflectionCommand } from "@/lib/application/learning/reflectionCommands";
+import { preparedReflectionStore } from "@/lib/server/jobs/preparedReflectionStore";
+import type { ReflectionDecision, Ticket } from "@/types";
 
 export interface JobHandlerContext {
   job: ClaimedJob["job"];
+  actor: { id?: string; name?: string; email?: string };
   persistence: OrganizationPersistenceSession;
   ai: AIAdapter;
   signal: AbortSignal;
@@ -144,6 +148,73 @@ export function createDefaultJobHandlerRegistry(): JobHandlerRegistry {
     await persistence.saveTicketRecords(updates);
     await reportProgress({ stage: "succeeded", completed: entries.length, total: entries.length, percent: 100, message: "Bulk analysis complete" });
     return { uploadKey, preparedCount: prepared.length, analysis } satisfies BulkJobResult;
+  })
+  .register("reflection.generate", async ({ job, actor, persistence, signal, reportProgress }) => {
+    if (signal.aborted) throw new Error("Reflection generation was cancelled.");
+    const input = job.input as {
+      ticket?: unknown;
+      understanding?: unknown;
+      reviewedResponse?: unknown;
+      existingMatch?: unknown;
+      selectedDraft?: unknown;
+      languageContext?: unknown;
+    };
+    if (!input.ticket || typeof input.ticket !== "object" || !input.understanding || typeof input.understanding !== "object" || typeof input.reviewedResponse !== "string" || !input.reviewedResponse.trim()) {
+      throw new Error("The reflection job input is invalid.");
+    }
+    const ticket = input.ticket as Ticket;
+    const records = await persistence.loadTicketRecords();
+    const ticketId = ticket.ticketId ?? ticket.id;
+    if (!records.some((record) => record.ticketId === ticketId)) throw new Error("The reflection ticket is not present in the organization scope.");
+    const profile = await persistence.loadOrganizationProfile();
+    const knowledgeItems = await persistence.loadKnowledge();
+    const rawMatch = input.existingMatch && typeof input.existingMatch === "object" ? input.existingMatch as { item?: { id?: unknown }; similarity?: unknown; reason?: unknown } : null;
+    const existingMatch = rawMatch?.item?.id
+      ? { ...rawMatch, item: knowledgeItems.find((item) => item.id === rawMatch.item?.id) } as any
+      : null;
+    if (rawMatch?.item?.id && !existingMatch?.item) throw new Error("The reflection memory match is not present in the organization scope.");
+    await reportProgress({ stage: "generating", completed: 1, total: 4, percent: 25, message: "Generating prepared reflection" });
+    const generated = generateReflectionCommand({
+      organizationId: job.organizationId,
+      actor: { id: actor.id ?? job.actorId ?? "durable-worker", name: actor.name ?? "Durable Worker", email: actor.email },
+      authority: job.authority,
+      requestId: job.requestId,
+      organizationProfile: profile,
+      ticket,
+      understanding: input.understanding as any,
+      reviewedResponse: input.reviewedResponse,
+      existingMatch,
+      selectedDraft: input.selectedDraft as any,
+      languageContext: input.languageContext as any
+    });
+    if (signal.aborted) throw new Error("Reflection generation was cancelled.");
+    await reportProgress({ stage: "validating", completed: 2, total: 4, percent: 50, message: "Validating reflection safety boundary" });
+    const validation = validateReflectionCommand({
+      organizationId: job.organizationId,
+      actor: { id: actor.id ?? job.actorId ?? "durable-worker", name: actor.name ?? "Durable Worker", email: actor.email },
+      authority: job.authority,
+      requestId: job.requestId,
+      reflection: generated.reflection,
+      safetyContext: { customerName: ticket.customerName, organizationName: profile.name, sourceTicketId: ticketId, sourceTicketText: `${ticket.subject} ${ticket.description}` }
+    });
+    if (!validation.accepted) throw new Error(`Reflection validation rejected: ${validation.reasons.join(", ")}.`);
+    await reportProgress({ stage: "persisting", completed: 3, total: 4, percent: 75, message: "Persisting prepared reflection for human review" });
+    const saved = await preparedReflectionStore.save({
+      context: persistence.context,
+      jobId: job.id,
+      ticketId,
+      inputDigest: job.inputDigest,
+      idempotencyKey: job.idempotencyKey,
+      ticket,
+      understanding: input.understanding,
+      reviewedResponse: input.reviewedResponse,
+      reflection: generated.reflection,
+      warnings: validation.warnings,
+      reasons: validation.reasons,
+      generationMetadata: { source: generated.diagnostics.source, organizationId: job.organizationId, requestId: job.requestId, correlationId: job.correlationId, status: "prepared", promotionRequired: true }
+    });
+    await reportProgress({ stage: "prepared", completed: 4, total: 4, percent: 100, message: "Prepared reflection is ready for human review" });
+    return { preparedReflection: saved.record, replayed: saved.replayed, reflection: generated.reflection as ReflectionDecision, validation: { accepted: validation.accepted, warnings: validation.warnings, reasons: validation.reasons }, promotionRequired: true };
   });
 }
 

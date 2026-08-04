@@ -19,12 +19,15 @@ export const POST = withOrganizationRoute(async ({ request, organizationId, user
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const type = body?.type;
   if (!isJobType(type)) return NextResponse.json({ error: { code: "INVALID_JOB", message: "A supported durable job type is required." } }, { status: 400 });
-  if (type !== "ticket.process" && type !== "bulk.analyze") return NextResponse.json({ error: { code: "JOB_HANDLER_UNAVAILABLE", message: `${type} is not enabled in this rollout.` } }, { status: 409 });
+  if (type !== "ticket.process" && type !== "bulk.analyze" && type !== "reflection.generate") return NextResponse.json({ error: { code: "JOB_HANDLER_UNAVAILABLE", message: `${type} is not enabled in this rollout.` } }, { status: 409 });
   const rawInput = body?.input;
   if (!rawInput || typeof rawInput !== "object" || Array.isArray(rawInput)) return NextResponse.json({ error: { code: "INVALID_JOB", message: "Job input must be an object." } }, { status: 400 });
   const input = type === "ticket.process" ? { ticketInput: rawInput as Record<string, unknown> } : rawInput as Record<string, unknown>;
   if (type === "bulk.analyze" && (!Array.isArray(input.entries) || typeof input.uploadKey !== "string")) {
     return NextResponse.json({ error: { code: "INVALID_JOB", message: "Bulk jobs require uploadKey and parsed entries." } }, { status: 400 });
+  }
+  if (type === "reflection.generate" && (!input.ticket || !input.understanding || typeof input.reviewedResponse !== "string")) {
+    return NextResponse.json({ error: { code: "INVALID_JOB", message: "Reflection jobs require ticket, understanding, and reviewed response snapshots." } }, { status: 400 });
   }
   const requestId = text(body?.requestId, randomUUID());
   const correlationId = text(body?.correlationId, requestId);

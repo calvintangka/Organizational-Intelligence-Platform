@@ -126,11 +126,12 @@ export class AsyncJobWorker {
     }, Math.max(1_000, Math.floor(this.leaseMs / 3)));
     try {
       const actor = job.actorId ? await prisma.user.findUnique({ where: { id: job.actorId }, select: { id: true, name: true, email: true } }) : null;
+      const actorContext = actor ?? { id: job.actorId ?? undefined, name: "Durable Worker", email: undefined };
       const context = createPersistenceContext({ organizationId: job.organizationId, actorContext: actor ?? { id: job.actorId }, authority: job.authority, requestId: job.requestId, correlationId: job.correlationId, idempotencyKey: job.idempotencyKey });
       const persistence = createServerJobPersistenceSession(context);
       const handler = this.registry.get(job.type);
       if (!handler) throw new Error(`No durable handler is registered for ${job.type}.`);
-      const result = await handler({ job, persistence, ai: createAIAdapter(readAIConfig()), signal: controller.signal, reportProgress: async (progress) => {
+      const result = await handler({ job, actor: actorContext, persistence, ai: createAIAdapter(readAIConfig()), signal: controller.signal, reportProgress: async (progress) => {
         await this.repository.recordProgress(job.id, this.workerId, { ...progress, updatedAt: new Date().toISOString() });
       } });
       await this.repository.complete(job.id, this.workerId, result, digestJobInput(result));

@@ -97,7 +97,8 @@ import {
 } from "@/lib/ticketRecords";
 import { CaseLookupView } from "@/components/views/CaseLookupView";
 import { processTicket, ProcessTicketError } from "@/lib/application/tickets/processTicket";
-import { bulkResult, cancelJob, enqueueBulkJob, getJob } from "@/lib/application/jobs/client";
+import { bulkResult, cancelJob, enqueueBulkJob, enqueueReflectionJob, getJob, reflectionResult } from "@/lib/application/jobs/client";
+import { digestJobInput } from "@/lib/application/jobs/types";
 import {
   generateReflectionCommand,
   promoteKnowledgeCommand,
@@ -106,6 +107,7 @@ import {
 } from "@/lib/application/learning/reflectionCommands";
 const PAGE_LOAD_STARTED_AT = Date.now();
 const ASYNC_BULK_INTAKE_ENABLED = process.env.NEXT_PUBLIC_OIP_ASYNC_BULK_INTAKE === "true";
+const ASYNC_REFLECTION_ENABLED = process.env.NEXT_PUBLIC_OIP_ASYNC_REFLECTION === "true";
 import type {
   AIAnalysis,
   AIAdvisory,
@@ -3032,26 +3034,48 @@ export default function Home() {
     // policy-compliant translation is never mistaken for a rewritten answer.
     const reflectionLanguage = resolveTicketLanguage(selectedTicket, organizationProfile);
     const reflectionRequestId = `reflection-${ticketReferenceId(selectedTicket)}-${Date.now()}`;
-    const reflectionIdempotencyKey = `reflection:${ticketReferenceId(selectedTicket)}:${Date.now()}`;
-    const reflectionSession = await openPersistenceSession(organizationProfile.id, "generate-reflection", reflectionRequestId);
-    const reflection = measureTelemetrySync(
-      "reflection",
-      "pipeline",
-      () => generateReflectionCommand({
-        organizationId: organizationProfile.id,
-        actor: { id: authUser?.id ?? "ui-reviewer", name: authUser?.name ?? "Prototype Knowledge Validator", email: authUser?.email },
-        authority: reflectionSession.context.authority,
-        requestId: reflectionRequestId,
-        organizationProfile,
+    const reflectionIdempotencyKey = `reflection:${ticketReferenceId(selectedTicket)}:${digestJobInput({ reviewedResponse })}`;
+    let reflection: ReflectionDecision;
+    if (ASYNC_REFLECTION_ENABLED) {
+      const queued = await enqueueReflectionJob(organizationProfile.id, {
         ticket: selectedTicket,
         understanding: und,
         reviewedResponse,
         existingMatch,
         selectedDraft: { draftMode: suggestedResponse?.draftMode, matchedLesson },
         languageContext: { responseLanguage: reflectionLanguage.response.language, internalLanguage: reflectionLanguage.policy.internalLanguage }
-      }).reflection,
-      { unit: "tickets" }
-    );
+      }, { idempotencyKey: reflectionIdempotencyKey, correlationId: reflectionRequestId });
+      let job = queued.data.job;
+      while (true) {
+        job = await getJob(organizationProfile.id, job.id);
+        if (job.status === "succeeded") {
+          reflection = reflectionResult(job).reflection;
+          break;
+        }
+        if (["failed", "cancelled", "dead_lettered"].includes(job.status)) throw new Error(job.error?.safeMessage ?? `Reflection job ended in ${job.status}.`);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    } else {
+      const reflectionSession = await openPersistenceSession(organizationProfile.id, "generate-reflection", reflectionRequestId);
+      reflection = measureTelemetrySync(
+        "reflection",
+        "pipeline",
+        () => generateReflectionCommand({
+          organizationId: organizationProfile.id,
+          actor: { id: authUser?.id ?? "ui-reviewer", name: authUser?.name ?? "Prototype Knowledge Validator", email: authUser?.email },
+          authority: reflectionSession.context.authority,
+          requestId: reflectionRequestId,
+          organizationProfile,
+          ticket: selectedTicket,
+          understanding: und,
+          reviewedResponse,
+          existingMatch,
+          selectedDraft: { draftMode: suggestedResponse?.draftMode, matchedLesson },
+          languageContext: { responseLanguage: reflectionLanguage.response.language, internalLanguage: reflectionLanguage.policy.internalLanguage }
+        }).reflection,
+        { unit: "tickets" }
+      );
+    }
     learningCommandContext.current = { requestId: reflectionRequestId, idempotencyKey: reflectionIdempotencyKey };
     setReflectionDecision(reflection);
 
