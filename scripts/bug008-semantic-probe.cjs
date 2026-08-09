@@ -36,7 +36,8 @@ const {
   isStrongLessonEvidence,
   findMatchingLesson,
   assessCompatibilityDecision,
-  authorizeSemanticLessonReuse
+  authorizeSemanticLessonReuse,
+  markSemanticLessonAuthorization
 } = require(path.join(root, "lib", "drafting.ts"));
 const { evaluateSemanticLessonCompatibility } = require(path.join(root, "lib", "ai", "semanticCompatibility.ts"));
 const { seedOrganizationProfiles } = require(path.join(root, "data", "seedOrganizationProfiles.ts"));
@@ -245,7 +246,12 @@ async function main() {
       check(`H forged authorization (${label}): rejected`, draft.source === "no_template" && draft.basedOnKnowledgeIds.length === 0, draft.source);
     }
     // A VALID authorization for a genuinely-unknown case still works (sanity).
-    const valid = { itemId: LOGIN_ITEM, lessonId: autofillLesson.id, confidence: "high", reasoning: "valid" };
+    const valid = markSemanticLessonAuthorization({
+      itemId: LOGIN_ITEM,
+      lessonId: autofillLesson.id,
+      confidence: "high",
+      reasoning: "valid"
+    });
     const draft = draftResponse(ticket, und, matches[0], profile, false, valid);
     check("H sanity: valid authorization on unknown state is honored", draft.basedOnKnowledgeIds.includes(LOGIN_ITEM));
   }
