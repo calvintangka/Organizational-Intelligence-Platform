@@ -5,6 +5,7 @@ import {
   toSafeMigrationImportError
 } from "@/lib/server/migrationImportService";
 import { requireCapability } from "@/lib/server/authorization";
+import { enforceRateLimit, rateLimitResponse, requestIdentity } from "@/lib/server/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +18,16 @@ export async function POST(
 ) {
   const { organizationId } = await context.params;
   try {
-    await requireCapability(organizationId, "migration.import", { request, resource: "migration_import:intake" });
+    const { user } = await requireCapability(organizationId, "migration.import", { request, resource: "migration_import:intake" });
+    const { requestId, correlationId } = requestIdentity(request);
+    const decision = await enforceRateLimit("admin.mutate.user", [{ type: "user", value: user.id }], {
+      route: "/api/organizations/[organizationId]/migration-import",
+      organizationId,
+      actorUserId: user.id,
+      requestId,
+      correlationId
+    });
+    if (!decision.allowed) return rateLimitResponse(decision);
     const advertisedLength = Number(request.headers.get("content-length") ?? "0");
     if (advertisedLength > MAX_PACKAGE_BYTES) {
       return NextResponse.json(

@@ -18,9 +18,9 @@ This document is the release configuration contract. Values shown are names or s
 | `AI_BASE_URL` | Server-side LM Studio endpoint | Uses the configured application default only when AI is enabled. |
 | `AI_MODEL` | LM Studio model name | Uses the application default. |
 | `AI_TIMEOUT_MS` | LM Studio timeout | Uses the application default. |
-| `ANTHROPIC_API_KEY` | Server-side fallback provider key | Provider fallback is unavailable; deterministic fallback remains. |
-| `CLAUDE_MODEL` | Claude fallback model | Uses the application default. |
-| `CLAUDE_TIMEOUT_MS` | Claude timeout | Uses the application default. |
+| `AI_LMSTUDIO_ENABLED` | Optional local Tier-2 switch | Defaults to `true`; set `false`/`off` for `DISABLED_BY_OPERATOR`. |
+
+The active release chain is **DeepSeek API → LM Studio → deterministic fallback**. Claude implementation and its isolated contract route may remain available for future development, but Claude credentials are not required and Claude is not an active release fallback.
 
 ## Worker variables
 

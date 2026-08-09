@@ -3,7 +3,7 @@ import { buildAIAdvisory } from "@/lib/ai/deterministic";
 import type { AIAdapter, AIProviderResult } from "@/lib/ai/types";
 import { evaluateSemanticLessonCompatibility } from "@/lib/ai/semanticCompatibility";
 import { classifyBusinessDomain } from "@/lib/domainClassifier";
-import { draftBusinessInquiryResponse, draftResponse, findMatchingLesson, isCompatibleForDrafting, ticketContradictsLesson } from "@/lib/drafting";
+import { draftBusinessInquiryResponse, draftResponse, findMatchingLesson, isRetrievalCandidateEligible, ticketContradictsLesson } from "@/lib/drafting";
 import type { LessonMatchResult, SemanticLessonAuthorization } from "@/lib/drafting";
 import { retrieveMemory } from "@/lib/memory";
 import {
@@ -300,6 +300,10 @@ function diagnosticsFor(adapter: AIAdapter, results: Array<AIProviderResult<unkn
     serverBaseUrl: first?.serverBaseUrl ?? adapter.config.baseUrl,
     proxySucceeded: results.some((result) => result.diagnostics?.proxySucceeded === true) ? true : results.some((result) => result.diagnostics?.proxySucceeded === false) ? false : undefined,
     fallbackReason: first?.fallbackReason ?? fallbackReason ?? failed?.error,
+    latencyMs: first?.latencyMs ?? Math.max(0, ...results.map((result) => result.latencyMs)),
+    retries: first?.retries,
+    fallbackPath: first?.fallbackPath,
+    completionStatus: results.some((result) => result.ok) ? "succeeded" : results.length > 0 ? "failed" : "skipped",
     attempts: first?.attempts
   };
 }
@@ -596,7 +600,7 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
     const knowledgeItems = command.processingOptions?.knowledgeItems ?? [];
     const sessionCreatedIds = command.processingOptions?.sessionCreatedIds ?? new Set<string>();
     const rawMatches = securityRouted ? [] : withPreDiscriminationLessonMatches(ticket, enriched, retrieveMemory(enriched, knowledgeItems, sessionCreatedIds), knowledgeItems, canonical.title);
-    const matches = rawMatches.filter((item) => isCompatibleForDrafting(enriched, item.item, ticket));
+    const matches = rawMatches.filter((item) => isRetrievalCandidateEligible(enriched, item.item, ticket));
     const selected = selectPreferredMatch(ticket, matches);
     const topMatch = selected?.match ?? null;
     const lessonMatch = selected?.lessonMatch ?? null;
@@ -604,7 +608,7 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
     const businessMemory = isBusinessInquiry && matches.some((item) => item.item.category === "Business Inquiry");
     let effectiveMatch = isBusinessInquiry && !businessMemory ? null : topMatch;
     if (effectiveMatch) effectiveMatch = await discriminate(ports, ticket, rawUnderstanding, effectiveMatch, lessonMatch);
-    const semantic = !securityRouted && !isBusinessInquiry && !businessMemory && matches.length === 0 && rawMatches[0] && isCompatibleForDrafting(enriched, rawMatches[0].item, ticket)
+    const semantic = !securityRouted && !isBusinessInquiry && !businessMemory && matches.length === 0 && rawMatches[0] && isRetrievalCandidateEligible(enriched, rawMatches[0].item, ticket)
       ? await evaluateSemanticLessonCompatibility(adapter.provider, ticket, enriched, rawMatches[0].item).catch(() => ({ authorization: null, aiResults: [], declineReason: "semantic evaluation failed" }))
       : null;
     if (!effectiveMatch && semantic?.authorization && rawMatches[0]) effectiveMatch = rawMatches[0];

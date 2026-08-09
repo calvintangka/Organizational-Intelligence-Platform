@@ -56,13 +56,6 @@ const INTENT_CANONICAL_RULES: Record<string, CanonicalProblemIdentity> = {
     category: "Billing",
     tags: ["billing", "payment"]
   },
-  billing_contact_update: {
-    id: "canonical-billing-contact-update",
-    title: "Billing Contact Update",
-    problemSummary: "Customers need to correct the billing recipient or invoice contact information.",
-    category: "Billing",
-    tags: ["billing", "invoice", "contact"]
-  },
   duplicate_invoice: {
     id: "canonical-duplicate-invoice",
     title: "Billing Duplicate Invoice Investigation",
@@ -76,6 +69,76 @@ const INTENT_CANONICAL_RULES: Record<string, CanonicalProblemIdentity> = {
     problemSummary: "Customers request a refund or eligibility review where account activity, renewal, or cancellation history must be checked first.",
     category: "Refund",
     tags: ["refund", "billing", "investigation"]
+  },
+  billing_contact_update: {
+    id: "canonical-billing-contact-update",
+    title: "Billing Contact Update",
+    problemSummary: "Customers need to correct the billing recipient or invoice contact information.",
+    category: "Billing",
+    tags: ["billing", "invoice", "contact"]
+  },
+  activation_failure: {
+    id: "canonical-activation-failure",
+    title: "Activation Failure",
+    problemSummary: "Customers cannot complete an activation or invitation flow.",
+    category: "Activation",
+    tags: ["activation", "invitation"]
+  },
+  delivery_delay: {
+    id: "canonical-delivery-delay",
+    title: "Delivery Delay",
+    problemSummary: "A shipment or delivery is delayed or its tracking has stopped progressing.",
+    category: "Delivery Delay",
+    tags: ["delivery", "delay", "tracking"]
+  },
+  report_export_timeout: {
+    id: "canonical-report-export-timeout",
+    title: "Large Report Export Timeout",
+    problemSummary: "A large report or data export is timing out or remaining stuck near completion.",
+    category: "Reporting & Exports",
+    tags: ["reporting", "export", "timeout"]
+  },
+  role_permission: {
+    id: "canonical-role-permission",
+    title: "Permissions & Access Issue",
+    problemSummary: "A required role or permission is missing or denied.",
+    category: "Permissions & Access",
+    tags: ["permissions", "role", "access-control"]
+  },
+  general_login_failure: {
+    id: "canonical-login-issue",
+    title: "Login Issue",
+    problemSummary: "Customers cannot log in or complete an account session.",
+    category: "Login",
+    tags: ["login", "account", "session"]
+  },
+  credentials_rejected: {
+    id: "canonical-login-issue",
+    title: "Login Issue",
+    problemSummary: "Customers cannot complete login because authentication credentials or session verification are rejected.",
+    category: "Login",
+    tags: ["login", "credentials", "session"]
+  },
+  product_information: {
+    id: "canonical-product-information-inquiry",
+    title: "Product Information Inquiry",
+    problemSummary: "A business or enterprise evaluation request requires accurate, profile-grounded product information.",
+    category: "Business Inquiry",
+    tags: ["business", "product", "information"]
+  },
+  company_information: {
+    id: "canonical-company-information-inquiry",
+    title: "Company Information Inquiry",
+    problemSummary: "A business inquiry requests verified information about the company or support model.",
+    category: "Business Inquiry",
+    tags: ["business", "company", "information"]
+  },
+  general_business_inquiry: {
+    id: "canonical-general-business-inquiry",
+    title: "General Business Inquiry",
+    problemSummary: "A business inquiry requires a grounded response from the approved organization profile.",
+    category: "Business Inquiry",
+    tags: ["business", "inquiry"]
   },
   sso_certificate: {
     id: "canonical-authentication-infrastructure",

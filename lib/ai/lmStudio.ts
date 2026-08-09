@@ -10,6 +10,7 @@ import type {
   AIConfig,
   AIProvider,
   AIProviderResult,
+  AIProviderResultMetadata,
   AnalyzeTicketInput,
   CanonicalProblemInput,
   DraftCustomerResponseInput,
@@ -37,20 +38,28 @@ interface ChatCompletionOptions {
    */
   timeoutMs?: number;
   providerLabel?: string;
+  /** Validates the complete, parsed JSON object for one prompt contract. */
+  validateStructuredOutput?: (value: unknown) => boolean;
 }
 
 const MAX_AI_TIMEOUT_MS = 120000;
+
+function diagnosticId(): string {
+  if (typeof globalThis.crypto?.randomUUID === "function") return globalThis.crypto.randomUUID();
+  return `ai-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 function readDiagnostics(
   config: AIConfig,
   endpoint: string,
   proxySucceeded?: boolean,
   fallbackReason?: string,
-  headers?: Headers
+  headers?: Headers,
+  metadata: AIProviderResultMetadata = {}
 ): AIDiagnostics {
   return {
     mode: (headers?.get("x-ai-mode") as AIDiagnostics["mode"] | null) ?? config.mode,
-    provider: headers?.get("x-ai-provider") ?? "LM Studio",
+    provider: headers?.get("x-ai-provider") ?? config.providerLabel ?? (config.mode === "deepseek" ? "DeepSeek API" : config.mode === "claude" ? "Claude API" : config.mode === "openai-compatible" ? "OpenAI-compatible API" : "LM Studio"),
     model: headers?.get("x-ai-model") ?? config.model,
     proxyPath: headers?.get("x-ai-proxy-path") ?? config.proxyPath,
     serverBaseUrl: headers?.get("x-ai-server-base-url") ?? config.baseUrl,
@@ -59,7 +68,10 @@ function readDiagnostics(
       headers?.get("x-ai-proxy-succeeded") != null
         ? headers.get("x-ai-proxy-succeeded") === "true"
         : proxySucceeded,
-    fallbackReason: headers?.get("x-ai-fallback-reason") ?? fallbackReason
+    fallbackReason: headers?.get("x-ai-fallback-reason") ?? fallbackReason,
+    diagnosticId: diagnosticId(),
+    timestamp: new Date().toISOString(),
+    ...metadata
   };
 }
 
@@ -71,34 +83,94 @@ function extractJsonObject(text: string): string | null {
 }
 
 function parseJsonObject(text: string): unknown | null {
-  const broad = extractJsonObject(text);
-  if (broad) {
-    try {
-      return JSON.parse(broad);
-    } catch {
-      // Fall through to narrower candidates when the model emits extra braces.
-    }
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return null;
+  try {
+    const parsed = JSON.parse(trimmed);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
   }
-
-  const starts = [...text.matchAll(/\{/g)].map((match) => match.index ?? -1).filter((index) => index >= 0);
-  const ends = [...text.matchAll(/\}/g)].map((match) => match.index ?? -1).filter((index) => index >= 0);
-  for (const start of starts) {
-    for (const end of ends.filter((candidate) => candidate > start).reverse()) {
-      try {
-        return JSON.parse(text.slice(start, end + 1));
-      } catch {
-        // Try the next candidate.
-      }
-    }
-  }
-
-  return null;
 }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function hasExactKeys(value: unknown, keys: string[]): value is Record<string, unknown> {
+  return isRecord(value)
+    && Object.keys(value).length === keys.length
+    && keys.every((key) => Object.prototype.hasOwnProperty.call(value, key));
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function isNullableString(value: unknown): boolean {
+  return value === null || typeof value === "string";
+}
+
+function isConfidence(value: unknown): boolean {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;
+}
+
+const validates = {
+  analysis(value: unknown): boolean {
+    if (!hasExactKeys(value, ["summary", "category", "urgency", "entities", "tags", "confidence", "rationale", "extractedFields"])) return false;
+    const fields = value.extractedFields;
+    return typeof value.summary === "string"
+      && value.summary.trim().length > 0
+      && typeof value.category === "string"
+      && value.category.trim().length > 0
+      && (value.urgency === "low" || value.urgency === "medium" || value.urgency === "high")
+      && isStringArray(value.entities)
+      && isStringArray(value.tags)
+      && isConfidence(value.confidence)
+      && typeof value.rationale === "string"
+      && hasExactKeys(fields, ["senderName", "senderRole", "companyName", "deadline", "subIssues", "urgencyIndicators"])
+      && isNullableString(fields.senderName)
+      && isNullableString(fields.senderRole)
+      && isNullableString(fields.companyName)
+      && isNullableString(fields.deadline)
+      && isStringArray(fields.subIssues)
+      && isStringArray(fields.urgencyIndicators);
+  },
+  titled(value: unknown): boolean {
+    return hasExactKeys(value, ["title", "confidence", "rationale"])
+      && typeof value.title === "string"
+      && value.title.trim().length > 0
+      && isConfidence(value.confidence)
+      && typeof value.rationale === "string";
+  },
+  enrichment(value: unknown): boolean {
+    return hasExactKeys(value, ["internalGuidance", "troubleshootingChecklist", "rootCauseHypotheses", "preventiveActions", "confidence"])
+      && isStringArray(value.internalGuidance)
+      && isStringArray(value.troubleshootingChecklist)
+      && isStringArray(value.rootCauseHypotheses)
+      && isStringArray(value.preventiveActions)
+      && isConfidence(value.confidence);
+  },
+  draft(value: unknown): boolean {
+    return hasExactKeys(value, ["customerResponse", "confidence"])
+      && typeof value.customerResponse === "string"
+      && value.customerResponse.trim().length > 0
+      && isConfidence(value.confidence);
+  },
+  discrimination(value: unknown): boolean {
+    return hasExactKeys(value, ["isDistinctFromMatch", "confidence", "reasoning"])
+      && typeof value.isDistinctFromMatch === "boolean"
+      && (value.confidence === "low" || value.confidence === "medium" || value.confidence === "high")
+      && typeof value.reasoning === "string"
+      && value.reasoning.trim().length > 0;
+  }
+};
 
 async function callChatCompletion<T>(
   config: AIConfig,
   prompt: { system: string; user: string },
-  options: ChatCompletionOptions = {}
+  options: ChatCompletionOptions = {},
+  retryAttempt = 0
 ): Promise<AIProviderResult<T>> {
   const startedAt = Date.now();
   const controller = new AbortController();
@@ -106,16 +178,35 @@ async function callChatCompletion<T>(
   const timeoutMs = Math.max(5000, Math.min(requestedTimeout, MAX_AI_TIMEOUT_MS));
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const viaProxy = typeof window !== "undefined";
+  const providerLabel = options.providerLabel ?? config.providerLabel ?? (config.mode === "deepseek" ? "DeepSeek API" : config.mode === "openai-compatible" ? "OpenAI-compatible API" : "LM Studio");
   const endpoint = viaProxy
     ? config.proxyPath
     : `${config.baseUrl.replace(/\/$/, "")}/chat/completions`;
 
-  const resolvedMaxTokens = Math.max(options.maxTokens ?? 180, config.minMaxTokens ?? 0);
+  const resolvedMaxTokens = Math.max(options.maxTokens ?? 700, config.minMaxTokens ?? 0);
+  const maxRetries = Math.max(0, Math.min(2, Math.floor(config.maxRetries ?? 0)));
+  const retry = async (result: AIProviderResult<T>, retryable: boolean, nextMaxTokens?: number, requireOneRetry = false): Promise<AIProviderResult<T>> => {
+    const retryLimit = requireOneRetry ? Math.max(1, maxRetries) : maxRetries;
+    if (!retryable || retryAttempt >= retryLimit) return result;
+    const next = await callChatCompletion<T>(
+      config,
+      prompt,
+      { ...options, maxTokens: nextMaxTokens ?? resolvedMaxTokens },
+      retryAttempt + 1
+    );
+    return {
+      ...next,
+      diagnostics: next.diagnostics
+        ? { ...next.diagnostics, retries: (next.diagnostics.retries ?? 0) + 1 }
+        : next.diagnostics
+    };
+  };
   try {
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {})
       },
       body: JSON.stringify({
         model: config.model,
@@ -145,21 +236,27 @@ async function callChatCompletion<T>(
       endedAt: responseReceivedAt,
       success: response.ok,
       unit: "requests",
-      tags: { provider: options.providerLabel ?? "LM Studio", operation: "http_request", timeout: false }
+        tags: { provider: providerLabel, operation: "http_request", timeout: false }
     });
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => "");
-      const error = errorText ? `HTTP ${response.status}: ${errorText}` : `HTTP ${response.status}`;
-      return {
+      await response.text().catch(() => "");
+      const error = `HTTP ${response.status}`;
+      const proxyReason = response.headers.get("x-ai-fallback-reason") ?? "";
+      const authenticationFailure = response.status === 401 || response.status === 403 || /authentication failed/i.test(proxyReason);
+      return retry({
         ok: false,
-        providerMode: "lmstudio",
-        providerLabel: "LM Studio",
+        providerMode: config.mode,
+        providerLabel,
         model: config.model,
         latencyMs: Date.now() - startedAt,
         error,
-        diagnostics: readDiagnostics(config, endpoint, false, error, response.headers)
-      };
+        diagnostics: readDiagnostics(config, endpoint, false, `HTTP ${response.status}`, response.headers, {
+          httpStatus: response.status,
+          failureClass: authenticationFailure ? "authentication" : response.status === 429 ? "rate_limit" : response.status >= 500 ? "provider_unavailable" : "unexpected_error",
+          jsonParseStatus: "not_attempted"
+        })
+      }, response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500);
     }
 
     const bodyStartedAt = Date.now();
@@ -177,7 +274,7 @@ async function callChatCompletion<T>(
       endedAt: Date.now(),
       success: true,
       unit: "requests",
-      tags: { provider: options.providerLabel ?? "LM Studio", operation: "response_body" }
+      tags: { provider: providerLabel, operation: "response_body" }
     });
     const firstChoice = payload.choices?.[0];
     const finishReason = firstChoice?.finish_reason;
@@ -186,77 +283,42 @@ async function callChatCompletion<T>(
     const tier = config.proxyPath;
     if (finishReason === "length") {
       console.warn(`[callChatCompletion] ${tier}: 200 OK but finish_reason=length — increase max_tokens or reduce reasoning (current: ${resolvedMaxTokens})`);
-      return {
+      return retry({
         ok: false,
-        providerMode: "lmstudio",
-        providerLabel: "LM Studio",
+        providerMode: config.mode,
+        providerLabel,
         model: config.model,
         latencyMs: Date.now() - startedAt,
         error: "AI output truncated before valid JSON",
-        diagnostics: readDiagnostics(config, endpoint, false, "AI output truncated before valid JSON", response.headers)
-      };
+        diagnostics: readDiagnostics(config, endpoint, false, "AI output truncated before valid JSON", response.headers, {
+          failureClass: "truncated_response",
+          completionLength: (content?.length ?? 0) + (reasoningContent?.length ?? 0),
+          jsonParseStatus: "not_attempted",
+          structuredOutputValid: false
+        })
+      }, true, resolvedMaxTokens * 2);
     }
-    if (!content && reasoningContent) {
-      // Thinking models (e.g. Gemma QAT) sometimes emit the JSON answer in
-      // reasoning_content and leave content null. Try parsing it as a fallback.
-      const parseStartedAt = Date.now();
-      const parsedFromReasoning = parseJsonObject(reasoningContent);
-      recordTelemetryEvent({
-        name: "json_parsing",
-        category: "provider",
-        durationMs: Date.now() - parseStartedAt,
-        startedAt: parseStartedAt,
-        endedAt: Date.now(),
-        success: !!parsedFromReasoning,
-        unit: "requests",
-        tags: { provider: options.providerLabel ?? "LM Studio" }
-      });
-      if (parsedFromReasoning && typeof parsedFromReasoning === "object") {
-        console.warn(`[callChatCompletion] ${tier}: 200 OK — content empty, used reasoning_content fallback (thinking model path)`);
-        return {
-          ok: true,
-          providerMode: "lmstudio",
-          providerLabel: "LM Studio",
-          model: config.model,
-          latencyMs: Date.now() - startedAt,
-          data: parsedFromReasoning as T,
-          diagnostics: readDiagnostics(config, endpoint, true, undefined, response.headers)
-        };
-      }
-      console.warn(
-        `[callChatCompletion] ${tier}: 200 OK — content empty, reasoning_content present but not valid JSON.`,
-        `reasoning_content[:300]: ${reasoningContent.slice(0, 300)}`
-      );
-      return {
-        ok: false,
-        providerMode: "lmstudio",
-        providerLabel: "LM Studio",
-        model: config.model,
-        latencyMs: Date.now() - startedAt,
-        error: "Model returned reasoning_content instead of JSON content",
-        diagnostics: readDiagnostics(
-          config,
-          endpoint,
-          false,
-          "Model returned reasoning_content instead of JSON content",
-          response.headers
-        )
-      };
-    }
+    // Some reasoning-capable OpenAI-compatible providers return a private
+    // `reasoning_content` field alongside the actual answer in `content`.
+    // The reasoning channel is never parsed, persisted, or exposed; only the
+    // strict JSON answer in `content` can be accepted. Rejecting the whole
+    // response merely because private metadata is present makes valid
+    // structured DeepSeek completions fail over unnecessarily. A response
+    // with reasoning but no answer still fails through the empty-content guard.
     if (!content) {
       console.warn(
         `[callChatCompletion] ${tier}: 200 OK — content and reasoning_content both empty.`,
         `choices[0]: ${JSON.stringify(payload.choices?.[0]).slice(0, 500)}`
       );
-      return {
+      return retry({
         ok: false,
-        providerMode: "lmstudio",
-        providerLabel: "LM Studio",
+        providerMode: config.mode,
+        providerLabel,
         model: config.model,
         latencyMs: Date.now() - startedAt,
         error: "Malformed AI response",
-        diagnostics: readDiagnostics(config, endpoint, false, "Malformed AI response", response.headers)
-      };
+        diagnostics: readDiagnostics(config, endpoint, false, "Malformed AI response", response.headers, { failureClass: "malformed_response", jsonParseStatus: "not_attempted", structuredOutputValid: false })
+      }, true, undefined, true);
     }
 
     const parseStartedAt = Date.now();
@@ -269,32 +331,50 @@ async function callChatCompletion<T>(
       endedAt: Date.now(),
       success: !!parsed,
       unit: "requests",
-      tags: { provider: options.providerLabel ?? "LM Studio" }
+      tags: { provider: providerLabel }
     });
     if (!parsed || typeof parsed !== "object") {
       console.warn(
         `[callChatCompletion] ${tier}: 200 OK — parseJsonObject failed.`,
         `content[:400]: ${content.slice(0, 400)}`
       );
-      return {
+      return retry({
         ok: false,
-        providerMode: "lmstudio",
-        providerLabel: "LM Studio",
+        providerMode: config.mode,
+        providerLabel,
         model: config.model,
         latencyMs: Date.now() - startedAt,
         error: "AI response did not contain valid JSON",
-        diagnostics: readDiagnostics(config, endpoint, false, "AI response did not contain valid JSON", response.headers)
-      };
+        diagnostics: readDiagnostics(config, endpoint, false, "AI response did not contain valid JSON", response.headers, { failureClass: "malformed_response", completionLength: content.length, jsonParseStatus: "invalid", structuredOutputValid: false })
+      }, true, undefined, true);
+    }
+
+    if (options.validateStructuredOutput && !options.validateStructuredOutput(parsed)) {
+      console.warn(`[callChatCompletion] ${tier}: rejected JSON that does not exactly match the structured-output schema.`);
+      return retry({
+        ok: false,
+        providerMode: config.mode,
+        providerLabel,
+        model: config.model,
+        latencyMs: Date.now() - startedAt,
+        error: "AI response failed structured schema validation",
+        diagnostics: readDiagnostics(config, endpoint, false, "AI response failed structured schema validation", response.headers, {
+          failureClass: "invalid_structured_output",
+          completionLength: content.length,
+          jsonParseStatus: "valid",
+          structuredOutputValid: false
+        })
+      }, true, undefined, true);
     }
 
     return {
       ok: true,
-      providerMode: "lmstudio",
-      providerLabel: "LM Studio",
+      providerMode: config.mode,
+      providerLabel,
       model: config.model,
       latencyMs: Date.now() - startedAt,
       data: parsed as T,
-      diagnostics: readDiagnostics(config, endpoint, true, undefined, response.headers)
+      diagnostics: readDiagnostics(config, endpoint, true, undefined, response.headers, { completionLength: content.length, jsonParseStatus: "valid", structuredOutputValid: true })
     };
   } catch (error) {
     const message =
@@ -303,15 +383,16 @@ async function callChatCompletion<T>(
         : error instanceof Error
         ? error.message
         : "Unknown network error";
-    return {
+    const failure: AIProviderResult<T> = {
       ok: false,
-      providerMode: "lmstudio",
-      providerLabel: "LM Studio",
+      providerMode: config.mode,
+      providerLabel,
       model: config.model,
       latencyMs: Date.now() - startedAt,
       error: message,
-      diagnostics: readDiagnostics(config, endpoint, false, message)
+        diagnostics: readDiagnostics(config, endpoint, false, message, undefined, { failureClass: message.includes("timed out") ? "timeout" : /fetch|network|connect|refused|socket/i.test(message) ? "network" : "unexpected_error", timedOut: message.includes("timed out"), jsonParseStatus: "not_attempted" })
     };
+    return retry(failure, /timed out|network|fetch|connect|refused|socket/i.test(message));
   } finally {
     clearTimeout(timeout);
   }
@@ -356,6 +437,20 @@ function mapFailure<T>(result: AIProviderResult<Record<string, unknown>>): AIPro
   };
 }
 
+function hasNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function mapStructuredFailure<T>(result: AIProviderResult<Record<string, unknown>>): AIProviderResult<T> {
+  return {
+    ...mapFailure<T>(result),
+    error: "AI response failed structured schema validation",
+    diagnostics: result.diagnostics
+      ? { ...result.diagnostics, failureClass: "invalid_structured_output", structuredOutputValid: false }
+      : undefined
+  };
+}
+
 export function createLMStudioProvider(config: AIConfig, labelOverride?: string): AIProvider {
   const lbl = labelOverride ?? "LM Studio";
 
@@ -366,11 +461,12 @@ export function createLMStudioProvider(config: AIConfig, labelOverride?: string)
   }
 
   return {
-    mode: "lmstudio",
+    mode: config.mode,
     label: lbl,
     async analyzeTicket(input: AnalyzeTicketInput) {
-      const result = await callChatCompletion<Record<string, unknown>>(config, buildAnalyzeTicketPrompt(input), { providerLabel: lbl });
+      const result = await callChatCompletion<Record<string, unknown>>(config, buildAnalyzeTicketPrompt(input), { providerLabel: lbl, validateStructuredOutput: validates.analysis });
       if (!result.ok || !result.data) return relabel(mapFailure<AIAnalysisSuggestion>(result));
+      if (!hasNonEmptyString(result.data.summary) || !hasNonEmptyString(result.data.category)) return relabel(mapStructuredFailure<AIAnalysisSuggestion>(result));
       return relabel({
         ...result,
         data: {
@@ -404,9 +500,10 @@ export function createLMStudioProvider(config: AIConfig, labelOverride?: string)
       const result = await callChatCompletion<Record<string, unknown>>(
         config,
         buildCanonicalProblemPrompt(input),
-        { maxTokens: 700, timeoutMs: 90000, providerLabel: lbl }
+        { maxTokens: 700, timeoutMs: 90000, providerLabel: lbl, validateStructuredOutput: validates.titled }
       );
       if (!result.ok || !result.data) return relabel(mapFailure<AICanonicalProblemSuggestion>(result));
+      if (!hasNonEmptyString(result.data.title)) return relabel(mapStructuredFailure<AICanonicalProblemSuggestion>(result));
       return relabel({
         ...result,
         data: {
@@ -417,8 +514,9 @@ export function createLMStudioProvider(config: AIConfig, labelOverride?: string)
       });
     },
     async suggestPatternName(input: PatternNameInput) {
-      const result = await callChatCompletion<Record<string, unknown>>(config, buildPatternNamePrompt(input), { providerLabel: lbl });
+      const result = await callChatCompletion<Record<string, unknown>>(config, buildPatternNamePrompt(input), { providerLabel: lbl, validateStructuredOutput: validates.titled });
       if (!result.ok || !result.data) return relabel(mapFailure<AIPatternSuggestion>(result));
+      if (!hasNonEmptyString(result.data.title)) return relabel(mapStructuredFailure<AIPatternSuggestion>(result));
       return relabel({
         ...result,
         data: {
@@ -429,7 +527,7 @@ export function createLMStudioProvider(config: AIConfig, labelOverride?: string)
       });
     },
     async enrichKnowledge(input: KnowledgeEnrichmentInput) {
-      const result = await callChatCompletion<Record<string, unknown>>(config, buildKnowledgeEnrichmentPrompt(input), { providerLabel: lbl });
+      const result = await callChatCompletion<Record<string, unknown>>(config, buildKnowledgeEnrichmentPrompt(input), { providerLabel: lbl, validateStructuredOutput: validates.enrichment });
       if (!result.ok || !result.data) return relabel(mapFailure<AIKnowledgeEnrichment>(result));
       return relabel({
         ...result,
@@ -446,9 +544,10 @@ export function createLMStudioProvider(config: AIConfig, labelOverride?: string)
       const result = await callChatCompletion<Record<string, unknown>>(
         config,
         buildDraftCustomerResponsePrompt(input),
-        { maxTokens: 650, providerLabel: lbl }
+        { maxTokens: 650, providerLabel: lbl, validateStructuredOutput: validates.draft }
       );
       if (!result.ok || !result.data) return relabel(mapFailure<AICustomerResponseSuggestion>(result));
+      if (!hasNonEmptyString(result.data.customerResponse) && !hasNonEmptyString(result.data.draftResponse)) return relabel(mapStructuredFailure<AICustomerResponseSuggestion>(result));
       return relabel({
         ...result,
         data: {
@@ -472,9 +571,10 @@ export function createLMStudioProvider(config: AIConfig, labelOverride?: string)
       const result = await callChatCompletion<Record<string, unknown>>(
         config,
         buildMatchDiscriminationPrompt(input),
-        { maxTokens: 700, timeoutMs: 90000, providerLabel: lbl }
+        { maxTokens: 700, timeoutMs: 90000, providerLabel: lbl, validateStructuredOutput: validates.discrimination }
       );
       if (!result.ok || !result.data) return relabel(mapFailure<MatchDiscriminationResult>(result));
+      if (typeof result.data.isDistinctFromMatch !== "boolean") return relabel(mapStructuredFailure<MatchDiscriminationResult>(result));
       const confidence = result.data.confidence === "high" || result.data.confidence === "low"
         ? result.data.confidence
         : "medium";
@@ -491,3 +591,6 @@ export function createLMStudioProvider(config: AIConfig, labelOverride?: string)
     }
   };
 }
+
+/** Shared OpenAI-compatible provider port. DeepSeek is one configuration of this factory. */
+export const createOpenAICompatibleProvider = createLMStudioProvider;

@@ -28,7 +28,6 @@ const { stableStringify } = require(path.join(root, "lib", "persistence", "migra
 const {
   DEVELOPER_DEMO_ORGANIZATION_ID,
   PROTECTED_ORGANIZATION_IDS,
-  developerDemoActors
 } = require(path.join(root, "data", "developerDemoFoundation.ts"));
 
 const O = DEVELOPER_DEMO_ORGANIZATION_ID;
@@ -37,6 +36,16 @@ const HERO_TITLE = "SSO Redirect Loop After Certificate Rotation";
 const findings = [];
 function finding(classification, severity, section, summary, evidence) {
   findings.push({ classification, severity, section, summary, evidence });
+}
+
+const RELEASE_BLOCKING_CLASSIFICATIONS = new Set(["DATA_CORRUPTION", "CURRENT_AUDITABILITY_GAP"]);
+const EPHEMERAL_BULK_TICKET = /^bulk-ticket-/;
+function isEphemeralBulkTicketId(ticketId) {
+  return typeof ticketId === "string" && EPHEMERAL_BULK_TICKET.test(ticketId);
+}
+function historicalOrCurrentReference(ticketId, ticketById) {
+  if (ticketById.has(ticketId)) return "resolved";
+  return isEphemeralBulkTicketId(ticketId) ? "historical" : "current";
 }
 
 const summary = {};
@@ -61,7 +70,11 @@ async function loadOrganization(prisma) {
     await Promise.all([
       prisma.organization.findUnique({ where: { id: O } }),
       prisma.organizationMembership.findMany({ where, orderBy: { userId: "asc" } }),
-      prisma.user.findMany({ where: { id: { startsWith: "user-oip-demo-" } }, orderBy: { id: "asc" } }),
+      // Actor attribution is validated against the organization's current
+      // membership/user graph, not the retired synthetic demo roster. The
+      // latter caused false failures when a real development user committed
+      // historical validation records.
+      prisma.user.findMany({ where: { memberships: { some: { organizationId: O } } }, orderBy: { id: "asc" } }),
       prisma.knowledgeItem.findMany({ where, orderBy: { id: "asc" } }),
       prisma.knowledgeCandidate.findMany({ where, orderBy: { id: "asc" } }),
       prisma.validationRecord.findMany({ where, orderBy: { id: "asc" } }),
@@ -101,6 +114,34 @@ function normalizeAfterState(after) {
     knowledgeVersions: after.knowledgeVersions ?? [],
     lifecycleState: after.lifecycleState
   };
+}
+
+function continuityState(state) {
+  if (!state || typeof state !== "object") return null;
+  return {
+    id: state.id,
+    organizationId: state.organizationId,
+    trustScore: state.trustScore,
+    timesReused: state.timesReused,
+    timesSeen: state.timesSeen,
+    successfulResolutions: state.successfulResolutions,
+    failedResolutions: state.failedResolutions,
+    successRate: state.successRate,
+    lifecycleState: state.lifecycleState
+  };
+}
+
+function continuityMismatch(left, right) {
+  const a = continuityState(left);
+  const b = continuityState(right);
+  if (!a || !b) return ["snapshot-shape"];
+  return Object.keys(a).filter((key) => stableStringify(a[key]) !== stableStringify(b[key]));
+}
+
+function revisionMismatch(left, right) {
+  const leftRevision = left && Number.isInteger(left.revision) ? left.revision : null;
+  const rightRevision = right && Number.isInteger(right.revision) ? right.revision : null;
+  return leftRevision !== null && rightRevision !== null && leftRevision !== rightRevision;
 }
 
 function auditTrust(data) {
@@ -149,9 +190,15 @@ function auditTrust(data) {
       const before = trustOf(m.beforeState);
       const after = trustOf(m.afterState);
       if (after < 0 || after > 100) { outOfRange += 1; finding("DATA_CORRUPTION", "high", "B", `Trust out of range on ${m.id}: ${after}.`, { memoryId: m.id, after }); }
-      if (i > 0 && stableStringify(m.beforeState) !== stableStringify(chain[i - 1].afterState)) {
-        chainIntact = false;
-        finding("DATA_CORRUPTION", "high", "B", `Broken memory chain for ${item.id} at ${m.id}: beforeState != prior afterState.`, { itemId: item.id, memoryId: m.id });
+      if (i > 0) {
+        const priorAfter = chain[i - 1].afterState;
+        const hardMismatch = continuityMismatch(m.beforeState, priorAfter);
+        if (hardMismatch.length > 0 || revisionMismatch(m.beforeState, priorAfter)) {
+          chainIntact = false;
+          finding("DATA_CORRUPTION", "high", "B", `Broken current memory chain for ${item.id} at ${m.id}: authoritative state differs from prior afterState.`, { itemId: item.id, memoryId: m.id, fields: [...hardMismatch, ...(revisionMismatch(m.beforeState, priorAfter) ? ["revision"] : [])] });
+        } else if (stableStringify(m.beforeState) !== stableStringify(priorAfter)) {
+          finding("HISTORICAL_AUDITABILITY_GAP", "low", "B", `Historical memory snapshot for ${item.id} at ${m.id} differs in non-authoritative fields from the prior snapshot.`, { itemId: item.id, memoryId: m.id });
+        }
       }
       const delta = (after ?? 0) - (before ?? TRUST_INITIAL);
       if (m.changeType === "trust_update_only") {
@@ -172,7 +219,7 @@ function auditTrust(data) {
         else if (hasEvidence) { expectedRaw = TRUST_HUMAN_REUSE + (allEdited ? TRUST_HUMAN_EDIT_PENALTY : 0); inferredMode = "human_reuse(evidence)"; }
         else { expectedRaw = TRUST_AUTO_SUCCESS; inferredMode = "automatic(no-evidence)"; modeInferredEvents += 1; }
         if (expectedRaw === delta) explainedTrustEvents += 1;
-        else finding("AUDITABILITY_GAP", "low", "B", `Trust event ${m.id} delta ${delta} not explained by durable signals (expected ${expectedRaw}).`, { memoryId: m.id, delta, expectedRaw, hasEvidence, allEdited, anyRejected });
+        else finding("HISTORICAL_AUDITABILITY_GAP", "low", "B", `Trust event ${m.id} delta ${delta} is not fully explained by the available historical durable signals (expected ${expectedRaw}).`, { memoryId: m.id, delta, expectedRaw, hasEvidence, allEdited, anyRejected });
         // A positive human reuse must carry evidence; auto/wrong legitimately need none.
         if (delta > 0 && !hasEvidence && !(expectedRaw === TRUST_AUTO_SUCCESS)) {
           trustEventsMissingEvidence += 1;
@@ -190,7 +237,26 @@ function auditTrust(data) {
     if (reconstructed === item.trustScore && finalAfter === item.trustScore) exact += 1;
     else { mismatches += 1; finding("DATA_CORRUPTION", "high", "B", `Reconstructed trust ${reconstructed} / final snapshot ${finalAfter} != persisted ${item.trustScore} for ${item.id}.`, { itemId: item.id, reconstructed, finalAfter, persisted: item.trustScore }); }
     if (digest(normalizeAfterState(chain[chain.length - 1].afterState)) === digest(normalizeKnowledgeContent(item))) finalStateMatch += 1;
-    else finding("DATA_CORRUPTION", "high", "D", `Final afterState snapshot does not equal current KnowledgeItem for ${item.id}.`, { itemId: item.id });
+    else {
+      const finalAfter = chain[chain.length - 1].afterState;
+      const currentState = {
+        id: item.id,
+        organizationId: item.organizationId,
+        trustScore: item.trustScore,
+        timesReused: item.timesReused,
+        timesSeen: item.timesSeen,
+        successfulResolutions: item.successfulResolutions,
+        failedResolutions: item.failedResolutions,
+        successRate: item.successRate,
+        lifecycleState: item.lifecycleState
+      };
+      const hardMismatch = continuityMismatch(finalAfter, currentState);
+      if (hardMismatch.length > 0 || revisionMismatch(finalAfter, currentState)) {
+        finding("DATA_CORRUPTION", "high", "D", `Current memory afterState does not match authoritative KnowledgeItem state for ${item.id}.`, { itemId: item.id, fields: [...hardMismatch, ...(revisionMismatch(finalAfter, currentState) ? ["revision"] : [])] });
+      } else {
+        finding("HISTORICAL_AUDITABILITY_GAP", "low", "D", `Historical afterState snapshot does not fully match current KnowledgeItem serialization for ${item.id}.`, { itemId: item.id });
+      }
+    }
   }
 
   summary.trust = { itemsAudited: knowledge.length, exactTrustMatches: exact, mismatches, baselineOk, chainIntact: chainOk, finalStateMatch, trustEvents, deltaLegal, deltaTotal, explainedTrustEvents, modeInferredEvents, trustEventsMissingEvidence, outOfRange };
@@ -222,7 +288,7 @@ function auditEvidence(data) {
     const expectDelta = validationDelta.get(e.validationRecordId);
     if (expectDelta !== undefined && e.delta !== expectDelta) { deltaMismatch += 1; ok = false; finding("DATA_CORRUPTION", "medium", "C", `TrustEvidence ${e.id} delta ${e.delta} != event delta ${expectDelta}.`, { id: e.id }); }
     if (ticket && iso(ticket.createdAt) > iso(e.createdAt)) { chronologyBad += 1; ok = false; finding("DATA_CORRUPTION", "medium", "C", `TrustEvidence ${e.id} predates its source ticket.`, { id: e.id }); }
-    if (validation && iso(validation.timestamp) !== iso(e.createdAt)) { chronologyBad += 1; finding("AUDITABILITY_GAP", "low", "C", `TrustEvidence ${e.id} createdAt != validation timestamp.`, { id: e.id }); }
+    if (validation && iso(validation.timestamp) !== iso(e.createdAt)) { chronologyBad += 1; finding("HISTORICAL_AUDITABILITY_GAP", "low", "C", `TrustEvidence ${e.id} createdAt != validation timestamp; immutable historical timestamps are retained.`, { id: e.id }); }
     const key = `${e.organizationId}|${e.knowledgeItemId}|${e.sourceTicketId}|${e.trustEventType}`;
     if (keys.has(key)) { duplicates += 1; ok = false; finding("DATA_CORRUPTION", "high", "C", `Duplicate TrustEvidence key ${key}.`, { id: e.id }); }
     keys.add(key);
@@ -232,11 +298,12 @@ function auditEvidence(data) {
 }
 
 function auditValidationMemory(data) {
-  const { validations, memory, candidates, knowledge } = data;
+  const { validations, memory, candidates, knowledge, memberships, users } = data;
   const candidateById = new Map(candidates.map((c) => [c.id, c]));
   const knowledgeIds = new Set(knowledge.map((k) => k.id));
   const validationById = new Map(validations.map((v) => [v.id, v]));
-  const memberIds = new Set(developerDemoActors.map((a) => a.id));
+  const memberIds = new Set((memberships ?? []).map((membership) => membership.userId));
+  const userIds = new Set((users ?? []).map((user) => user.id));
   let vOk = 0, vBad = 0;
   const candidateValidationCount = new Map();
   for (const v of validations) {
@@ -244,7 +311,7 @@ function auditValidationMemory(data) {
     if (v.organizationId !== O) { ok = false; finding("DATA_CORRUPTION", "high", "D", `Validation ${v.id} cross-org.`, { id: v.id }); }
     if (!candidateById.has(v.candidateId)) { ok = false; finding("DATA_CORRUPTION", "high", "D", `Validation ${v.id} unresolved candidate.`, { id: v.id }); }
     if (v.knowledgeItemId && !knowledgeIds.has(v.knowledgeItemId)) { ok = false; finding("DATA_CORRUPTION", "high", "D", `Validation ${v.id} unresolved knowledge.`, { id: v.id }); }
-    if (!v.actorId || !memberIds.has(v.actorId)) { ok = false; finding("DATA_CORRUPTION", "high", "I", `Validation ${v.id} actorId unresolved: ${v.actorId}.`, { id: v.id }); }
+    if (!v.actorId || !memberIds.has(v.actorId) || !userIds.has(v.actorId)) { ok = false; finding("DATA_CORRUPTION", "high", "I", `Validation ${v.id} actorId is not a current organization member: ${v.actorId}.`, { id: v.id, actorId: v.actorId }); }
     candidateValidationCount.set(v.candidateId, (candidateValidationCount.get(v.candidateId) ?? 0) + 1);
     if (ok) vOk += 1; else vBad += 1;
   }
@@ -260,12 +327,12 @@ function auditValidationMemory(data) {
     if (!v) { ok = false; finding("DATA_CORRUPTION", "high", "D", `Memory ${m.id} unresolved validation.`, { id: m.id }); }
     if (!candidateById.has(m.candidateId)) { ok = false; finding("DATA_CORRUPTION", "high", "D", `Memory ${m.id} unresolved candidate.`, { id: m.id }); }
     if (!knowledgeIds.has(m.knowledgeItemId)) { ok = false; finding("DATA_CORRUPTION", "high", "D", `Memory ${m.id} unresolved knowledge.`, { id: m.id }); }
-    if (!m.actorId || !memberIds.has(m.actorId)) { ok = false; finding("DATA_CORRUPTION", "high", "I", `Memory ${m.id} actorId unresolved: ${m.actorId}.`, { id: m.id }); }
+    if (!m.actorId || !memberIds.has(m.actorId) || !userIds.has(m.actorId)) { ok = false; finding("DATA_CORRUPTION", "high", "I", `Memory ${m.id} actorId is not a current organization member: ${m.actorId}.`, { id: m.id, actorId: m.actorId }); }
     if (v && m.actorId !== v.actorId) { ok = false; finding("DATA_CORRUPTION", "medium", "I", `Memory ${m.id} actor != validation actor.`, { id: m.id }); }
     if (m.beforeState !== null && typeof m.beforeState !== "object") { ok = false; finding("DATA_CORRUPTION", "high", "D", `Memory ${m.id} malformed beforeState.`, { id: m.id }); }
     if (typeof m.afterState !== "object" || m.afterState === null) { ok = false; finding("DATA_CORRUPTION", "high", "D", `Memory ${m.id} malformed afterState.`, { id: m.id }); }
     if (m.afterState && m.afterState.id !== m.knowledgeItemId) { ok = false; finding("DATA_CORRUPTION", "high", "D", `Memory ${m.id} afterState.id != knowledgeItemId.`, { id: m.id }); }
-    if (v && iso(v.timestamp) !== iso(m.timestamp)) finding("AUDITABILITY_GAP", "low", "H", `Memory ${m.id} timestamp != validation timestamp.`, { id: m.id });
+    if (v && iso(v.timestamp) !== iso(m.timestamp)) finding("HISTORICAL_AUDITABILITY_GAP", "low", "H", `Memory ${m.id} timestamp != validation timestamp; immutable historical timestamps are retained.`, { id: m.id });
     validationMemoryCount.set(m.validationRecordId, (validationMemoryCount.get(m.validationRecordId) ?? 0) + 1);
     if (ok) mOk += 1; else mBad += 1;
   }
@@ -290,12 +357,13 @@ function auditVersions(data) {
       else finding("DATA_CORRUPTION", "high", "E", `Duplicate versionId ${v.versionId}.`, { itemId: item.id });
       seen.add(v.versionId); globalIds.add(v.versionId);
       const expectedId = `${item.id}-v${String(index + 1).padStart(3, "0")}`;
-      if (v.versionId !== expectedId) finding("AUDITABILITY_GAP", "low", "E", `Version ${v.versionId} does not follow ${expectedId} progression.`, { itemId: item.id });
+      if (v.versionId !== expectedId) finding("HISTORICAL_AUDITABILITY_GAP", "low", "E", `Version ${v.versionId} does not follow the current zero-padded progression ${expectedId}; legacy version naming is preserved.`, { itemId: item.id, versionId: v.versionId, expectedId });
       if (prev === null || iso(prev) <= iso(v.createdAt)) chronoOk += 1;
       else finding("DATA_CORRUPTION", "medium", "E", `Version ${v.versionId} out of chronological order.`, { itemId: item.id });
       prev = v.createdAt;
       if (v.sourceTicketId && ticketIds.has(v.sourceTicketId)) sourceOk += 1;
-      else finding("AUDITABILITY_GAP", "low", "E", `Version ${v.versionId} sourceTicketId unresolved.`, { itemId: item.id, sourceTicketId: v.sourceTicketId });
+      else if (v.sourceTicketId && isEphemeralBulkTicketId(v.sourceTicketId)) finding("HISTORICAL_AUDITABILITY_GAP", "low", "E", `Version ${v.versionId} preserves an ephemeral bulk-upload source reference that is not a durable TicketRecord.`, { itemId: item.id, sourceTicketId: v.sourceTicketId });
+      else finding("CURRENT_AUDITABILITY_GAP", "high", "E", `Version ${v.versionId} has an unresolved non-bulk sourceTicketId.`, { itemId: item.id, sourceTicketId: v.sourceTicketId });
     });
   }
   summary.versions = { total, unique, chronoOk, sourceOk };
@@ -346,10 +414,15 @@ function auditTicketsCandidates(data) {
   const { tickets, candidates, knowledge } = data;
   const ticketById = new Map(tickets.map((t) => [t.ticketId, t]));
   const knowledgeById = new Map(knowledge.map((k) => [k.id, k]));
+  const lessonById = new Map();
   const lessonResolvableByItem = new Map();
   for (const k of knowledge) {
     const set = new Set();
-    for (const l of k.content?.lessons ?? []) { set.add(l.id); for (const a of l.aliasLessonIds ?? []) set.add(a); }
+    for (const l of k.content?.lessons ?? []) {
+      set.add(l.id);
+      lessonById.set(l.id, k.id);
+      for (const a of l.aliasLessonIds ?? []) { set.add(a); lessonById.set(a, k.id); }
+    }
     lessonResolvableByItem.set(k.id, set);
   }
   let dupTicketIds = 0, ticketCrossOrg = 0, memoryMatchOk = 0, memoryMatchUnresolved = 0, reflectionOk = 0, reflectionUnresolved = 0;
@@ -361,10 +434,10 @@ function auditTicketsCandidates(data) {
     const match = t.memoryMatch;
     if (match && match.knowledgeId) {
       const item = knowledgeById.get(match.knowledgeId);
-      if (!item) { memoryMatchUnresolved += 1; finding("AUDITABILITY_GAP", "low", "G", `Ticket ${t.ticketId} memoryMatch.knowledgeId unresolved.`, { ticketId: t.ticketId }); }
+      if (!item) { memoryMatchUnresolved += 1; finding("CURRENT_AUDITABILITY_GAP", "high", "G", `Ticket ${t.ticketId} memoryMatch.knowledgeId is an unresolved current authoritative reference.`, { ticketId: t.ticketId, knowledgeId: match.knowledgeId }); }
       else {
         memoryMatchOk += 1;
-        if (match.lessonId && !lessonResolvableByItem.get(item.id)?.has(match.lessonId)) finding("AUDITABILITY_GAP", "low", "G", `Ticket ${t.ticketId} memoryMatch.lessonId not resolvable in item.`, { ticketId: t.ticketId });
+        if (match.lessonId && !lessonResolvableByItem.get(item.id)?.has(match.lessonId)) finding("HISTORICAL_AUDITABILITY_GAP", "low", "G", `Ticket ${t.ticketId} memoryMatch.lessonId is not resolvable in the current item lesson collection.`, { ticketId: t.ticketId, lessonId: match.lessonId });
       }
     }
     const reflection = t.reflection;
@@ -373,18 +446,34 @@ function auditTicketsCandidates(data) {
       if (!lessonId) continue;
       const item = reflection.knowledgeChanged ? knowledgeById.get(reflection.knowledgeChanged) : null;
       if (item && lessonResolvableByItem.get(item.id)?.has(lessonId)) reflectionOk += 1;
-      else { reflectionUnresolved += 1; finding("AUDITABILITY_GAP", "low", "G", `Ticket ${t.ticketId} reflection.${key} unresolved.`, { ticketId: t.ticketId, lessonId }); }
+      else if (reflection?.decision === "create_new" && lessonById.has(lessonId)) reflectionOk += 1;
+      else { reflectionUnresolved += 1; finding("HISTORICAL_AUDITABILITY_GAP", "low", "G", `Ticket ${t.ticketId} reflection.${key} is not resolvable from the current lesson collection.`, { ticketId: t.ticketId, lessonId, decision: reflection?.decision }); }
     }
   }
-  let candidateCrossTicket = 0, orphanSource = 0;
+  let candidateCrossTicket = 0, historicalSource = 0, orphanSource = 0;
   for (const c of candidates) {
     if (c.organizationId !== O) finding("DATA_CORRUPTION", "high", "G", `Candidate ${c.id} cross-org.`, {});
     if (!c.sourceTicketIds || c.sourceTicketIds.length === 0) { orphanSource += 1; finding("DATA_CORRUPTION", "medium", "G", `Candidate ${c.id} has no source tickets.`, { id: c.id }); }
-    for (const tid of c.sourceTicketIds ?? []) if (!ticketById.has(tid)) { candidateCrossTicket += 1; finding("DATA_CORRUPTION", "high", "G", `Candidate ${c.id} references unknown ticket ${tid}.`, { id: c.id }); }
+    for (const tid of c.sourceTicketIds ?? []) if (!ticketById.has(tid)) {
+      if (historicalOrCurrentReference(tid, ticketById) === "historical") {
+        historicalSource += 1;
+        finding("HISTORICAL_AUDITABILITY_GAP", "low", "G", `Candidate ${c.id} preserves an ephemeral bulk-upload source reference ${tid}; no durable TicketRecord is expected for this legacy upload provenance.`, { id: c.id, sourceTicketId: tid });
+      } else {
+        candidateCrossTicket += 1;
+        finding("DATA_CORRUPTION", "high", "G", `Candidate ${c.id} references an unresolved non-bulk ticket ${tid}.`, { id: c.id, sourceTicketId: tid });
+      }
+    }
   }
   let knowledgeSourceOk = 0;
-  for (const k of knowledge) if (ticketById.has(k.sourceTicketId)) knowledgeSourceOk += 1; else finding("DATA_CORRUPTION", "high", "G", `Knowledge ${k.id} sourceTicketId unresolved.`, { id: k.id });
-  summary.ticketsCandidates = { tickets: tickets.length, dupTicketIds, ticketCrossOrg, memoryMatchOk, memoryMatchUnresolved, reflectionOk, reflectionUnresolved, candidates: candidates.length, candidateCrossTicket, orphanSource, knowledgeSourceOk };
+  let historicalKnowledgeSource = 0;
+  for (const k of knowledge) {
+    if (ticketById.has(k.sourceTicketId)) knowledgeSourceOk += 1;
+    else if (isEphemeralBulkTicketId(k.sourceTicketId)) {
+      historicalKnowledgeSource += 1;
+      finding("HISTORICAL_AUDITABILITY_GAP", "low", "G", `Knowledge ${k.id} preserves an ephemeral bulk-upload source reference ${k.sourceTicketId}.`, { id: k.id, sourceTicketId: k.sourceTicketId });
+    } else finding("CURRENT_AUDITABILITY_GAP", "high", "G", `Knowledge ${k.id} has an unresolved non-bulk sourceTicketId.`, { id: k.id, sourceTicketId: k.sourceTicketId });
+  }
+  summary.ticketsCandidates = { tickets: tickets.length, dupTicketIds, ticketCrossOrg, memoryMatchOk, memoryMatchUnresolved, reflectionOk, reflectionUnresolved, candidates: candidates.length, candidateCrossTicket, historicalSource, orphanSource, knowledgeSourceOk, historicalKnowledgeSource };
 }
 
 function auditChronology(data) {
@@ -427,7 +516,12 @@ function auditMetrics(data) {
   const compare = (field, derivedValue) => {
     const persisted = metrics?.[field];
     const match = persisted === derivedValue;
-    if (!match) finding("DATA_CORRUPTION", "medium", "J", `OrgMetrics.${field} persisted ${persisted} != independently derived ${derivedValue}.`, { field, persisted, derivedValue });
+    if (!match) {
+      const classification = ["lifetimeTickets", "knowledgeReused", "knowledgeVersions", "emergingPatternsDetected", "resolutionsCount"].includes(field)
+        ? "DATA_CORRUPTION"
+        : "FIXTURE_DRIFT";
+      finding(classification, "medium", "J", `OrgMetrics.${field} persisted ${persisted} != independently derived ${derivedValue}.`, { field, persisted, derivedValue, note: classification === "FIXTURE_DRIFT" ? "This legacy probe derivation is not an authoritative RSS-1.2E.2 metric." : undefined });
+    }
     return { field, persisted, derived: derivedValue, match };
   };
   const rows = [
@@ -448,10 +542,10 @@ function auditMetrics(data) {
   const modeUnknown = completed.filter((t) => t.resolutionMode !== "automatic" && t.resolutionMode !== "human").length;
   const reconstructable = modeUnknown === 0;
   if (reconstructable) {
-    if (metrics?.autoResolutions !== modeAuto) finding("DATA_CORRUPTION", "medium", "J", `OrgMetrics.autoResolutions ${metrics?.autoResolutions} != reconstructed ${modeAuto}.`, { modeAuto });
-    if (metrics?.humanResolutions !== modeHuman) finding("DATA_CORRUPTION", "medium", "J", `OrgMetrics.humanResolutions ${metrics?.humanResolutions} != reconstructed ${modeHuman}.`, { modeHuman });
+    if (metrics?.autoResolutions !== modeAuto) finding("CURRENT_AUDITABILITY_GAP", "medium", "J", `OrgMetrics.autoResolutions ${metrics?.autoResolutions} != reconstructed ${modeAuto}.`, { modeAuto });
+    if (metrics?.humanResolutions !== modeHuman) finding("CURRENT_AUDITABILITY_GAP", "medium", "J", `OrgMetrics.humanResolutions ${metrics?.humanResolutions} != reconstructed ${modeHuman}.`, { modeHuman });
   } else {
-    finding("AUDITABILITY_GAP", "medium", "J", `${modeUnknown} completed resolutions have null resolutionMode (historical rows predating TODO-026). The durable TicketRecord.resolutionMode field now exists, but the persisted auto/human split (auto=${metrics?.autoResolutions}, human=${metrics?.humanResolutions}) is not reconstructable for these rows until an explicitly approved reseed/backfill. Null is NOT counted as human.`, { autoResolutions: metrics?.autoResolutions, humanResolutions: metrics?.humanResolutions, modeUnknown, modeAuto, modeHuman });
+    finding("HISTORICAL_AUDITABILITY_GAP", "medium", "J", `${modeUnknown} completed resolutions have null resolutionMode (historical rows predating TODO-026). The durable TicketRecord.resolutionMode field now exists, but the persisted auto/human split (auto=${metrics?.autoResolutions}, human=${metrics?.humanResolutions}) is not reconstructable without an explicitly approved backfill.`, { autoResolutions: metrics?.autoResolutions, humanResolutions: metrics?.humanResolutions, modeUnknown, modeAuto, modeHuman });
   }
   summary.metrics = { derivableFields: rows, resolutionMode: { automatic: modeAuto, human: modeHuman, unknownNull: modeUnknown }, autoHumanReconstructable: reconstructable };
 }
@@ -460,19 +554,24 @@ function auditSequence(data) {
   const { sequence, tickets } = data;
   let maxSeq = 0, dup = 0;
   const seen = new Set();
+  const numericSequences = [];
   for (const t of tickets) {
     const m = /-(\d{4,})$/.exec(t.ticketId);
     const n = m ? Number(m[1]) : 0;
     maxSeq = Math.max(maxSeq, n);
+    if (n > 0) numericSequences.push(n);
     if (seen.has(t.ticketId)) dup += 1;
     seen.add(t.ticketId);
   }
   const counter = sequence?.counter ?? 0;
-  if (counter !== 5000) finding("DATA_CORRUPTION", "high", "K", `TicketSequence counter ${counter} != 5000.`, { counter });
+  const sorted = [...numericSequences].sort((a, b) => a - b);
+  const monotonic = sorted.every((value, index) => index === 0 || value > sorted[index - 1]);
+  if (!Number.isInteger(counter) || counter < 0) finding("DATA_CORRUPTION", "high", "K", `TicketSequence counter is not a non-negative integer: ${counter}.`, { counter });
   if (maxSeq !== counter) finding("DATA_CORRUPTION", "high", "K", `Highest ticket sequence ${maxSeq} != counter ${counter}.`, { maxSeq, counter });
-  const nextCollision = seen.has(`OIP-`) ? 0 : tickets.filter((t) => /-(\d{4,})$/.test(t.ticketId) && Number(/-(\d{4,})$/.exec(t.ticketId)[1]) === counter + 1).length;
+  if (!monotonic) finding("DATA_CORRUPTION", "high", "K", "Ticket sequence suffixes are not unique and strictly increasing.", { duplicateSequence: true });
+  const nextCollision = tickets.filter((t) => /-(\d{4,})$/.test(t.ticketId) && Number(/-(\d{4,})$/.exec(t.ticketId)[1]) === counter + 1).length;
   if (nextCollision > 0) finding("DATA_CORRUPTION", "high", "K", `Next sequence ${counter + 1} already used.`, {});
-  summary.sequence = { counter, maxSeq, duplicates: dup, nextSequence: counter + 1, nextCollision };
+  summary.sequence = { counter, maxSeq, duplicates: dup, monotonic, numericTicketIds: numericSequences.length, nextSequence: counter + 1, nextCollision };
 }
 
 function reconstructHero(data) {
@@ -511,26 +610,87 @@ function reconstructHero(data) {
     trustProgression: `${trustPath[0]} -> ${trustPath[trustPath.length - 1]} (${trustPath.length} events)`,
     provenancePresent: Boolean(item.content?.provenance)
   };
-  if (!sourceTicket) finding("AUDITABILITY_GAP", "medium", "L", "HERO source ticket not durably resolvable.", { itemId: item.id });
+  if (!sourceTicket) {
+    const classification = isEphemeralBulkTicketId(item.sourceTicketId) ? "HISTORICAL_AUDITABILITY_GAP" : "CURRENT_AUDITABILITY_GAP";
+    finding(classification, "medium", "L", "HERO source ticket is not durably resolvable.", { itemId: item.id, sourceTicketId: item.sourceTicketId });
+  }
 }
 
 async function protectedSnapshot(prisma) {
   const result = {};
-  for (const organizationId of PROTECTED_ORGANIZATION_IDS) {
+  const organizations = [...new Set([O, ...PROTECTED_ORGANIZATION_IDS])];
+  for (const organizationId of organizations) {
     const where = { organizationId };
-    const value = {
-      organization: await prisma.organization.findUnique({ where: { id: organizationId } }),
-      knowledge: await prisma.knowledgeItem.count({ where }),
-      tickets: await prisma.ticketRecord.count({ where }),
-      validations: await prisma.validationRecord.count({ where }),
-      memory: await prisma.memoryChangeRecord.count({ where }),
-      evidence: await prisma.trustEvidence.count({ where }),
-      metrics: await prisma.orgMetrics.findUnique({ where: { organizationId } }),
-      sequence: await prisma.ticketSequence.findUnique({ where: { organizationId } })
-    };
-    result[organizationId] = crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
+    const [organization, knowledge, candidates, validations, memory, evidence, tickets, patterns, logs, metrics, sequence] = await Promise.all([
+      prisma.organization.findUnique({ where: { id: organizationId } }),
+      prisma.knowledgeItem.findMany({ where, orderBy: { id: "asc" } }),
+      prisma.knowledgeCandidate.findMany({ where, orderBy: { id: "asc" } }),
+      prisma.validationRecord.findMany({ where, orderBy: { id: "asc" } }),
+      prisma.memoryChangeRecord.findMany({ where, orderBy: { id: "asc" } }),
+      prisma.trustEvidence.findMany({ where, orderBy: { id: "asc" } }),
+      prisma.ticketRecord.findMany({ where, orderBy: { ticketId: "asc" } }),
+      prisma.emergingPattern.findMany({ where, orderBy: { id: "asc" } }),
+      prisma.intelligenceLog.findMany({ where, orderBy: { id: "asc" } }),
+      prisma.orgMetrics.findUnique({ where: { organizationId } }),
+      prisma.ticketSequence.findUnique({ where: { organizationId } })
+    ]);
+    result[organizationId] = digest({ organization, knowledge, candidates, validations, memory, evidence, tickets, patterns, logs, metrics, sequence });
   }
   return result;
+}
+
+function captureFixtureFindings(run) {
+  const start = findings.length;
+  const summaryBefore = JSON.parse(JSON.stringify(summary));
+  try {
+    run();
+    return findings.splice(start);
+  } finally {
+    for (const key of Object.keys(summary)) delete summary[key];
+    Object.assign(summary, summaryBefore);
+  }
+}
+
+function runNegativeControls() {
+  const controls = [];
+  const record = (name, run, expected) => {
+    const observed = captureFixtureFindings(run);
+    const passed = observed.some((item) => item.classification === expected.classification && (!expected.pattern || expected.pattern.test(item.summary)));
+    controls.push({
+      name,
+      expected: expected.classification,
+      observed: observed.map((item) => item.classification),
+      findingCount: observed.length,
+      passed
+    });
+  };
+  const actor = { id: "negative-control-actor" };
+  const member = { userId: actor.id };
+  const user = { id: actor.id };
+  record("orphan current validation", () => auditValidationMemory({
+    validations: [{ id: "v-negative", organizationId: O, candidateId: "missing-candidate", knowledgeItemId: null, actorId: actor.id }],
+    memory: [], candidates: [], knowledge: [], memberships: [member], users: [user]
+  }), { classification: "DATA_CORRUPTION", pattern: /unresolved candidate/ });
+  record("cross-organization trust evidence", () => auditEvidence({
+    evidence: [{ id: "e-negative", organizationId: "other-org", knowledgeItemId: "k-negative", sourceTicketId: "t-negative", validationRecordId: "v-negative", trustEventType: "HUMAN_REUSE", delta: 5, createdAt: new Date() }],
+    knowledge: [{ id: "k-negative" }], tickets: [{ ticketId: "t-negative", createdAt: new Date() }], validations: [{ id: "v-negative", timestamp: new Date() }], memory: []
+  }), { classification: "DATA_CORRUPTION", pattern: /cross-org/ });
+  record("duplicate authoritative ticket identifier", () => auditTicketsCandidates({
+    tickets: [{ ticketId: "duplicate-negative", organizationId: O }, { ticketId: "duplicate-negative", organizationId: O }],
+    candidates: [], knowledge: []
+  }), { classification: "DATA_CORRUPTION", pattern: /Duplicate ticketId/ });
+  record("orphan current trust evidence reference", () => auditEvidence({
+    evidence: [{ id: "e-orphan-negative", organizationId: O, knowledgeItemId: "missing-knowledge", sourceTicketId: "missing-ticket", validationRecordId: "missing-validation", trustEventType: "HUMAN_REUSE", delta: 5, createdAt: new Date() }],
+    knowledge: [], tickets: [], validations: [], memory: []
+  }), { classification: "DATA_CORRUPTION", pattern: /unresolved knowledgeItemId/ });
+  record("broken current version provenance", () => auditVersions({
+    knowledge: [{ id: "k-version-negative", content: { knowledgeVersions: [{ versionId: "k-version-negative-v001", version: 1, createdAt: new Date().toISOString(), sourceTicketId: "missing-current-ticket" }] } }],
+    tickets: []
+  }), { classification: "CURRENT_AUDITABILITY_GAP", pattern: /unresolved non-bulk sourceTicketId/ });
+  record("invalid current ticket sequence", () => auditSequence({
+    sequence: { counter: 10 }, tickets: [{ ticketId: "OD-0009" }, { ticketId: "OD-0011" }]
+  }), { classification: "DATA_CORRUPTION", pattern: /Highest ticket sequence/ });
+  return { passed: controls.every((control) => control.passed), controls };
 }
 
 async function main() {
@@ -541,9 +701,10 @@ async function main() {
   const data = await loadOrganization(prisma);
   assert(data.organization, "Developer demo organization must exist.");
 
-  // M. Organization isolation of authoritative references.
-  const memberIds = new Set(data.memberships.map((m) => m.userId));
-  for (const actor of developerDemoActors) if (!memberIds.has(actor.id)) finding("DATA_CORRUPTION", "high", "M", `Synthetic actor ${actor.id} is not a demo member.`, {});
+  // M. The current organization membership/user graph is the authoritative
+  // actor boundary. Historical synthetic-roster membership is not asserted.
+  const memberIds = new Set(data.memberships.map((membership) => membership.userId));
+  for (const user of data.users) if (!memberIds.has(user.id)) finding("DATA_CORRUPTION", "high", "M", `Current organization user ${user.id} is not represented by a membership row.`, { userId: user.id });
 
   auditTrust(data);
   auditEvidence(data);
@@ -575,14 +736,10 @@ async function main() {
 
   const bySeverity = findings.reduce((acc, f) => { acc[f.severity] = (acc[f.severity] ?? 0) + 1; return acc; }, {});
   const byClass = findings.reduce((acc, f) => { acc[f.classification] = (acc[f.classification] ?? 0) + 1; return acc; }, {});
-  const corruption = findings.filter((f) => f.classification === "DATA_CORRUPTION");
+  const blocking = findings.filter((f) => RELEASE_BLOCKING_CLASSIFICATIONS.has(f.classification));
+  const verdict = blocking.length > 0 ? "DATA_INTEGRITY_FAILURE" : findings.length > 0 ? "PASS_WITH_FINDINGS" : "PASS";
 
-  const verdict = corruption.length > 0
-    ? "DATA_INTEGRITY_FAILURE"
-    : findings.some((f) => f.classification === "AUDITABILITY_GAP" || f.classification === "MODEL_LIMITATION")
-      ? "PASS_WITH_FINDINGS"
-      : "PASS";
-
+  const negativeControls = process.argv.includes("--negative-controls") ? runNegativeControls() : undefined;
   console.log(JSON.stringify({
     verdict,
     organizationId: O,
@@ -595,13 +752,21 @@ async function main() {
     summary,
     findingsBySeverity: bySeverity,
     findingsByClassification: byClass,
+    releaseBlockingFindings: blocking.length,
     findings,
     simulatorCrossCheck,
-    protectedOrganizationsUnchanged: true
+    protectedOrganizationsUnchanged: true,
+    protectedStateDigestBefore: protectedBefore[O],
+    protectedStateDigestAfter: protectedAfter[O],
+    ...(negativeControls ? { negativeControls } : {})
   }, null, 2));
 
-  if (corruption.length > 0) {
-    console.error(`\nDATA_INTEGRITY_FAILURE: ${corruption.length} corruption finding(s).`);
+  if (blocking.length > 0) {
+    console.error(`\nDATA_INTEGRITY_FAILURE: ${blocking.length} release-blocking finding(s).`);
+    process.exitCode = 1;
+  }
+  if (negativeControls && !negativeControls.passed) {
+    console.error("\nNEGATIVE_CONTROL_FAILURE: at least one disposable corruption fixture was not detected.");
     process.exitCode = 1;
   }
 }

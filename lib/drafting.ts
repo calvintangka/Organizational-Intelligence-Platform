@@ -373,6 +373,21 @@ export function assessCompatibilityDecision(
 }
 
 /**
+ * Candidate-pool gate used immediately after retrieval. Hard-incompatible
+ * candidates are removed, while unknown candidates remain available for
+ * explainability and the final fail-closed drafting/semantic authorization
+ * gate. This keeps the retrieval winner from being replaced by a lower-ranked
+ * sibling merely because the winner lacks enough root-cause evidence yet.
+ */
+export function isRetrievalCandidateEligible(
+  understanding: Understanding,
+  item: KnowledgeItem,
+  ticket: Ticket
+): boolean {
+  return assessCompatibilityDecision(understanding, item, ticket).state !== "incompatible";
+}
+
+/**
  * A semantic-equivalence confirmation produced by the AI discrimination layer
  * for ONE validated lesson of ONE knowledge item. drafting re-verifies every
  * deterministic gate before honoring it (see authorizeSemanticLessonReuse), so
@@ -383,6 +398,22 @@ export interface SemanticLessonAuthorization {
   lessonId: string;
   confidence: "high";
   reasoning: string;
+}
+
+// Semantic authorizations are created only by the provider-validation module.
+// Keep a non-enumerable module-local brand so callers cannot fabricate a plain
+// `{ confidence: "high" }` object and bypass the deterministic boundary.
+const SEMANTIC_AUTHORIZATION_BRAND = Symbol("oip.semanticLessonAuthorization");
+
+export function markSemanticLessonAuthorization(
+  authorization: SemanticLessonAuthorization
+): SemanticLessonAuthorization {
+  return Object.defineProperty({ ...authorization }, SEMANTIC_AUTHORIZATION_BRAND, {
+    value: true,
+    enumerable: false,
+    writable: false,
+    configurable: false
+  });
 }
 
 /**
@@ -403,6 +434,7 @@ export function authorizeSemanticLessonReuse(
   authorization: SemanticLessonAuthorization | null | undefined
 ): Lesson | null {
   if (!authorization) return null;
+  if ((authorization as SemanticLessonAuthorization & { [SEMANTIC_AUTHORIZATION_BRAND]?: true })[SEMANTIC_AUTHORIZATION_BRAND] !== true) return null;
   if (authorization.confidence !== "high") return null;
   if (authorization.itemId !== item.id) return null;
   if (understanding.category === UNCATEGORIZED_CATEGORY || understanding.category === "General") return null;
@@ -615,7 +647,11 @@ function lessonRequiresLoginFailure(lesson: Lesson): boolean {
 
 export function ticketContradictsLesson(ticket: Ticket, lesson: Lesson): boolean {
   const ticketText = normalizeLessonSignalText(`${ticket.subject} ${ticket.description}`);
-  return lessonRequiresLoginFailure(lesson) && ticketHasExplicitLoginContradiction(ticketText);
+  if (lessonRequiresLoginFailure(lesson) && ticketHasExplicitLoginContradiction(ticketText)) return true;
+  const lessonText = normalizeLessonSignalText(`${lesson.title ?? ""} ${lesson.rootCause} ${lesson.solution} ${lesson.signals.join(" ")}`);
+  const explicitSeatChange = /\b(?:changed|change|increase|decrease|added|removed|reduced|increased)\b[^.!?]{0,35}\b(?:seats?|plan|quantity|headcount)\b|\b(?:seats?|plan|quantity|headcount)\b[^.!?]{0,35}\b(?:changed|change|increased|decreased|added|removed)\b/i.test(ticketText);
+  if (/\bseat change|seat reconciliation|plan change|quantity change|headcount change\b/i.test(lessonText) && !explicitSeatChange) return true;
+  return false;
 }
 
 // TODO-040: bounded deterministic semantic concept groups. Each set collects
@@ -1365,7 +1401,7 @@ export function draftResponse(
     return {
       draftResponse: UNCATEGORIZED_PLACEHOLDER,
       basedOnKnowledgeIds: [],
-      confidenceNote: "A compatible canonical candidate was considered, but no validated lesson provided sufficient relevance evidence. Human review must author the response and capture the correct root cause in Reflection.",
+      confidenceNote: "A compatible canonical candidate was considered, but no validated lesson provided sufficient relevance evidence. Current-case status: NOT_CONFIRMED (no validated lesson evidence). Human review must author the response and capture the correct root cause in Reflection.",
       source: "no_template"
     };
   }
@@ -1375,10 +1411,10 @@ export function draftResponse(
       draftResponse: UNCATEGORIZED_PLACEHOLDER,
       basedOnKnowledgeIds: [],
       confidenceNote: rejectedForCompatibility
-        ? `No compatible knowledge template was authorized. ${rejectedForCompatibility} Human review must author the response and capture the correct root cause in Reflection.`
+        ? `No compatible knowledge template was authorized. ${rejectedForCompatibility} Current-case status: NOT_CONFIRMED (no validated lesson evidence). Human review must author the response and capture the correct root cause in Reflection.`
         : knowledgeBaseEmpty
         ? "No approved knowledge exists yet. A human must author the first response and capture the learning in Reflection."
-        : "No compatible knowledge matched this ticket. A human must author the response and capture the learning in Reflection.",
+        : "No compatible knowledge matched this ticket. Current-case status: NOT_CONFIRMED (no validated lesson evidence). A human must author the response and capture the learning in Reflection.",
       source: "no_template"
     };
   }

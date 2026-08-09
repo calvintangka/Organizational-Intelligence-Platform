@@ -22,6 +22,8 @@ import type { KnowledgeItem, Lesson, MatchDiscriminationResult, Ticket } from "@
 import type { Understanding } from "@/types/oip";
 import {
   assessCompatibilityDecision,
+  findMatchingLesson,
+  markSemanticLessonAuthorization,
   ticketContradictsLesson,
   type SemanticLessonAuthorization
 } from "@/lib/drafting";
@@ -79,6 +81,14 @@ export async function evaluateSemanticLessonCompatibility(
     return none(`Deterministic decision is "${decision.state}"; semantic fallback only resolves "unknown".`);
   }
 
+  // Semantic confirmation may resolve an ambiguous root cause, but it must
+  // still start from a real lesson signal on the selected item. Without this
+  // floor an AI response could authorize an arbitrary first lesson on a
+  // merely category-compatible candidate that had no retrieval evidence.
+  if (!findMatchingLesson(ticket, item)) {
+    return none("No deterministic lesson signal exists on the selected candidate; semantic fallback is not permitted, failing closed.");
+  }
+
   const candidates = rankLessonsByOverlap(
     (item.lessons ?? []).filter((lesson) => lesson.id && !ticketContradictsLesson(ticket, lesson)),
     `${ticket.subject} ${ticket.description}`
@@ -109,12 +119,12 @@ export async function evaluateSemanticLessonCompatibility(
     }
     if (result.data.isDistinctFromMatch === false && result.data.confidence === "high") {
       return {
-        authorization: {
+        authorization: markSemanticLessonAuthorization({
           itemId: item.id,
           lessonId: lesson.id,
           confidence: "high",
           reasoning: result.data.reasoning
-        },
+        }),
         aiResults,
         declineReason: null
       };

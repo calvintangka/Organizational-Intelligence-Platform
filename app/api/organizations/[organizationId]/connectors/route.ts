@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { withOrganizationRoute } from "@/lib/server/organizationRoute";
 import { connectorErrorResponse } from "@/lib/server/connectors/http";
 import { createConnectorInstallation, listConnectorInstallations } from "@/lib/server/connectors/connectorService";
+import { enforceOrgUserLimits, rateLimitResponse } from "@/lib/server/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,10 @@ export const GET = withOrganizationRoute("connector.read", async ({ organization
 
 export const POST = withOrganizationRoute("connector.install", async ({ request, organizationId, user }) => {
   try {
+    const limit = await enforceOrgUserLimits(request, { route: "/api/organizations/[organizationId]/connectors", organizationId, actorUserId: user.id }, [
+      { policy: "connector.mutate.organization", dimensions: [{ type: "organization", value: organizationId }] }
+    ]);
+    if (!limit.allowed) return rateLimitResponse(limit);
     const body = await request.json() as { connectorType?: unknown; name?: unknown; configuration?: unknown; signingSecret?: unknown };
     if (typeof body.connectorType !== "string" || typeof body.name !== "string" || typeof body.signingSecret !== "string") return NextResponse.json({ error: { code: "INVALID_CONFIGURATION", message: "connectorType, name, and signingSecret are required." } }, { status: 400 });
     const installation = await createConnectorInstallation({ organizationId, user, connectorType: body.connectorType, name: body.name, configuration: body.configuration, signingSecret: body.signingSecret });

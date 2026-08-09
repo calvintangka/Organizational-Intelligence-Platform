@@ -38,26 +38,59 @@ export interface MatchDiscriminationResult {
   reasoning: string;
 }
 
-export type AIProviderMode = "disabled" | "lmstudio" | "claude";
+export type AIProviderMode = "disabled" | "deepseek" | "lmstudio" | "claude" | "openai-compatible";
 export type AIAdvisoryStatus = "verified" | "advisory_only" | "needs_human_review" | "unavailable" | "disabled";
+
+export type AIProviderFailureClass =
+  | "authentication"
+  | "quota"
+  | "rate_limit"
+  | "timeout"
+  | "network"
+  | "provider_unavailable"
+  | "truncated_response"
+  | "malformed_response"
+  | "invalid_structured_output"
+  | "unexpected_error";
+
+export type AIJsonParseStatus = "not_attempted" | "valid" | "invalid";
 
 export interface AIChainAttempt {
   label: string;
   provider: string;
   status: "succeeded" | "failed" | "skipped";
   reason?: string;
+  failureClass?: AIProviderFailureClass;
+  httpStatus?: number;
+  timedOut?: boolean;
+  retries?: number;
+  completionLength?: number;
+  jsonParseStatus?: AIJsonParseStatus;
+  structuredOutputValid?: boolean;
 }
 
 export interface AIDiagnostics {
   mode: AIProviderMode;
   provider: string;
   model?: string;
+  latencyMs?: number;
+  retries?: number;
+  fallbackPath?: string[];
+  completionStatus?: "succeeded" | "failed" | "skipped";
   proxyPath: string;
   serverBaseUrl?: string;
   endpointUsed?: string;
   proxySucceeded?: boolean;
   fallbackReason?: string;
   attempts?: AIChainAttempt[];
+  diagnosticId?: string;
+  timestamp?: string;
+  failureClass?: AIProviderFailureClass;
+  timedOut?: boolean;
+  httpStatus?: number;
+  completionLength?: number;
+  jsonParseStatus?: AIJsonParseStatus;
+  structuredOutputValid?: boolean;
 }
 
 export interface AIAnalysisSuggestion {

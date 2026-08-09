@@ -70,7 +70,10 @@ export function createClaudeAPIProvider(): AIProvider {
       baseUrl: "https://api.anthropic.com",
       model: DEFAULT_CLAUDE_MODEL,
       timeoutMs: DEFAULT_CLAUDE_CLIENT_TIMEOUT_MS,
-      proxyPath: CLAUDE_PROXY_PATH
+      proxyPath: CLAUDE_PROXY_PATH,
+      // Claude remains an isolated provider contract. It is not part of the
+      // current release adapter chain.
+      maxRetries: 1
     },
     "Claude API"
   );

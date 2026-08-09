@@ -118,6 +118,10 @@ export function buildAIAdvisory(input: {
       endpointUsed: input.diagnostics?.endpointUsed,
       proxySucceeded: input.diagnostics?.proxySucceeded,
       fallbackReason: input.diagnostics?.fallbackReason ?? input.availabilityMessage,
+      latencyMs: input.diagnostics?.latencyMs,
+      retries: input.diagnostics?.retries,
+      fallbackPath: input.diagnostics?.fallbackPath,
+      completionStatus: input.diagnostics?.completionStatus,
       attempts: input.diagnostics?.attempts
     },
     deterministicLabel: input.deterministicLabel,

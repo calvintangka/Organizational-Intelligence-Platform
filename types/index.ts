@@ -13,8 +13,14 @@
   BulkTicketSeed,
   TicketRecordFilter,
   TicketPageRequest,
-  TicketPage
+  TicketPage,
+  ClientTicketRecord,
+  TicketAuthorityField,
+  TicketClientField,
+  TicketWorkflowCommand,
+  TicketWriteErrorCode
 } from "./ticket";
+export { TICKET_AUTHORITY_FIELDS, TICKET_CLIENT_FIELDS, TicketWriteError } from "./ticket";
 export type {
   BusinessIntent,
   BusinessIntentClassification
@@ -24,6 +30,8 @@ export type {
   DraftGroundingMode,
   SuggestedResponse,
   AIProviderMode,
+  AIProviderFailureClass,
+  AIJsonParseStatus,
   AIAdvisoryStatus,
   AIDiagnostics,
   AIChainAttempt,

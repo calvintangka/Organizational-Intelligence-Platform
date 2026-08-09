@@ -64,8 +64,13 @@ const SECURITY_RULES: Array<{ pattern: RegExp; reason: string; severity: Securit
   { pattern: /\b(phish(?:ing|ed)?|credential theft|stolen credentials|social engineering|fake (?:login|support) page|malicious link)\b/i, reason: "phishing or social-engineering signal", severity: "critical" },
   { pattern: /\b(unexpected login|unrecognized login|unknown login|unfamiliar login|signed in|logged in)\b[^.!?\n]{0,100}\b(not me|unfamiliar|unknown|foreign|country|location)|\b(account compromised|compromised account|session hijack|token theft|suspicious session|unauthorized access)\b/i, reason: "possible account compromise or unauthorized access", severity: "critical" },
   { pattern: /\b(disable|turn off|delete|suppress|remove)\b[^.!?\n]{0,80}\b(audit logs?|logging|audit trail)\b/i, reason: "request to disable or remove audit evidence", severity: "critical" },
-  { pattern: /\b(webhook|api key|secret|credential|database (?:password|credentials|user)|private key)\b/i, reason: "secret, credential, webhook, or database access signal", severity: "high" },
-  { pattern: /\b(temporary owner|make .*owner|promote .*owner|admin(?:istrator)? role|elevate privileges?|privilege escalation|bypass approval)\b/i, reason: "privilege escalation or owner/admin mutation signal", severity: "critical" },
+  { pattern: /\b(?:api key|secret|credential|database (?:password|credentials|user)|private key|webhook(?:\s+(?:signing|verification))?\s+(?:secret|credential|key)|(?:webhook|api)\s+(?:signature|authentication|verification)\s+(?:failure|failed|rejected|invalid|mismatch))\b/i, reason: "secret, credential, webhook, or database access signal", severity: "high" },
+  // Merely describing an administrator role is not an escalation request.
+  // Require an explicit mutation/elevation verb so benign permission-denial
+  // tickets do not become security incidents because they mention "Reporting
+  // Administrator" in historical context.
+  { pattern: /\b(temporary owner|make .*owner|promote .*owner|elevate privileges?|privilege escalation|bypass approval|grant .*admin(?:istrator)?|assign .*admin(?:istrator)?)\b/i, reason: "privilege escalation or owner/admin mutation signal", severity: "critical" },
+  { pattern: /\b(?:akses tidak sah|akses tanpa izin|aktivitas akun yang tidak kami kenali|login dari lokasi yang tidak kami kenali|email mencurigakan|tautan(?: situs)?(?: yang)? berbeda)\b/i, reason: "possible phishing or unauthorized access signal", severity: "critical" },
   { pattern: /\b(export|download|dump)\b[^.!?\n]{0,60}\b(all data|customer data|users?|records?)\b/i, reason: "sensitive data export signal", severity: "high" },
   { pattern: /\b(password|login|account|email address|email)\b[^.!?\n]{0,80}\b(changed|changed by|not me|didn't|did not|unknown|unrecognized|change was not mine)\b/i, reason: "possible unauthorized credential or account change", severity: "critical" }
 ];
@@ -104,18 +109,32 @@ function topicsFor(text: string): string[] {
 function securityIntent(text: string): SecurityIntent {
   const reasons: string[] = [];
   let severity: SecurityIntent["severity"] = "low";
-  const benignFederatedRotation = /\b(?:sso|saml|identity provider|certificate)\b/i.test(text)
+  const benignFederatedRotation = /\b(?:sso|saml|identity provider|corporate identity|federat(?:ed|ion)|certificate|signing credential|provider maintenance)\b/i.test(text)
     && !/\b(?:phishing|compromised|unauthorized|unfamiliar|not me|suspicious|unexpected)\b/i.test(text);
+  const benignFederatedCredentialRotation = benignFederatedRotation
+    && /\b(?:signing credential|signing certificate|certificate rotation|certificate renewal|signing metadata|credential replacement|provider maintenance)\b/i.test(text)
+    && !/\b(?:provide|send|share|give|expose|reveal|forward)\b[^.!?\n]{0,60}\b(?:credential|secret|key|password)\b/i.test(text);
   const benignWebhookRotation = /\b(?:webhook|signature)\b[^.!?\n]{0,80}\b(?:secret rotation|rotated|rotation)\b/i.test(text)
     && !/\b(?:provide|send|share|give|expose)\b[^.!?\n]{0,60}\b(?:secret|credential|key)\b/i.test(text);
   for (const rule of SECURITY_RULES) {
     if (!rule.pattern.test(text)) continue;
     if (benignFederatedRotation && rule.reason === "possible unauthorized credential or account change") continue;
+    if (benignFederatedCredentialRotation && rule.reason === "secret, credential, webhook, or database access signal") continue;
     if (benignWebhookRotation && rule.reason === "secret, credential, webhook, or database access signal") continue;
     reasons.push(rule.reason);
     if (rule.severity === "critical" || (rule.severity === "high" && severity !== "critical")) severity = rule.severity;
   }
-  const requestedActions = SECURITY_ACTIONS.filter((action) => action.pattern.test(text)).map((action) => action.label);
+  const requestedActions = SECURITY_ACTIONS
+    .filter((action) => {
+      const match = action.pattern.exec(text);
+      if (!match || match.index === undefined) return false;
+      const prefix = text.slice(Math.max(0, match.index - 45), match.index);
+      // "Do not ask us to send credentials" is a safety boundary, not a
+      // request to expose credentials. Negated security language must not
+      // route an otherwise benign ticket to security review.
+      return !/\b(?:do not|don't|dont|never|not|without)\b[^.!?\n]{0,35}$/i.test(prefix);
+    })
+    .map((action) => action.label);
   const unauthorizedRequest = requestedActions.length > 0 || /\b(unauthorized|without authorization|without approval|not authorized|no approval|bypass)\b/i.test(text);
   const detected = reasons.length > 0 || unauthorizedRequest;
   return { detected, severity: detected && severity === "low" ? "high" : severity, reasons: [...new Set(reasons)], escalationRequired: detected, unauthorizedRequest, requestedActions: [...new Set(requestedActions)] };
@@ -188,9 +207,9 @@ export function isolateIntent(ticketOrText: Ticket | string): IntentIsolationRes
     const topics = topicsFor(sentence);
     const labels: IntentSentenceLabel[] = [];
     const quoted = hasQuotedText(sentence);
-    const resolved = /\b(resolved|already fixed|fixed last|previously|historical|former|old issue|no longer|last year|last month|in \w+ \d{4}|unrelated|not the reason|do not reopen|jangan membuka kembali)\b/i.test(sentence);
+    const resolved = /\b(resolved|already fixed|fixed last|previously|historical|former|old issue|no longer|last year|last month|in \w+ \d{4}|in (?:january|february|march|april|may|june|july|august|september|october|november|december)\b|during (?:january|february|march|april|may|june|july|august|september|october|november|december)\b|unrelated|not the reason|do not reopen|jangan membuka kembali)\b/i.test(sentence);
     const negated = isTopicNegation(sentence, topics);
-    const request = /\b(please|help|need to|need help|can you|could you|we need|we want|confirm|explain|determine|investigate|request(?:s|ed)?|questions?|provide|evaluate|tolong|mohon|bisa|perlu|butuh)\b/i.test(sentence);
+    const request = /\b(please|help|need(?:s)?(?:\s+to|\s+help)?|can you|could you|we need|we want|confirm|explain|determine|investigate|request(?:s|ed)?|questions?|provide|evaluate|tolong|mohon|bisa|perlu|butuh)\b/i.test(sentence);
     const hypothetical = /\b(if|might|may|could be|possibly|wondering whether|jika|mungkin|apakah)\b/i.test(sentence);
     const workaround = /\b(tried|tested|cleared|reset|restarted|changed|removed|mengganti|mencoba|sudah)\b/i.test(sentence);
     const observation = /\b(shows?|display(?:s|ed)?|tracking (?:shows?|says?)|we see|portal|terlihat|menunjukkan)\b/i.test(sentence);
@@ -232,13 +251,13 @@ export function isolateIntent(ticketOrText: Ticket | string): IntentIsolationRes
     ? "refund_investigation"
     : /\b(access denied|permission|permissions|role|administrator|akses ditolak)\b/i.test(analysisText) && /\b(role|permission|export|approval|izin|hak akses)\b/i.test(analysisText)
     ? "role_permission"
-    : /\b(report|export|csv|unduh|download)\b/i.test(analysisText) && /\b(timeout|stuck|stall|minutes?|baris|rows?|large|besar|progress|hang|lama)\b/i.test(analysisText)
+    : /\b(report|export|csv|unduh|download)\b/i.test(analysisText) && /\b(timeout|timing out|stuck|stall|minutes?|baris|rows?|large|besar|progress|hang|lama|percent|persen)\b/i.test(analysisText)
     ? "report_export_timeout"
     : /\b(activation|aktivasi|invitation|undangan|activation email|never created a password|belum menerima email)\b/i.test(analysisText)
     ? "activation_failure"
-    : /\b(invoice|billing|tagihan|email address|recipient|contact)\b/i.test(analysisText) && /\b(change|update|incorrect|outdated|salah|ganti|ubah|contact)\b/i.test(analysisText)
+    : /\b(invoice|billing|tagihan|email address|recipient)\b/i.test(analysisText) && /\b(change|update|incorrect|outdated|salah|ganti|ubah|perbarui|memperbarui|perubahan|mengubah|contact)\b/i.test(analysisText)
     ? "billing_contact_update"
-    : /\b(sso|saml|certificate|sertifikat|identity provider)\b/i.test(analysisText)
+    : /\b(?:sso|saml|identity provider|idp|federat(?:ed|ion)|identity metadata|signing (?:certificate|key|credential)|trust certificate|certificate (?:rotation|renewal|rollover)|sertifikat)\b/i.test(analysisText)
     ? "sso_certificate"
     : /\b(tracking|shipment|delivery|pengiriman|paket)\b/i.test(analysisText) && /\b(delay|late|stuck|stalled|not moved|passed|terlambat|belum)\b/i.test(analysisText)
     ? "delivery_delay"

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { withOrganizationRoute } from "@/lib/server/organizationRoute";
 import { prepareGovernedAction, GovernedActionError, listGovernedActions } from "@/lib/server/actions/actionService";
 import { isGovernedActionType } from "@/lib/server/actions/registry";
+import { enforceOrgUserLimits, rateLimitResponse } from "@/lib/server/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,10 @@ export const GET = withOrganizationRoute("operations.read", async ({ request, or
 
 export const POST = withOrganizationRoute("operations.read", async ({ request, organizationId, user }) => {
   try {
+    const limit = await enforceOrgUserLimits(request, { route: "/api/organizations/[organizationId]/governed-actions", organizationId, actorUserId: user.id }, [
+      { policy: "action.prepare.user", dimensions: [{ type: "user", value: user.id }] }
+    ]);
+    if (!limit.allowed) return rateLimitResponse(limit);
     const body = await request.json().catch(() => null) as Record<string, unknown> | null;
     const actionType = body?.actionType;
     const ticketId = typeof body?.ticketId === "string" ? body.ticketId.trim() : "";

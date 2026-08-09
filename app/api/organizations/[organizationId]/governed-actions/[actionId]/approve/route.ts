@@ -2,11 +2,16 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { withOrganizationRoute } from "@/lib/server/organizationRoute";
 import { approveGovernedAction, GovernedActionError } from "@/lib/server/actions/actionService";
+import { enforceOrgUserLimits, rateLimitResponse } from "@/lib/server/rateLimit";
 
 export const dynamic = "force-dynamic";
 
 export const POST = withOrganizationRoute<{ organizationId: string; actionId: string }>("operations.read", async ({ request, organizationId, params, user }) => {
   try {
+    const limit = await enforceOrgUserLimits(request, { route: "/api/organizations/[organizationId]/governed-actions/[actionId]/approve", organizationId, actorUserId: user.id }, [
+      { policy: "action.approve.user", dimensions: [{ type: "user", value: user.id }] }
+    ]);
+    if (!limit.allowed) return rateLimitResponse(limit);
     const body = await request.json().catch(() => null) as { decision?: unknown; comment?: unknown } | null;
     const decision = body?.decision === "rejected" ? "rejected" : body?.decision === "approved" ? "approved" : null;
     if (!decision) return NextResponse.json({ error: { code: "INVALID_REQUEST", message: "decision must be approved or rejected." } }, { status: 400 });

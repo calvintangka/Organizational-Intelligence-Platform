@@ -224,6 +224,56 @@ check("N: identifiers contribute no CONCEPT evidence", () => {
   }
 });
 
+check("N: email entities and malformed identifiers remain non-semantic", () => {
+  for (const identifier of [
+    "one@example.com two@example.org",
+    "one@@example..com",
+    "one @ example . com",
+    "  user@example.com  ",
+    "用户@example.com"
+  ]) {
+    const extraction = extractConcepts(identifier, developerDemoProfile);
+    assert.equal(extraction.empty, true, `${identifier} must yield no concepts`);
+    const { understanding } = runPipeline("contact", identifier);
+    assert.ok(
+      understanding.category === "Uncategorized" || understanding.category === "General",
+      `${identifier}: identifier-only input must fail closed, got ${understanding.category}`
+    );
+  }
+});
+
+check("M: mixed-language invoice evidence converges without leaking quoted history", () => {
+  const mixed = runPipeline(
+    "Duplicate invoice / factura duplicada",
+    "We were charged twice for invoice INV-1001 and factura INV-1002."
+  );
+  assert.equal(mixed.understanding.category, "Billing");
+  assert.equal(mixed.canonical.id, "canonical-duplicate-invoice");
+
+  const quotedResolved = runPipeline(
+    "Invoice question",
+    'The old case said "duplicate invoice" but it was resolved last month. Please explain the current invoice total.'
+  );
+  assert.equal(quotedResolved.understanding.category, "Billing");
+  assert.notEqual(quotedResolved.canonical.id, "canonical-duplicate-invoice");
+  assert.ok(quotedResolved.understanding.intentIsolation.ignoredTopics.includes("billing"));
+});
+
+check("M: multiple and whitespace-separated invoice evidence stays deterministic", () => {
+  const cases = [
+    ["Invoice review", "Invoices INV-1 and INV-2 appear twice in the same billing period."],
+    ["Invoice issue", "Duplicate   invoice\\nwas charged twice."]
+  ];
+  for (const [subject, description] of cases) {
+    const first = runPipeline(subject, description);
+    const second = runPipeline(subject, description);
+    assert.equal(first.understanding.category, "Billing");
+    assert.equal(first.canonical.category, "Billing");
+    assert.equal(first.canonical.id, second.canonical.id);
+    assert.equal(first.understanding.intent, second.understanding.intent);
+  }
+});
+
 check("N: generic concepts alone never establish relevance or a category", () => {
   const generics = [
     ["account only", "akun", "akun"],

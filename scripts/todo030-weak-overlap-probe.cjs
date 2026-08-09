@@ -26,7 +26,7 @@ const {
   assessCompatibilityDecision,
   draftResponse,
   findMatchingLesson,
-  isCompatibleForDrafting,
+  isRetrievalCandidateEligible,
   isStrongLessonEvidence,
   ticketContradictsLesson
 } = require(path.join(root, "lib", "drafting.ts"));
@@ -74,7 +74,7 @@ function pipeline(testTicket, profile, items) {
   const canonical = identifyCanonicalProblem(understanding, profile);
   const rawMatches = retrieveMemory(understanding, items, new Set());
   const matches = withPreDiscriminationLessonMatches(testTicket, understanding, rawMatches, items, canonical.title);
-  const compatible = matches.filter((match) => isCompatibleForDrafting(understanding, match.item, testTicket));
+  const compatible = matches.filter((match) => isRetrievalCandidateEligible(understanding, match.item, testTicket));
   const selected = compatible.length ? selectPreferredMatch(testTicket, compatible) : null;
   const topMatch = selected?.match ?? null;
   const lessonMatch = topMatch ? findMatchingLesson(testTicket, topMatch.item) : null;
@@ -226,9 +226,13 @@ async function main() {
     reasoning: "Forced compatible by QA boundary mock"
   };
   const aiWeakDraft = draftResponse(m07Ticket, m07.understanding, m07.topMatch, profile, false, forged);
+  // The corrected M07 retrieval winner is the invoice-address item. Its
+  // root-cause state is intentionally `unknown` (not compatible) because the
+  // ticket carries only a weak billing-invoice signal; the final draft must
+  // still fail closed even when a forged AI authorization is supplied.
   check("K AI high-confidence cannot rescue weak deterministic evidence", aiWeakDraft.source === "no_template"
     && aiWeakDraft.basedOnKnowledgeIds.length === 0
-    && assessCompatibilityDecision(m07.understanding, m07.topMatch.item, m07Ticket).state === "compatible"
+    && assessCompatibilityDecision(m07.understanding, m07.topMatch.item, m07Ticket).state === "unknown"
     && !ticketContradictsLesson(m07Ticket, m07.lessonMatch.lesson));
 
   const after = await snapshots();

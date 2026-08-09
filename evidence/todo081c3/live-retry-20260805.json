@@ -1,0 +1,48 @@
+{
+  "task": "TODO-081C3",
+  "attemptDate": "2026-08-05",
+  "verdict": "NOT_CERTIFIED",
+  "status": "BLOCKED — Current runtime authentication unavailable",
+  "repository": {
+    "branch": "master",
+    "headBeforeLaunch": "50c04d0a225d3a37f139370e3d8425c7cb8ab7eb",
+    "headAfterShutdown": "50c04d0a225d3a37f139370e3d8425c7cb8ab7eb",
+    "headTag": null,
+    "workingTree": "dirty; prior reports/evidence/logs preserved"
+  },
+  "runtime": {
+    "launchCommand": "cmd.exe /c start \"\" /b npm.cmd run dev",
+    "parentNextPid": 32004,
+    "serverPid": 11280,
+    "parentStartLocal": "2026-08-05T10:11:01+07:00",
+    "serverStartLocal": "2026-08-05T10:11:02+07:00",
+    "httpRootStatus": 200,
+    "nextVersion": "15.5.22",
+    "processPathEvidence": "next dev and next/dist/server/lib/start-server.js resolved inside the repository",
+    "nextOutputRebuiltLocal": "2026-08-05T10:11:25–10:11:26+07:00",
+    "shutdown": "parent and child stopped; no port-3000 listener remained"
+  },
+  "browser": {
+    "surface": "Codex built-in browser",
+    "tabUrl": "http://localhost:3000/",
+    "tabTitle": "OIP Developer Demo | OIP",
+    "authenticatedBeforeRestart": true,
+    "postRestartState": "Checking authentication…",
+    "postRestartAuthApi": {
+      "route": "/api/auth/me",
+      "timeoutsSeconds": [10, 45],
+      "result": "no response within 45 seconds"
+    },
+    "credentialsHandled": false,
+    "ticketsSubmitted": 0,
+    "alternateBrowserUsed": false
+  },
+  "environment": {
+    "prismaValidate": "pass",
+    "prismaMigrateStatus": "pass; database schema up to date",
+    "database": "reachable; rolled-back temporary write probe succeeded",
+    "lmStudio": "not re-run after this retry because authentication gate blocked the suite"
+  },
+  "comparison": "All TODO-081C2 case findings remain unable to verify against the current commit.",
+  "evidenceLimit": "No case-level acceptance evidence exists for this attempt because authenticated hydration never completed."
+}

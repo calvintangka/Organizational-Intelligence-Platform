@@ -1,0 +1,44 @@
+{
+  "task": "TODO-082C",
+  "verdict": "COMPLETED_WITH_LIMITATIONS",
+  "head": "50c04d0a225d3a37f139370e3d8425c7cb8ab7eb",
+  "branch": "master",
+  "runtime": {
+    "developmentServer": "http://127.0.0.1:3000/",
+    "rootHttpStatus": 200,
+    "authMeStatus": 401,
+    "providersEndpointUnauthenticatedStatus": 401,
+    "testEndpointUnauthenticatedStatus": 401,
+    "browserAuthenticated": false,
+    "liveScreenshotsCaptured": false
+  },
+  "diagnosticsProbe": {
+    "status": "passed",
+    "checks": [
+      "exact harmless health prompt",
+      "DeepSeek first",
+      "DeepSeek success stops chain",
+      "DeepSeek authentication failure falls back to LM Studio",
+      "fallback path recorded",
+      "credential absent from serialized diagnostics",
+      "history capped at 25"
+    ]
+  },
+  "regressions": {
+    "typescript": "passed",
+    "prismaValidate": "passed",
+    "productionBuild": "passed",
+    "todo082a": "passed",
+    "todo018": "passed",
+    "todo067": "passed",
+    "todo068": "passed",
+    "todo069": "passed",
+    "todo070": "passed",
+    "todo080": "passed",
+    "oipBenchmark": "passed: 1000/1000",
+    "todo078": "failed: existing viewer authorization assertion returned HTTP 500"
+  },
+  "businessDataMutation": "none from diagnostics implementation probe",
+  "commitCreated": false,
+  "tagCreated": false
+}

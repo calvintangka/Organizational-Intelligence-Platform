@@ -9,6 +9,7 @@ import type { EmergingPattern } from "@/types/patterns";
 import type { KnowledgeItem, Ticket } from "@/types";
 import type { Understanding } from "@/types/oip";
 import { prisma } from "@/lib/server/prisma";
+import { recomputeAuthoritativeOrgMetricsTx } from "@/lib/server/persistenceService";
 
 export class PatternDiscoveryError extends Error {
   constructor(public readonly code: "INVALID_INPUT" | "TENANT_MISMATCH" | "ALGORITHM_FAILURE" | "DATABASE_TRANSIENT", message: string, public readonly retryable = false) {
@@ -187,6 +188,7 @@ export class PatternDiscoveryStore {
     try {
       const response = await prisma.$transaction(async (tx) => {
         const outcomeKey = request.input.sourceTicketId ? patternDiscoveryIdempotencyKey(request.context.organizationId, request.input.sourceTicketId, request.input.triggerType) : request.context.idempotencyKey ?? request.jobId;
+        await recomputeAuthoritativeOrgMetricsTx(tx, request.context.organizationId);
         const existingOutcome = await tx.patternDiscoveryOutcome.findUnique({ where: { organizationId_idempotencyKey: { organizationId: request.context.organizationId, idempotencyKey: outcomeKey } } });
         if (existingOutcome) return { result: resultFromOutcome(existingOutcome, request.context, request.attemptNumber), replayed: true };
         if (request.input.triggerType === "ticket_follow_up" && !request.input.sourceTicketId) throw new PatternDiscoveryError("INVALID_INPUT", "A ticket follow-up requires a source ticket ID.");
@@ -202,9 +204,7 @@ export class PatternDiscoveryStore {
           const auditSummary = { ...baseAudit, durationMs: Date.now() - startedAt };
           const outcome = await tx.patternDiscoveryOutcome.create({ data: { organizationId: request.context.organizationId, jobId: request.jobId, idempotencyKey: outcomeKey, sourceTicketId: input.sourceTicketId ?? null, sourceJobId: input.sourceJobId ?? null, patternId: data.patternId ?? null, action: data.action, patternFound: data.patternFound, created: data.created, strengthened: data.strengthened, evidenceCount: data.evidenceCount, matchedTicketCount: data.matchedTicketCount, confidence: data.confidence ?? null, reason: data.reason, auditSummary: json(auditSummary) } });
           await tx.intelligenceLog.upsert({ where: { id: `pattern-discovery-${request.jobId}` }, create: { id: `pattern-discovery-${request.jobId}`, organizationId: request.context.organizationId, timestamp: new Date(), event: `Pattern discovery ${data.action}`, detail: data.patternId ? `Pattern ${data.patternId}; evidence ${data.evidenceCount}` : data.reason }, update: {} });
-          if (data.patternFound && data.action !== "merged") {
-            await tx.orgMetrics.upsert({ where: { organizationId: request.context.organizationId }, create: { organizationId: request.context.organizationId, lifetimeTickets: 0, knowledgeReused: 0, autoResolutions: 0, humanResolutions: 0, totalResolutionTimeSec: 0, resolutionsCount: 0, memoryGrowthToday: 0, memoryGrowthDate: new Date().toISOString().slice(0, 10), emergingPatternsDetected: 1, lastUpdatedAt: new Date() }, update: { emergingPatternsDetected: { increment: 1 }, lastUpdatedAt: new Date() } });
-          }
+          await recomputeAuthoritativeOrgMetricsTx(tx, request.context.organizationId);
           return { result: { patternFound: data.patternFound, patternId: data.patternId, action: data.action as PatternDiscoveryJobResult["action"], created: data.created, strengthened: data.strengthened, evidenceCount: data.evidenceCount, matchedTicketCount: data.matchedTicketCount, confidence: data.confidence, reason: data.reason, followUpRequired: false, auditSummary: { ...baseAudit, replayed: false, durationMs: Date.now() - startedAt } }, replayed: false };
         };
 
@@ -229,6 +229,7 @@ export class PatternDiscoveryStore {
         const data = patternData(updated);
         await tx.emergingPattern.upsert({ where: { id: updated.id }, create: { id: updated.id, organizationId: request.context.organizationId, ...data }, update: data });
         await tx.patternDiscoveryEvidence.create({ data: { organizationId: request.context.organizationId, patternId: updated.id, ticketId: source.ticketId, evidenceDigest: digestJobInput({ ticketId: source.ticketId, summary: input.understandingSummary, category: input.category, tags: input.tags }), safeSummary: safeSignalSummary(input), language: input.language ?? null } });
+        await recomputeAuthoritativeOrgMetricsTx(tx, request.context.organizationId);
         const evidenceCount = await tx.patternDiscoveryEvidence.count({ where: { organizationId: request.context.organizationId, patternId: updated.id } });
         const action: PatternDiscoveryJobResult["action"] = detected.isNew ? "created" : "strengthened";
         return writeOutcome({ patternId: updated.id, action, patternFound: true, created: detected.isNew, strengthened: !detected.isNew, evidenceCount, matchedTicketCount: updated.timesSeen, confidence: updated.confidenceScore, reason: detected.isNew ? "A new emerging pattern was created from the source signal." : "An existing emerging pattern was strengthened with new evidence." });

@@ -6,6 +6,7 @@ import {
   validateOrganizationId
 } from "@/lib/server/persistenceAuthorityService";
 import { requireCapability } from "@/lib/server/authorization";
+import { enforceRateLimit, rateLimitResponse, requestIdentity } from "@/lib/server/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,7 +28,16 @@ export async function POST(request: Request, context: CutoverRouteContext) {
   try {
     const { organizationId } = await context.params;
     validateOrganizationId(organizationId);
-    await requireCapability(organizationId, "persistence.authority.manage", { request, resource: "persistence_authority:cutover" });
+    const { user } = await requireCapability(organizationId, "persistence.authority.manage", { request, resource: "persistence_authority:cutover" });
+    const { requestId, correlationId } = requestIdentity(request);
+    const decision = await enforceRateLimit("admin.mutate.user", [{ type: "user", value: user.id }], {
+      route: "/api/organizations/[organizationId]/persistence-authority/cutover",
+      organizationId,
+      actorUserId: user.id,
+      requestId,
+      correlationId
+    });
+    if (!decision.allowed) return rateLimitResponse(decision);
     let body: unknown;
     try {
       body = await request.json();

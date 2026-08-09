@@ -8,6 +8,7 @@ const { installProbeHarness } = require("./lib/probe-harness.cjs");
 const { root } = installProbeHarness({ loadEnv: false });
 const { createAIAdapter } = require(path.join(root, "lib", "ai", "adapter.ts"));
 const claudeRoute = require(path.join(root, "app", "api", "ai", "claude", "route.ts"));
+const { installAIRouteAuthStub } = require("./lib/ai-route-auth.cjs");
 
 const CLAUDE_PATH = "/api/ai/claude";
 const LM_STUDIO_PATH = "/api/ai/chat";
@@ -87,7 +88,7 @@ async function adapterScenario(outcomes) {
     if (outcome === "success") {
       const isClaude = endpoint === CLAUDE_PATH;
       return completion(
-        '{"title":"Webhook signature rotation","confidence":92}',
+        '{"title":"Webhook signature rotation","confidence":92,"rationale":"Matches the deterministic pattern."}',
         isClaude
           ? {
               "x-ai-mode": "claude",
@@ -116,6 +117,7 @@ async function main() {
   const originalInfo = console.info;
   const originalWarn = console.warn;
   const capturedLogs = [];
+  let restoreAIRouteAuthStub;
 
   global.window = {};
   console.info = (...values) => capturedLogs.push(values);
@@ -136,20 +138,21 @@ async function main() {
       && claudeSuccess.result.model === MODEL
       && claudeSuccess.result.diagnostics?.provider === "Claude API");
 
-    const totalFailure = await adapterScenario(["fail", "fail"]);
+    const totalFailure = await adapterScenario(["fail", "fail", "fail"]);
     check("CASE C both provider failures return safe failure", !totalFailure.result.ok
       && totalFailure.result.data === undefined
-      && totalFailure.calls.join("|") === `${LM_STUDIO_PATH}|${CLAUDE_PATH}`);
+      && totalFailure.calls.join("|") === `${LM_STUDIO_PATH}|${CLAUDE_PATH}|${CLAUDE_PATH}`);
     check("CASE C diagnostics preserve both failed attempts", totalFailure.result.diagnostics?.attempts?.length === 2
       && totalFailure.result.diagnostics.attempts.every((attempt) => attempt.status === "failed"));
 
-    const malformed = await adapterScenario(["fail", "malformed"]);
+    const malformed = await adapterScenario(["fail", "malformed", "malformed"]);
     check("CASE D malformed Claude output fails safely", !malformed.result.ok
       && malformed.result.data === undefined
       && malformed.result.error?.includes("valid JSON"));
 
     delete process.env.ANTHROPIC_API_KEY;
     global.fetch = async () => { throw new Error("Missing-key route must not call Anthropic."); };
+    restoreAIRouteAuthStub = installAIRouteAuthStub({ role: "support_agent" });
     const missingKey = await claudeRoute.POST(new Request("http://localhost/api/ai/claude", {
       method: "POST",
       body: JSON.stringify({ messages: [{ role: "user", content: "probe" }] })
@@ -223,6 +226,7 @@ async function main() {
 
     originalInfo("TODO-038 Claude failover probe passed.");
   } finally {
+    if (typeof restoreAIRouteAuthStub === "function") restoreAIRouteAuthStub();
     global.fetch = originalFetch;
     if (originalWindow === undefined) delete global.window;
     else global.window = originalWindow;

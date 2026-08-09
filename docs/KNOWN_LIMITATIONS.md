@@ -10,7 +10,8 @@ This document lists genuine limitations remaining for the planned `v0.1.0-certif
 
 ## Live validation
 
-- The full TODO-079 live UI acceptance is historical evidence and must be rerun for the final release candidate.
+- TODO-079 deterministic release acceptance currently scores 580/600 (threshold 560); a full browser/UI rehearsal remains an operational follow-up.
+- TODO-058C retains a stale fixture label (`canonical-billing-invoice-issue`) while the accepted product canonical is `canonical-duplicate-invoice`; this is documented fixture debt and does not change product behavior.
 - BUG-009 live HTTP verification requires its local endpoint to be running; the endpoint was unavailable during the latest focused verification.
 - Production-scale load validation and multi-customer design-partner validation remain limited.
 

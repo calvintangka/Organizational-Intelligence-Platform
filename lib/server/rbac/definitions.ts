@@ -13,7 +13,8 @@ export const CAPABILITY_KEYS = [
   "connector.read", "connector.install", "connector.activate", "connector.pause", "connector.delete",
   "connector.rotate_credentials", "connector.inspect", "connector.retry",
   "operations.read", "metrics.read", "migration.import", "migration.verify",
-  "persistence.authority.manage", "action.prepare", "action.approve", "action.execute"
+  "persistence.authority.manage", "action.prepare", "action.approve", "action.execute",
+  "ai.use"
 ] as const;
 export type CapabilityKey = (typeof CAPABILITY_KEYS)[number];
 
@@ -31,9 +32,9 @@ const readOnly: CapabilityKey[] = ["organization.read", "ticket.read", "knowledg
 export const ROLE_CAPABILITIES: Record<RoleKey, CapabilityKey[]> = {
   owner: [...CAPABILITY_KEYS],
   administrator: CAPABILITY_KEYS.filter((key) => key !== "organization.ownership.transfer"),
-  reviewer: ["organization.read", "ticket.read", "ticket.review", "knowledge.read", "knowledge.promote", "knowledge.version.create", "knowledge.trust.update", "reflection.read", "reflection.generate", "reflection.approve", "worker.read", "connector.read", "connector.inspect", "operations.read", "metrics.read", "action.prepare", "action.approve"],
-  operator: ["organization.read", "ticket.read", "worker.read", "worker.retry", "worker.cancel", "worker.pause", "connector.read", "connector.inspect", "connector.activate", "connector.pause", "connector.retry", "operations.read", "metrics.read", "action.prepare"],
-  support_agent: ["organization.read", "ticket.read", "ticket.submit", "ticket.review", "ticket.bulk_prepare", "knowledge.read", "reflection.read", "worker.read", "connector.read", "connector.inspect", "operations.read"],
+  reviewer: ["organization.read", "ticket.read", "ticket.review", "knowledge.read", "knowledge.promote", "knowledge.version.create", "knowledge.trust.update", "reflection.read", "reflection.generate", "reflection.approve", "worker.read", "connector.read", "connector.inspect", "operations.read", "metrics.read", "action.prepare", "action.approve", "ai.use"],
+  operator: ["organization.read", "ticket.read", "worker.read", "worker.retry", "worker.cancel", "worker.pause", "connector.read", "connector.inspect", "connector.activate", "connector.pause", "connector.retry", "operations.read", "metrics.read", "action.prepare", "ai.use"],
+  support_agent: ["organization.read", "ticket.read", "ticket.submit", "ticket.review", "ticket.bulk_prepare", "knowledge.read", "reflection.read", "worker.read", "connector.read", "connector.inspect", "operations.read", "ai.use"],
   viewer: readOnly
 };
 

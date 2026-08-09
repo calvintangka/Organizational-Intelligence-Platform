@@ -1,0 +1,32 @@
+{
+  "task": "TODO-081C3-retry",
+  "timestamp": "2026-08-05T10:03:14.3836133+07:00",
+  "repository": {
+    "branch": "master",
+    "headBeforeLaunch": "50c04d0a225d3a37f139370e3d8425c7cb8ab7eb",
+    "workingTree": "dirty; preserved prior review/evidence artifacts"
+  },
+  "runtime": {
+    "launchCommand": "npm.cmd run dev",
+    "launchMechanism": "temporary PowerShell job",
+    "observedNextVersion": "15.5.22",
+    "observedProcessIds": [12940, 37436],
+    "observedStartup": ["Starting...", "Ready in 2.3s", "GET / 200 in 1497ms"],
+    "buildOutputLastWriteWindow": "2026-08-05T10:02:23+07:00 to 2026-08-05T10:02:33+07:00",
+    "post_check_port_3000": "no listener; temporary job exited before the follow-up check",
+    "runtimePathEvidence": "Both observed Next command lines resolved inside C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2."
+  },
+  "environment": {
+    "prismaValidate": "pass",
+    "prismaMigrateStatus": "pass; database schema is up to date",
+    "lmStudioModels": "fail; unable to connect to 127.0.0.1:1234/v1/models",
+    "databaseWriteProbe": "not repeated because browser gate was unavailable"
+  },
+  "browser": {
+    "requested": "visible Chrome",
+    "connectorResult": "Browser is not available: chrome",
+    "authentication": "not attempted",
+    "acceptance": "not run"
+  },
+  "certification": "BLOCKED — Chrome Browser Unavailable"
+}

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { withOrganizationRoute } from "@/lib/server/organizationRoute";
 import { requireCapability } from "@/lib/server/authorization";
 import { assignOrganizationRole, removeOrganizationMember, RoleServiceError } from "@/lib/server/rbac/roleService";
+import { enforceOrgUserLimits, rateLimitResponse } from "@/lib/server/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,10 @@ type Params = { organizationId: string; userId: string };
 
 export const PATCH = withOrganizationRoute<Params>("organization.members.manage", async ({ request, organizationId, params, user }) => {
   try {
+    const limit = await enforceOrgUserLimits(request, { route: "/api/organizations/[organizationId]/members/[userId]", organizationId, actorUserId: user.id }, [
+      { policy: "admin.mutate.user", dimensions: [{ type: "user", value: user.id }] }
+    ]);
+    if (!limit.allowed) return rateLimitResponse(limit);
     const body = await request.json().catch(() => null) as { role?: unknown } | null;
     if (!body || typeof body.role !== "string") return NextResponse.json({ error: { code: "INVALID_REQUEST", message: "A role is required." } }, { status: 400 });
     if (body.role.trim().toLowerCase() === "owner") await requireCapability(organizationId, "organization.ownership.transfer", { request, resource: `member:${params.userId}:owner_assignment` });
@@ -20,8 +25,12 @@ export const PATCH = withOrganizationRoute<Params>("organization.members.manage"
   }
 });
 
-export const DELETE = withOrganizationRoute<Params>("organization.members.manage", async ({ organizationId, params }) => {
+export const DELETE = withOrganizationRoute<Params>("organization.members.manage", async ({ request, organizationId, params, user }) => {
   try {
+    const limit = await enforceOrgUserLimits(request, { route: "/api/organizations/[organizationId]/members/[userId]", organizationId, actorUserId: user.id }, [
+      { policy: "admin.mutate.user", dimensions: [{ type: "user", value: user.id }] }
+    ]);
+    if (!limit.allowed) return rateLimitResponse(limit);
     await removeOrganizationMember(organizationId, params.userId);
     return NextResponse.json({ data: { removed: true } });
   } catch (error) {

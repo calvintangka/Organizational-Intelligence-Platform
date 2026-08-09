@@ -1,6 +1,8 @@
 "use client";
 
-export type ActiveView = "home" | "tickets" | "cases" | "knowledge" | "dashboard" | "operations" | "organization" | "settings";
+import { useAuthorization } from "@/components/AuthorizationContext";
+
+export type ActiveView = "home" | "tickets" | "cases" | "knowledge" | "dashboard" | "operations" | "organization" | "settings" | "developer";
 
 interface SidebarProps {
   activeView: ActiveView;
@@ -95,6 +97,11 @@ function OperationsIcon({ active, darkMode, accent }: { active: boolean; darkMod
   return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 12.5h12M3 10V6m3 4V3m3 7V7m3 3V4" stroke={color} strokeWidth="1.5" strokeLinecap="round" /></svg>;
 }
 
+function DeveloperIcon({ active, darkMode, accent }: { active: boolean; darkMode: boolean; accent: string }) {
+  const color = active ? (darkMode ? "#fff" : accent) : "#667085";
+  return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m5.5 4-3 4 3 4M10.5 4l3 4-3 4M9 2.5 7 13.5" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+}
+
 const NAV_ITEMS: { id: ActiveView; label: string }[] = [
   { id: "home", label: "Home" },
   { id: "tickets", label: "Tickets" },
@@ -114,11 +121,16 @@ function NavIcon({ id, active, darkMode, accent }: { id: ActiveView; active: boo
   if (id === "dashboard") return <DashboardIcon active={active} darkMode={darkMode} accent={accent} />;
   if (id === "organization") return <OrgIcon active={active} darkMode={darkMode} accent={accent} />;
   if (id === "operations") return <OperationsIcon active={active} darkMode={darkMode} accent={accent} />;
+  if (id === "developer") return <DeveloperIcon active={active} darkMode={darkMode} accent={accent} />;
   return <SettingsIcon active={active} darkMode={darkMode} accent={accent} />;
 }
 
 export function Sidebar({ activeView, onNavigate, orgName, darkMode, accentColor }: SidebarProps) {
   const accent = accentColor;
+  const { can, loading: authorizationLoading } = useAuthorization();
+  const navItems = !authorizationLoading && can("operations.read")
+    ? [...NAV_ITEMS, { id: "developer" as const, label: "Developer" }]
+    : NAV_ITEMS;
   return (
     <aside className={`m-4 flex w-[calc(100%-2rem)] flex-shrink-0 flex-col rounded-[24px] border md:m-6 md:h-[calc(100vh-48px)] md:w-[236px] ${darkMode ? "bg-[#111827] border-[#24344d]" : "bg-white border-slate-200"}`}>
       <div className="px-6 pb-4 pt-6 md:pb-7">
@@ -129,7 +141,7 @@ export function Sidebar({ activeView, onNavigate, orgName, darkMode, accentColor
       </div>
 
       <nav className="flex gap-2 overflow-x-auto px-4 pb-4 md:flex-1 md:flex-col md:gap-3 md:overflow-y-auto md:px-4 md:pb-0">
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const active = activeView === item.id;
           return (
             <button

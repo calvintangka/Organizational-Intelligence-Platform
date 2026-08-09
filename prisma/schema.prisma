@@ -1012,3 +1012,72 @@ model PatternDiscoveryEvidence {
   @@index([organizationId, ticketId])
   @@map("pattern_discovery_evidence")
 }
+
+// RSS-1.2S2 — rate limiting abuse protection. Atomic per-window counters shared
+// across application instances through PostgreSQL. `dimensionKey` is a keyed
+// digest of the protected identity (account, network address, user, or
+// organization); raw emails, IPs, and identifiers are never stored. The
+// composite primary key makes `INSERT ... ON CONFLICT DO UPDATE` the atomic
+// increment primitive, so concurrent requests can never exceed a window limit.
+model RateLimitCounter {
+  policyKey     String
+  dimensionKey  String
+  windowStart   DateTime @db.Timestamptz(6)
+  count         Int      @default(0)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(6)
+
+  @@id([policyKey, dimensionKey, windowStart])
+  @@index([policyKey, updatedAt])
+  @@map("rate_limit_counters")
+}
+
+// RSS-1.2S2 — durable record of rate-limit DENIAL decisions only. Allowed
+// requests are aggregated in operational counters and telemetry; a durable row
+// per allowed request would itself be a denial-of-service vector. Columns are
+// intentionally free-form (no foreign keys) so defense logging never depends on
+// an organization or user still existing.
+model RateLimitEvent {
+  id                 String   @id @default(cuid())
+  policyKey          String
+  route              String
+  decision           String
+  dimensionClass     String?
+  actorUserId        String?
+  organizationId     String?
+  limitValue         Int
+  remaining          Int
+  resetAt            DateTime? @db.Timestamptz(6)
+  retryAfterSeconds  Int?
+  reason             String?
+  requestId          String?
+  correlationId      String?
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([createdAt])
+  @@index([policyKey, createdAt])
+  @@map("rate_limit_events")
+}
+
+// RSS-1.2S3 — durable evidence of server-owned ticket workflow transitions.
+// Records who performed each transition, the previous and new status, the
+// authoritative actor, request/correlation ids, and the server timestamp.
+// Free-form columns (no foreign keys) so transition evidence survives even if
+// the actor or ticket is later removed, matching the append-only audit posture.
+model TicketTransitionAudit {
+  id             String   @id @default(cuid())
+  organizationId String
+  ticketId       String
+  action         String
+  actorId        String
+  previousStatus String?
+  newStatus      String
+  summary        Json?
+  source         String
+  requestId      String?
+  correlationId  String?
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([organizationId, createdAt])
+  @@index([ticketId, createdAt])
+  @@map("ticket_transition_audits")
+}

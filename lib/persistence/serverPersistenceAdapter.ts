@@ -266,9 +266,10 @@ export class ServerPersistenceAdapter implements PersistenceAdapter {
 
     if (!response.ok || !payload || !("data" in payload)) {
       const error = payload && "error" in payload ? payload.error : undefined;
+      const message = error?.message ?? `Server persistence could not complete the ${method} request.`;
       throw new ServerPersistenceAdapterError(
         error?.code ?? "SERVER_PERSISTENCE_ERROR",
-        error?.message ?? `Server persistence could not complete the ${method} request.`,
+        `${message} (HTTP ${response.status || 502}).`,
         response.status || 502
       );
     }

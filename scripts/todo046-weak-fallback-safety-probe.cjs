@@ -24,7 +24,7 @@ const {
   assessCompatibilityDecision,
   draftResponse,
   findMatchingLesson,
-  isCompatibleForDrafting,
+  isRetrievalCandidateEligible,
   isStrongLessonEvidence
 } = require(path.join(root, "lib", "drafting.ts"));
 const { selectPreferredMatch, withPreDiscriminationLessonMatches } = require(path.join(root, "lib", "lessonSelection.ts"));
@@ -82,7 +82,7 @@ function runPipeline(input, profile, items) {
   const canonical = identifyCanonicalProblem(understanding, profile);
   const rawMatches = retrieveMemory(understanding, items, new Set());
   const matches = withPreDiscriminationLessonMatches(input, understanding, rawMatches, items, canonical.title);
-  const compatibleMatches = matches.filter((match) => isCompatibleForDrafting(understanding, match.item, input));
+  const compatibleMatches = matches.filter((match) => isRetrievalCandidateEligible(understanding, match.item, input));
   const selected = compatibleMatches.length ? selectPreferredMatch(input, compatibleMatches) : null;
   const topMatch = selected?.match ?? null;
   const lessonMatch = topMatch ? findMatchingLesson(input, topMatch.item) : null;
@@ -240,6 +240,30 @@ async function main() {
     return { id, selectedCanonical: result.topMatch?.item.id ?? null, selectedLesson: result.lessonMatch?.lesson.id ?? null, authorized: result.draft.basedOnKnowledgeIds.length > 0, source: result.draft.source };
   });
 
+  // Expanded weak-fallback coverage: these inputs may produce a broad
+  // deterministic category or weak retrieval candidates, but none contains
+  // enough validated evidence to authorize a grounded response.
+  const safetyFallbackDefinitions = [
+    ["empty", "", ""],
+    ["contradictory", "Refund request", "The account was never used, but employees logged in and exported data. Please investigate before deciding."],
+    ["multilingual-ambiguous", "Necesito ayuda", "No entiendo este asunto y no puedo explicar el problema con claridad."],
+    ["unsupported-request", "Legal advice", "Please provide legal strategy for a contract dispute and diagnose a medical condition."],
+    ["malformed", "Unknown request", "%%%% @@@ ???"],
+    ["provider-exhaustion", "Invoice review", "Please review this invoice; no validated root-cause details are available."],
+    ["federated-credential-exposure", "Send the SAML signing credential", "Please send the signing credential and private key so I can complete the certificate rotation."]
+  ];
+  const safetyFallback = safetyFallbackDefinitions.map(([id, subject, description]) => {
+    const result = runPipeline(ticket({ id, subject, description }, "TODO046-FALLBACK"), profile, items);
+    return {
+      id,
+      category: result.understanding.category,
+      canonical: result.canonical.id,
+      source: result.draft.source,
+      authorized: result.draft.basedOnKnowledgeIds.length > 0,
+      basedOnKnowledgeIds: result.draft.basedOnKnowledgeIds
+    };
+  });
+
   const trustValues = [1, 50, 95, 100];
   const trust = trustValues.map((trustScore) => {
     const trustItems = items.map((item) => item.id === c02Result.topMatch.item.id ? { ...item, trustScore } : item);
@@ -262,11 +286,16 @@ async function main() {
   const aiPass = Object.values(ai).every((entry) => entry.blocked === true);
   const matrixPass = matrix.every((entry) => entry.passed);
   const positivePass = positive.every((entry) => entry.authorized);
-  const verdict = !c02.after.passed || !matrixPass || !positivePass || !aiPass || !protectedUnchanged || !provenance.intact ? "SAFETY_FAILURE_REMAINS" : "COMPLETED";
-  const report = { verdict, c02, matrix, positive, todo030: { authorized: todo030.draft.basedOnKnowledgeIds.length > 0, source: todo030.draft.source }, todo040: { authorized: todo040.draft.basedOnKnowledgeIds.length > 0, lesson: todo040.lessonMatch?.lesson.id ?? null }, trustSafety, ai, matrixPass, positivePass, aiPass, protectedUnchanged, provenance, snapshots: { before, after } };
+  const fallbackPass = safetyFallback.every((entry) => !entry.authorized && entry.source === "no_template");
+  const exposure = safetyFallback.find((entry) => entry.id === "federated-credential-exposure");
+  const securityBoundaryPass = exposure?.category === "Security Incident" && !exposure.authorized && exposure.source === "no_template";
+  const verdict = !c02.after.passed || !matrixPass || !positivePass || !fallbackPass || !securityBoundaryPass || !aiPass || !protectedUnchanged || !provenance.intact ? "SAFETY_FAILURE_REMAINS" : "COMPLETED";
+  const report = { verdict, c02, matrix, positive, safetyFallback, todo030: { authorized: todo030.draft.basedOnKnowledgeIds.length > 0, source: todo030.draft.source }, todo040: { authorized: todo040.draft.basedOnKnowledgeIds.length > 0, lesson: todo040.lessonMatch?.lesson.id ?? null }, trustSafety, ai, matrixPass, positivePass, fallbackPass, securityBoundaryPass, aiPass, protectedUnchanged, provenance, snapshots: { before, after } };
   console.log(`TODO046 C02 beforeLegacy=${legacyWouldAuthorize} afterAuthorized=${c02.after.finalDraftType === "grounded"} afterSource=${c02.after.draftAuthorizationPath}`);
   console.log(`TODO046 MATRIX ${matrixPass ? "PASS" : "FAIL"} unsafe=${matrix.filter((entry) => entry.authorized).length}/${matrix.length}`);
   console.log(`TODO046 POSITIVE ${positivePass ? "PASS" : "FAIL"} authorized=${positive.filter((entry) => entry.authorized).length}/${positive.length}`);
+  console.log(`TODO046 FALLBACK ${fallbackPass ? "PASS" : "FAIL"} authorized=${safetyFallback.filter((entry) => entry.authorized).length}/${safetyFallback.length}`);
+  console.log(`TODO046 SECURITY_BOUNDARY ${securityBoundaryPass ? "PASS" : "FAIL"} category=${exposure?.category ?? "none"}`);
   console.log(`TODO046 TRUST ${JSON.stringify(trustSafety)}`);
   console.log(`TODO046 AI ${JSON.stringify({ aiPass, ai })}`);
   console.log(`TODO046 TODO030 authorized=${todo030.draft.basedOnKnowledgeIds.length > 0} source=${todo030.draft.source}`);

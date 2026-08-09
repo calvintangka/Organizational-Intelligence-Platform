@@ -6,7 +6,7 @@ import {
   identifyCanonicalProblem,
   withCanonicalProblemDefaults
 } from "@/lib/canonicalProblemEngine";
-import { findMatchingLesson, isCompatibleForDrafting } from "@/lib/drafting";
+import { findMatchingLesson, isRetrievalCandidateEligible } from "@/lib/drafting";
 import { retrieveMemory } from "@/lib/memory";
 import {
   isStrongLessonMatch,
@@ -688,10 +688,8 @@ async function analyzeBulkEntriesInternal(input: AnalyzeBulkEntriesInput): Promi
   let fallbackUsed = false;
   // Bug fix: the "Clustered via X" badge must reflect whichever tier actually
   // returned a successful response, not the AI adapter's static chain-level
-  // label (which always names every tier, e.g. "AI Chain (LM Studio → Claude
-  // API)" — a string that names Claude regardless of whether it ever ran or
-  // succeeded). Track the most recent genuinely successful call's own
-  // providerLabel instead.
+  // label. Track the most recent genuinely successful call's own providerLabel
+  // instead.
   let actualProviderLabel: string | undefined;
   // F-3: track AI call attempts so a single bad response no longer flips the
   // mode to "deterministic_fallback". A majority-failure threshold is applied
@@ -734,7 +732,7 @@ async function analyzeBulkEntriesInternal(input: AnalyzeBulkEntriesInput): Promi
       () => withPreDiscriminationLessonMatches(ticket, routedUnderstanding, rawMemoryMatches, knowledgeItems, canonicalProblem.title),
       { unit: "rows" }
     );
-    const compatibleMatches = memoryMatches.filter((match) => isCompatibleForDrafting(routedUnderstanding, match.item, ticket));
+    const compatibleMatches = memoryMatches.filter((match) => isRetrievalCandidateEligible(routedUnderstanding, match.item, ticket));
     const selectedMatchInfo = compatibleMatches.length > 0 ? selectPreferredMatch(ticket, compatibleMatches) : null;
     let existingMatch = selectedMatchInfo?.match ?? null;
     let retrievedLessonId = selectedMatchInfo?.lessonMatch?.lesson.id ?? null;

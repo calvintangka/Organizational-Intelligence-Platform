@@ -3,7 +3,7 @@ import type { Understanding } from "@/types/oip";
 import type { KnowledgeItem, KnowledgeMatch } from "@/types";
 import {
   findMatchingLesson,
-  isCompatibleForDrafting,
+  isRetrievalCandidateEligible,
   isStrongLessonEvidence,
   type LessonMatchResult
 } from "@/lib/drafting";
@@ -98,7 +98,7 @@ function isLessonSearchCandidate(
   // considering a lesson that belongs to the already-selected canonical.
   // Final authorization still re-runs isCompatibleForDrafting with the ticket
   // after findMatchingLesson has produced strong evidence.
-  if (!isCompatibleForDrafting(understanding, item, _ticket)) return false;
+  if (!isRetrievalCandidateEligible(understanding, item, _ticket)) return false;
   // The raw match at the caller boundary already identifies the canonical.
   // Requiring lexical overlap with the classifier's canonical title would
   // discard valid paraphrases before the semantic lesson matcher runs.

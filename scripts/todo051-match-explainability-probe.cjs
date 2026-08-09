@@ -85,11 +85,44 @@ async function main() {
     manualRows.push({ label, canonical: result.match?.item.id ?? null, lesson: result.lesson?.lesson.id ?? null, relevance: result.explanation.relevance, lessonEvidence: result.explanation.lessonEvidence, trust: result.match?.item.trustScore ?? null, authorized: actualAuthorized, draftMode: result.response.draftMode });
   }
 
+  const expanded = [
+    ["confirmed seat-count change", ticket("E01", "Duplicate Invoice After Seats Changed", "Two invoice lines cover the same seat period after seats changed."), "demo-ki-duplicate-invoice-seat-change", true],
+    ["duplicate invoice without seat evidence", ticket("E02", "Duplicate Invoice Needs Review", "The same subscription period appears on two invoices."), null, false],
+    ["old PDF address history only", ticket("E03", "Old PDF Address History", "The old quoted PDF showed the previous address, but that issue was resolved last month. The current invoice amount is correct."), null, false],
+    ["current stale invoice PDF", ticket("E04", "Current Invoice PDF Address", "The current billing invoice PDF shows the previous address after the profile was updated. billing invoice stale timeline root cause 01 invoice-pdf-stale-address."), "demo-ki-invoice-pdf-stale-address", true],
+    ["quoted seat history with current tax issue", ticket("E05", "Current Invoice Tax Rounding", "The quoted old ticket said duplicate invoice after seat changes. The current invoice has a tax rounding difference."), "demo-ki-invoice-tax-rounding", true],
+    ["resolved seat history with current tax issue", ticket("E06", "Current Tax Rounding Issue", "The duplicate invoice after seat changes was resolved last month. The current invoice tax total is rounded incorrectly. Please investigate."), "demo-ki-invoice-tax-rounding", true],
+    ["competing invoice issues with explicit priority", ticket("E07", "Duplicate Charge and Old Address", "Two invoice lines are duplicated after a seat change, and the PDF also shows an old billing address. Please investigate the duplicate charge first."), "demo-ki-duplicate-invoice-seat-change", true],
+    ["same category incompatible root cause", ticket("E08", "Invoice Tax Difference", "The invoice tax total differs by a small rounding amount; no duplicate charge or seat change occurred."), null, false],
+    ["higher lexical overlap wrong candidate", ticket("E09", "Billing Invoice Address Note", "The billing invoice has duplicate wording in a note, but the PDF shows the previous address after an update."), null, false]
+  ];
+  const expandedRows = [];
+  for (const [label, input, expectedId, expectedAuthorized] of expanded) {
+    const result = runPipeline(input, profile, items);
+    const actualAuthorized = result.draft.basedOnKnowledgeIds.length > 0;
+    check(`${label} authorization`, actualAuthorized === expectedAuthorized, `selected=${result.match?.item.id ?? "none"} source=${result.draft.source}`);
+    if (expectedId) check(`${label} selected knowledge`, result.match?.item.id === expectedId, result.match?.item.id ?? "none");
+    check(`${label} explanation matches decision`, result.explanation.authorized === actualAuthorized);
+    check(`${label} safe explanation`, !JSON.stringify(result.explanation).match(/(?:api[_ -]?key|password|secret|credential)/i));
+    if (!actualAuthorized) check(`${label} deterministic fallback`, result.draft.source === "no_template" && result.draft.basedOnKnowledgeIds.length === 0);
+    expandedRows.push({ label, canonical: result.match?.item.id ?? null, lesson: result.lesson?.lesson.id ?? null, authorized: actualAuthorized, source: result.draft.source, ignoredTopics: result.understanding.intentIsolation.ignoredTopics });
+  }
+
+  const orderingInput = ticket("E10", "Duplicate Invoice After Seat Changes", "Two invoice lines charge the same seat period after a seat change. billing duplicate invoice timeline root cause 01 duplicate-invoice-seat-change.");
+  const orderingA = runPipeline(orderingInput, profile, items);
+  const orderingB = runPipeline(orderingInput, profile, [...items].reverse());
+  check("order-independent candidate ranking", orderingA.match?.item.id === orderingB.match?.item.id && orderingA.lesson?.lesson.id === orderingB.lesson?.lesson.id);
+
   const source = items.find((item) => item.id === "demo-ki-sso-certificate-redirect-loop");
   assert.ok(source, "HERO knowledge item must exist.");
   const syntheticMatch = { item: source, matchScore: 5, matchReason: "low lexical overlap", matchedCategory: source.category, matchedTags: [], matchedKeywords: [] };
   const authorizedResponse = { ticketId: "P", basedOnKnowledgeIds: [source.id], source: "deterministic", draftMode: "lesson_grounded", groundingLabel: "semantic lesson" };
   const rejectedResponse = { ticketId: "P", basedOnKnowledgeIds: [], source: "no_template", draftMode: "cold_start", groundingLabel: "no organizational knowledge" };
+
+  const providerUnavailable = buildMatchExplainability(null, ticket("E11", "Provider unavailable", "The advisory provider is unavailable; use deterministic fallback and require review."), rejectedResponse);
+  check("provider-unavailable fallback remains explainable", !providerUnavailable.authorized && providerUnavailable.decision === "No compatible Organizational Memory used");
+  const advisoryDisagreement = buildMatchExplainability(syntheticMatch, ticket("E12", "SSO paraphrase", "Provider advice disagrees with the grounded lesson."), rejectedResponse);
+  check("provider disagreement cannot authorize unsupported memory", !advisoryDisagreement.authorized && advisoryDisagreement.decision === "Not authorized for grounded reuse");
 
   const semantic = buildMatchExplainability(syntheticMatch, ticket("P", "Sign-in returns to provider", "Users bounce back after an identity-provider key change."), authorizedResponse);
   check("semantic paraphrase is strong when authorized", semantic.authorized && semantic.relevance === "Strong" && semantic.lessonEvidence === "Strong");
@@ -107,6 +140,8 @@ async function main() {
 
   console.log("\n=== TODO-051 MANUAL RESULTS ===");
   for (const row of manualRows) console.log(JSON.stringify(row));
+  console.log("\n=== TODO-051 EXPANDED RESULTS ===");
+  for (const row of expandedRows) console.log(JSON.stringify(row));
   console.log("\nTODO-051 MATCH EXPLAINABILITY: PASS");
 }
 

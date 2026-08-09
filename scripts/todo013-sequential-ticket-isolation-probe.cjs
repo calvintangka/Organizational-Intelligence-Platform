@@ -96,12 +96,16 @@ assert.notEqual(resultA1.understanding.category, resultB1.understanding.category
 assert.notEqual(resultA1.canonical.title, resultB1.canonical.title);
 
 // Sequence 2: refund -> login -> activation, each with independent outputs.
+// Maesa explicitly supports "refund request" in its issue types, so the
+// current profile-aware classifier intentionally selects Refund rather than
+// the generic Billing fallback. This is a fixture expectation update, not a
+// classifier change.
 const sequence2 = [
   ticket("TODO013-A2", "Ari", "Refund request", "Ari wants a refund for a duplicate charge."),
   ticket("TODO013-B2", "Bea", "Password login", "Bea cannot log in after a password reset."),
   ticket("TODO013-C2", "Chen", "Activation failure", "Chen's license key activation fails after installation.")
 ].map((item) => ({ item, result: run(item, maesa) }));
-assert.deepEqual(sequence2.map(({ result }) => result.understanding.category), ["Billing", "Login", "Activation"]);
+assert.deepEqual(sequence2.map(({ result }) => result.understanding.category), ["Refund", "Login", "Activation"]);
 for (let index = 0; index < sequence2.length; index += 1) {
   assertFresh(sequence2[index].result, sequence2[index].item, sequence2.slice(0, index).map(({ item }) => item));
 }

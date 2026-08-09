@@ -152,9 +152,20 @@ export function retrieveMemory(
     }
   }
 
-  return [...byId.values()].sort((a, b) =>
-    b.matchScore - a.matchScore || a.item.id.localeCompare(b.item.id)
-  );
+  return [...byId.values()].sort((a, b) => {
+    if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
+    // A capped score of 100 can hide a materially better canonical match.
+    // Prefer explicit phrase/concept/specific-keyword evidence before the
+    // stable id tie-break so a generic category fixture cannot outrank an
+    // exact canonical title (while equal evidence remains deterministic).
+    const specificity = (match: KnowledgeMatch) => {
+      const evidence = match.relevanceEvidence;
+      return (evidence?.phrasePoints ?? 0)
+        + (evidence?.conceptPoints ?? 0)
+        + (evidence?.keywordPoints ?? 0);
+    };
+    return specificity(b) - specificity(a) || a.item.id.localeCompare(b.item.id);
+  });
 }
 
 /**
@@ -167,15 +178,27 @@ function assessIntentCompatibility(understanding: Understanding, item: Knowledge
   if (!isolation) return { score: 0, reason: "legacy retrieval compatibility" };
   const text = `${item.canonicalProblemTitle ?? item.title} ${item.problemSummary ?? item.problem} ${(item.tags ?? []).join(" ")}`.toLowerCase();
   const active = `${isolation.activeProblemText} ${isolation.requestedOutcome ?? ""}`.toLowerCase();
+  // `activeProblemText` is intentionally concise and may contain only the
+  // subject. Weighted retrieval text also contains current symptom/evidence
+  // sentences while excluding quoted, resolved, and negated history. Root-cause
+  // compatibility must inspect that safe current evidence or it can reject a
+  // correct lesson merely because the subject is abbreviated.
+  const currentEvidence = `${active} ${isolation.retrievalText ?? ""}`.toLowerCase();
   const has = (pattern: RegExp) => pattern.test(text);
   const activeHas = (pattern: RegExp) => pattern.test(active);
+  const evidenceHas = (pattern: RegExp) => pattern.test(currentEvidence);
   const negated = (pattern: RegExp) => isolation.negatedTopics.some((topic) => pattern.test(topic));
 
   if (isolation.securityIntent.detected) return { score: -100, reason: "security override: retrieval prohibited" };
-  if (isolation.primaryIssueHint === "role_permission" && has(/guest|workspace|collaborator|external invitation/) && !activeHas(/guest|collaborator|invitation|workspace/)) return { score: -100, reason: "object mismatch: guest/workspace lesson is not the active role-permission issue" };
+  if (isolation.primaryIssueHint === "role_permission" && has(/guest|collaborator|external invitation/) && !evidenceHas(/guest|collaborator|invitation/)) return { score: -100, reason: "object mismatch: guest/collaborator lesson is not the active role-permission issue" };
   if (isolation.primaryIssueHint === "refund_investigation" && has(/duplicate|invoice duplication|two charges/) && !activeHas(/duplicate|twice|two charges|doubled/)) return { score: -100, reason: "object mismatch: duplicate-charge lesson is not the refund investigation" };
   if (isolation.primaryIssueHint === "report_export_timeout" && has(/encoding|csv|garbled|character|spreadsheet/) && !activeHas(/encoding|csv|garbled|character/)) return { score: -100, reason: "stage mismatch: encoding lesson is not the report timeout" };
   if (isolation.primaryIssueHint === "activation_failure" && has(/login|password reset|account access/) && !activeHas(/login|password|masuk|kata sandi/)) return { score: -100, reason: "intent mismatch: login lesson is not activation/invitation failure" };
+  if (isolation.primaryIssueHint === "duplicate_invoice"
+      && has(/seat change|seat reconciliation|plan change|quantity change|headcount change/)
+      && !evidenceHas(/(?:changed|change|increase|decrease|added|removed|reduced|increased)\s+(?:the\s+)?(?:number of\s+)?seats?|(?:seats?|plan|quantity|headcount)\s+(?:changed|change|increased|decreased|added|removed)/)) {
+    return { score: -100, reason: "root-cause mismatch: duplicate invoice evidence does not establish a seat or plan change" };
+  }
   if (isolation.negatedTopics.length > 0 && has(new RegExp(isolation.negatedTopics.join("|"), "i")) && !activeHas(new RegExp(isolation.negatedTopics.join("|"), "i"))) return { score: -100, reason: "negated topic veto" };
   if (isolation.object && has(new RegExp(isolation.object.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"))) return { score: 12, reason: `compatible object: ${isolation.object}` };
   return { score: 1, reason: "category-compatible candidate; no stronger object confirmation" };

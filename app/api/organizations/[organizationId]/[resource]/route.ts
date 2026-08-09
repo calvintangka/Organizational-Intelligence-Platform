@@ -14,10 +14,12 @@ import {
   saveKnowledge,
   saveKnowledgeCandidates,
   saveOrgMetrics,
-  saveTicketRecords
+  saveClientTicketRecords
 } from "@/lib/server/persistenceService";
 import { withOrganizationRoute } from "@/lib/server/organizationRoute";
 import { requireCapability } from "@/lib/server/authorization";
+import { enforceOrgUserLimits, rateLimitResponse } from "@/lib/server/rateLimit";
+import { TicketWriteError } from "@/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,8 +63,7 @@ const resourceWriters: Record<string, (organizationId: string, payload: any) => 
   "knowledge-candidates": saveKnowledgeCandidates,
   metrics: saveOrgMetrics,
   "intelligence-log": saveIntelligenceLog,
-  "emerging-patterns": saveEmergingPatterns,
-  tickets: saveTicketRecords
+  "emerging-patterns": saveEmergingPatterns
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -70,13 +71,37 @@ const resourceWriters: Record<string, (organizationId: string, payload: any) => 
 // transactional validation commit endpoint, never by snapshot saves.
 const APPEND_ONLY_RESOURCES = new Set(["validation-records", "memory-change-records"]);
 
-export const PUT = withOrganizationRoute<ResourceRouteParams>(async ({ request, organizationId, params }) => {
+export const PUT = withOrganizationRoute<ResourceRouteParams>(async ({ request, organizationId, params, user }) => {
   const { resource } = params;
   if (APPEND_ONLY_RESOURCES.has(resource)) {
     return NextResponse.json(
       { error: { code: "APPEND_ONLY_RESOURCE", message: "Audit records can only be written through the validation commit operation." } },
       { status: 405 }
     );
+  }
+  if (resource === "tickets") {
+    // RSS-1.2S3: the tickets writer is the strict server-owned client boundary.
+    const limit = await enforceOrgUserLimits(request, { route: "/api/organizations/[organizationId]/[resource]?resource=tickets", organizationId, actorUserId: user.id }, [
+      { policy: "ticket.submit.user", dimensions: [{ type: "user", value: user.id }] },
+      { policy: "ticket.submit.organization", dimensions: [{ type: "organization", value: organizationId }] }
+    ]);
+    if (!limit.allowed) return rateLimitResponse(limit);
+    let body: unknown;
+    try { body = await request.json(); } catch {
+      return NextResponse.json({ error: { code: "INVALID_REQUEST", message: "The request body must be valid JSON." } }, { status: 400 });
+    }
+    if (!Array.isArray(body)) {
+      return NextResponse.json({ error: { code: "INVALID_REQUEST", message: "The ticket payload must be an array of client-owned ticket records." } }, { status: 400 });
+    }
+    try {
+      await saveClientTicketRecords(organizationId, user.id, body);
+    } catch (error) {
+      if (error instanceof TicketWriteError) {
+        return NextResponse.json({ error: { code: error.code, message: error.message } }, { status: error.status });
+      }
+      throw error;
+    }
+    return NextResponse.json({ data: { saved: true } }, { status: 200 });
   }
   const writer = resourceWriters[resource];
   if (!writer) {
@@ -85,12 +110,17 @@ export const PUT = withOrganizationRoute<ResourceRouteParams>(async ({ request, 
       { status: 404 }
     );
   }
-  const capability = resource === "tickets" ? "ticket.submit"
-    : resource === "knowledge-candidates" ? "knowledge.promote"
+  const capability = resource === "knowledge-candidates" ? "knowledge.promote"
     : resource === "knowledge" ? "knowledge.version.create"
     : resource === "metrics" ? "metrics.read"
     : "organization.profile.update";
   await requireCapability(organizationId, capability, { request, resource: `organization_resource_write:${resource}` });
+  if (resource === "metrics") {
+    const limit = await enforceOrgUserLimits(request, { route: "/api/organizations/[organizationId]/[resource]?resource=metrics", organizationId, actorUserId: user.id }, [
+      { policy: "admin.mutate.user", dimensions: [{ type: "user", value: user.id }] }
+    ]);
+    if (!limit.allowed) return rateLimitResponse(limit);
+  }
   let body: unknown;
   try {
     body = await request.json();

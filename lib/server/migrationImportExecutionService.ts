@@ -33,6 +33,7 @@ import {
   stableStringify
 } from "@/lib/persistence/migrationExportDigest";
 import { parseTicketId } from "@/lib/ticketIdFormat";
+import { recomputeAuthoritativeOrgMetricsTx } from "@/lib/server/persistenceService";
 
 const IMPLEMENTED_RESOURCE_TYPES = [
   "knowledge",
@@ -1043,6 +1044,9 @@ async function finalizeBatch(organizationId: string, batchId: string): Promise<v
         : hasFailure
           ? "failed"
           : "partial";
+    // The import resource writes and final status transition share one transaction;
+    // derive the four authoritative metrics from the now-persisted rows before commit.
+    await recomputeAuthoritativeOrgMetricsTx(tx, organizationId);
     await tx.migrationImportBatch.update({
       where: { id: batchId },
       data: { status, errorSummary: hasFailure ? batch.errorSummary : null }

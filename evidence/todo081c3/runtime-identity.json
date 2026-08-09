@@ -1,0 +1,49 @@
+{
+  "task": "TODO-081C3",
+  "recordedAt": "2026-08-04",
+  "repository": {
+    "branch": "master",
+    "headBeforeLaunch": "50c04d0a225d3a37f139370e3d8425c7cb8ab7eb",
+    "headAfterShutdown": "50c04d0a225d3a37f139370e3d8425c7cb8ab7eb",
+    "headSubject": "Route security-sensitive requests and isolate current intent",
+    "headTag": null,
+    "foundationReadyForAsync": "127184bd78fbb7c7549a318c7203ed536a27fc3d",
+    "preSecurityUpgrade": "ee2479b196d66d9263e5b217b78cf65af39d05f6",
+    "workingTree": "dirty; pre-existing review artifacts/logs plus C3 evidence"
+  },
+  "runtime": {
+    "launchCommand": "npm.cmd run dev",
+    "terminalSessionId": 74275,
+    "startupLocalTime": "2026-08-04 23:51:23 +07:00",
+    "processes": [
+      {"pid": 36120, "parentPid": 42688, "command": "next dev", "pathRoot": "C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2"},
+      {"pid": 48092, "parentPid": 36120, "command": "next/dist/server/lib/start-server.js", "pathRoot": "C:\\Users\\Calvin\\Documents\\My Project\\Hackathon 2"}
+    ],
+    "processStartTimes": {
+      "36120": "2026-08-04 23:51:23 +07:00",
+      "48092": "2026-08-04 23:51:24 +07:00"
+    },
+    "httpStatus": 200,
+    "nextVersion": "15.5.22",
+    "startupLog": ["Starting...", "Ready in 3.3s", "GET / 200 in 1531ms"],
+    "nextBuildDirectoryLastWrite": "2026-08-04 23:51:52 +07:00",
+    "runtimeWorkingDirectoryEvidence": "The server was launched with the repository as the working directory and both Next process command paths resolve inside that repository.",
+    "staleServerCheck": "No port-3000 listener or repository-owned Next process existed before launch.",
+    "shutdown": "Cleanly stopped after the browser gate was blocked; no port-3000 listener remained."
+  },
+  "environment": {
+    "prismaValidate": "pass",
+    "prismaMigrateStatus": "pass; database schema is up to date; 19 migrations found",
+    "database": "reachable; rolled-back temporary-table write probe succeeded",
+    "lmStudioModels": "HTTP 200; google/gemma-4-e4b and text-embedding-nomic-embed-text-v1.5",
+    "unexpectedMigration": false
+  },
+  "browser": {
+    "requested": "visible Chrome",
+    "connectorResult": "Browser is not available: chrome",
+    "substitutionUsed": false,
+    "credentialEntry": "not reached",
+    "acceptanceSuite": "not run"
+  },
+  "certification": "BLOCKED — Chrome Browser Unavailable"
+}

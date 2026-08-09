@@ -16,6 +16,7 @@ import type {
   TicketPage,
   TicketPageRequest,
   BulkTicketSeed,
+  ClientTicketRecord,
   TicketRecord,
   TicketRecordFilter,
   ValidationRecord
@@ -35,6 +36,7 @@ import type {
 } from "@/generated/prisma/client";
 import { formatTicketIdRange, organizationTicketPrefix, ticketDateStamp } from "@/lib/ticketIdFormat";
 import { AuthorizationError } from "@/lib/server/authorization";
+import { buildAuthoritativeClientTicketRecord, validateClientTicketRecord } from "@/lib/server/tickets/clientTicketWrite";
 import { dedupeLessonCollection, dedupeNewLessonProposals } from "@/lib/canonicalProblemEngine";
 import { withStableValidationProvenance } from "@/lib/knowledgeProvenance";
 import { startTelemetrySpan } from "@/lib/telemetry";
@@ -67,6 +69,101 @@ type JsonRecord = Record<string, unknown>;
 
 function asRecord(value: unknown): JsonRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {};
+}
+
+export interface AuthoritativeOrgMetricValues {
+  lifetimeTickets: number;
+  knowledgeReused: number;
+  knowledgeVersions: number;
+  emergingPatternsDetected: number;
+}
+
+/**
+ * RSS-1.2E.2 — the four release-critical counters are projections of durable
+ * rows, never client-owned deltas. The metrics row is locked before any
+ * authoritative rows are changed by a caller, serializing concurrent writers
+ * for one organization. A replay observes the same rows and therefore writes
+ * the same values without incrementing twice.
+ */
+async function ensureOrgMetricsRowTx(tx: Prisma.TransactionClient, organizationId: string): Promise<void> {
+  await tx.orgMetrics.upsert({
+    where: { organizationId },
+    create: {
+      organizationId,
+      lifetimeTickets: 0,
+      knowledgeReused: 0,
+      autoResolutions: 0,
+      humanResolutions: 0,
+      totalResolutionTimeSec: 0,
+      resolutionsCount: 0,
+      memoryGrowthToday: 0,
+      memoryGrowthDate: new Date().toISOString().slice(0, 10),
+      mergedTickets: null,
+      duplicatePreventions: null,
+      knowledgeVersions: null,
+      emergingPatternsDetected: null,
+      promotedPatterns: null,
+      aiCalls: null,
+      aiSuccesses: null,
+      aiFailures: null,
+      aiFallbacks: null,
+      aiAgreementSamples: null,
+      aiAgreementTotal: null,
+      humanAcceptedAISuggestions: null,
+      lastUpdatedAt: new Date()
+    },
+    update: {}
+  });
+  await tx.$queryRaw`SELECT "organizationId" FROM "org_metrics" WHERE "organizationId" = ${organizationId} FOR UPDATE`;
+}
+
+export async function deriveAuthoritativeOrgMetricValuesTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string
+): Promise<AuthoritativeOrgMetricValues> {
+  const [tickets, knowledge, emergingPatternsDetected] = await Promise.all([
+    tx.ticketRecord.findMany({
+      where: { organizationId },
+      select: { ticketId: true, status: true, memoryMatch: true, createdAt: true }
+    }),
+    tx.knowledgeItem.findMany({
+      where: { organizationId },
+      select: { id: true, sourceTicketId: true, createdAt: true, content: true }
+    }),
+    tx.emergingPattern.count({ where: { organizationId } })
+  ]);
+  const knowledgeById = new Map<string, { sourceTicketId: string; createdAt: Date }>();
+  for (const item of knowledge) {
+    knowledgeById.set(item.id, { sourceTicketId: item.sourceTicketId, createdAt: item.createdAt });
+  }
+  const knowledgeReused = tickets.filter((ticket) => {
+    if (ticket.status !== "resolved") return false;
+    const match = asRecord(ticket.memoryMatch);
+    const knowledgeId = typeof match.knowledgeId === "string" ? match.knowledgeId : undefined;
+    if (!knowledgeId) return false;
+    const item = knowledgeById.get(knowledgeId);
+    return Boolean(item && ticket.ticketId !== item.sourceTicketId && ticket.createdAt >= item.createdAt);
+  }).length;
+  const knowledgeVersions = knowledge.reduce((total, item) => {
+    const content = asRecord(item.content);
+    return total + (Array.isArray(content.knowledgeVersions) ? content.knowledgeVersions.length : 0);
+  }, 0);
+  return {
+    lifetimeTickets: tickets.length,
+    knowledgeReused,
+    knowledgeVersions,
+    emergingPatternsDetected
+  };
+}
+
+export async function recomputeAuthoritativeOrgMetricsTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string
+): Promise<AuthoritativeOrgMetricValues> {
+  await ensureOrgMetricsRowTx(tx, organizationId);
+  const values = await deriveAuthoritativeOrgMetricValuesTx(tx, organizationId);
+  await tx.orgMetrics.update({ where: { organizationId }, data: values });
+  return values;
 }
 
 function stringValue(value: unknown, fallback = ""): string {
@@ -904,6 +1001,36 @@ async function upsertTicketRecordTx(
   });
 }
 
+/**
+ * RSS-1.2S3 — server-owned client ticket upsert.
+ *
+ * A client proposal may only touch its own facts. When the ticket already
+ * exists the update is restricted to `rawMessage`/`subject` so server-owned
+ * columns (status, actor, timestamps, classification, resolution, memory and
+ * review state) can never be overwritten by a client. When it is new the row is
+ * created with full server-derived authority.
+ */
+async function upsertClientTicketTx(
+  tx: TransactionClient,
+  organizationId: string,
+  record: TicketRecord
+): Promise<void> {
+  const ticketId = requireString(record.ticketId, "ticket record ticketId");
+  const existing = await tx.ticketRecord.findUnique({
+    where: { organizationId_ticketId: { organizationId, ticketId } },
+    select: { ticketId: true }
+  });
+  if (existing) {
+    await tx.ticketRecord.update({
+      where: { organizationId_ticketId: { organizationId, ticketId } },
+      data: { rawMessage: record.rawMessage, subject: record.subject ?? null }
+    });
+  } else {
+    const columns = toTicketColumns(record);
+    await tx.ticketRecord.create({ data: { organizationId, ticketId, ...columns } });
+  }
+}
+
 /* ----------------------------- Organization writes ----------------------------- */
 
 export async function upsertOrganizationProfile(profile: OrganizationProfile): Promise<OrganizationProfile> {
@@ -1010,6 +1137,7 @@ export async function saveKnowledge(organizationId: string, items: KnowledgeItem
   if (!Array.isArray(items)) throw invalidRequest("The knowledge payload must be an array.");
   await writeDatabase("knowledge", () =>
     prisma.$transaction(async (tx) => {
+      await ensureOrgMetricsRowTx(tx, organization.id);
       const keptIds: string[] = [];
       for (const item of items) {
         const expectedRevision = typeof item.revision === "number" && item.revision > 0 ? item.revision : null;
@@ -1025,6 +1153,7 @@ export async function saveKnowledge(organizationId: string, items: KnowledgeItem
         keptIds.push(item.id);
       }
       await tx.knowledgeItem.deleteMany({ where: { organizationId: organization.id, id: { notIn: keptIds } } });
+      await recomputeAuthoritativeOrgMetricsTx(tx, organization.id);
     })
   );
 }
@@ -1055,8 +1184,6 @@ export async function saveOrgMetrics(organizationId: string, metrics: OrgMetrics
   const organization = await requireOrganization(organizationId);
   assertPayloadOrganization(organization.id, metrics.organizationId, "metrics snapshot");
   const data = {
-    lifetimeTickets: metrics.lifetimeTickets ?? 0,
-    knowledgeReused: metrics.knowledgeReused ?? 0,
     autoResolutions: metrics.autoResolutions ?? 0,
     humanResolutions: metrics.humanResolutions ?? 0,
     totalResolutionTimeSec: metrics.totalResolutionTimeSec ?? 0,
@@ -1065,8 +1192,6 @@ export async function saveOrgMetrics(organizationId: string, metrics: OrgMetrics
     memoryGrowthDate: typeof metrics.memoryGrowthDate === "string" ? metrics.memoryGrowthDate : new Date().toISOString().slice(0, 10),
     mergedTickets: metrics.mergedTickets ?? null,
     duplicatePreventions: metrics.duplicatePreventions ?? null,
-    knowledgeVersions: metrics.knowledgeVersions ?? null,
-    emergingPatternsDetected: metrics.emergingPatternsDetected ?? null,
     promotedPatterns: metrics.promotedPatterns ?? null,
     aiCalls: metrics.aiCalls ?? null,
     aiSuccesses: metrics.aiSuccesses ?? null,
@@ -1078,10 +1203,10 @@ export async function saveOrgMetrics(organizationId: string, metrics: OrgMetrics
     lastUpdatedAt: optionalDate(metrics.lastUpdatedAt) ?? new Date()
   };
   await writeDatabase("organization metrics", () =>
-    prisma.orgMetrics.upsert({
-      where: { organizationId: organization.id },
-      create: { organizationId: organization.id, ...data },
-      update: data
+    prisma.$transaction(async (tx) => {
+      await ensureOrgMetricsRowTx(tx, organization.id);
+      await tx.orgMetrics.update({ where: { organizationId: organization.id }, data });
+      await recomputeAuthoritativeOrgMetricsTx(tx, organization.id);
     })
   );
 }
@@ -1117,6 +1242,7 @@ export async function saveEmergingPatterns(organizationId: string, patterns: Eme
   if (!Array.isArray(patterns)) throw invalidRequest("The emerging pattern payload must be an array.");
   await writeDatabase("emerging patterns", () =>
     prisma.$transaction(async (tx) => {
+      await ensureOrgMetricsRowTx(tx, organization.id);
       for (const pattern of patterns) {
         const id = requireString(pattern.id, "emerging pattern id");
         assertPayloadOrganization(organization.id, pattern.organizationId, "emerging pattern");
@@ -1147,6 +1273,7 @@ export async function saveEmergingPatterns(organizationId: string, patterns: Eme
       await tx.emergingPattern.deleteMany({
         where: { organizationId: organization.id, id: { notIn: patterns.map((pattern) => pattern.id) } }
       });
+      await recomputeAuthoritativeOrgMetricsTx(tx, organization.id);
     })
   );
 }
@@ -1161,11 +1288,41 @@ export async function saveTicketRecords(organizationId: string, records: TicketR
   if (!Array.isArray(records)) throw invalidRequest("The ticket record payload must be an array.");
   await writeDatabase("ticket records", () =>
     prisma.$transaction(async (tx) => {
+      await ensureOrgMetricsRowTx(tx, organization.id);
       for (const record of records) {
         await upsertTicketRecordTx(tx, organization.id, record);
       }
+      await recomputeAuthoritativeOrgMetricsTx(tx, organization.id);
     })
   );
+}
+
+/**
+ * RSS-1.2S3 — the only client-facing ticket write. Accepts strictly
+ * client-owned records, rejects server-owned authority fields, derives every
+ * authoritative field server-side, and persists with create/update separation
+ * so a client can never overwrite server-owned state.
+ */
+export async function saveClientTicketRecords(
+  organizationId: string,
+  actorId: string,
+  records: ClientTicketRecord[]
+): Promise<TicketRecord[]> {
+  const organization = await requireOrganization(organizationId);
+  if (!Array.isArray(records)) throw invalidRequest("The ticket payload must be an array.");
+  const authoritative = records.map((input) =>
+    buildAuthoritativeClientTicketRecord(validateClientTicketRecord(input, organizationId), organization.id, actorId)
+  );
+  await writeDatabase("ticket records", () =>
+    prisma.$transaction(async (tx) => {
+      await ensureOrgMetricsRowTx(tx, organization.id);
+      for (const record of authoritative) {
+        await upsertClientTicketTx(tx, organization.id, record);
+      }
+      await recomputeAuthoritativeOrgMetricsTx(tx, organization.id);
+    })
+  );
+  return authoritative;
 }
 
 /**
@@ -1194,6 +1351,7 @@ export async function prepareBulkTicketRecords(
 
   return writeDatabase("bulk ticket preparation", () =>
     prisma.$transaction(async (tx) => {
+      await ensureOrgMetricsRowTx(tx, organization.id);
       const existing = await tx.ticketRecord.findMany({
         where: {
           organizationId: organization.id,
@@ -1246,6 +1404,7 @@ export async function prepareBulkTicketRecords(
       const byEntry = new Map(
         [...existing, ...created].map((row) => [row.bulkEntryId!, row])
       );
+      await recomputeAuthoritativeOrgMetricsTx(tx, organization.id);
       return seeds.map((seed) => mapTicket(byEntry.get(seed.entryId)!));
     })
   );
@@ -1425,6 +1584,7 @@ export async function commitValidation(
 
   return writeDatabase("validation commit", () =>
     prisma.$transaction(async (tx) => {
+      await ensureOrgMetricsRowTx(tx, organization.id);
       const existingValidation = await tx.validationRecord.findUnique({ where: { id: payload.validation.id } });
       if (existingValidation) {
         if (existingValidation.organizationId !== organization.id
@@ -1447,6 +1607,7 @@ export async function commitValidation(
         if (!knowledge || knowledge.organizationId !== organization.id) {
           throw conflict(`Validation replay ${payload.validation.id} has no knowledge item in this organization.`);
         }
+        await recomputeAuthoritativeOrgMetricsTx(tx, organization.id);
         return loadCommittedValidationAggregate(
           tx,
           organization.id,
@@ -1611,6 +1772,7 @@ export async function commitValidation(
         payload.expectedKnowledgeRevision
       );
       await runValidationCommitTestHook("afterKnowledgeUpdate");
+      await recomputeAuthoritativeOrgMetricsTx(tx, organization.id);
       return loadCommittedValidationAggregate(
         tx,
         organization.id,

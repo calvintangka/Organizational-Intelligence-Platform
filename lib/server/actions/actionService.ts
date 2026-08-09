@@ -3,7 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/server/prisma";
-import { authorizationService } from "@/lib/server/rbac/authorizationService";
+import { authorizationService, AuthorizationServiceError } from "@/lib/server/rbac/authorizationService";
 import { digestJobInput, type DurableJobRecord } from "@/lib/application/jobs/types";
 import { ACTION_REGISTRY, type GovernedActionType } from "./registry";
 import { evaluateLabelPolicy, getActionPolicy, type PolicyDecision } from "./policyEngine";
@@ -47,7 +47,8 @@ async function loadAction(organizationId: string, actionId: string) {
 async function assertActionCapability(actorId: string, organizationId: string, capability: "action.prepare" | "action.approve" | "action.execute", resource: string): Promise<void> {
   try {
     await authorizationService.requireCapability({ actorUserId: actorId, organizationId, capability, resource });
-  } catch {
+  } catch (error) {
+    if (!(error instanceof AuthorizationServiceError)) throw error;
     throw new GovernedActionError("AUTHORIZATION_DENIED", `The ${capability} capability is required.`, 403, false);
   }
 }

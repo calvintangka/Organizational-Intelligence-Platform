@@ -155,8 +155,12 @@ const MIN_CONCEPT_CATEGORY_EVIDENCE = 2;
  * switched off — TODO-011 case C caught it. Refinement therefore stays inside
  * the category the ticket already legitimately reached.
  */
-const CONCEPT_INTENT_RULES: Array<{ category: string; conceptId: string; intent: string }> = [
-  { category: "Billing", conceptId: "invoice", intent: "invoice_question" }
+const CONCEPT_INTENT_RULES: Array<{ category: string; conceptIds: readonly string[]; intent: string }> = [
+  // A duplicate invoice is a compound concept: the invoice object plus
+  // duplicate-record evidence. Keeping this compound prevents a generic
+  // duplicate concept from refining unrelated Billing tickets.
+  { category: "Billing", conceptIds: ["invoice", "duplicate_record"], intent: "duplicate_invoice" },
+  { category: "Billing", conceptIds: ["invoice"], intent: "invoice_question" }
 ];
 
 /**
@@ -173,7 +177,7 @@ function isRefinableGenericIntent(intent: string | undefined): boolean {
 function conceptIntentForCategory(category: string, extraction: ConceptExtraction): string | undefined {
   if (extraction.empty) return undefined;
   const found = new Set(extraction.conceptIds);
-  return CONCEPT_INTENT_RULES.find((rule) => rule.category === category && found.has(rule.conceptId))?.intent;
+  return CONCEPT_INTENT_RULES.find((rule) => rule.category === category && rule.conceptIds.every((conceptId) => found.has(conceptId)))?.intent;
 }
 
 function conceptScoreForCategory(category: string, extraction: ConceptExtraction): number {
@@ -1127,7 +1131,16 @@ export function understandForProfile(ticket: Ticket, inputProfile: OrganizationP
   let explicitCategoryMatched = false;
 
   const rules = CATEGORY_RULES.filter((rule) => categoryAllowedByProfile(rule, profile));
-  const loginContradiction = hasExplicitLoginContradiction(fullText) || intentIsolation.ignoredTopics.includes("login");
+  // Intent isolation may conservatively mark a multilingual failure sentence
+  // as ignored (for example, Indonesian "tidak bisa login"). A direct login
+  // signal must remain lexical evidence; only apply the ignored-topic penalty
+  // when no login wording is present at all. Explicit English contradiction
+  // patterns still take precedence for the existing TODO-080 cases.
+  const loginContradiction = hasExplicitLoginContradiction(fullText) ||
+    (intentIsolation.ignoredTopics.includes("login") &&
+      !containsSignal(fullText, "login") &&
+      !containsSignal(fullText, "log in") &&
+      !containsSignal(fullText, "sign in"));
   // TODO-058B: one extraction per ticket, reused by every rule below.
   const conceptExtraction = extractConcepts(`${ticket.subject} ${ticket.description}`, profile);
   const rankedCategories = rules.map((rule) => {

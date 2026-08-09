@@ -8,6 +8,8 @@ import type {
   AIKnowledgeEnrichment,
   AIPatternSuggestion,
   AIProviderMode,
+  AIProviderFailureClass,
+  AIJsonParseStatus,
   MatchDiscriminationResult,
   KnowledgeMatch,
   OrganizationProfile,
@@ -21,6 +23,8 @@ export interface AIConfig {
   model: string;
   timeoutMs: number;
   proxyPath: string;
+  /** Server-only DeepSeek credential; never populate this in browser config. */
+  apiKey?: string;
   /** Floor on max_tokens for any call through this config. Useful for thinking models
    *  (e.g. Gemma QAT) that emit reasoning tokens before the JSON answer. */
   minMaxTokens?: number;
@@ -28,6 +32,16 @@ export interface AIConfig {
    *  provider-specific controls (e.g. reasoning_budget to cap a thinking model's
    *  chain of thought) without affecting other tiers that share this provider code. */
   extraBody?: Record<string, unknown>;
+  /** Human-facing label for a generic OpenAI-compatible Tier 1 provider. */
+  providerLabel?: string;
+  /** Bounded per-provider retries. Defaults to zero for deterministic failover. */
+  maxRetries?: number;
+  /** Fallback LM Studio settings retained when DeepSeek is the configured tier. */
+  lmStudioBaseUrl?: string;
+  lmStudioModel?: string;
+  lmStudioTimeoutMs?: number;
+  /** Operators may intentionally disable the local fallback without changing Tier 1. */
+  lmStudioEnabled?: boolean;
 }
 
 export interface AIProviderResult<T> {
@@ -39,6 +53,16 @@ export interface AIProviderResult<T> {
   data?: T;
   error?: string;
   diagnostics?: AIDiagnostics;
+}
+
+export interface AIProviderResultMetadata {
+  failureClass?: AIProviderFailureClass;
+  timedOut?: boolean;
+  httpStatus?: number;
+  completionLength?: number;
+  jsonParseStatus?: AIJsonParseStatus;
+  structuredOutputValid?: boolean;
+  retries?: number;
 }
 
 export interface AnalyzeTicketInput {

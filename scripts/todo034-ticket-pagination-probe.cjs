@@ -95,7 +95,12 @@ async function main() {
   const first = await timed(() => persistence.loadTicketPage(DEMO, {
     page: 1, pageSize: PAGE_SIZE, search: "", filter: "all"
   }));
-  check("CASE A first page has expected size and total", first.value.tickets.length === PAGE_SIZE && first.value.total === 5000);
+  // The protected Developer Demo dataset has evolved as new certification
+  // fixtures were added. The authoritative full read is the correct oracle;
+  // a hard-coded 5,000-row expectation made this read-only pagination probe
+  // fail even when count, ordering, and page boundaries were correct.
+  const expectedTicketTotal = fullTickets.value.length;
+  check("CASE A first page has expected size and total", first.value.tickets.length === PAGE_SIZE && first.value.total === expectedTicketTotal);
   check("CASE A first page is organization scoped", first.value.tickets.every((ticket) => ticket.orgId === DEMO));
   for (const filter of ["heavily_edited", "cold_start", "uncategorized", "rejected", "discarded"]) {
     const serverFiltered = await persistence.loadTicketPage(DEMO, { page: 1, pageSize: PAGE_SIZE, filter });

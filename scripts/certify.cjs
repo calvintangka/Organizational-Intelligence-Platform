@@ -5,7 +5,9 @@ const crypto = require("crypto");
 const { spawnSync } = require("child_process");
 
 const root = path.resolve(__dirname, "..");
-const reportPath = path.join(root, "docs", "OIP-CERTIFICATION-REPORT.md");
+const reportPath = process.env.CERTIFICATION_REPORT_PATH
+  ? path.resolve(root, process.env.CERTIFICATION_REPORT_PATH)
+  : path.join(root, "docs", "OIP-CERTIFICATION-REPORT.md");
 const startedAt = new Date();
 const args = new Set(process.argv.slice(2));
 const requestedStage = process.argv.slice(2).find((arg) => arg.startsWith("--stage="))?.slice(8);
@@ -16,6 +18,7 @@ const stageOrder = [
   "build",
   "regression",
   "benchmark",
+  "live-acceptance",
   "async",
   "chaos",
   "security",
@@ -62,6 +65,7 @@ const stages = {
     script("probe:todo080-intent-isolation"),
   ],
   benchmark: [{ label: "OIP Benchmark v1", command: "node", args: ["scripts/oip-benchmark-v1.cjs"] }],
+  "live-acceptance": [{ label: "TODO-079 live acceptance", command: "npm.cmd", args: ["run", "acceptance:todo079"] }],
   async: [
     script("probe:todo018-async-foundation"),
     script("probe:todo072-worker-recovery"),
@@ -216,6 +220,12 @@ function parseBenchmark(output) {
   try { return JSON.parse(line.slice("CERTIFICATION_BENCHMARK_SUMMARY=".length)); } catch { return null; }
 }
 
+function parseTodo079(output) {
+  const line = String(output || "").split(/\r?\n/).find((item) => item.startsWith("TODO079_ACCEPTANCE_SUMMARY="));
+  if (!line) return null;
+  try { return JSON.parse(line.slice("TODO079_ACCEPTANCE_SUMMARY=".length)); } catch { return null; }
+}
+
 function gitValue(args) {
   const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
   return (result.stdout || "").trim() || "unavailable";
@@ -238,25 +248,28 @@ function runStage(name) {
   return result;
 }
 
-function chooseVerdict(results, benchmark, memory) {
+function chooseVerdict(results, benchmark, liveAcceptance, memory) {
   const failed = results.find((stage) => stage.status === "failed");
   if (failed?.name === "security") return "SECURITY_FAILURE";
   if (failed?.name === "regression") return "REGRESSION_FAILURE";
   if (failed?.name === "memory" || (memory.before.available && memory.after.available && !memory.integrity)) return "DATA_INTEGRITY_FAILURE";
   if (failed?.name === "performance") return "PERFORMANCE_FAILURE";
   if (failed?.name === "chaos") return "CHAOS_FAILURE";
+  if (liveAcceptance && liveAcceptance.executionStatus !== "passed") return "LIVE_ACCEPTANCE_FAILURE";
+  if (liveAcceptance && liveAcceptance.score < liveAcceptance.releaseThreshold) return "LIVE_ACCEPTANCE_BELOW_THRESHOLD";
   if (benchmark && benchmark.securityPct < 100) return "SECURITY_FAILURE";
   if (failed) return "NOT_CERTIFIED";
   if (memory.before.available && !memory.after.available) return "CERTIFIED_WITH_LIMITATIONS";
   return releaseMode ? "CERTIFIED" : "CERTIFIED_WITH_LIMITATIONS";
 }
 
-function renderReport({ results, memory, benchmark, start, end, currentStatus }) {
-  const verdict = chooseVerdict(results, benchmark, memory);
+function renderReport({ results, memory, benchmark, liveAcceptance, start, end, currentStatus }) {
+  const verdict = chooseVerdict(results, benchmark, liveAcceptance, memory);
   const limitations = [];
   if (!releaseMode) limitations.push("Release cleanliness was not enforced; rerun with --release before tagging.");
   if (!memory.before.available || !memory.after.available) limitations.push(`Memory snapshot unavailable: ${memory.after.reason || memory.before.reason}.`);
   if (benchmark && !benchmark.passed) limitations.push(`OIP Benchmark v1 scored ${benchmark.overallPct}% against the 95% threshold.`);
+  if (liveAcceptance && liveAcceptance.score < liveAcceptance.releaseThreshold) limitations.push(`TODO-079 scored ${liveAcceptance.score}/${liveAcceptance.maxScore}; release threshold is ${liveAcceptance.releaseThreshold}/${liveAcceptance.maxScore}.`);
   const lines = [
     "# OIP Certification Report",
     "",
@@ -281,6 +294,10 @@ function renderReport({ results, memory, benchmark, start, end, currentStatus })
   lines.push(benchmark
     ? `OIP Benchmark v1: ${benchmark.passedChecks}/${benchmark.totalChecks} checks (${benchmark.overallPct}%), security ${benchmark.securityPct}%. Thresholds: overall ${benchmark.thresholdOverall}%, security ${benchmark.thresholdSecurity}%.`
     : "Benchmark summary was not produced.");
+  lines.push("", "## TODO-079 Live Acceptance", "");
+  lines.push(liveAcceptance
+    ? `TODO-079: ${liveAcceptance.score}/${liveAcceptance.maxScore} across ${liveAcceptance.datasetCases} cases, repeated ${liveAcceptance.repeatCount} time(s); deterministic execution ${liveAcceptance.executionStatus}; threshold ${liveAcceptance.releaseThreshold}/${liveAcceptance.maxScore}.`
+    : "TODO-079 acceptance summary was not produced.");
   lines.push("", "## Memory Integrity", "");
   lines.push(`- Before snapshot available: ${memory.before.available ? "yes" : "no"}`);
   lines.push(`- After snapshot available: ${memory.after.available ? "yes" : "no"}`);
@@ -302,6 +319,7 @@ async function main() {
   const results = [];
   const memoryBefore = await captureMemorySnapshot();
   let benchmark = null;
+  let liveAcceptance = null;
 
   for (const name of selected) {
     if (name === "regression" && args.has("--skip-regressions")) {
@@ -313,6 +331,8 @@ async function main() {
     results.push(result);
     const benchmarkCommand = result.commands.find((command) => command.label === "OIP Benchmark v1");
     if (benchmarkCommand) benchmark = parseBenchmark(benchmarkCommand.rawOutput || benchmarkCommand.output);
+    const liveAcceptanceCommand = result.commands.find((command) => command.label === "TODO-079 live acceptance");
+    if (liveAcceptanceCommand) liveAcceptance = parseTodo079(liveAcceptanceCommand.rawOutput || liveAcceptanceCommand.output);
     if (result.status === "failed") {
       console.log(`[STOP] critical stage '${name}' failed; later stages were not run.`);
       break;
@@ -326,7 +346,7 @@ async function main() {
     integrity: memoryBefore.available && memoryAfter.available ? snapshotsEqual(memoryBefore, memoryAfter) : null,
   };
   const end = new Date();
-  const rendered = renderReport({ results, memory, benchmark, start: startedAt, end, currentStatus: "generated" });
+  const rendered = renderReport({ results, memory, benchmark, liveAcceptance, start: startedAt, end, currentStatus: "generated" });
   fs.mkdirSync(path.dirname(reportPath), { recursive: true });
   fs.writeFileSync(reportPath, rendered.text, "utf8");
   console.log(`CERTIFICATION_VERDICT=${rendered.verdict}`);

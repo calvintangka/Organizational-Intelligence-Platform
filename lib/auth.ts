@@ -84,7 +84,13 @@ export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
   });
   if (!session) return null;
 
-  if (session.expiresAt <= new Date()) {
+  // Prisma adapters may materialize timestamptz values as either Date objects
+  // or date-like strings. Normalize before comparing so an expired session can
+  // never be accepted because of JavaScript coercion semantics.
+  const expiresAtMs = session.expiresAt instanceof Date
+    ? session.expiresAt.getTime()
+    : Date.parse(String(session.expiresAt));
+  if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
     await deleteSession(token);
     return null;
   }

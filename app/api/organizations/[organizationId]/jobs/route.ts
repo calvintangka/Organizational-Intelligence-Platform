@@ -5,6 +5,7 @@ import { durableJobRepository } from "@/lib/server/jobs/jobRepository";
 import { digestJobInput, isJobType } from "@/lib/application/jobs/types";
 import { jobContext, safeJob } from "@/lib/server/jobs/http";
 import { requireCapability } from "@/lib/server/authorization";
+import { enforceOrgUserLimits, rateLimitResponse } from "@/lib/server/rateLimit";
 
 function text(value: unknown, fallback = ""): string { return typeof value === "string" ? value.trim() : fallback; }
 
@@ -17,6 +18,11 @@ export const GET = withOrganizationRoute("worker.read", async ({ request, organi
 });
 
 export const POST = withOrganizationRoute("ticket.submit", async ({ request, organizationId, user }) => {
+  const limit = await enforceOrgUserLimits(request, { route: "/api/organizations/[organizationId]/jobs", organizationId, actorUserId: user.id }, [
+    { policy: "job.create.organization", dimensions: [{ type: "organization", value: organizationId }] }
+  ]);
+  if (!limit.allowed) return rateLimitResponse(limit);
+
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const type = body?.type;
   if (!isJobType(type)) return NextResponse.json({ error: { code: "INVALID_JOB", message: "A supported durable job type is required." } }, { status: 400 });

@@ -501,13 +501,15 @@ check("058A/H: the ticket panel labels detected, assumed, and reviewer-set disti
 });
 
 check("058A/H: a reviewer override is recorded as a decision, not as a detection", () => {
+  // RSS-1.2S3 moved authoritative ticket writes out of the client. Keep this
+  // assertion focused on the production write boundary rather than requiring
+  // the client handler to contain persistence fields.
   const page = fs.readFileSync(path.join(root, "app", "page.tsx"), "utf8");
-  const start = page.indexOf("function overrideTicketLanguage");
-  assert.ok(start >= 0, "the override handler must exist");
-  const body = page.slice(start, page.indexOf("function changeOrganizationProfile", start));
-  assert.ok(body.includes('method: "reviewer"'), "an override must not masquerade as a lexical detection");
-  assert.ok(body.includes("reviewerOverride: true"), "the override flag must be persisted");
-  assert.ok(body.includes("resolveResponseLanguage("), "an override must re-resolve through organization policy");
+  const workflow = fs.readFileSync(path.join(root, "lib", "server", "tickets", "ticketWorkflow.ts"), "utf8");
+  assert.ok(page.includes('kind: "language"'), "the client must issue a language transition command");
+  assert.ok(workflow.includes('case "language"'), "the server must own the language transition");
+  assert.ok(workflow.includes('method: "reviewer"'), "an override must not masquerade as a lexical detection");
+  assert.ok(workflow.includes("reviewerOverride: true"), "the override flag must be persisted");
 });
 
 check("058A/H: both intake paths record language metadata", () => {

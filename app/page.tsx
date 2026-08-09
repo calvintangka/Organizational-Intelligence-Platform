@@ -23,7 +23,7 @@ import { classifyBusinessDomain } from "@/lib/domainClassifier";
 import { businessLessonSignalAliases } from "@/lib/businessInquiry";
 import { analyzeBulkEntries, prepareBulkClusterCommit } from "@/lib/bulkUpload";
 import { retrieveMemory } from "@/lib/memory";
-import { draftBusinessInquiryResponse, draftResponse, findMatchingLesson, isCompatibleForDrafting, ticketContradictsLesson } from "@/lib/drafting";
+import { draftBusinessInquiryResponse, draftResponse, findMatchingLesson, isRetrievalCandidateEligible, ticketContradictsLesson } from "@/lib/drafting";
 import type { LessonMatchResult, SemanticLessonAuthorization } from "@/lib/drafting";
 import {
   buildDiscriminationLessonPayload,
@@ -96,8 +96,9 @@ import {
 } from "@/lib/ticketRecords";
 import { CaseLookupView } from "@/components/views/CaseLookupView";
 import { AuthorizationProvider } from "@/components/AuthorizationContext";
-import { processTicket, ProcessTicketError } from "@/lib/application/tickets/processTicket";
+import { DeveloperDiagnosticsView } from "@/components/views/DeveloperDiagnosticsView";
 import { bulkResult, cancelJob, enqueueBulkJob, enqueuePatternDiscoveryJob, enqueueReflectionJob, getJob, reflectionResult } from "@/lib/application/jobs/client";
+import type { ProcessTicketResult } from "@/lib/application/tickets/processTicket";
 import { digestJobInput } from "@/lib/application/jobs/types";
 import { buildPatternDiscoveryInput, patternDiscoveryIdempotencyKey } from "@/lib/application/jobs/patternTypes";
 import {
@@ -107,6 +108,8 @@ import {
   LearningApplicationError
 } from "@/lib/application/learning/reflectionCommands";
 const PAGE_LOAD_STARTED_AT = Date.now();
+const AUTH_HYDRATION_TIMEOUT_MS = 2_500;
+const AUTH_HYDRATION_RETRY_DELAY_MS = 250;
 const ASYNC_BULK_INTAKE_ENABLED = process.env.NEXT_PUBLIC_OIP_ASYNC_BULK_INTAKE === "true";
 const ASYNC_REFLECTION_ENABLED = process.env.NEXT_PUBLIC_OIP_ASYNC_REFLECTION === "true";
 import type {
@@ -145,6 +148,7 @@ import type {
   DraftGroundingMode,
   BusinessDomainClassification,
   TicketRecord,
+  TicketWorkflowCommand,
   KnowledgePack,
   KnowledgePackCandidateDraft,
 } from "@/types";
@@ -653,20 +657,37 @@ export default function Home() {
 
   useEffect(() => {
     let cancelled = false;
-    void fetch("/api/auth/me", { cache: "no-store" })
-      .then(async (response) => ({ response, payload: await response.json().catch(() => null) }))
-      .then(({ response, payload }) => {
-        if (cancelled) return;
-        if (response.ok && payload?.data) {
-          setAuthUser(payload.data);
-          setAuthStatus("authenticated");
-        } else {
-          setAuthStatus("unauthenticated");
+
+    async function hydrateAuthentication(): Promise<void> {
+      for (let attempt = 0; attempt < 2 && !cancelled; attempt += 1) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), AUTH_HYDRATION_TIMEOUT_MS);
+
+        try {
+          const response = await fetch("/api/auth/me", { cache: "no-store", signal: controller.signal });
+          const payload = await response.json().catch(() => null);
+          if (cancelled) return;
+
+          if (response.ok && payload?.data) {
+            setAuthUser(payload.data);
+            setAuthStatus("authenticated");
+          } else {
+            setAuthStatus("unauthenticated");
+          }
+          return;
+        } catch {
+          if (attempt === 0 && !cancelled) {
+            await new Promise((resolve) => setTimeout(resolve, AUTH_HYDRATION_RETRY_DELAY_MS));
+          }
+        } finally {
+          clearTimeout(timeout);
         }
-      })
-      .catch(() => {
-        if (!cancelled) setAuthStatus("unauthenticated");
-      });
+      }
+
+      if (!cancelled) setAuthStatus("unauthenticated");
+    }
+
+    void hydrateAuthentication();
     return () => {
       cancelled = true;
     };
@@ -801,14 +822,62 @@ export default function Home() {
     });
   }
 
+  /**
+   * RSS-1.2S3: the only client-owned fields that may be written directly. All
+   * authority (status, actor, timestamps, resolution, review and memory state)
+   * is derived server-side.
+   */
+  function clientTicketFields(record: TicketRecord) {
+    return {
+      ticketId: record.ticketId,
+      orgId: record.orgId,
+      rawMessage: record.rawMessage,
+      subject: record.subject,
+      bulkUploadKey: record.bulkUploadKey ?? null,
+      bulkEntryId: record.bulkEntryId ?? null
+    };
+  }
+
+  /**
+   * RSS-1.2S3: execute a server-owned ticket workflow transition. The server
+   * validates the transition against the current workflow state and computes
+   * every authoritative field; the client never writes state directly.
+   */
+  async function transitionTicket(ticketId: string, command: TicketWorkflowCommand): Promise<TicketRecord> {
+    const organizationId = organizationProfile.id;
+    const response = await fetch(`/api/organizations/${encodeURIComponent(organizationId)}/tickets/${encodeURIComponent(ticketId)}/transition`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(command)
+    });
+    const payload = await response.json().catch(() => null) as { data?: TicketRecord; error?: { message?: string } } | null;
+    if (!response.ok) {
+      throw new Error(payload?.error?.message ?? `Ticket transition failed (${response.status}).`);
+    }
+    if (!payload?.data) throw new Error("Ticket transition returned no result.");
+    return payload.data;
+  }
+
   function persistTicketRecord(record: TicketRecord) {
     const organizationId = record.orgId;
     const previous = ticketSaveChains.current[organizationId] ?? Promise.resolve();
     const operation = previous
       .catch(() => undefined)
       .then(async () => {
-        const session = await openPersistenceSession(organizationId, "save-ticket");
-        await session.saveTicketRecord(record);
+        if (persistenceMode === "local") {
+          const session = await openPersistenceSession(organizationId, "save-ticket");
+          await session.saveTicketRecord(record);
+          return;
+        }
+        const response = await fetch(`/api/organizations/${encodeURIComponent(organizationId)}/tickets`, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify([clientTicketFields(record)])
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => null) as { error?: { message?: string } } | null;
+          throw new Error(body?.error?.message ?? `Ticket save failed (${response.status}).`);
+        }
       });
     ticketSaveChains.current[organizationId] = operation;
     queuePersistenceSave("saveTicketRecord", operation);
@@ -1447,7 +1516,19 @@ export default function Home() {
               }
       });
     }
-    persistTicketRecords(updates);
+    // RSS-1.2S3: attach the deterministic analysis through a server-owned
+    // transition; the server validates structure and org-scoped references and
+    // derives the workflow state.
+    for (const update of updates) {
+      void transitionTicket(update.ticketId, {
+        kind: "attach_analysis",
+        classification: update.classification,
+        memoryMatch: update.memoryMatch,
+        bulkClusterId: update.bulkClusterId ?? null
+      })
+        .then((record) => { if (update.bulkEntryId) bulkTicketRecords.current[`${uploadKey}:${update.bulkEntryId}`] = record; })
+        .catch((error) => reportPersistenceError("attachBulkAnalysis", error));
+    }
     await flushTicketSaves(organizationProfile.id);
     for (const update of updates) bulkTicketRecords.current[`${uploadKey}:${update.bulkEntryId}`] = update;
     return result;
@@ -1600,9 +1681,25 @@ export default function Home() {
         resolutionMode: "human" as const,
       };
     });
-    if (bulkRecords.length > 0) {
-      persistTicketRecords(bulkRecords);
+    // RSS-1.2S3: commit bulk cluster validation through a server-owned
+    // transition. The server validates the validation-record and knowledge
+    // references against this organization and derives the resolved state.
+    for (const rec of bulkRecords) {
+      void transitionTicket(rec.ticketId, {
+        kind: "commit",
+        validationRecordIds: rec.validationRecordIds ?? [],
+        knowledgeId: rec.memoryMatch?.knowledgeId ?? null,
+        action: rec.reflection?.decision ?? prepared.action,
+        lessonCreatedId: rec.reflection?.lessonCreatedId ?? null,
+        lessonReinforcedId: rec.reflection?.lessonReinforcedId ?? null,
+        knowledgeChanged: rec.reflection?.knowledgeChanged ?? null,
+        classification: rec.classification,
+        memoryMatch: rec.memoryMatch
+      })
+        .then((record) => { if (rec.bulkEntryId) bulkTicketRecords.current[`${uploadKey}:${rec.bulkEntryId}`] = record; })
+        .catch((error) => reportPersistenceError("commitBulkValidation", error));
     }
+    await flushTicketSaves(organizationProfile.id);
 
     addLogEntries([
       createLogEntry("Bulk cluster validated", `${cluster.count} uploaded queries committed as ${prepared.action.replace(/_/g, " ")} for ${cluster.canonicalProblemTitle}`),
@@ -1753,7 +1850,10 @@ export default function Home() {
     if (!confirmed) return;
 
     const updated: TicketRecord = { ...activeTicketRecord, status: "discarded" };
-    persistTicketRecord(updated);
+    setActiveTicketRecord(updated);
+    void transitionTicket(activeTicketRecord.ticketId, { kind: "discard" })
+      .then((record) => setActiveTicketRecord(record))
+      .catch((error) => reportPersistenceError("discardTicket", error));
     addLogEntries([
       createLogEntry("Ticket discarded", `${activeTicketRecord.ticketId} discarded by user before reflection commit`)
     ]);
@@ -1953,7 +2053,7 @@ export default function Home() {
         setAiAdvisory(aiDraft.advisory);
         setSuggestedResponse({
           ...aiDraft.response,
-          fallbackNotice: "Still unavailable — check that LM Studio is running or configure a Claude API key."
+          fallbackNotice: "AI advisory unavailable — check that DeepSeek is configured or enable local LM Studio; a deterministic draft is shown."
         });
         addLogEntries([createLogEntry("AI draft retry failed", "All AI tiers unavailable")]);
       }
@@ -2006,27 +2106,15 @@ export default function Home() {
     if (!activeTicketRecord?.classification) return;
     const policy = resolveLanguagePolicy(organizationProfile);
     const response = resolveResponseLanguage(policy, { language, confidence: 1 });
-    const updated: TicketRecord = {
-      ...activeTicketRecord,
-      classification: {
-        ...activeTicketRecord.classification,
-        language: {
-          detected: language,
-          confidence: 1,
-          // A human decision is not a lexical detection; record it as such so
-          // the stored metadata stays honest about where the language came from.
-          method: "reviewer",
-          responseLanguage: response.language,
-          reviewerOverride: true,
-        },
-      },
-    };
-    setActiveTicketRecord(updated);
-    persistTicketRecord(updated);
+    // RSS-1.2S3: the reviewer language decision is a server-owned transition;
+    // the server records the authoritative classification.language metadata.
+    void transitionTicket(activeTicketRecord.ticketId, { kind: "language", language })
+      .then((record) => setActiveTicketRecord(record))
+      .catch((error) => reportPersistenceError("overrideTicketLanguage", error));
     addLogEntries([
       createLogEntry(
         `Reviewer set ticket language: ${languageLabel(language)}`,
-        `${updated.ticketId} — ${response.explanation}`
+        `${activeTicketRecord.ticketId} — ${response.explanation}`
       ),
     ]);
   }
@@ -3033,24 +3121,15 @@ export default function Home() {
     learningCommandContext.current = { requestId: reflectionRequestId, idempotencyKey: reflectionIdempotencyKey };
     setReflectionDecision(reflection);
 
-    // Update ticket record with resolution
+    // Update ticket record with resolution (RSS-1.2S3: server-owned approve
+    // transition; the server derives status, resolution mode, actor, and the
+    // resolved timestamp).
     if (activeTicketRecord) {
       const originalDraft = suggestedResponse?.draftResponse ?? "";
       const humanEdited = reviewedResponse !== originalDraft;
-      const editNote = humanEdited ? computeEditDistance(originalDraft, reviewedResponse) : null;
-      const updated: TicketRecord = {
-        ...activeTicketRecord,
-        resolution: {
-          finalResponse: reviewedResponse,
-          humanEdited,
-          editDistanceNote: editNote,
-          resolvedAt: new Date().toISOString(),
-        },
-        // TODO-026: a human reviewer approved this response (edited or not).
-        resolutionMode: "human",
-      };
-      setActiveTicketRecord(updated);
-      persistTicketRecord(updated);
+      void transitionTicket(activeTicketRecord.ticketId, { kind: "approve", finalResponse: reviewedResponse, humanEdited })
+        .then((record) => setActiveTicketRecord(record))
+        .catch((error) => reportPersistenceError("approveTicket", error));
     }
 
     addLogEntries([
@@ -3181,7 +3260,21 @@ export default function Home() {
           resolutionMode: "human"
         };
         setActiveTicketRecord(updated);
-        persistTicketRecord(updated);
+        // RSS-1.2S3: the reflection-confirmed resolution is a server-owned
+        // commit; the server validates the validation/knowledge references and
+        // derives the resolved state.
+        void transitionTicket(activeTicketRecord.ticketId, {
+          kind: "commit",
+          validationRecordIds: [result.validation.id],
+          knowledgeId: committedItem.id,
+          action: result.action,
+          lessonCreatedId: result.ticketReflection.lessonCreatedId ?? null,
+          lessonReinforcedId: result.ticketReflection.lessonReinforcedId ?? null,
+          knowledgeChanged: result.ticketReflection.knowledgeChanged ?? null,
+          automatic: false
+        })
+          .then((record) => setActiveTicketRecord(record))
+          .catch((error) => reportPersistenceError("confirmReflection", error));
       }
       addLogEntries([
         createLogEntry("Reflection confirmed", `${result.action.replace(/_/g, " ")} · ${committedItem.title}`),
@@ -3501,27 +3594,42 @@ export default function Home() {
         ? committedItemForReflection?.lessons?.find((lesson) => lessonContentFingerprint(lesson) === lessonDraftFingerprint)?.id ?? null
         : null;
       const lessonReinforced = lessonDraft?.mode === "improves_existing" ? lessonDraft.existingLessonId ?? null : null;
+      const validationRecordIds = committedValidationId
+        ? [committedValidationId]
+        : validationRecords
+            .filter((v) => v.candidateId && knowledgeCandidates.some(
+              (c) => c.id === v.candidateId && c.sourceTicketIds.includes(ticketReferenceId(selectedTicket))
+            ))
+            .map((v) => v.id);
+      const knowledgeChanged = committedItemForReflection?.id ?? lastSavedKnowledgeId ?? null;
       const updated: TicketRecord = {
         ...activeTicketRecord,
         reflection: {
           decision: reflectionDecision.action,
           lessonCreatedId: lessonCreated,
           lessonReinforcedId: lessonReinforced,
-          knowledgeChanged: committedItemForReflection?.id ?? lastSavedKnowledgeId,
+          knowledgeChanged,
         },
-        validationRecordIds: committedValidationId
-          ? [committedValidationId]
-          : validationRecords
-              .filter((v) => v.candidateId && knowledgeCandidates.some(
-                (c) => c.id === v.candidateId && c.sourceTicketIds.includes(ticketReferenceId(selectedTicket))
-              ))
-              .map((v) => v.id),
+        validationRecordIds,
         status: "resolved",
         // TODO-026: the primary review workspace resolves through human approval.
         resolutionMode: "human",
       };
       setActiveTicketRecord(updated);
-      persistTicketRecord(updated);
+      // RSS-1.2S3: resolve through a server-owned commit; the server validates
+      // the validation/knowledge references and derives the resolved state.
+      void transitionTicket(activeTicketRecord.ticketId, {
+        kind: "commit",
+        validationRecordIds,
+        knowledgeId: knowledgeChanged,
+        action: reflectionDecision.action,
+        lessonCreatedId: lessonCreated ?? null,
+        lessonReinforcedId: lessonReinforced ?? null,
+        knowledgeChanged,
+        automatic: false
+      })
+        .then((record) => setActiveTicketRecord(record))
+        .catch((error) => reportPersistenceError("resolveTicket", error));
     }
 
     setErrorMessage("");
@@ -3600,7 +3708,7 @@ export default function Home() {
     // MOST TRUSTED knowledge — that is what enables auto-resolution over time.
     // Category-incompatible items are excluded before the trust-based selection so
     // a high-trust Activation item cannot drive a Login ticket's reuse response.
-    const compatibleMatches = matches.filter((m) => isCompatibleForDrafting(enrichedUnderstanding, m.item, second));
+    const compatibleMatches = matches.filter((m) => isRetrievalCandidateEligible(enrichedUnderstanding, m.item, second));
     const selectedMatchInfo = compatibleMatches.length > 0 ? selectPreferredMatch(second, compatibleMatches) : null;
     const reusedMatch = selectedMatchInfo?.match ?? null;
     const reusedLessonMatch = selectedMatchInfo?.lessonMatch ?? null;
@@ -3760,27 +3868,26 @@ export default function Home() {
     const profile = normalizeOrganizationProfile(organizationProfile);
     const requestId = `ticket-request-${profile.id}-${Date.now()}-${requestGeneration}`;
     try {
-      const resourcePersistence = await openPersistenceSession(profile.id, "process-ticket", requestId);
-      const result = await processTicket(
-        {
-          organizationId: profile.id,
-          actorContext: authUser ? { id: authUser.id, name: authUser.name, email: authUser.email } : {},
-          authority: resourcePersistence.context.authority,
-          requestId,
-          idempotencyKey: `ui:${requestId}`,
-          ticketInput: curatedScenario
-            ? { subject: curatedScenario.ticketSubject, description: curatedScenario.ticketBody, customerName: "Demo User", intakeMode: "single" }
-            : { description: text.trim(), customerName: "Demo User", intakeMode: "single" },
-          organizationProfile: profile,
-          processingOptions: { knowledgeItems, sessionCreatedIds, aiAdapter },
-          signal: abortController.signal
-        },
-        {
-          persistence: resourcePersistence,
-          ai: aiAdapter,
-          onEvent: (event) => addLogEntries([createLogEntry(event.name, event.detail)])
-        }
-      );
+      // RSS-1.2S3: interactive ticket processing runs on the server, which
+      // derives every authoritative field (actor, status, timestamps,
+      // classification, memory references, workflow state). The client only
+      // submits the ticket's facts.
+      const response = await fetch(`/api/organizations/${encodeURIComponent(profile.id)}/tickets/process`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        signal: abortController.signal,
+        body: JSON.stringify({
+          description: text.trim(),
+          ...(curatedScenario ? { subject: curatedScenario.ticketSubject, customerName: "Demo User" } : { customerName: "Demo User" }),
+          idempotencyKey: `ui:${requestId}`
+        })
+      });
+      const payload = await response.json().catch(() => null) as { data?: ProcessTicketResult; error?: { message?: string } } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error?.message ?? "Ticket processing failed. Retry is safe.");
+      }
+      const result = payload?.data;
+      if (!result) throw new Error("Ticket processing returned no result. Retry is safe.");
       if (!ticketRequestIsCurrent(requestGeneration)) return;
       setSelectedTicket(result.ticket);
       setActiveTicketRecord(result.persistedTicket);
@@ -3822,14 +3929,12 @@ export default function Home() {
       setCurrentStep(4);
     } catch (error) {
       if (!ticketRequestIsCurrent(requestGeneration)) return;
-      if (error instanceof ProcessTicketError) {
-        if (error.failure.persistedTicket) setActiveTicketRecord(error.failure.persistedTicket);
-        if (error.failure.errorClass === "cancelled") return;
-        setErrorMessage(error.failure.safeMessage);
-      } else {
-        console.error("Ticket application service failed.", error);
-        setErrorMessage("Ticket processing could not be completed. Retry is safe.");
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setErrorMessage("Ticket processing was cancelled.");
+        return;
       }
+      console.error("Ticket processing failed.", error);
+      setErrorMessage(error instanceof Error ? error.message : "Ticket processing could not be completed. Retry is safe.");
     } finally {
       if (ticketRequestIsCurrent(requestGeneration)) setIsProcessing(false);
       if (ticketAbortController.current === abortController) ticketAbortController.current = null;
@@ -3878,6 +3983,7 @@ export default function Home() {
   }
 
   return (
+    <AuthorizationProvider organizationId={organizationProfile.id}>
     <div className={`flex h-screen flex-col overflow-hidden md:flex-row ${darkMode ? "bg-[#0b1220]" : "bg-[#F3F6FA]"}`}>
       {/* Sidebar */}
       <Sidebar
@@ -3928,7 +4034,6 @@ export default function Home() {
         )}
 
         {/* View content */}
-        <AuthorizationProvider organizationId={organizationProfile.id}>
         <main className={`flex-1 overflow-y-auto ${darkMode ? "bg-[#0b1220]" : "bg-[#F3F6FA]"}`}>
           {activeView === "home" && (
             <HomeView
@@ -4055,6 +4160,10 @@ export default function Home() {
             <OperationsView organizationId={organizationProfile.id} darkMode={darkMode} accentColor={accent} />
           )}
 
+          {activeView === "developer" && (
+            <DeveloperDiagnosticsView darkMode={darkMode} accentColor={accent} />
+          )}
+
           {activeView === "organization" && (
             <OrganizationView
               profile={organizationProfile}
@@ -4149,9 +4258,9 @@ export default function Home() {
             </div>
           )}
         </main>
-        </AuthorizationProvider>
       </div>
     </div>
+    </AuthorizationProvider>
   );
 }
 

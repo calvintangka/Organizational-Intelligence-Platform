@@ -98,7 +98,17 @@ export class AuthorizationService {
 
   async requireCapability(request: AuthorizationRequest): Promise<AuthorizationResult> {
     const result = await this.authorize(request);
-    if (!result.allowed) throw new AuthorizationServiceError(result.reason === "organization_membership_required" ? "You do not have access to this organization." : `The ${request.capability} capability is required.`);
+    if (!result.allowed) {
+      const reason = result.reason === "organization_membership_required"
+        ? "organization_membership_required"
+        : "capability_not_granted";
+      throw new AuthorizationServiceError(
+        reason === "organization_membership_required"
+          ? "You do not have access to this organization."
+          : `The ${request.capability} capability is required.`,
+        reason
+      );
+    }
     return result;
   }
 
@@ -117,7 +127,10 @@ export class AuthorizationService {
 
 export class AuthorizationServiceError extends Error {
   readonly status = 403 as const;
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly reason: "organization_membership_required" | "capability_not_granted"
+  ) {
     super(message);
     this.name = "AuthorizationServiceError";
   }

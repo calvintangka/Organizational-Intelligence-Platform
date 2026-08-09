@@ -3,11 +3,16 @@ import { withOrganizationRoute } from "@/lib/server/organizationRoute";
 import { requireCapability } from "@/lib/server/authorization";
 import { connectorErrorResponse } from "@/lib/server/connectors/http";
 import { rotateConnectorSecret, setConnectorStatus, testConnectorInstallation } from "@/lib/server/connectors/connectorService";
+import { enforceOrgUserLimits, rateLimitResponse } from "@/lib/server/rateLimit";
 
 export const dynamic = "force-dynamic";
 
 export const POST = withOrganizationRoute<{ organizationId: string; installationId: string; action: string }>(async ({ request, organizationId, params, user }) => {
   try {
+    const limit = await enforceOrgUserLimits(request, { route: `/api/organizations/[organizationId]/connectors/[installationId]/[action]`, organizationId, actorUserId: user.id }, [
+      { policy: "connector.mutate.organization", dimensions: [{ type: "organization", value: organizationId }] }
+    ]);
+    if (!limit.allowed) return rateLimitResponse(limit);
     const capability = params.action === "test" ? "connector.inspect"
       : params.action === "activate" ? "connector.activate"
       : params.action === "rotate-secret" ? "connector.rotate_credentials"
