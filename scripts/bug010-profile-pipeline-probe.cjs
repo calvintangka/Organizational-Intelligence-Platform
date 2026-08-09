@@ -133,11 +133,15 @@ const originalWindow = global.window;
 const originalFetch = global.fetch;
 global.window = {};
 const aiConfig = {
-  mode: "lmstudio",
-  baseUrl: "http://probe.invalid/v1",
+  mode: "deepseek",
+  baseUrl: "https://probe.invalid/v1",
   model: "probe-model",
   timeoutMs: 5000,
-  proxyPath: "/api/ai/chat"
+  proxyPath: "/api/ai/deepseek",
+  apiKey: "probe-key",
+  lmStudioBaseUrl: "http://probe.invalid/v1",
+  lmStudioModel: "probe-lm-model",
+  lmStudioTimeoutMs: 5000
 };
 const patternInput = {
   ticket: probeTicket,
@@ -160,26 +164,27 @@ async function providerScenario(outcomes) {
     calls.push(endpoint);
     const outcome = outcomes[calls.length - 1];
     return outcome
-      ? jsonResponse({ choices: [{ message: { content: '{"title":"Probe pattern","confidence":90}' } }] })
+      ? jsonResponse({ choices: [{ message: { content: '{"title":"Probe pattern","confidence":90,"rationale":"probe"}' } }] })
       : jsonResponse({ error: "provider unavailable" }, 503);
   };
   const result = await createAIAdapter(aiConfig).provider.suggestPatternName(patternInput);
   return { result, calls };
 }
 
-const lmSuccess = await providerScenario([true]);
-assert.equal(lmSuccess.result.ok, true);
-assert.deepEqual(lmSuccess.calls, ["/api/ai/chat"]);
+const deepSeekSuccess = await providerScenario([true]);
+assert.equal(deepSeekSuccess.result.ok, true);
+assert.equal(deepSeekSuccess.result.providerMode, "deepseek");
+assert.deepEqual(deepSeekSuccess.calls, ["/api/ai/deepseek"]);
 
-const claudeFallback = await providerScenario([false, true]);
-assert.equal(claudeFallback.result.ok, true);
-assert.equal(claudeFallback.result.providerMode, "claude");
-assert.equal(claudeFallback.result.providerLabel, "Claude API");
-assert.deepEqual(claudeFallback.calls, ["/api/ai/chat", "/api/ai/claude"]);
+const lmStudioFallback = await providerScenario([false, true]);
+assert.equal(lmStudioFallback.result.ok, true);
+assert.equal(lmStudioFallback.result.providerMode, "lmstudio");
+assert.equal(lmStudioFallback.result.providerLabel, "LM Studio");
+assert.deepEqual(lmStudioFallback.calls, ["/api/ai/deepseek", "/api/ai/chat"]);
 
 const bothFail = await providerScenario([false, false]);
 assert.equal(bothFail.result.ok, false);
-assert.deepEqual(bothFail.calls, ["/api/ai/chat", "/api/ai/claude"]);
+assert.deepEqual(bothFail.calls, ["/api/ai/deepseek", "/api/ai/chat"]);
 
 global.window = originalWindow;
 global.fetch = originalFetch;
