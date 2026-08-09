@@ -1,4 +1,4 @@
-/* TODO-038 focused LM Studio -> Claude API -> deterministic fail-safe probe. */
+/* TODO-038 focused release-provider chain and isolated Claude contract probe. */
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -10,10 +10,12 @@ const { createAIAdapter } = require(path.join(root, "lib", "ai", "adapter.ts"));
 const claudeRoute = require(path.join(root, "app", "api", "ai", "claude", "route.ts"));
 const { installAIRouteAuthStub } = require("./lib/ai-route-auth.cjs");
 
-const CLAUDE_PATH = "/api/ai/claude";
+const DEEPSEEK_PATH = "/api/ai/deepseek";
 const LM_STUDIO_PATH = "/api/ai/chat";
 const FAKE_KEY = "todo038-probe-key-never-log";
-const MODEL = "claude-haiku-4-5-20251001";
+const MODEL = "todo038-deepseek-model";
+const LM_MODEL = "todo038-lm-model";
+const CLAUDE_MODEL = "claude-haiku-4-5-20251001";
 
 function check(label, condition) {
   console.log(`${condition ? "PASS" : "FAIL"} ${label}`);
@@ -36,11 +38,15 @@ function completion(content, headers = {}) {
 }
 
 const config = {
-  mode: "lmstudio",
-  baseUrl: "http://todo038.invalid/v1",
-  model: "todo038-lm-model",
+  mode: "deepseek",
+  baseUrl: "https://todo038.invalid/v1",
+  model: MODEL,
   timeoutMs: 5000,
-  proxyPath: LM_STUDIO_PATH
+  proxyPath: DEEPSEEK_PATH,
+  apiKey: FAKE_KEY,
+  lmStudioBaseUrl: "http://todo038.invalid/v1",
+  lmStudioModel: LM_MODEL,
+  lmStudioTimeoutMs: 5000
 };
 const patternInput = {
   ticket: {
@@ -86,20 +92,9 @@ async function adapterScenario(outcomes) {
     calls.push(String(endpoint));
     const outcome = outcomes[calls.length - 1];
     if (outcome === "success") {
-      const isClaude = endpoint === CLAUDE_PATH;
       return completion(
         '{"title":"Webhook signature rotation","confidence":92,"rationale":"Matches the deterministic pattern."}',
-        isClaude
-          ? {
-              "x-ai-mode": "claude",
-              "x-ai-provider": "Claude API",
-              "x-ai-model": MODEL,
-              "x-ai-proxy-path": CLAUDE_PATH,
-              "x-ai-server-base-url": "https://api.anthropic.com",
-              "x-ai-endpoint-used": "https://api.anthropic.com/v1/messages",
-              "x-ai-proxy-succeeded": "true"
-            }
-          : {}
+        {}
       );
     }
     if (outcome === "malformed") return completion("not-json");
@@ -124,29 +119,29 @@ async function main() {
   console.warn = (...values) => capturedLogs.push(values);
 
   try {
-    const lmSuccess = await adapterScenario(["success"]);
-    check("CASE A LM Studio success skips Claude", lmSuccess.result.ok
-      && lmSuccess.result.providerLabel === "LM Studio"
-      && lmSuccess.calls.join("|") === LM_STUDIO_PATH);
-    check("CASE A diagnostics mark Claude skipped", lmSuccess.result.diagnostics?.attempts?.[1]?.status === "skipped");
+    const deepSeekSuccess = await adapterScenario(["success"]);
+    check("CASE A DeepSeek success skips LM Studio", deepSeekSuccess.result.ok
+      && deepSeekSuccess.result.providerLabel === "DeepSeek API"
+      && deepSeekSuccess.calls.join("|") === DEEPSEEK_PATH);
+    check("CASE A diagnostics mark LM Studio skipped", deepSeekSuccess.result.diagnostics?.attempts?.[1]?.status === "skipped");
 
-    const claudeSuccess = await adapterScenario(["fail", "success"]);
-    check("CASE B LM Studio failure invokes Claude only", claudeSuccess.calls.join("|") === `${LM_STUDIO_PATH}|${CLAUDE_PATH}`);
-    check("CASE B Claude result identity is accurate", claudeSuccess.result.ok
-      && claudeSuccess.result.providerMode === "claude"
-      && claudeSuccess.result.providerLabel === "Claude API"
-      && claudeSuccess.result.model === MODEL
-      && claudeSuccess.result.diagnostics?.provider === "Claude API");
+    const lmStudioSuccess = await adapterScenario(["fail", "success"]);
+    check("CASE B DeepSeek failure invokes LM Studio only", lmStudioSuccess.calls.join("|") === `${DEEPSEEK_PATH}|${LM_STUDIO_PATH}`);
+    check("CASE B LM Studio result identity is accurate", lmStudioSuccess.result.ok
+      && lmStudioSuccess.result.providerMode === "lmstudio"
+      && lmStudioSuccess.result.providerLabel === "LM Studio"
+      && lmStudioSuccess.result.model === LM_MODEL
+      && lmStudioSuccess.result.diagnostics?.provider === "LM Studio");
 
     const totalFailure = await adapterScenario(["fail", "fail", "fail"]);
     check("CASE C both provider failures return safe failure", !totalFailure.result.ok
       && totalFailure.result.data === undefined
-      && totalFailure.calls.join("|") === `${LM_STUDIO_PATH}|${CLAUDE_PATH}|${CLAUDE_PATH}`);
+      && totalFailure.calls.join("|") === `${DEEPSEEK_PATH}|${LM_STUDIO_PATH}`);
     check("CASE C diagnostics preserve both failed attempts", totalFailure.result.diagnostics?.attempts?.length === 2
       && totalFailure.result.diagnostics.attempts.every((attempt) => attempt.status === "failed"));
 
     const malformed = await adapterScenario(["fail", "malformed", "malformed"]);
-    check("CASE D malformed Claude output fails safely", !malformed.result.ok
+    check("CASE D malformed LM Studio output fails safely", !malformed.result.ok
       && malformed.result.data === undefined
       && malformed.result.error?.includes("valid JSON"));
 
@@ -160,14 +155,14 @@ async function main() {
     check("Claude proxy fails closed before network access when key is absent", missingKey.status === 503);
 
     process.env.ANTHROPIC_API_KEY = FAKE_KEY;
-    process.env.CLAUDE_MODEL = MODEL;
+    process.env.CLAUDE_MODEL = CLAUDE_MODEL;
     let upstreamRequest;
     global.fetch = async (endpoint, init) => {
       upstreamRequest = { endpoint: String(endpoint), init };
       return response({
         content: [{ type: "text", text: '{"title":"Claude proxy success","confidence":91}' }],
         stop_reason: "end_turn",
-        model: MODEL,
+        model: CLAUDE_MODEL,
         usage: { input_tokens: 12, output_tokens: 8 }
       });
     };
@@ -189,7 +184,7 @@ async function main() {
     check("Claude proxy calls the Anthropic Messages endpoint", upstreamRequest.endpoint === "https://api.anthropic.com/v1/messages");
     check("Claude key is injected server-side with required API version", upstreamHeaders.get("x-api-key") === FAKE_KEY
       && upstreamHeaders.get("anthropic-version") === "2023-06-01");
-    check("Claude proxy controls model and separates system prompt", upstreamBody.model === MODEL
+    check("Claude proxy controls model and separates system prompt", upstreamBody.model === CLAUDE_MODEL
       && upstreamBody.system === "Return JSON."
       && upstreamBody.messages.length === 1
       && upstreamBody.messages[0].role === "user");
@@ -217,14 +212,14 @@ async function main() {
     const routeSource = fs.readFileSync(path.join(root, "app", "api", "ai", "claude", "route.ts"), "utf8");
     check("NVIDIA and Nemotron are absent from the active provider surface", !/nvidia|nemotron/i.test(activeSources)
       && !fs.existsSync(path.join(root, "app", "api", "ai", "nvidia", "route.ts")));
-    check("Anthropic key is server-only", routeSource.includes("process.env.ANTHROPIC_API_KEY")
-      && environmentExample.includes("ANTHROPIC_API_KEY=")
+    check("Claude key is isolated and not required by the release config", routeSource.includes("process.env.ANTHROPIC_API_KEY")
+      && !environmentExample.includes("ANTHROPIC_API_KEY=")
       && !clientSources.includes("ANTHROPIC_API_KEY")
       && !routeSource.includes("NEXT_PUBLIC_ANTHROPIC"));
     check("Claude proxy logs never include the API key", !capturedLogs.flat(Infinity).map(String).join(" ").includes(FAKE_KEY));
     check("Local secret files are not tracked", !childProcess.execFileSync("git", ["ls-files", ".env", ".env.local"], { cwd: root, encoding: "utf8" }).trim());
 
-    originalInfo("TODO-038 Claude failover probe passed.");
+    originalInfo("TODO-038 provider-chain and isolated Claude contract probe passed.");
   } finally {
     if (typeof restoreAIRouteAuthStub === "function") restoreAIRouteAuthStub();
     global.fetch = originalFetch;
