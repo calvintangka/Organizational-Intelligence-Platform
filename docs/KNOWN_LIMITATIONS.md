@@ -4,9 +4,8 @@ This document lists genuine limitations remaining for the planned `v0.1.0-certif
 
 ## Release process
 
-- The official certified release commit and `v0.1.0-certified` Git tag have not yet been created.
-- Release-mode certification still requires a clean reviewed checkout.
-- TODO-081B full release certification and explicit release approval remain pending.
+- The official certified release commit is `f08692fbeb623bd50faf0cc8f1a9dd1fe48607ba`; the annotated `v0.1.0-certified` tag is published on the configured remote. A GitHub Release page is optional and was not created in RSS-1.4.
+- RSS-1.3 release-mode certification passed on the certified source. Future release candidates still require a clean reviewed checkout and explicit approval.
 
 ## Live validation
 

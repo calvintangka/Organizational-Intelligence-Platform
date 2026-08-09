@@ -3,16 +3,16 @@
 ## Release status
 
 - Version: `v0.1.0-certified`
-- Release date: **TBD — pending TODO-081B full release certification**
+- Release date: **TBD — publication date is managed separately from the certified tag**
 - Intended scope: controlled enterprise pilots and design partners
-- Current certification evidence: OIP Benchmark v1 100% overall, 100% critical security, zero benchmark memory mutations
-- Official Git release tag: **not created yet**
+- Current certification evidence: RSS-1.3 release-mode certification passed on source `f08692fbeb623bd50faf0cc8f1a9dd1fe48607ba`; OIP Benchmark v1 100% overall, 100% critical security, zero benchmark memory mutations
+- Official Git release tag: **`v0.1.0-certified` annotated tag published to the `calvintangka` remote**
 
 ## Summary
 
 This release package represents the completed Enterprise Foundation architecture for the Organizational Intelligence Platform (OIP). It consolidates durable organizational memory, governed learning, asynchronous processing, connector boundaries, organization-scoped authorization, and deterministic certification evidence.
 
-The package is prepared for final clean-checkout certification. It is not a claim that the official release tag already exists.
+The package is the certified baseline recorded by RSS-1.3 and published as `v0.1.0-certified`. A GitHub Release page is optional and is not claimed by this tag-only publication.
 
 ## Major milestones
 

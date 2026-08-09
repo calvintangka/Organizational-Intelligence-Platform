@@ -14,6 +14,7 @@ Every significant implementation should append a new dated entry.
 
 - Completed RSS-1.2 live acceptance with all required behavioral, security, persistence, integrity, and benchmark gates verified.
 - Prepared the v0.1.0-certified release-candidate source with TODO-079 at 580/600, OIP Benchmark v1 at 1000/1000, and critical security at 100%.
+- Created and published the annotated `v0.1.0-certified` tag from certified source `f08692fbeb623bd50faf0cc8f1a9dd1fe48607ba` on the `calvintangka` remote.
 
 - Simplified the active AI provider chain to DeepSeek → LM Studio → deterministic fallback; Claude remains outside the current release runtime.
 
