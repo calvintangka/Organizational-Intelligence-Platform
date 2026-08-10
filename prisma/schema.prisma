@@ -122,6 +122,7 @@ model User {
   roleAssignments OrganizationRoleAssignment[] @relation("RoleAssignmentUser")
   assignedRoleAssignments OrganizationRoleAssignment[] @relation("RoleAssignmentActor")
   authorizationAudits AuthorizationDecisionAudit[] @relation("AuthorizationAuditActor")
+  organizationCreationRequests OrganizationCreationRequest[] @relation("OrganizationCreationRequestCreator")
   activeOrganization Organization? @relation("UserActiveOrganization", fields: [activeOrganizationId], references: [id], onDelete: SetNull)
 
   @@index([activeOrganizationId])
@@ -178,6 +179,7 @@ model Organization {
   memberships               OrganizationMembership[]
   roleAssignments           OrganizationRoleAssignment[]
   authorizationAudits       AuthorizationDecisionAudit[]
+  creationRequest           OrganizationCreationRequest?
   activeUsers               User[]                   @relation("UserActiveOrganization")
 
   @@map("organizations")
@@ -278,6 +280,27 @@ model AuthorizationDecisionAudit {
   @@index([organizationId, capabilityKey, decision, createdAt])
   @@index([actorUserId, createdAt])
   @@map("authorization_decision_audits")
+}
+
+/**
+ * RSS-2.2: records a completed server-owned tenant provisioning request.
+ * The per-creator idempotency key makes a lost response or duplicate submit
+ * return the original tenant rather than provision a second one.
+ */
+model OrganizationCreationRequest {
+  id             String   @id @default(cuid())
+  userId         String
+  organizationId String   @unique
+  idempotencyKey String
+  requestDigest  String
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  user         User         @relation("OrganizationCreationRequestCreator", fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, idempotencyKey])
+  @@index([organizationId])
+  @@map("organization_creation_requests")
 }
 
 model KnowledgeItem {

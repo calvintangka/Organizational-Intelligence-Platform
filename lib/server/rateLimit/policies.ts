@@ -14,6 +14,8 @@ import "server-only";
 export type RateLimitPolicyKey =
   | "auth.login.ip"
   | "auth.login.account"
+  | "auth.signup.ip"
+  | "auth.signup.account"
   | "ai.invoke.burst"
   | "ai.invoke.user"
   | "ai.invoke.organization"
@@ -58,6 +60,8 @@ export type RateLimitMode = "enforce" | "observe" | "off";
 const DEFAULTS: Record<RateLimitPolicyKey, Omit<RateLimitPolicy, "key">> = {
   "auth.login.ip": { windowMs: 15 * 60 * 1000, max: 30, cost: 1, failureMode: "emergency_ceiling", emergencyCeiling: 10 },
   "auth.login.account": { windowMs: 15 * 60 * 1000, max: 10, cost: 1, failureMode: "emergency_ceiling", emergencyCeiling: 5 },
+  "auth.signup.ip": { windowMs: 60 * 60 * 1000, max: 20, cost: 1, failureMode: "emergency_ceiling", emergencyCeiling: 5 },
+  "auth.signup.account": { windowMs: 60 * 60 * 1000, max: 5, cost: 1, failureMode: "emergency_ceiling", emergencyCeiling: 3 },
   "ai.invoke.burst": { windowMs: 60 * 1000, max: 10, cost: 1, failureMode: "emergency_ceiling", emergencyCeiling: 3 },
   "ai.invoke.user": { windowMs: 60 * 60 * 1000, max: 100, cost: 1, failureMode: "emergency_ceiling", emergencyCeiling: 5 },
   "ai.invoke.organization": { windowMs: 60 * 60 * 1000, max: 500, cost: 1, failureMode: "emergency_ceiling", emergencyCeiling: 10 },

@@ -39,7 +39,7 @@ import { AuthorizationError } from "@/lib/server/authorization";
 import { buildAuthoritativeClientTicketRecord, validateClientTicketRecord } from "@/lib/server/tickets/clientTicketWrite";
 import { dedupeLessonCollection, dedupeNewLessonProposals } from "@/lib/canonicalProblemEngine";
 import { withStableValidationProvenance } from "@/lib/knowledgeProvenance";
-import { startTelemetrySpan } from "@/lib/telemetry";
+import { recordTelemetryEvent, startTelemetrySpan } from "@/lib/telemetry";
 import type { ValidationCommitResult as AtomicValidationCommitResult } from "@/lib/persistence/adapter";
 
 export type PersistenceServiceErrorCode =
@@ -50,6 +50,7 @@ export type PersistenceServiceErrorCode =
   | "ORGANIZATION_NOT_FOUND"
   | "RESOURCE_NOT_FOUND"
   | "CONFLICT"
+  | "REVISION_CONFLICT"
   | "DATABASE_UNAVAILABLE"
   | "DATABASE_SCHEMA_MISSING"
   | "DATABASE_ERROR";
@@ -58,7 +59,13 @@ export class PersistenceServiceError extends Error {
   constructor(
     public readonly code: PersistenceServiceErrorCode,
     message: string,
-    public readonly status: number
+    public readonly status: number,
+    public readonly details?: {
+      resourceType: string;
+      resourceId: string;
+      expectedRevision: number | null;
+      currentRevision: number;
+    }
   ) {
     super(message);
     this.name = "PersistenceServiceError";
@@ -666,14 +673,19 @@ function mapTicketSequence(row: PrismaTicketSequence): { organizationId: string;
   };
 }
 
-export function toSafePersistenceError(error: unknown): { code: PersistenceServiceErrorCode; message: string; status: number } {
+export function toSafePersistenceError(error: unknown): {
+  code: PersistenceServiceErrorCode;
+  message: string;
+  status: number;
+  details?: PersistenceServiceError["details"];
+} {
   if (error instanceof AuthorizationError) {
     return { code: error.code, message: error.message, status: error.status };
   }
   const safe = error instanceof PersistenceServiceError
     ? error
     : classifyDatabaseError(error, "the requested resource");
-  return { code: safe.code, message: safe.message, status: safe.status };
+  return { code: safe.code, message: safe.message, status: safe.status, ...(safe.details ? { details: safe.details } : {}) };
 }
 
 /* ------------------------------------------------------------------ */
@@ -688,6 +700,33 @@ function invalidRequest(message: string): PersistenceServiceError {
 
 function conflict(message: string): PersistenceServiceError {
   return new PersistenceServiceError("CONFLICT", message, 409);
+}
+
+function revisionConflict(
+  organizationId: string,
+  resourceType: string,
+  resourceId: string,
+  expectedRevision: number,
+  currentRevision: number
+): PersistenceServiceError {
+  // Metadata-only process-local telemetry. The payload/body is intentionally
+  // excluded; the durable write remains untouched and the client must reload.
+  recordTelemetryEvent({
+    name: "revision_conflict",
+    category: "database",
+    durationMs: 0,
+    startedAt: Date.now(),
+    endedAt: Date.now(),
+    success: false,
+    unit: "operations",
+    tags: { organizationId, resourceType, resourceId, expectedRevision, currentRevision, outcome: "rejected" }
+  });
+  return new PersistenceServiceError(
+    "REVISION_CONFLICT",
+    `${resourceType} ${resourceId} was changed by another update. Reload the latest version before saving again.`,
+    409,
+    { resourceType, resourceId, expectedRevision, currentRevision }
+  );
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -916,7 +955,7 @@ async function upsertKnowledgeItemTx(
   if (!existing || existing.organizationId !== organizationId) {
     throw new PersistenceServiceError("RESOURCE_NOT_FOUND", `Knowledge item ${id} was not found in this organization.`, 404);
   }
-  throw conflict(`Knowledge item ${id} was changed by another update (stored revision ${existing.revision}, expected ${expectedRevision}). Reload and retry.`);
+  throw revisionConflict(organizationId, "knowledge", id, expectedRevision, existing.revision);
 }
 
 async function upsertCandidateTx(
@@ -1653,10 +1692,15 @@ export async function commitValidation(
         )
       ];
       const sourceTickets = sourceTicketIds.length > 0
-        ? await tx.ticketRecord.findMany({ where: { ticketId: { in: sourceTicketIds } }, select: { organizationId: true } })
+        ? await tx.ticketRecord.findMany({
+            // Ticket numbers are human-facing and may repeat across tenants;
+            // source resolution must stay inside the commit's organization.
+            where: { organizationId: organization.id, ticketId: { in: sourceTicketIds } },
+            select: { organizationId: true, ticketId: true }
+          })
         : [];
-      if (sourceTickets.some((ticket) => ticket.organizationId !== organization.id)) {
-        throw conflict("A validation candidate references a source ticket from another organization.");
+      if (sourceTickets.length !== sourceTicketIds.length) {
+        throw conflict("A validation candidate references a missing source ticket in this organization.");
       }
 
       await upsertCandidateTx(tx, organization.id, { ...payload.candidate, status: "validated" }, { authoritativeLifecycle: true });

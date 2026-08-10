@@ -10,7 +10,7 @@ import { BulkUploadWorkspace } from "@/components/views/BulkUploadWorkspace";
 import { KnowledgeView } from "@/components/views/KnowledgeView";
 import { DashboardView } from "@/components/views/DashboardView";
 import { OperationsView } from "@/components/views/OperationsView";
-import { OrganizationView } from "@/components/views/OrganizationView";
+import { OrganizationView, type NewOrganizationInput } from "@/components/views/OrganizationView";
 import { AccentPicker } from "@/components/AccentPicker";
 import { AccountWorkspaceMenu } from "@/components/AccountWorkspaceMenu";
 import { defaultOrganizationProfile, seedOrganizationProfiles } from "@/data/seedOrganizationProfiles";
@@ -436,6 +436,8 @@ function resolveTicketLanguage(ticket: Ticket, profile: OrganizationProfile) {
 }
 
 function LoginScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUser) => void }) {
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -446,14 +448,14 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUser) =>
     setError("");
     setIsSubmitting(true);
     try {
-      const response = await fetch("/api/auth/login", {
+      const response = await fetch(mode === "signup" ? "/api/auth/signup" : "/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify(mode === "signup" ? { name, email, password } : { email, password })
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload?.data) {
-        setError(payload?.error?.message ?? "Unable to sign in.");
+        setError(payload?.error?.message ?? (mode === "signup" ? "Unable to create your account." : "Unable to sign in."));
         return;
       }
       onAuthenticated(payload.data);
@@ -468,15 +470,73 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUser) =>
     <main className="flex min-h-screen items-center justify-center bg-[#F3F6FA] px-4">
       <form onSubmit={submit} className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#2563EB]">Powered by OIP</p>
-        <h1 className="mt-3 text-3xl font-bold text-[#111827]">Sign in to OIP</h1>
-        <p className="mt-2 text-sm text-slate-500">Use your authenticated OIP account to continue.</p>
-        <label className="mt-8 block text-sm font-semibold text-slate-700" htmlFor="auth-email">Email</label>
+        <h1 className="mt-3 text-3xl font-bold text-[#111827]">{mode === "signup" ? "Create your OIP account" : "Sign in to OIP"}</h1>
+        <p className="mt-2 text-sm text-slate-500">{mode === "signup" ? "Start with an account, then create your first organization." : "Use your authenticated OIP account to continue."}</p>
+        {mode === "signup" && <>
+          <label className="mt-8 block text-sm font-semibold text-slate-700" htmlFor="auth-name">Name</label>
+          <input id="auth-name" name="name" autoComplete="name" required value={name} onChange={(event) => setName(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-[#2563EB]" />
+        </>}
+        <label className={`${mode === "signup" ? "mt-5" : "mt-8"} block text-sm font-semibold text-slate-700`} htmlFor="auth-email">Email</label>
         <input id="auth-email" name="email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-[#2563EB]" />
         <label className="mt-5 block text-sm font-semibold text-slate-700" htmlFor="auth-password">Password</label>
-        <input id="auth-password" name="password" type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-[#2563EB]" />
+        <input id="auth-password" name="password" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} minLength={mode === "signup" ? 8 : undefined} required value={password} onChange={(event) => setPassword(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-[#2563EB]" />
         {error && <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
         <button type="submit" disabled={isSubmitting} className="mt-6 w-full rounded-xl bg-[#2563EB] px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
-          {isSubmitting ? "Signing in…" : "Sign in"}
+          {isSubmitting ? (mode === "signup" ? "Creating account…" : "Signing in…") : (mode === "signup" ? "Create account" : "Sign in")}
+        </button>
+        <p className="mt-5 text-center text-sm text-slate-600">
+          {mode === "signup" ? "Already have an account?" : "Don’t have an account?"}{" "}
+          <button type="button" className="font-semibold text-[#2563EB]" onClick={() => { setMode(mode === "signup" ? "login" : "signup"); setError(""); }}>
+            {mode === "signup" ? "Sign in" : "Create account"}
+          </button>
+        </p>
+      </form>
+    </main>
+  );
+}
+
+function FirstOrganizationOnboarding({ onCreate }: { onCreate: (input: NewOrganizationInput, idempotencyKey: string) => Promise<void> }) {
+  const [name, setName] = useState("");
+  const [industry, setIndustry] = useState("General");
+  const [description, setDescription] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const key = useRef<string | null>(null);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (name.trim().length < 2) {
+      setError("Enter an organization name with at least 2 characters.");
+      return;
+    }
+    setError("");
+    setSubmitting(true);
+    const idempotencyKey = key.current ?? `first-org-${crypto.randomUUID()}`;
+    key.current = idempotencyKey;
+    try {
+      await onCreate({ name, industry, description, initials: "", accentColor: "#7C3AED", tone: "professional" }, idempotencyKey);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Organization creation failed. Please retry.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#F3F6FA] px-4">
+      <form onSubmit={submit} aria-busy={submitting} className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#2563EB]">Welcome to OIP</p>
+        <h1 className="mt-3 text-3xl font-bold text-[#111827]">Create your organization</h1>
+        <p className="mt-2 text-sm text-slate-500">Your first workspace starts empty and you will be its Owner.</p>
+        <label className="mt-8 block text-sm font-semibold text-slate-700" htmlFor="first-org-name">Organization name</label>
+        <input id="first-org-name" required minLength={2} value={name} onChange={(event) => { setName(event.target.value); setError(""); }} className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-[#2563EB]" placeholder="e.g. Nimbus Cloud" />
+        <label className="mt-5 block text-sm font-semibold text-slate-700" htmlFor="first-org-industry">Industry</label>
+        <input id="first-org-industry" required value={industry} onChange={(event) => { setIndustry(event.target.value); setError(""); }} className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-[#2563EB]" />
+        <label className="mt-5 block text-sm font-semibold text-slate-700" htmlFor="first-org-description">Description <span className="font-normal text-slate-400">(optional)</span></label>
+        <textarea id="first-org-description" value={description} onChange={(event) => setDescription(event.target.value)} className="mt-2 min-h-24 w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-[#2563EB]" />
+        {error && <p role="alert" aria-live="polite" className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+        <button type="submit" disabled={submitting || name.trim().length < 2} className="mt-6 w-full rounded-xl bg-[#2563EB] px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
+          {submitting ? "Creating organization…" : "Create organization"}
         </button>
       </form>
     </main>
@@ -501,6 +561,9 @@ export default function Home() {
   const [organizationProfile, setOrganizationProfile] = useState<OrganizationProfile>(defaultOrganizationProfile);
   const [organizationList, setOrganizationList] = useState<OrganizationProfile[]>(seedOrganizationProfiles);
   const [authorizedOrganizations, setAuthorizedOrganizations] = useState<OrganizationProfile[]>([]);
+  const [organizationBootstrapState, setOrganizationBootstrapState] = useState<"loading" | "onboarding" | "ready" | "error">("loading");
+  const [organizationSwitching, setOrganizationSwitching] = useState(false);
+  const [openCreateOrganization, setOpenCreateOrganization] = useState(false);
   const [metrics, setMetrics] = useState<Metrics>(createInitialMetrics);
   const [orgMetrics, setOrgMetrics] = useState<OrgMetrics>(() => persistence.seedOrgMetrics(defaultOrganizationProfile.id));
   const [hydrated, setHydrated] = useState(false);
@@ -508,6 +571,7 @@ export default function Home() {
   const [migrationWarning, setMigrationWarning] = useState("");
   // BUG-009: non-blocking notice shown after stale-profile conflict recovery.
   const [profileConflictNotice, setProfileConflictNotice] = useState("");
+  const [revisionConflictNotice, setRevisionConflictNotice] = useState("");
 
   async function openPersistenceSession(organizationId: string, operation: string, requestId?: string): Promise<OrganizationPersistenceSession> {
     const id = requestId ?? `${operation}:${organizationId}:${Date.now()}`;
@@ -551,6 +615,10 @@ export default function Home() {
 
   // Ticket records (first-class persisted case records)
   const ticketSaveChains = useRef<Record<string, Promise<void>>>({});
+  // Profile edits have their own resource-specific write chain. This lets a
+  // switch drain an actual pending profile edit without treating navigation as
+  // a reason to re-save an unchanged whole organization snapshot.
+  const profileSaveChains = useRef<Record<string, Promise<void>>>({});
   const bulkTicketRecords = useRef<Record<string, TicketRecord>>({});
   const [activeTicketRecord, setActiveTicketRecord] = useState<TicketRecord | null>(null);
 
@@ -582,12 +650,22 @@ export default function Home() {
   // latest optimistic-concurrency precondition.
   const profileRevisionByOrganization = useRef<Record<string, string>>({});
   const profileSettingsRevisionByOrganization = useRef<Record<string, number>>({});
-  // BUG-009: distinguishes a server-loaded profile replacement (hydration,
-  // organization switch, or stale-conflict recovery) from a genuine user edit.
-  // The profile autosave effect consumes this flag to skip the echo write that
-  // would otherwise churn _profileRevision and make other open browsers stale.
-  const suppressNextProfileSave = useRef(false);
+  // Server hydration and organization switching replace complete authoritative
+  // collections. Those replacements are reads, not resource mutations, so the
+  // following effects must not echo the loaded snapshots back to persistence.
+  const suppressedHydrationPersistence = useRef(new Set<string>());
 
+  function suppressHydratedCollectionPersistence(): void {
+    for (const resource of ["knowledge", "candidates", "metrics", "log", "patterns"]) {
+      suppressedHydrationPersistence.current.add(resource);
+    }
+  }
+
+  function shouldPersistHydratedCollection(resource: string): boolean {
+    if (!hydrated) return false;
+    if (suppressedHydrationPersistence.current.delete(resource)) return false;
+    return true;
+  }
   function cancelActiveTicketRequest() {
     ticketRequestGuard.current.cancel();
     ticketAbortController.current?.abort();
@@ -696,14 +774,20 @@ export default function Home() {
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
     setAuthUser(null);
+    setAuthorizedOrganizations([]);
+    setOrganizationBootstrapState("loading");
     setAuthStatus("unauthenticated");
   }
 
   /* ---------- Persistence: load on mount, save on change ---------- */
 
   useEffect(() => {
-    if (authStatus !== "authenticated") return;
+    if (authStatus !== "authenticated") {
+      setOrganizationBootstrapState("loading");
+      return;
+    }
     let cancelled = false;
+    setOrganizationBootstrapState("loading");
 
     void (async () => {
       try {
@@ -714,6 +798,14 @@ export default function Home() {
         }
         const authorizedProfiles = organizationsPayload.data;
         if (!cancelled) setAuthorizedOrganizations(authorizedProfiles);
+        if (authorizedProfiles.length === 0) {
+          if (!cancelled) {
+            setOrganizationList([]);
+            setHydrated(false);
+            setOrganizationBootstrapState("onboarding");
+          }
+          return;
+        }
         // The authenticated active-organization context is authoritative on
         // refresh. Do not let a preserved shell/localStorage selection choose
         // an organization outside the user's current membership set.
@@ -776,14 +868,11 @@ export default function Home() {
             ...activeOrganizationContext
           } as OrganizationProfile);
 
-        // BUG-009: this is a server-authoritative load, not a user edit. Suppress
-        // the autosave it would otherwise trigger so hydration never PUTs the
-        // profile back and bumps the revision for other open browsers.
-        suppressNextProfileSave.current = true;
         setOrganizationProfile(loadedProfile);
         profileRevisionByOrganization.current[orgId] = loadedProfile.updatedAt;
         profileSettingsRevisionByOrganization.current[orgId] = loadedProfile.profileRevision ?? 0;
         setOrganizationList(syncProfileIntoList(loadedOrganizationList, loadedProfile));
+        suppressHydratedCollectionPersistence();
         setKnowledgeItems(loadedKnowledge);
         setKnowledgeCandidates(loadedCandidates);
         clearKnowledgeHistoryCache();
@@ -797,10 +886,12 @@ export default function Home() {
         setEmergingPatterns(loadedPatterns);
         setDarkMode(window.localStorage.getItem("maesa-theme") === "dark");
         setHydrated(true);
+        setOrganizationBootstrapState("ready");
       } catch (error) {
         if (cancelled) return;
         console.error("Failed to hydrate persistence state.", error);
         setErrorMessage("Failed to load persisted organization data. Hydration was left incomplete to avoid overwriting existing browser storage.");
+        setOrganizationBootstrapState("error");
       }
     })();
 
@@ -811,6 +902,11 @@ export default function Home() {
 
   function reportPersistenceError(scope: string, error: unknown) {
     console.error(`Persistence ${scope} failed.`, error);
+    if (error instanceof ServerPersistenceAdapterError && error.code === "REVISION_CONFLICT") {
+      setRevisionConflictNotice("This item was updated elsewhere. Reload the latest version before saving again.");
+      setErrorMessage("Your change was not saved because the item changed elsewhere.");
+      return;
+    }
     const detail = error instanceof Error ? error.message : "The browser could not persist the latest change.";
     setErrorMessage(`Persistence failed for ${scope}: ${detail}`);
     setMigrationWarning((current) => current ? `${current} Persistence failed for ${scope}: ${detail}` : `Persistence failed for ${scope}: ${detail}`);
@@ -888,7 +984,7 @@ export default function Home() {
   }
 
   async function flushTicketSaves(organizationId: string): Promise<void> {
-    await ticketSaveChains.current[organizationId]?.catch(() => undefined);
+    await ticketSaveChains.current[organizationId];
   }
 
   const loadCasePage = useCallback(
@@ -922,9 +1018,6 @@ export default function Home() {
       // late recovery for Organization A from overwriting Organization B.
       if (generation !== organizationSwitchGeneration.current) return;
       if (latest.id !== savingOrgId) return;
-      // The replacement is a server-authoritative load, not a user edit; suppress
-      // the autosave it would otherwise trigger.
-      suppressNextProfileSave.current = true;
       setOrganizationProfile(latest);
       profileRevisionByOrganization.current[latest.id] = latest.updatedAt;
       profileSettingsRevisionByOrganization.current[latest.id] = latest.profileRevision ?? 0;
@@ -935,6 +1028,44 @@ export default function Home() {
       if (generation !== organizationSwitchGeneration.current) return;
       reportPersistenceError("saveOrganizationProfile", recoveryError);
     }
+  }
+
+  function persistOrganizationProfile(profile: OrganizationProfile): Promise<void> {
+    const snapshot = {
+      ...profile,
+      updatedAt: profileRevisionByOrganization.current[profile.id] ?? profile.updatedAt,
+      profileRevision: profileSettingsRevisionByOrganization.current[profile.id] ?? profile.profileRevision ?? 0
+    };
+    const savingOrgId = snapshot.id;
+    const generation = organizationSwitchGeneration.current;
+    const previous = profileSaveChains.current[savingOrgId] ?? Promise.resolve();
+    const operation = previous
+      .catch(() => undefined)
+      .then(async () => {
+        const session = await openPersistenceSession(savingOrgId, "save-profile");
+        return await session.saveOrganizationProfile(snapshot);
+      })
+      .then((saved) => {
+        profileRevisionByOrganization.current[saved.id] = saved.updatedAt;
+        profileSettingsRevisionByOrganization.current[saved.id] = saved.profileRevision ?? 0;
+        setProfileConflictNotice("");
+      })
+      .catch(async (error) => {
+        const isStaleConflict =
+          error instanceof ServerPersistenceAdapterError && (error.status === 409 || error.code === "CONFLICT");
+        if (isStaleConflict) {
+          await recoverFromStaleProfileConflict(error, savingOrgId, generation);
+          return;
+        }
+        reportPersistenceError("saveOrganizationProfile", error);
+        throw error;
+      });
+    profileSaveChains.current[savingOrgId] = operation;
+    return operation;
+  }
+
+  async function flushProfileSaves(organizationId: string): Promise<void> {
+    await profileSaveChains.current[organizationId];
   }
 
   async function persistOrganizationState(orgId: string): Promise<void> {
@@ -976,52 +1107,24 @@ export default function Home() {
   // Validation and memory-change history persist through the validated-memory
   // commit boundary, never through partial client snapshots.
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveKnowledge", openPersistenceSession(organizationProfile.id, "save-knowledge").then((session) => session.saveKnowledge(knowledgeItems)));
+    if (shouldPersistHydratedCollection("knowledge")) queuePersistenceSave("saveKnowledge", openPersistenceSession(organizationProfile.id, "save-knowledge").then((session) => session.saveKnowledge(knowledgeItems)));
   }, [knowledgeItems, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveKnowledgeCandidates", openPersistenceSession(organizationProfile.id, "save-candidates").then((session) => session.saveKnowledgeCandidates(knowledgeCandidates)));
+    if (shouldPersistHydratedCollection("candidates")) queuePersistenceSave("saveKnowledgeCandidates", openPersistenceSession(organizationProfile.id, "save-candidates").then((session) => session.saveKnowledgeCandidates(knowledgeCandidates)));
   }, [knowledgeCandidates, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveOrgMetrics", openPersistenceSession(organizationProfile.id, "save-metrics").then((session) => session.saveOrgMetrics(orgMetrics)));
+    if (shouldPersistHydratedCollection("metrics")) queuePersistenceSave("saveOrgMetrics", openPersistenceSession(organizationProfile.id, "save-metrics").then((session) => session.saveOrgMetrics(orgMetrics)));
   }, [orgMetrics, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveOrgLog", openPersistenceSession(organizationProfile.id, "save-log").then((session) => session.saveOrgLog(intelligenceLog)));
+    if (shouldPersistHydratedCollection("log")) queuePersistenceSave("saveOrgLog", openPersistenceSession(organizationProfile.id, "save-log").then((session) => session.saveOrgLog(intelligenceLog)));
   }, [intelligenceLog, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (hydrated) queuePersistenceSave("saveEmergingPatterns", openPersistenceSession(organizationProfile.id, "save-patterns").then((session) => session.saveEmergingPatterns(emergingPatterns)));
+    if (shouldPersistHydratedCollection("patterns")) queuePersistenceSave("saveEmergingPatterns", openPersistenceSession(organizationProfile.id, "save-patterns").then((session) => session.saveEmergingPatterns(emergingPatterns)));
   }, [emergingPatterns, organizationProfile.id, hydrated]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    // BUG-009: skip the echo write caused by a server-authoritative profile
-    // replacement (hydration, organization switch, or conflict recovery). Only
-    // genuine user edits fall through to the save below.
-    if (suppressNextProfileSave.current) {
-      suppressNextProfileSave.current = false;
-      return;
-    }
-    const snapshot = {
-      ...organizationProfile,
-      updatedAt: profileRevisionByOrganization.current[organizationProfile.id] ?? organizationProfile.updatedAt,
-      profileRevision: profileSettingsRevisionByOrganization.current[organizationProfile.id] ?? organizationProfile.profileRevision ?? 0
-    };
-    const savingOrgId = snapshot.id;
-    const generation = organizationSwitchGeneration.current;
-    void openPersistenceSession(savingOrgId, "save-profile")
-      .then((session) => session.saveOrganizationProfile(snapshot))
-      .then((saved) => {
-        profileRevisionByOrganization.current[saved.id] = saved.updatedAt;
-        profileSettingsRevisionByOrganization.current[saved.id] = saved.profileRevision ?? 0;
-        setProfileConflictNotice("");
-      })
-      .catch((error) => {
-        void recoverFromStaleProfileConflict(error, savingOrgId, generation);
-      });
-  }, [organizationProfile, hydrated]);
 
   useEffect(() => {
     // In server mode the organization list is authoritative membership data.
@@ -1306,6 +1409,20 @@ export default function Home() {
       () => loadOrganizationStateInternal(orgId),
       { unit: "operations", tags: { organizationId: orgId } }
     );
+  }
+
+  async function reloadLatestKnowledge(): Promise<void> {
+    try {
+      const session = await openPersistenceSession(organizationProfile.id, "reload-revision-conflict");
+      const latest = await session.loadKnowledge();
+      suppressHydratedCollectionPersistence();
+      setKnowledgeItems(latest);
+      clearKnowledgeHistoryCache();
+      setRevisionConflictNotice("");
+      setErrorMessage("");
+    } catch (error) {
+      reportPersistenceError("reloadLatestKnowledge", error);
+    }
   }
 
   async function commitValidatedMemoryChange(
@@ -2123,6 +2240,7 @@ export default function Home() {
     const normalizedProfile = normalizeOrganizationProfile(profile);
     setOrganizationProfile(normalizedProfile);
     setOrganizationList((list) => syncProfileIntoList(list, normalizedProfile));
+    if (hydrated) queuePersistenceSave("saveOrganizationProfile", persistOrganizationProfile(normalizedProfile));
     setBusinessRelevance(null);
     setAiAdvisory(null);
     setErrorMessage("");
@@ -2132,20 +2250,35 @@ export default function Home() {
   async function selectOrganization(
     id: string,
     availableOrganizations: OrganizationProfile[] = organizationList,
-    persistCurrent = true
+    persistCurrent = true,
+    authorizedOrganizationSet: OrganizationProfile[] = authorizedOrganizations
   ) {
     const found = availableOrganizations.find((org) => org.id === id);
-    if (!found || found.id === organizationProfile.id) return;
+    if (!found || found.id === organizationProfile.id) return false;
+    if (!authorizedOrganizationSet.some((organization) => organization.id === found.id)) {
+      setErrorMessage("You do not have access to that organization.");
+      return false;
+    }
+    setOrganizationSwitching(true);
     const switchSpan = startTelemetrySpan("organization_switch", "ui", {
       unit: "operations",
       tags: { from: organizationProfile.id, to: found.id }
     });
     const generation = ++organizationSwitchGeneration.current;
     let authorizedContext: ActiveOrganizationContext | null = null;
-    // Membership authorization happens before any outgoing state is reset or
-    // persisted. A rejected switch therefore leaves the current workspace
-    // untouched and cannot write outgoing data into the requested scope.
+    let serverTransitioned = false;
+
+    // A switch drains only explicit resource queues. It never treats the
+    // browser's loaded organization snapshot as pending work.
     try {
+      if (persistCurrent) {
+        await flushTicketSaves(organizationProfile.id);
+        await flushProfileSaves(organizationProfile.id);
+      }
+
+      // Authorization and the authoritative context transition happen only
+      // after pending resource-specific writes have settled. A failure above
+      // therefore leaves both server and UI on the outgoing organization.
       const response = await fetch("/api/auth/active-organization", {
         method: "PUT",
         cache: "no-store",
@@ -2160,44 +2293,25 @@ export default function Home() {
         throw new Error(payload?.error?.message ?? "You do not have access to that organization.");
       }
       authorizedContext = payload?.data?.organization ?? null;
-    } catch (error) {
-      if (generation === organizationSwitchGeneration.current) {
-        setErrorMessage(error instanceof Error ? error.message : "You do not have access to that organization.");
-      }
-      switchSpan.end(false);
-      return;
-    }
-    // Invalidate any in-flight ticket analysis before clearing the outgoing
-    // workspace. Late AI or persistence results must not land in the incoming
-    // organization.
-    cancelActiveTicketRequest();
-    clearKnowledgeHistoryCache();
-    const wasHydrated = hydrated;
-    setHydrated(false);
-    setErrorMessage("");
-    setProfileConflictNotice("");
-    resetWorkflowState();
-    try {
-      await flushTicketSaves(organizationProfile.id);
-      // Finish the OUTGOING organization's resource writes through ITS OWN
-      // authority before any new organization can become active. The outgoing
-      // authority is still active here (activation for the incoming org happens
-      // after these saves), so cross-source writes are impossible.
-      if (persistCurrent && wasHydrated) {
-        await persistOrganizationState(organizationProfile.id);
-      }
-      if (persistCurrent) {
-        const outgoingSession = await openPersistenceSession(organizationProfile.id, "save-profile-before-switch");
-        await outgoingSession.saveOrganizationProfile(organizationProfile);
-      }
-      if (persistenceMode === "local") await persistence.saveOrganizationList(availableOrganizations);
-      // The incoming load creates a new immutable session; the outgoing
-      // session above remains scoped to the outgoing organization.
+      serverTransitioned = true;
+
+      // Invalidate in-flight work only after the server accepted the context
+      // transition. Late results cannot be applied to the incoming state.
+      cancelActiveTicketRequest();
+      clearKnowledgeHistoryCache();
+      setHydrated(false);
+      setErrorMessage("");
+      setProfileConflictNotice("");
+      setRevisionConflictNotice("");
+      resetWorkflowState();
+
+      // The incoming load creates a new immutable session and does not write
+      // any resource belonging to the outgoing organization.
       const loaded = await loadOrganizationState(found.id);
-       if (generation !== organizationSwitchGeneration.current) {
-         switchSpan.end(false, { superseded: true });
-         return;
-       }
+      if (generation !== organizationSwitchGeneration.current) {
+        switchSpan.end(false, { superseded: true });
+        return false;
+      }
       // TODO-056: the active-organization response is an authorization context,
       // not a profile. It confirms the switch was authorized for this id; the
       // complete profile comes from the organization list so no profile field
@@ -2206,13 +2320,11 @@ export default function Home() {
         throw new Error("The authorized organization did not match the requested organization.");
       }
       const incomingProfile = found;
-      // BUG-009: switching organizations replaces the profile from a
-      // server-authoritative load; suppress the echo autosave it would trigger.
-      suppressNextProfileSave.current = true;
       setOrganizationProfile(incomingProfile);
       profileRevisionByOrganization.current[found.id] = incomingProfile.updatedAt;
       profileSettingsRevisionByOrganization.current[found.id] = incomingProfile.profileRevision ?? 0;
       setOrganizationList((current) => syncProfileIntoList(current, incomingProfile));
+      suppressHydratedCollectionPersistence();
       setKnowledgeItems(loaded.knowledge);
       setKnowledgeCandidates(loaded.candidates);
       setValidationRecords(loaded.validations);
@@ -2233,23 +2345,77 @@ export default function Home() {
       );
       setHydrated(true);
       switchSpan.end(true);
+      return true;
     } catch (error) {
       if (generation !== organizationSwitchGeneration.current) {
         switchSpan.end(false, { superseded: true });
-        return;
+        return false;
       }
       console.error("Failed to switch organization.", error);
-      setErrorMessage("Failed to load the selected organization. The organization switch was not completed.");
+      if (serverTransitioned) {
+        // The authoritative server transition succeeded, but target hydration
+        // did not. Reload from server authority rather than leaving a stale
+        // outgoing client context beside an incoming server context.
+        setErrorMessage("The organization changed but its workspace could not load. Reloading the authoritative organization context.");
+        switchSpan.end(false, { recovery: "hard_reload" });
+        window.location.reload();
+        return false;
+      }
+      setErrorMessage(error instanceof Error ? error.message : "The organization switch was not completed.");
       switchSpan.end(false);
+      return false;
+    } finally {
+      setOrganizationSwitching(false);
     }
   }
 
-  async function addOrganization(profile: OrganizationProfile) {
-    const normalizedProfile = normalizeOrganizationProfile(profile);
-    const nextList = syncProfileIntoList(organizationList, normalizedProfile);
-    setOrganizationList(nextList);
-    if (normalizedProfile.id === organizationProfile.id) return;
-    await selectOrganization(normalizedProfile.id, nextList);
+  async function addOrganization(input: NewOrganizationInput, idempotencyKey: string): Promise<void> {
+    try {
+      const response = await fetch("/api/organizations", {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify({
+          name: input.name,
+          industry: input.industry,
+          ...(input.description?.trim() ? { description: input.description } : {}),
+          customerTone: input.tone,
+          accentColor: input.accentColor,
+          ...(input.initials.trim() ? { logoInitials: input.initials } : {})
+        })
+      });
+      const payload = await response.json().catch(() => null) as {
+        data?: { organization?: OrganizationProfile };
+        error?: { message?: string };
+      } | null;
+      if (!response.ok || !payload?.data?.organization) {
+        throw new Error(payload?.error?.message ?? "Organization creation failed.");
+      }
+
+      // The create response proves durable provisioning. Refresh the membership
+      // projection before switching, so the RSS-2.1 authorization guard uses
+      // authoritative server membership rather than a fabricated client entry.
+      const organizationsResponse = await fetch("/api/organizations", { cache: "no-store" });
+      const organizationsPayload = await organizationsResponse.json().catch(() => null) as {
+        data?: OrganizationProfile[];
+        error?: { message?: string };
+      } | null;
+      if (!organizationsResponse.ok || !Array.isArray(organizationsPayload?.data)) {
+        throw new Error(organizationsPayload?.error?.message ?? "Organization was created but available organizations could not be refreshed.");
+      }
+      const authoritativeOrganizations = organizationsPayload.data;
+      if (!authoritativeOrganizations.some((organization) => organization.id === payload.data!.organization!.id)) {
+        throw new Error("Organization was created but its owner membership was not available.");
+      }
+      setAuthorizedOrganizations(authoritativeOrganizations);
+      setOrganizationList(authoritativeOrganizations);
+      const switched = await selectOrganization(payload.data.organization.id, authoritativeOrganizations, true, authoritativeOrganizations);
+      if (!switched) throw new Error("Organization was created but the workspace could not be loaded. Please refresh.");
+      setOrganizationBootstrapState("ready");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Organization creation failed.";
+      setErrorMessage(message);
+      throw error;
+    }
   }
 
   async function deleteOrganization(id: string) {
@@ -3121,16 +3287,11 @@ export default function Home() {
     learningCommandContext.current = { requestId: reflectionRequestId, idempotencyKey: reflectionIdempotencyKey };
     setReflectionDecision(reflection);
 
-    // Update ticket record with resolution (RSS-1.2S3: server-owned approve
-    // transition; the server derives status, resolution mode, actor, and the
-    // resolved timestamp).
-    if (activeTicketRecord) {
-      const originalDraft = suggestedResponse?.draftResponse ?? "";
-      const humanEdited = reviewedResponse !== originalDraft;
-      void transitionTicket(activeTicketRecord.ticketId, { kind: "approve", finalResponse: reviewedResponse, humanEdited })
-        .then((record) => setActiveTicketRecord(record))
-        .catch((error) => reportPersistenceError("approveTicket", error));
-    }
+    // Keep the ticket in the reviewable state until reflection is committed.
+    // RSS-1.2S3's `approve` command is a terminal response approval, while
+    // this customer journey still has a governed knowledge commit to perform.
+    // The commit transition below records the final response and resolves the
+    // ticket atomically with the validation/knowledge references.
 
     addLogEntries([
       createLogEntry("Human approved response", "Response reviewed and approved by human reviewer"),
@@ -3252,29 +3413,29 @@ export default function Home() {
       setOrgMetrics((prev) => ({ ...prev, ...result.orgMetricsPatch, lastUpdatedAt: new Date().toISOString() }));
       if (lastDraftUsedAI) recordHumanAcceptedAISuggestion();
       if (activeTicketRecord) {
-        const updated: TicketRecord = {
-          ...activeTicketRecord,
-          reflection: result.ticketReflection,
-          validationRecordIds: [result.validation.id],
-          status: "resolved",
-          resolutionMode: "human"
-        };
-        setActiveTicketRecord(updated);
         // RSS-1.2S3: the reflection-confirmed resolution is a server-owned
         // commit; the server validates the validation/knowledge references and
-        // derives the resolved state.
-        void transitionTicket(activeTicketRecord.ticketId, {
-          kind: "commit",
-          validationRecordIds: [result.validation.id],
-          knowledgeId: committedItem.id,
-          action: result.action,
-          lessonCreatedId: result.ticketReflection.lessonCreatedId ?? null,
-          lessonReinforcedId: result.ticketReflection.lessonReinforcedId ?? null,
-          knowledgeChanged: result.ticketReflection.knowledgeChanged ?? null,
-          automatic: false
-        })
-          .then((record) => setActiveTicketRecord(record))
-          .catch((error) => reportPersistenceError("confirmReflection", error));
+        // derives the resolved state. Await it so the UI cannot show a
+        // successful reflection while the governed ticket commit is still
+        // pending or has failed.
+        try {
+          const record = await transitionTicket(activeTicketRecord.ticketId, {
+            kind: "commit",
+            validationRecordIds: [result.validation.id],
+            knowledgeId: committedItem.id,
+            action: result.action,
+            lessonCreatedId: result.ticketReflection.lessonCreatedId ?? null,
+            lessonReinforcedId: result.ticketReflection.lessonReinforcedId ?? null,
+            knowledgeChanged: result.ticketReflection.knowledgeChanged ?? null,
+            finalResponse: reviewedResponse,
+            automatic: false
+          });
+          setActiveTicketRecord(record);
+        } catch (error) {
+          reportPersistenceError("confirmReflection", error);
+          setCurrentStep(7);
+          return;
+        }
       }
       addLogEntries([
         createLogEntry("Reflection confirmed", `${result.action.replace(/_/g, " ")} · ${committedItem.title}`),
@@ -3286,7 +3447,14 @@ export default function Home() {
       setErrorMessage("");
       setCurrentStep(8);
     } catch (error) {
-      if (error instanceof LearningApplicationError) setErrorMessage(error.failure.safeMessage);
+      if (error instanceof LearningApplicationError) {
+        if (error.failure.errorClass === "stale_revision") {
+          setRevisionConflictNotice("This item was updated elsewhere. Reload the latest version before saving again.");
+          setErrorMessage("Your change was not saved because the item changed elsewhere.");
+        } else {
+          setErrorMessage(error.failure.safeMessage);
+        }
+      }
       else {
         reportPersistenceError("promoteKnowledge", error);
         setErrorMessage("Knowledge promotion failed. No success state was applied; retry is safe.");
@@ -3981,6 +4149,20 @@ export default function Home() {
   if (!authUser) {
     return <LoginScreen onAuthenticated={(user) => { setAuthUser(user); setAuthStatus("authenticated"); }} />;
   }
+  if (organizationBootstrapState === "loading") {
+    return <main role="status" aria-live="polite" className="flex min-h-screen items-center justify-center bg-[#F3F6FA] text-sm text-slate-500">Loading your organizations and workspace…</main>;
+  }
+  if (organizationBootstrapState === "onboarding") {
+    return <FirstOrganizationOnboarding onCreate={addOrganization} />;
+  }
+  if (organizationBootstrapState === "error") {
+    return (
+      <main role="alert" className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#F3F6FA] px-4 text-center text-sm text-red-700">
+        <p>{errorMessage || "Unable to load your workspace."}</p>
+        <button type="button" onClick={() => window.location.reload()} className="rounded-xl bg-slate-900 px-4 py-2 font-semibold text-white hover:bg-slate-700">Try again</button>
+      </main>
+    );
+  }
 
   return (
     <AuthorizationProvider organizationId={organizationProfile.id}>
@@ -4007,11 +4189,19 @@ export default function Home() {
               organizations={authorizedOrganizations}
               darkMode={darkMode}
               accentColor={accent}
-              onSelectOrganization={(id) => selectOrganization(id, authorizedOrganizations)}
+              onSelectOrganization={(id) => { void selectOrganization(id, authorizedOrganizations); }}
+              onCreateOrganization={() => { setOpenCreateOrganization(true); setActiveView("organization"); }}
               onSignOut={logout}
+              busy={organizationSwitching}
             />
           </div>
         </header>
+
+        {organizationSwitching && (
+          <div role="status" aria-live="polite" className={`mx-4 mb-3 rounded-xl border px-4 py-2 text-sm md:mx-6 ${darkMode ? "border-blue-700/50 bg-blue-900/20 text-blue-200" : "border-blue-200 bg-blue-50 text-blue-800"}`}>
+            Switching to the selected organization…
+          </div>
+        )}
 
         {migrationWarning && (
           <div className={`mx-4 mb-3 rounded-xl border px-4 py-3 text-sm md:mx-6 ${darkMode ? "border-amber-700/50 bg-amber-900/20 text-amber-200" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
@@ -4029,6 +4219,19 @@ export default function Home() {
               aria-label="Dismiss profile update notice"
             >
               Dismiss
+            </button>
+          </div>
+        )}
+
+        {revisionConflictNotice && (
+          <div className={`mx-4 mb-3 flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm md:mx-6 ${darkMode ? "border-amber-700/50 bg-amber-900/20 text-amber-200" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+            <span><strong>Updated elsewhere:</strong> {revisionConflictNotice}</span>
+            <button
+              type="button"
+              onClick={() => { void reloadLatestKnowledge(); }}
+              className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${darkMode ? "bg-amber-800/50 hover:bg-amber-800" : "bg-amber-100 hover:bg-amber-200"}`}
+            >
+              Reload latest
             </button>
           </div>
         )}
@@ -4173,6 +4376,8 @@ export default function Home() {
               onAddOrg={addOrganization}
               onDeleteOrg={deleteOrganization}
               darkMode={darkMode}
+              openCreateOrganization={openCreateOrganization}
+              onCreateOrganizationOpened={() => setOpenCreateOrganization(false)}
             />
           )}
 

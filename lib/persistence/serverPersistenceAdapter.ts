@@ -22,14 +22,29 @@ export class ServerPersistenceAdapterError extends Error {
   constructor(
     public readonly code: string,
     message: string,
-    public readonly status: number
+    public readonly status: number,
+    public readonly details?: {
+      resourceType?: string;
+      resourceId?: string;
+      expectedRevision?: number | null;
+      currentRevision?: number;
+      requestId?: string;
+    }
   ) {
     super(message);
     this.name = "ServerPersistenceAdapterError";
   }
 }
 
-type ApiPayload<T> = { data: T } | { error: { code?: string; message?: string } };
+type ApiPayload<T> = { data: T } | { error: {
+  code?: string;
+  message?: string;
+  resourceType?: string;
+  resourceId?: string;
+  expectedRevision?: number | null;
+  currentRevision?: number;
+  requestId?: string;
+} };
 
 function emptyOrgMetrics(organizationId: string): OrgMetrics {
   return {
@@ -270,7 +285,16 @@ export class ServerPersistenceAdapter implements PersistenceAdapter {
       throw new ServerPersistenceAdapterError(
         error?.code ?? "SERVER_PERSISTENCE_ERROR",
         `${message} (HTTP ${response.status || 502}).`,
-        response.status || 502
+        response.status || 502,
+        error && "code" in error
+          ? {
+              ...(error.resourceType ? { resourceType: error.resourceType } : {}),
+              ...(error.resourceId ? { resourceId: error.resourceId } : {}),
+              ...(typeof error.expectedRevision === "number" || error.expectedRevision === null ? { expectedRevision: error.expectedRevision } : {}),
+              ...(typeof error.currentRevision === "number" ? { currentRevision: error.currentRevision } : {}),
+              ...(error.requestId ? { requestId: error.requestId } : {})
+            }
+          : undefined
       );
     }
     return payload.data;

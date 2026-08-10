@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { OrganizationProfile } from "@/types";
+import { useAuthorization } from "@/components/AuthorizationContext";
 
 interface AuthUser {
   id: string;
@@ -16,7 +17,9 @@ interface AccountWorkspaceMenuProps {
   darkMode: boolean;
   accentColor: string;
   onSelectOrganization: (id: string) => void | Promise<void>;
+  onCreateOrganization: () => void;
   onSignOut: () => void | Promise<void>;
+  busy?: boolean;
 }
 
 function userInitials(user: AuthUser): string {
@@ -37,8 +40,11 @@ export function AccountWorkspaceMenu({
   darkMode,
   accentColor,
   onSelectOrganization,
+  onCreateOrganization,
   onSignOut,
+  busy = false,
 }: AccountWorkspaceMenuProps) {
+  const { role } = useAuthorization();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -63,8 +69,14 @@ export function AccountWorkspaceMenu({
   const item = darkMode ? "hover:bg-[#1e3048]" : "hover:bg-slate-50";
 
   function selectOrganization(id: string) {
+    if (busy) return;
     setOpen(false);
     void onSelectOrganization(id);
+  }
+
+  function roleLabel(value: string | null): string {
+    if (!value) return "Role unavailable";
+    return value === "support_agent" ? "Support agent" : value.charAt(0).toUpperCase() + value.slice(1);
   }
 
   return (
@@ -75,10 +87,14 @@ export function AccountWorkspaceMenu({
         aria-expanded={open}
         aria-label={`${user.name} account and workspace menu`}
         onClick={() => setOpen((value) => !value)}
-        className="flex h-11 w-11 items-center justify-center rounded-2xl text-xs font-bold text-white shadow-sm ring-offset-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
+        className="flex min-h-11 max-w-[min(76vw,22rem)] items-center gap-2 rounded-2xl px-2.5 py-1.5 text-left text-xs font-bold text-white shadow-sm ring-offset-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
         style={{ backgroundColor: accentColor }}
       >
-        {userInitials(user)}
+        <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-black/15">{userInitials(user)}</span>
+        <span className="hidden min-w-0 sm:block">
+          <span className="block truncate text-sm">{currentOrganization?.name ?? "No organization selected"}</span>
+          <span className="block text-[11px] font-medium text-white/75">{roleLabel(role)}</span>
+        </span>
       </button>
 
       {open && (
@@ -91,6 +107,7 @@ export function AccountWorkspaceMenu({
           <div className="border-b border-inherit px-3 py-3">
             <p className={`text-[11px] font-bold uppercase tracking-wide ${muted}`}>Current organization</p>
             <p className="mt-1 text-sm font-semibold">{currentOrganization?.name ?? "No organization selected"}</p>
+            <p className={`mt-0.5 text-xs ${muted}`}>Role: {roleLabel(role)}</p>
           </div>
 
           <div className="border-b border-inherit py-2">
@@ -106,8 +123,9 @@ export function AccountWorkspaceMenu({
                     type="button"
                     role="menuitem"
                     aria-current={active ? "true" : undefined}
+                    disabled={busy}
                     onClick={() => selectOrganization(organization.id)}
-                    className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm ${item}`}
+                    className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm disabled:cursor-wait disabled:opacity-60 ${item}`}
                   >
                     <span className="flex min-w-0 items-center gap-2">
                       <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: organization.accentColor }} />
@@ -119,6 +137,16 @@ export function AccountWorkspaceMenu({
               })
             )}
           </div>
+
+          <button
+            type="button"
+            role="menuitem"
+            disabled={busy}
+            onClick={() => { setOpen(false); onCreateOrganization(); }}
+            className={`mt-2 flex w-full items-center rounded-xl px-3 py-2 text-left text-sm font-semibold disabled:opacity-60 ${item}`}
+          >
+            Create organization
+          </button>
 
           <button
             type="button"

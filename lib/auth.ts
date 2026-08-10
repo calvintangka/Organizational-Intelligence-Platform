@@ -3,6 +3,7 @@ import "server-only";
 import { createHash, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/server/prisma";
+import type { Prisma } from "@/generated/prisma/client";
 
 export const AUTH_SESSION_COOKIE = "oip_session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
@@ -61,9 +62,17 @@ export function sessionCookieOptions() {
 }
 
 export async function createSession(userId: string): Promise<{ token: string; expiresAt: Date }> {
+  return createSessionWithClient(prisma, userId);
+}
+
+/** Creates the same hashed session record inside an existing DB transaction. */
+export async function createSessionWithClient(
+  client: Prisma.TransactionClient,
+  userId: string
+): Promise<{ token: string; expiresAt: Date }> {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-  await prisma.authSession.create({
+  await client.authSession.create({
     data: { tokenHash: tokenHash(token), userId, expiresAt }
   });
   return { token, expiresAt };

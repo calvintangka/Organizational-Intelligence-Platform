@@ -1,0 +1,99 @@
+{
+  "certificationId": "RSS-2.9-HOTFIX-CERTIFICATION",
+  "recordedAt": "2026-08-10T08:30:36.0956913+07:00",
+  "branch": "master",
+  "headSha": "4792e10ee2ef075b0d7e10287fb4ceff583b3941",
+  "preCommitHeadSha": "4792e10ee2ef075b0d7e10287fb4ceff583b3941",
+  "candidateSha": "PENDING_COMMIT",
+  "candidateTreeSha": "PENDING_COMMIT_TREE",
+  "commitSubject": "fix(release): stabilize organization lifecycle and onboarding",
+  "commitDate": "PENDING_COMMIT_DATE",
+  "postCommitReconciliation": "PENDING_RSS_2_9A",
+  "worktreeState": "DIRTY_MIXED",
+  "effectiveTestedTreeFullyCommitted": false,
+  "historicalCertifiedBaseline": {
+    "tag": "v0.1.0-certified",
+    "commitSha": "f08692fbeb623bd50faf0cc8f1a9dd1fe48607ba",
+    "unchanged": true
+  },
+  "recommendedRelease": {
+    "version": "0.1.1",
+    "tag": "v0.1.1-certified",
+    "annotatedMessage": "OIP v0.1.1 certified — RSS-2.9 organization lifecycle hotfix passed"
+  },
+  "environment": {
+    "node": "v24.14.1",
+    "npm": "11.11.0",
+    "next": "15.5.22",
+    "prisma": "7.9.1",
+    "database": "PostgreSQL 127.0.0.1:5432/oip_development",
+    "migrationStatus": "PASS — 23 migrations found; database schema is up to date"
+  },
+  "rss2": {
+    "RSS-2.1": "PASS",
+    "RSS-2.2": "PASS",
+    "RSS-2.3": "PASS",
+    "RSS-2.4": "PASS",
+    "RSS-2.5": "PASS",
+    "RSS-2.6": "PASS",
+    "RSS-2.7": "PASS",
+    "RSS-2.8": "PASS",
+    "RSS-2.8-final-browser": "NEW_CUSTOMER_E2E_ACCEPTANCE_VERIFIED",
+    "KnowledgeItem-two-tab": "KNOWLEDGEITEM_TWO_TAB_CLOSURE_VERIFIED"
+  },
+  "security": {
+    "RSS-1.2S1": "PASS",
+    "RSS-1.2S2": "PASS",
+    "RSS-1.2S3": "PASS",
+    "RSS-1.2S4": "PASS",
+    "RSS-1.2S5": "PASS",
+    "RSS-1.2S6": "PASS — contract probe; Claude inactive in release runtime",
+    "RSS-1.2S7": "PASS — five live DeepSeek Tier-1 requests",
+    "TODO-078": "PASS",
+    "LMStudio": "INTENTIONALLY_OFF",
+    "ClaudeActive": false
+  },
+  "quality": {
+    "typescript": "PASS",
+    "prismaValidate": "PASS",
+    "productionBuild": "PASS",
+    "diffCheck": "PASS",
+    "oipBenchmark": {
+      "checks": 1000,
+      "passed": 1000,
+      "criticalSecurityPercent": 100
+    }
+  },
+  "protectedState": {
+    "digestBefore": "f62a563cfc037f4a946add12178309036f25ac65e219893a88bfb723c6fcc9b4",
+    "digestAfter": "f62a563cfc037f4a946add12178309036f25ac65e219893a88bfb723c6fcc9b4",
+    "changed": false
+  },
+  "cleanup": {
+    "disposableBrowserDataRemoved": true,
+    "listenersRemoved": true,
+    "browserTabsFinalized": true,
+    "fullHarAvailable": false
+  },
+  "documentation": {
+    "report": "docs/RSS-2.9-HOTFIX-CERTIFICATION-REPORT.md",
+    "releaseNotes": "docs/releases/RSS-2.9-HOTFIX-RELEASE-NOTES.md",
+    "knownLimitationsReviewed": true,
+    "changelogUpdated": true,
+    "trackerModified": false
+  },
+  "remote": {
+    "trackingRef": "calvintangka/master",
+    "remoteHead": "cfb5adcd753a6d3cd6f153038581a9b98d6b9698",
+    "localAhead": 1,
+    "candidateOnLocalBranch": false,
+    "candidateOnRemoteBranch": false,
+    "pushRequiredAfterCommit": true
+  },
+  "finalVerdict": "RSS_2_9_READY_FOR_RELEASE_CANDIDATE_COMMIT",
+  "remainingBlockers": [
+    "RELEASE_CANDIDATE_COMMIT_REQUIRED",
+    "intended RSS-2 source, docs, probes, and gated harness files remain uncommitted"
+  ],
+  "noCommitTagPushPerformed": true
+}

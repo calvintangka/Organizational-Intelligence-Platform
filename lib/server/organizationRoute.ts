@@ -73,7 +73,18 @@ export function withOrganizationRoute<P extends OrganizationRouteParams = Organi
       return await handler({ request, organizationId, params, user });
     } catch (error) {
       const safe = toSafePersistenceError(error);
-      return NextResponse.json({ error: { code: safe.code, message: safe.message } }, { status: safe.status });
+      const requestId = request.headers.get("x-request-id") ?? request.headers.get("x-correlation-id") ?? undefined;
+      return NextResponse.json({
+        error: {
+          code: safe.code,
+          message: safe.message,
+          ...(safe.details ? safe.details : {}),
+          ...(requestId ? { requestId } : {})
+        }
+      }, {
+        status: safe.status,
+        ...(requestId ? { headers: { "x-request-id": requestId } } : {})
+      });
     }
   };
 }

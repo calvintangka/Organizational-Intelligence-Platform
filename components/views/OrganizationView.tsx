@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuthorization } from "@/components/AuthorizationContext";
 import type { CustomerTone, OrganizationProfile } from "@/types";
 import { ACCENT_SWATCHES } from "@/components/AccentPicker";
@@ -21,10 +21,21 @@ interface OrganizationViewProps {
   organizations: OrganizationProfile[];
   onChange: (profile: OrganizationProfile) => void;
   onSelectOrg: (id: string) => void;
-  onAddOrg: (profile: OrganizationProfile) => void;
+  onAddOrg: (input: NewOrganizationInput, idempotencyKey: string) => Promise<void>;
   onDeleteOrg: (id: string) => void;
+  openCreateOrganization?: boolean;
+  onCreateOrganizationOpened?: () => void;
   darkMode: boolean;
 }
+
+export type NewOrganizationInput = {
+  name: string;
+  initials: string;
+  accentColor: string;
+  industry: string;
+  tone: CustomerTone;
+  description?: string;
+};
 
 const INDUSTRIES = [
   "Software / SaaS",
@@ -48,37 +59,6 @@ const TONES: CustomerTone[] = ["professional", "friendly", "formal", "empathetic
 
 const CUSTOM_INDUSTRY = "__custom__";
 
-function buildNewProfile(input: {
-  name: string;
-  initials: string;
-  accentColor: string;
-  industry: string;
-  tone: CustomerTone;
-}): OrganizationProfile {
-  const now = new Date().toISOString();
-  const initials = input.initials.trim().toUpperCase().slice(0, 3);
-  return {
-    id: `org-${Date.now().toString(36)}`,
-    name: input.name.trim(),
-    industry: input.industry.trim() || "Software / SaaS",
-    description: "",
-    products: [],
-    services: [],
-    supportedDomains: [],
-    businessVocabulary: [],
-    supportedIssueTypes: [],
-    outOfScopeTopics: [],
-    customerTone: input.tone,
-    supportBoundaries: [],
-    autoResolutionThreshold: DEFAULT_AUTO_RESOLUTION_THRESHOLD,
-    escalationRules: [],
-    accentColor: normalizeAccentColor(input.accentColor),
-    logoInitials: initials.length > 0 ? initials : undefined,
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
 export function OrganizationView({
   profile,
   organizations,
@@ -86,6 +66,8 @@ export function OrganizationView({
   onSelectOrg,
   onAddOrg,
   onDeleteOrg,
+  openCreateOrganization = false,
+  onCreateOrganizationOpened,
   darkMode,
 }: OrganizationViewProps) {
   const { can } = useAuthorization();
@@ -106,6 +88,9 @@ export function OrganizationView({
 
   const [vocabInput, setVocabInput] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const [creatingOrganization, setCreatingOrganization] = useState(false);
+  const [creationError, setCreationError] = useState("");
+  const [creationIdempotencyKey, setCreationIdempotencyKey] = useState<string | null>(null);
   const [newOrg, setNewOrg] = useState({
     name: "",
     initials: "",
@@ -113,6 +98,12 @@ export function OrganizationView({
     industry: "Software / SaaS",
     tone: "professional" as CustomerTone,
   });
+
+  useEffect(() => {
+    if (!openCreateOrganization) return;
+    setAddOpen(true);
+    onCreateOrganizationOpened?.();
+  }, [onCreateOrganizationOpened, openCreateOrganization]);
 
   const card = `rounded-2xl border p-5 ${darkMode ? "bg-[#1a2b3c] border-[#2d3f52]" : "bg-white border-slate-200"}`;
   const label = `text-xs font-bold uppercase tracking-wide mb-1 ${darkMode ? "text-slate-400" : "text-slate-500"}`;
@@ -155,11 +146,24 @@ export function OrganizationView({
     onDeleteOrg(org.id);
   }
 
-  function submitNewOrg() {
+  async function submitNewOrg() {
     if (newOrg.name.trim().length < 2) return;
-    onAddOrg(buildNewProfile(newOrg));
-    setAddOpen(false);
-    setNewOrg({ name: "", initials: "", accentColor: ACCENT_SWATCHES[2], industry: "Software / SaaS", tone: "professional" });
+    // Keep the same key for a retry after an interrupted response. The server
+    // treats it as one logical provisioning request rather than a second org.
+    const idempotencyKey = creationIdempotencyKey ?? `org-create-${crypto.randomUUID()}`;
+    setCreationIdempotencyKey(idempotencyKey);
+    setCreationError("");
+    setCreatingOrganization(true);
+    try {
+      await onAddOrg(newOrg, idempotencyKey);
+      setAddOpen(false);
+      setCreationIdempotencyKey(null);
+      setNewOrg({ name: "", initials: "", accentColor: ACCENT_SWATCHES[2], industry: "Software / SaaS", tone: "professional" });
+    } catch (error) {
+      setCreationError(error instanceof Error ? error.message : "Organization creation failed. Check the form and retry.");
+    } finally {
+      setCreatingOrganization(false);
+    }
   }
 
   const newOrgPreviewInitials = initialsFor({ name: newOrg.name || "New Org", logoInitials: newOrg.initials || undefined });
@@ -218,14 +222,14 @@ export function OrganizationView({
               <p className={label}>Organization profiles</p>
               <p className={`text-xs ${darkMode ? "text-slate-500" : "text-slate-400"}`}>Use the account menu for global workspace switching.</p>
             </div>
-            {canEditProfile && <button
+            <button
               type="button"
               onClick={() => setAddOpen((v) => !v)}
               className="rounded-lg px-2.5 py-1 text-xs font-semibold text-white transition-colors"
               style={{ backgroundColor: accent }}
             >
               {addOpen ? "Close" : "＋ Add organization"}
-            </button>}
+            </button>
           </div>
 
           <div className="mt-2 flex flex-wrap gap-2">
@@ -272,8 +276,11 @@ export function OrganizationView({
           </p>
 
           {/* Add organization form */}
-          {canEditProfile && addOpen && (
+          {addOpen && (
             <div className={`mt-4 rounded-2xl border p-4 ${darkMode ? "border-[#2d3f52] bg-[#111827]" : "border-slate-200 bg-slate-50"}`}>
+              <p className={`mb-4 text-sm ${darkMode ? "text-slate-300" : "text-slate-600"}`}>
+                Create a server-owned organization. You will receive the Owner role and can switch to it after provisioning completes.
+              </p>
               <div className="flex items-start gap-4">
                 <div
                   className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl text-lg font-bold text-white"
@@ -319,22 +326,24 @@ export function OrganizationView({
                   </div>
                 </div>
               </div>
+              {creationError && <p role="alert" className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{creationError}</p>}
               <div className="mt-4 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setAddOpen(false)}
+                  disabled={creatingOrganization}
                   className={`rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${darkMode ? "border border-[#2d3f52] text-slate-300 hover:bg-[#1e3048]" : "border border-slate-300 text-slate-600 hover:bg-white"}`}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  onClick={submitNewOrg}
-                  disabled={newOrg.name.trim().length < 2}
+                  onClick={() => { void submitNewOrg(); }}
+                  disabled={newOrg.name.trim().length < 2 || creatingOrganization}
                   className="rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{ backgroundColor: normalizeAccentColor(newOrg.accentColor) }}
                 >
-                  Create organization
+                  {creatingOrganization ? "Creating…" : "Create organization"}
                 </button>
               </div>
             </div>
