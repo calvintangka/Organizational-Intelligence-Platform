@@ -12,6 +12,17 @@ Every significant implementation should append a new dated entry.
 
 ## Unreleased
 
+_No unreleased changes yet._
+
+## Version 0.2.0
+
+Date: 2026-08-12
+
+Release title: **OIP v0.2.0 — NusaCloud Learning Loop**
+Release type: Minor pre-1.0 capability release. The `v0.2.0` tag, push, release publication, and deployment remain pending separate authorization.
+
+The entries below retain their historical technical context; statements about pre-release state describe the state at the time of each entry.
+
 - RSS-2.9 HOTFIX CERTIFICATION: technical release gates passed for the RSS-2.1 through RSS-2.8 organization-lifecycle chain, including the exact KnowledgeItem two-tab closure, current RSS-1.2S1â€“S7/TODO-078 security evidence, TypeScript, Prisma, migration status, production build, OIP Benchmark v1 (1000/1000; critical security 100%), and protected mature-state digests. The candidate remains intentionally uncommitted on `master`; no commit, tag, push, or tracker mutation was performed. Final state: `RSS_2_9_READY_FOR_RELEASE_CANDIDATE_COMMIT`; recommended tag after operator review is `v0.1.1-certified`.
 
 - RSS-2.8-FINAL-KNOWLEDGEITEM-TWO-TAB-CLOSURE: completed the exact real-browser KnowledgeItem optimistic-concurrency acceptance through a gated test-only surface using the existing authenticated Knowledge GET/PUT routes. Two tabs loaded revision 2; Tab A saved revision 3; Tab B received HTTP 409 `REVISION_CONFLICT` with `resourceType=knowledge`; newer data remained authoritative; Reload latest loaded revision 3; Tab B intentionally re-saved revision 4. The disposable customer/organizations were cleaned up, protected mature-state integrity was unchanged, and RSS-2.8-FINAL is now verified. No normal production customer behavior changed; RSS-2.9 was not started.
@@ -86,7 +97,7 @@ Date range: 2026-08-10 to 2026-08-12
 
 - Provider-side rate limiting can still produce transient 429/fallback warnings; NC-FIX-005 measured latency and added attribution but did not claim an AI performance fix.
 - Broader retrieval/classification recall and ranking limitations remain documented by TODO-041/TODO-047 and related audit evidence. They do not erase the NC-FIX-007 cross-domain safety guard.
-- The current development state is unreleased and is not a v0.1.2 claim or release certification.
+- The pre-release development state was intentionally not a v0.1.2 claim; this metadata commit establishes the selected v0.2.0 identity, while tag, push, release publication, and deployment remain pending.
 
 #### Major Files / Components
 
@@ -100,7 +111,7 @@ Date range: 2026-08-10 to 2026-08-12
 
 | Item | Status |
 |------|--------|
-| Current Version / Baseline | **Certified baseline: v0.1.1; current post-baseline work: Unreleased** |
+| Current Version / Baseline | **Release identity prepared: v0.2.0; certified product baseline: v0.1.1; tag and publication pending** |
 | Architecture | Modular monolith; Next.js App Router with server-side application services and ports/adapters |
 | Backend | Next.js server routes and server-owned application workflows |
 | Frontend | React/Next.js authenticated support workspace, Cases, Knowledge, Reflection, and organization lifecycle views |
@@ -118,8 +129,8 @@ Date range: 2026-08-10 to 2026-08-12
 | Reflection | Draft Reflection may exist before resolution; evidence-backed resolved cases may prepare/resume Reflection; human validation gates promotion |
 | Reuse tracking | Durable source-ticket reuse with evidence, provenance, idempotent commits, `timesReused`, trust evidence, and organization metrics |
 | Pattern Discovery | Enabled through the existing deterministic/durable learning workflow |
-| Production Ready | Not release-certified; current work is unreleased release preparation for controlled/private-beta use |
-| Current Development Status | Unreleased post-v0.1.1 NusaCloud learning-loop development; NC-FIX-010 completed and verified with unrelated follow-ups |
+| Production Ready | Product candidate certified for release-candidate handling; v0.2.0 publication pending |
+| Current Development Status | v0.2.0 release metadata reconciled for the NusaCloud learning loop; tag, push, release publication, and deployment pending |
 
 This section provides a quick snapshot of the current implementation state. Update it whenever major architectural milestones are completed.
 
