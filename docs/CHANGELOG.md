@@ -34,21 +34,92 @@ Every significant implementation should append a new dated entry.
 
 - Simplified the active AI provider chain to DeepSeek → LM Studio → deterministic fallback; Claude remains outside the current release runtime.
 
+### Post-v0.1.1 NusaCloud Learning-Loop Development
+
+Date range: 2026-08-10 to 2026-08-12
+
+#### Added
+
+- **NC-FIX-002 — Durable multi-turn case conversations:** Added ordered, immutable `TicketMessage` history, the `waiting_for_customer` lifecycle state, same-case customer follow-up reopening, bounded conversation context, server-owned message identity, idempotent sends, serialized appends, and resume hydration. Migration: `20260810000000_add_ticket_messages`.
+- **NC-FIX-003 — Resolution evidence:** Added tenant-scoped `TicketResolutionEvidence` records and evidence-backed resolution/validation gates. Supported evidence types are customer confirmation, agent verification, and manual verified resolution. Migration: `20260811010000_add_resolution_evidence`.
+- **NC-FIX-005 — AI draft latency observability:** Added metadata-only timing diagnostics across prompt construction, provider request/response, parsing, retrieval, draft processing, persistence, fallback attempts, and browser-visible completion.
+- **NC-FIX-007 — Retrieval compatibility guard:** Added deterministic compatibility evaluation between candidate retrieval and grounded drafting, including compatibility, incompatibility, and unknown semantics for category/root-cause evidence.
+- **NC-FIX-009 — Grounding presentation reconciliation:** Added a shared presentation-state guard so AI-generated output is not represented as Organizational Memory grounding without authorized grounding evidence.
+
+#### Changed
+
+- **NC-FIX-001 — In-review draft persistence:** Generated and human-edited drafts now persist in the existing `TicketRecord.resolution.finalResponse` field with draft revision checks, allowing case resume without losing the current response. No schema migration was required.
+- **NC-FIX-004 — Response formatting:** Explicit plain-text paragraph guidance was added to AI drafting and the Cases final-response view now preserves whitespace. The existing persistence and API transport remain lossless for meaningful internal newlines.
+- **NC-FIX-006 — Knowledge reuse provenance:** Reuse approvals now create a durable server-owned source TicketRecord, use canonical persisted ticket references, attach reviewer evidence, and use stable idempotent candidate/validation/memory identities. Distinct reuse updates `timesReused` and metrics once; duplicate reuse does not double-count. Reuse is not represented as customer-confirmed success.
+- **NC-FIX-008 — Post-resolution Reflection lifecycle:** Evidence-backed resolved cases may prepare/resume Reflection without reopening support history. Validation and promotion remain gated by durable resolution evidence and human validation; resolved-case support evidence and provenance are preserved.
+- **NC-FIX-010 — Optimistic-concurrency recovery UX:** Stale KnowledgeItem writes remain revision-guarded, while conflict recovery now preserves the in-progress review, loads the authoritative tenant-scoped revision with an organization-switch race guard, and requires an explicit deliberate retry. No automatic merge or blind stale replay was introduced.
+- The server-owned persistence boundary now durably represents organizations, memberships, TicketRecords, conversation messages, resolution evidence, KnowledgeItems, ValidationRecords, MemoryChangeRecords, trust evidence, metrics, audit records, and related workflow state in PostgreSQL through Prisma.
+
+#### Fixed
+
+- **NC-FIX-011 — Human-authored Reflection lesson promotion and customer-specific content safety:** New lessons now require an explicitly authored reusable response template instead of inheriting the customer-specific reviewed draft. The promotion safety boundary validates the normalized reusable problem/lesson fields, including extracted customer and company identities, while leaving source TicketRecords, resolution evidence, audit history, and opaque provenance intact. Literal customer-specific reusable content remains rejected; `{{customerName}}`, `{{organizationName}}`, and `{{ticketId}}` remain supported. Added the permanent `probe:nc-fix-011-reflection-promotion-safety` regression and verified fresh-browser promotion, grounded similar-case retrieval, human reuse, and the unsafe-rejection/corrected-retry path.
+
+- **NC-FIX-007:** Cross-domain and weak generic candidates are rejected before grounded drafting; `Uncategorized` is not treated as compatible with everything, and high trust or reuse count cannot override incompatibility. All-incompatible candidate sets fail closed to cold-start behavior.
+- **NC-FIX-009:** A cold-start follow-up no longer displays `AI draft grounded in organizational memory` when persisted memory state is `none` and `basedOnKnowledgeIds` is empty. Resume and positive lesson-grounded paths remain consistent.
+- **NC-FIX-010:** Recoverable revision conflicts are presented as expected warnings with structured resource/expected/current revision details; Reload latest reconciles authoritative KnowledgeItems without discarding the local review, and a retry uses the refreshed revision. Unexpected persistence failures remain error-level failures.
+
+#### Safety / Governance
+
+- Reflection drafts remain distinct from validated Organizational Memory. Resolution evidence, server authority, tenant ownership, provenance, human review, and idempotent governed commits remain enforced at the workflow boundaries.
+- Retrieval compatibility preserves conservative unknown-category behavior and blocks incompatible candidates before grounding. NC-FIX-007A audit reconciliation confirmed zero cross-domain false-positive authorizations while retaining known recall/classification limitations and stale audit-fixture findings.
+- Knowledge reuse preserves the distinction between `KNOWLEDGE REUSED` and `SOLUTION CONFIRMED SUCCESSFUL AGAIN`.
+
+#### Architecture Impact
+
+- The platform remains a modular monolith using the Next.js App Router with server-side application services and ports/adapters, a client review workspace, authenticated organization-scoped API routes, and server-owned PostgreSQL persistence.
+- The ticket aggregate now separates immutable conversation messages and durable resolution evidence from the mutable current draft and Reflection state. Knowledge promotion remains a governed candidate -> validation -> memory-change transition.
+
+#### Verification
+
+- Permanent probes for NC-FIX-001 through NC-FIX-009 pass. The NC-FIX-009 browser matrix verified cold-start, follow-up, positive grounding, incompatible, Uncategorized, negation, resume, and isolation behavior.
+- The official `NC-ACCEPT-001-FINAL` browser rerun verified the end-to-end NusaCloud learning loop from cold start through support interaction, customer confirmation, evidence-backed resolution, Reflection, human validation, Organizational Memory promotion, similar-case retrieval, grounded response, human reuse approval, and durable reuse accounting. Verdict: `NC_ACCEPT_001_FINAL_VERIFIED_WITH_FOLLOWUPS`.
+- The permanent `probe:nc-fix-010-concurrency-recovery` verified normal save, two-client stale rejection, structured HTTP 409 details, authoritative reload, deliberate retry, no auto-retry, authorization ordering, tenant isolation, and single-row revision integrity. The browser rehearsal verified the same recovery contract across two authenticated tabs.
+- The earlier final acceptance failure exposed the post-resolution Reflection lifecycle conflict that was subsequently repaired by NC-FIX-008. The failed report remains preserved as forensic history; it is not treated as a product release milestone by itself.
+- TypeScript, Prisma validation, migration status, and the production build pass on the current worktree. Protected Developer Demo state remains unchanged with zero release-blocking integrity findings.
+
+#### Known Limitations
+
+- Provider-side rate limiting can still produce transient 429/fallback warnings; NC-FIX-005 measured latency and added attribution but did not claim an AI performance fix.
+- Broader retrieval/classification recall and ranking limitations remain documented by TODO-041/TODO-047 and related audit evidence. They do not erase the NC-FIX-007 cross-domain safety guard.
+- The current development state is unreleased and is not a v0.1.2 claim or release certification.
+
+#### Major Files / Components
+
+- `lib/server/tickets/ticketWorkflow.ts`, `lib/server/persistenceService.ts`, `lib/application/tickets/processTicket.ts`, `lib/ticketRecords.ts`
+- `app/page.tsx`, `components/views/TicketWorkspace.tsx`, `components/views/CaseLookupView.tsx`, `components/ProvenancePanel.tsx`, `components/ReflectionPanel.tsx`
+- `lib/retrievalCompatibility.ts`, `lib/memory.ts`, `lib/drafting.ts`, `lib/groundingPresentation.ts`
+- `prisma/schema.prisma`, `prisma/migrations/20260810000000_add_ticket_messages`, `prisma/migrations/20260811010000_add_resolution_evidence`
+- NC-FIX permanent probes and the corresponding reports under `scripts/` and `docs/`
+
 ## Current Platform Status
 
 | Item | Status |
 |------|--------|
-| Current Version | **0.9.0** |
-| Architecture | Organizational Intelligence Platform |
-| Current AI | Gemma 4 E4B (LM Studio) |
-| AI Mode | AI Advisory (Deterministic Governance) |
-| Persistence | localStorage |
-| Knowledge Intake | Three Intake Doors |
-| Organizational Memory | Enabled |
-| Pattern Discovery | Enabled |
-| Trust Engine | Enabled |
-| Production Ready | No |
-| Hackathon Status | Active Development |
+| Current Version / Baseline | **Certified baseline: v0.1.1; current post-baseline work: Unreleased** |
+| Architecture | Modular monolith; Next.js App Router with server-side application services and ports/adapters |
+| Backend | Next.js server routes and server-owned application workflows |
+| Frontend | React/Next.js authenticated support workspace, Cases, Knowledge, Reflection, and organization lifecycle views |
+| Database | PostgreSQL (`oip_development` in the development environment) |
+| ORM | Prisma 7.9.1 |
+| Persistence | Server-authoritative, organization-scoped PostgreSQL persistence with 25 applied migrations; local storage is not the current production persistence path |
+| Authentication | Session-based authenticated users with scrypt password hashing, organization memberships, RBAC capabilities, and active-organization authorization |
+| Organization / tenancy | Server-owned organization provisioning, memberships, active context, tenant-scoped resources, and authorization audits |
+| Current AI provider chain | DeepSeek API -> LM Studio -> deterministic fallback |
+| AI Mode | Environment-selected AI advisory chain; current browser mode is DeepSeek with deterministic governance and human review |
+| Organizational Memory | Enabled; validated KnowledgeItems and Lessons with provenance, trust, versioning, and human-governed promotion |
+| Retrieval | Deterministic organization-scoped retrieval with compatibility/incompatibility/unknown semantics and fail-closed incompatible candidates |
+| Human validation | Required for Organizational Memory promotion; ValidationRecords and MemoryChangeRecords are durable and governed |
+| Resolution evidence | Durable customer confirmation, agent verification, or manual verified resolution is required before validation/promotion |
+| Reflection | Draft Reflection may exist before resolution; evidence-backed resolved cases may prepare/resume Reflection; human validation gates promotion |
+| Reuse tracking | Durable source-ticket reuse with evidence, provenance, idempotent commits, `timesReused`, trust evidence, and organization metrics |
+| Pattern Discovery | Enabled through the existing deterministic/durable learning workflow |
+| Production Ready | Not release-certified; current work is unreleased release preparation for controlled/private-beta use |
+| Current Development Status | Unreleased post-v0.1.1 NusaCloud learning-loop development; NC-FIX-010 completed and verified with unrelated follow-ups |
 
 This section provides a quick snapshot of the current implementation state. Update it whenever major architectural milestones are completed.
 

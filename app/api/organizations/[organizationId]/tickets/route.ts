@@ -18,6 +18,7 @@ const FILTERS = new Set<TicketRecordFilter>([
   "heavily_edited",
   "cold_start",
   "uncategorized",
+  "waiting_for_customer",
   "rejected",
   "discarded"
 ]);

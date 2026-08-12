@@ -18,6 +18,8 @@ import type {
   BulkTicketSeed,
   ClientTicketRecord,
   TicketRecord,
+  TicketMessage,
+  TicketResolutionEvidence,
   TicketRecordFilter,
   ValidationRecord
 } from "@/types";
@@ -31,6 +33,8 @@ import type {
   OrgMetrics as PrismaOrgMetrics,
   Organization as PrismaOrganization,
   TicketRecord as PrismaTicketRecord,
+  TicketMessage as PrismaTicketMessage,
+  TicketResolutionEvidence as PrismaTicketResolutionEvidence,
   TicketSequence as PrismaTicketSequence,
   ValidationRecord as PrismaValidationRecord
 } from "@/generated/prisma/client";
@@ -50,6 +54,7 @@ export type PersistenceServiceErrorCode =
   | "ORGANIZATION_NOT_FOUND"
   | "RESOURCE_NOT_FOUND"
   | "CONFLICT"
+  | "RESOLUTION_EVIDENCE_REQUIRED"
   | "REVISION_CONFLICT"
   | "DATABASE_UNAVAILABLE"
   | "DATABASE_SCHEMA_MISSING"
@@ -391,10 +396,68 @@ function mapPattern(row: PrismaEmergingPattern): EmergingPattern {
   };
 }
 
-function mapTicket(row: PrismaTicketRecord): TicketRecord {
+function mapTicketMessage(row: PrismaTicketMessage): TicketMessage {
+  return {
+    id: row.id,
+    orgId: row.organizationId,
+    ticketId: row.ticketId,
+    sequence: row.sequence,
+    direction: row.direction,
+    content: row.content,
+    actorId: row.actorId,
+    createdAt: iso(row.createdAt),
+    idempotencyKey: row.idempotencyKey,
+  };
+}
+
+function mapTicketResolutionEvidence(row: PrismaTicketResolutionEvidence): TicketResolutionEvidence {
+  return {
+    id: row.id,
+    orgId: row.organizationId,
+    ticketId: row.ticketId,
+    type: row.type,
+    sourceMessageId: row.sourceMessageId,
+    actorId: row.actorId,
+    note: row.note,
+    createdAt: iso(row.createdAt),
+    idempotencyKey: row.idempotencyKey,
+  };
+}
+
+function mapTicket(row: PrismaTicketRecord, messages?: TicketMessage[], resolutionEvidence?: TicketResolutionEvidence[]): TicketRecord {
   const rawClassification = nullableJsonRecord(row.classification) as (Record<string, unknown> & { _processing?: Record<string, unknown> }) | null;
   const processing = rawClassification?._processing;
   const { _processing: _ignoredProcessing, ...classification } = rawClassification ?? {};
+  const resolution = asRecord(row.resolution);
+  const status = row.status as TicketRecord["status"];
+  const hydratedMessages = messages && messages.length > 0
+    ? messages
+    : [
+        {
+          id: `legacy-ticket-message-${row.ticketId}-1`,
+          orgId: row.organizationId,
+          ticketId: row.ticketId,
+          sequence: 1,
+          direction: "customer" as const,
+          content: row.rawMessage,
+          actorId: null,
+          createdAt: iso(row.createdAt),
+          idempotencyKey: null,
+        },
+        ...(status === "resolved" && typeof resolution.finalResponse === "string" && resolution.finalResponse.trim() && typeof resolution.resolvedAt === "string" && !Number.isNaN(Date.parse(resolution.resolvedAt))
+          ? [{
+              id: `legacy-ticket-message-${row.ticketId}-2`,
+              orgId: row.organizationId,
+              ticketId: row.ticketId,
+              sequence: 2,
+              direction: "agent" as const,
+              content: resolution.finalResponse,
+              actorId: row.actorId,
+              createdAt: resolution.resolvedAt,
+              idempotencyKey: null,
+            }]
+          : [])
+      ];
   return {
     ticketId: row.ticketId,
     orgId: row.organizationId,
@@ -413,11 +476,13 @@ function mapTicket(row: PrismaTicketRecord): TicketRecord {
     processingResult: processing?.result,
     memoryMatch: nullableJsonRecord(row.memoryMatch),
     draftSource: row.draftSource as TicketRecord["draftSource"],
-    resolution: asRecord(row.resolution) as unknown as TicketRecord["resolution"],
+    resolution: resolution as unknown as TicketRecord["resolution"],
     reflection: asRecord(row.reflection) as unknown as TicketRecord["reflection"],
     validationRecordIds: stringArray(row.validationRecordIds),
     labels: stringArray(row.labels),
-    status: row.status,
+    status,
+    messages: hydratedMessages,
+    resolutionEvidence: resolutionEvidence ?? [],
     resolutionMode: row.resolutionMode ?? null,
   };
 }
@@ -577,8 +642,56 @@ export async function loadEmergingPatterns(organizationId: string): Promise<Emer
 
 export async function loadTicketRecords(organizationId: string): Promise<TicketRecord[]> {
   const organization = await requireOrganization(organizationId);
-  const rows = await readDatabase("ticket records", () => prisma.ticketRecord.findMany({ where: { organizationId: organization.id }, orderBy: { createdAt: "asc" } }));
-  return rows.map(mapTicket);
+  const [rows, messages, evidence] = await readDatabase("ticket records", () => prisma.$transaction([
+    prisma.ticketRecord.findMany({ where: { organizationId: organization.id }, orderBy: { createdAt: "asc" } }),
+    prisma.ticketMessage.findMany({ where: { organizationId: organization.id }, orderBy: [{ ticketId: "asc" }, { sequence: "asc" }] }),
+    prisma.ticketResolutionEvidence.findMany({ where: { organizationId: organization.id }, orderBy: [{ ticketId: "asc" }, { createdAt: "asc" }] })
+  ]));
+  const byTicket = new Map<string, TicketMessage[]>();
+  for (const message of messages) {
+    const list = byTicket.get(message.ticketId) ?? [];
+    list.push(mapTicketMessage(message));
+    byTicket.set(message.ticketId, list);
+  }
+  const evidenceByTicket = new Map<string, TicketResolutionEvidence[]>();
+  for (const item of evidence) {
+    const list = evidenceByTicket.get(item.ticketId) ?? [];
+    list.push(mapTicketResolutionEvidence(item));
+    evidenceByTicket.set(item.ticketId, list);
+  }
+  return rows.map((row) => mapTicket(row, byTicket.get(row.ticketId) ?? [], evidenceByTicket.get(row.ticketId) ?? []));
+}
+
+export async function loadTicketMessages(organizationId: string, ticketId: string): Promise<TicketMessage[]> {
+  const organization = await requireOrganization(organizationId);
+  const normalizedTicketId = typeof ticketId === "string" ? ticketId.trim() : "";
+  if (!normalizedTicketId) throw invalidRequest("ticketId must be a non-empty string.");
+  const ticket = await readDatabase("ticket conversation ownership", () => prisma.ticketRecord.findUnique({
+    where: { organizationId_ticketId: { organizationId: organization.id, ticketId: normalizedTicketId } },
+    select: { ticketId: true }
+  }));
+  if (!ticket) throw new PersistenceServiceError("RESOURCE_NOT_FOUND", "The requested ticket was not found.", 404);
+  const rows = await readDatabase("ticket messages", () => prisma.ticketMessage.findMany({
+    where: { organizationId: organization.id, ticketId: normalizedTicketId },
+    orderBy: { sequence: "asc" }
+  }));
+  return rows.map(mapTicketMessage);
+}
+
+export async function loadTicketResolutionEvidence(organizationId: string, ticketId: string): Promise<TicketResolutionEvidence[]> {
+  const organization = await requireOrganization(organizationId);
+  const normalizedTicketId = typeof ticketId === "string" ? ticketId.trim() : "";
+  if (!normalizedTicketId) throw invalidRequest("ticketId must be a non-empty string.");
+  const ticket = await readDatabase("ticket evidence ownership", () => prisma.ticketRecord.findUnique({
+    where: { organizationId_ticketId: { organizationId: organization.id, ticketId: normalizedTicketId } },
+    select: { ticketId: true }
+  }));
+  if (!ticket) throw new PersistenceServiceError("RESOURCE_NOT_FOUND", "The requested ticket was not found.", 404);
+  const rows = await readDatabase("ticket resolution evidence", () => prisma.ticketResolutionEvidence.findMany({
+    where: { organizationId: organization.id, ticketId: normalizedTicketId },
+    orderBy: { createdAt: "asc" }
+  }));
+  return rows.map(mapTicketResolutionEvidence);
 }
 
 const TICKET_PAGE_SIZE_MAX = 100;
@@ -633,6 +746,9 @@ export async function loadTicketPage(
     case "rejected":
       filters.push({ status: "rejected" });
       break;
+    case "waiting_for_customer":
+      filters.push({ status: "waiting_for_customer" });
+      break;
     case "discarded":
       filters.push({ status: "discarded" });
       break;
@@ -650,8 +766,30 @@ export async function loadTicketPage(
       take: pageSize
     })
   ]));
+  const [messages, evidence] = await readDatabase("ticket page messages", () => prisma.$transaction([
+    prisma.ticketMessage.findMany({
+    where: { organizationId: organization.id, ticketId: { in: rows.map((row) => row.ticketId) } },
+    orderBy: [{ ticketId: "asc" }, { sequence: "asc" }]
+    }),
+    prisma.ticketResolutionEvidence.findMany({
+      where: { organizationId: organization.id, ticketId: { in: rows.map((row) => row.ticketId) } },
+      orderBy: [{ ticketId: "asc" }, { createdAt: "asc" }]
+    })
+  ]));
+  const byTicket = new Map<string, TicketMessage[]>();
+  for (const message of messages) {
+    const list = byTicket.get(message.ticketId) ?? [];
+    list.push(mapTicketMessage(message));
+    byTicket.set(message.ticketId, list);
+  }
+  const evidenceByTicket = new Map<string, TicketResolutionEvidence[]>();
+  for (const item of evidence) {
+    const list = evidenceByTicket.get(item.ticketId) ?? [];
+    list.push(mapTicketResolutionEvidence(item));
+    evidenceByTicket.set(item.ticketId, list);
+  }
   return {
-    tickets: rows.map(mapTicket),
+    tickets: rows.map((row) => mapTicket(row, byTicket.get(row.ticketId) ?? [], evidenceByTicket.get(row.ticketId) ?? [])),
     page,
     pageSize,
     total,
@@ -841,7 +979,7 @@ function carryForwardOptionalSettings(
 
 const KNOWLEDGE_LIFECYCLES = ["active", "candidate", "deprecated"] as const;
 const CANDIDATE_LIFECYCLES = ["proposed", "validated", "rejected"] as const;
-const TICKET_LIFECYCLES = ["open", "in_review", "resolved", "rejected", "discarded"] as const;
+const TICKET_LIFECYCLES = ["open", "in_review", "waiting_for_customer", "resolved", "rejected", "discarded"] as const;
 const PATTERN_LIFECYCLES = ["monitoring", "suggested", "promoted", "dismissed"] as const;
 
 function normalizeValidationKnowledgeItem(item: KnowledgeItem, stored: KnowledgeItem | null): KnowledgeItem {
@@ -1038,6 +1176,38 @@ async function upsertTicketRecordTx(
     create: { organizationId, ticketId, ...columns },
     update: columns
   });
+  if (record.messages && record.messages.length > 0) {
+    await tx.ticketMessage.createMany({
+      data: record.messages.map((message) => ({
+        id: message.id,
+        organizationId,
+        ticketId,
+        sequence: message.sequence,
+        direction: message.direction,
+        content: message.content,
+        actorId: message.actorId ?? null,
+        createdAt: parseDate(message.createdAt, "ticket message createdAt"),
+        idempotencyKey: message.idempotencyKey ?? null,
+      })),
+      skipDuplicates: true,
+    });
+  }
+  if (record.resolutionEvidence && record.resolutionEvidence.length > 0) {
+    await tx.ticketResolutionEvidence.createMany({
+      data: record.resolutionEvidence.map((item) => ({
+        id: item.id,
+        organizationId,
+        ticketId,
+        type: item.type,
+        sourceMessageId: item.sourceMessageId ?? null,
+        actorId: item.actorId,
+        note: item.note,
+        createdAt: parseDate(item.createdAt, "resolution evidence createdAt"),
+        idempotencyKey: item.idempotencyKey ?? null,
+      })),
+      skipDuplicates: true,
+    });
+  }
 }
 
 /**
@@ -1696,11 +1866,31 @@ export async function commitValidation(
             // Ticket numbers are human-facing and may repeat across tenants;
             // source resolution must stay inside the commit's organization.
             where: { organizationId: organization.id, ticketId: { in: sourceTicketIds } },
-            select: { organizationId: true, ticketId: true }
+            select: { organizationId: true, ticketId: true, status: true }
           })
         : [];
       if (sourceTickets.length !== sourceTicketIds.length) {
         throw conflict("A validation candidate references a missing source ticket in this organization.");
+      }
+      const unresolvedSourceTickets = sourceTickets.filter((ticket) => ticket.status !== "resolved");
+      if (unresolvedSourceTickets.length > 0) {
+        throw new PersistenceServiceError(
+          "RESOLUTION_EVIDENCE_REQUIRED",
+          "Every source ticket must be resolved with resolution evidence before its Reflection can be validated.",
+          409
+        );
+      }
+      const evidenceRows = await tx.ticketResolutionEvidence.findMany({
+        where: { organizationId: organization.id, ticketId: { in: sourceTicketIds } },
+        select: { ticketId: true }
+      });
+      const evidencedTicketIds = new Set(evidenceRows.map((row) => row.ticketId));
+      if (sourceTicketIds.some((ticketId) => !evidencedTicketIds.has(ticketId))) {
+        throw new PersistenceServiceError(
+          "RESOLUTION_EVIDENCE_REQUIRED",
+          "Every source ticket must have durable resolution evidence before its Reflection can be validated.",
+          409
+        );
       }
 
       await upsertCandidateTx(tx, organization.id, { ...payload.candidate, status: "validated" }, { authoritativeLifecycle: true });

@@ -107,7 +107,8 @@ function draftStructureInstructions(input: DraftCustomerResponseInput): string[]
     `1. Greeting line must use this structure: ${greeting} If no sender name is extracted, use "Hello," and never use "Demo User".`,
     `2. Add a short acknowledgment that reflects the customer's actual situation. ${deadlineInstruction}`,
     `3. Address each extracted sub-issue separately and in order. Current sub-issues: ${subIssues.map((issue, index) => `${index + 1}. ${issue}`).join(" | ")}.`,
-    `4. Close with only the next steps the customer can actually take, then sign off as "${input.organizationProfile.name} Support Team".`
+    `4. Close with only the next steps the customer can actually take, then sign off as "${input.organizationProfile.name} Support Team".`,
+    "5. Use plain-text support-message formatting: put a blank line between the greeting, acknowledgment, body paragraphs, troubleshooting steps, and closing. Do not return one dense paragraph, HTML, or a markdown code fence."
   ];
 }
 
@@ -267,6 +268,13 @@ export function buildDraftCustomerResponsePrompt(input: DraftCustomerResponseInp
     ...activationGuardrails
   ];
   const extractedFieldSummary = JSON.stringify(fields);
+  const conversationContext = input.conversationContext?.trim()
+    ? [
+        "Bounded conversation context (customer and agent labels are authoritative):",
+        input.conversationContext.trim(),
+        "Answer the latest customer message while preserving relevant prior context."
+      ]
+    : [];
 
   if (
     input.deterministicUnderstanding.businessClassification?.inquiryType === "business_inquiry"
@@ -281,6 +289,7 @@ export function buildDraftCustomerResponsePrompt(input: DraftCustomerResponseInp
         "Preserve the lesson's meaning and respond in the customer's language.",
       ].join("\n"),
       user: buildHardenedUserPrompt([
+        ...conversationContext,
         profileContext(input.organizationProfile),
         `Validated Business Lesson: ${input.groundingLabel}`,
         "Validated lesson response source:",
@@ -304,6 +313,7 @@ export function buildDraftCustomerResponsePrompt(input: DraftCustomerResponseInp
         "If requested information is not in the organization profile, state that it is not currently available rather than inventing it."
       ].join("\n"),
       user: buildHardenedUserPrompt([
+        ...conversationContext,
         profileContext(input.organizationProfile),
         "Approved organization profile knowledge is the only factual source.",
         "Deterministic organization-profile draft:",
@@ -323,6 +333,7 @@ export function buildDraftCustomerResponsePrompt(input: DraftCustomerResponseInp
     return {
       system: sharedSystemRules.join("\n"),
       user: buildHardenedUserPrompt([
+        ...conversationContext,
         `Organization Name: ${input.organizationProfile.name}`,
         "No validated organizational knowledge exists for this issue.",
         ticketRefLine
@@ -342,6 +353,7 @@ export function buildDraftCustomerResponsePrompt(input: DraftCustomerResponseInp
         "Do not include internal guidance or troubleshooting rationale in the customer response."
       ].join("\n"),
       user: buildHardenedUserPrompt([
+        ...conversationContext,
         profileContext(input.organizationProfile),
         `Validated Lesson: ${input.groundingLabel}`,
         "Customer response source:",
@@ -363,6 +375,7 @@ export function buildDraftCustomerResponsePrompt(input: DraftCustomerResponseInp
       "If the customer's issue is not addressed by the template, say the response needs human attention - do not improvise."
     ].join("\n"),
     user: buildHardenedUserPrompt([
+      ...conversationContext,
       profileContext(input.organizationProfile),
       "Validated Customer Response Template (your ONLY source of content - do not add steps not present here):",
       input.groundingContent || input.deterministicDraft

@@ -5,6 +5,10 @@ export interface ReflectionSafetyContext {
   organizationName?: string;
   sourceTicketId?: string;
   sourceTicketText?: string;
+  /** Additional source identities extracted from the ticket (for example an affected employee). */
+  sourceSpecificValues?: string[];
+  /** The human-authored canonical problem title is reusable content too. */
+  reusableProblemName?: string;
 }
 
 export interface ReflectionSafetyResult {
@@ -36,13 +40,68 @@ function overlapPercent(a: string, b: string): number {
   return Math.round((shared / Math.min(aWords.size, bWords.size)) * 100);
 }
 
+const GENERIC_SOURCE_WORDS = new Set([
+  "Customer", "Affected", "Employee", "Company", "Organization", "Issue", "Problem",
+  "Ticket", "Reference", "Hello", "Hi", "Please", "Thank", "Best", "Regards"
+]);
+
+/**
+ * Pull only conservative identity-shaped values from source text. These values
+ * are used as negative controls for reusable fields; the source text itself is
+ * never added to the reusable-content scan.
+ */
+function sourceIdentityCandidates(sourceText: string): string[] {
+  const candidates = new Set<string>();
+  const properPhrase = /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}\b/g;
+  for (const match of sourceText.matchAll(properPhrase)) {
+    const words = match[0].split(/\s+/).filter(Boolean);
+    for (let start = 0; start < words.length; start += 1) {
+      for (let length = 2; length <= Math.min(4, words.length - start); length += 1) {
+        const value = words.slice(start, start + length).join(" ");
+        if (value.split(" ").some((word) => GENERIC_SOURCE_WORDS.has(word))) continue;
+        candidates.add(value);
+      }
+    }
+  }
+  const companyPattern = /\b(?:PT|CV|LLC|Ltd\.?|Inc\.?|Corp\.?)\s+[A-Z][A-Za-z0-9&.'-]*(?:\s+[A-Z][A-Za-z0-9&.'-]*){0,4}/g;
+  for (const match of sourceText.matchAll(companyPattern)) candidates.add(match[0].trim());
+  return [...candidates];
+}
+
+export function buildReflectionSafetyContext(input: {
+  customerName?: string;
+  organizationName?: string;
+  sourceTicketId?: string;
+  sourceTicketText?: string;
+  extractedCustomerName?: string | null;
+  extractedCompanyName?: string | null;
+  reusableProblemName?: string;
+}): ReflectionSafetyContext {
+  const sourceTicketText = input.sourceTicketText ?? "";
+  return {
+    customerName: input.extractedCustomerName?.trim() || input.customerName,
+    organizationName: input.organizationName,
+    sourceTicketId: input.sourceTicketId,
+    sourceTicketText,
+    reusableProblemName: input.reusableProblemName,
+    sourceSpecificValues: [
+      input.customerName,
+      input.extractedCustomerName ?? undefined,
+      input.extractedCompanyName ?? undefined,
+      ...sourceIdentityCandidates(sourceTicketText)
+    ].filter((value): value is string => Boolean(value?.trim()))
+  };
+}
+
 /** Fail closed before reviewer-authored material enters Organizational Memory. */
 export function assessReflectionSafety(
   draft: Pick<LessonDraft, "rootCause" | "solution" | "customerResponse" | "signals">,
   context: ReflectionSafetyContext = {}
 ): ReflectionSafetyResult {
   const issues = new Set<string>();
-  const text = [draft.rootCause, draft.solution, draft.customerResponse, ...draft.signals].join("\n");
+  const text = [context.reusableProblemName, draft.rootCause, draft.solution, draft.customerResponse, ...draft.signals]
+    .filter((value): value is string => typeof value === "string")
+    .join("\n");
 
   for (const [label, rule] of UNSAFE_CONTENT_RULES) {
     if (rule.test(text)) issues.add(label);
@@ -59,6 +118,14 @@ export function assessReflectionSafety(
     }
   }
 
+  for (const value of context.sourceSpecificValues ?? []) {
+    const candidate = value.trim();
+    if (candidate.length >= 3 && text.toLowerCase().includes(candidate.toLowerCase())) {
+      issues.add("customer-specific source identity");
+      break;
+    }
+  }
+
   const sourceText = context.sourceTicketText?.trim();
   if (sourceText) {
     const normalizedDraft = text.toLowerCase().replace(/\s+/g, " ").trim();
@@ -72,4 +139,3 @@ export function assessReflectionSafety(
 
   return { safe: issues.size === 0, issues: [...issues] };
 }
-

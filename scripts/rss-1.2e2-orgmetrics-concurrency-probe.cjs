@@ -14,6 +14,7 @@ const {
   saveKnowledge,
   saveTicketRecords
 } = require(path.join(root, "lib", "server", "persistenceService.ts"));
+const { applyTicketWorkflowCommand } = require(path.join(root, "lib", "server", "tickets", "ticketWorkflow.ts"));
 
 const prisma = getPrismaClient();
 const organizationId = `rss12e2-concurrency-${Date.now()}`;
@@ -63,6 +64,35 @@ function ticket(index, status = "open") {
     status,
     resolutionMode: status === "resolved" ? "human" : null
   };
+}
+
+async function resolveSourceTicketWithEvidence(ticketId) {
+  const workflowInput = (command, suffix) => ({
+    organizationId,
+    actorId: "rss12e2-actor",
+    ticketId,
+    command,
+    requestId: `rss12e2-${ticketId}-${suffix}`,
+    correlationId: `rss12e2-${ticketId}`,
+    source: "rss-1.2e.2-fixture"
+  });
+  const messageRecord = await applyTicketWorkflowCommand(workflowInput({
+    kind: "append_customer_message",
+    content: "Customer confirms the disposable source issue is fixed.",
+    idempotencyKey: `rss12e2-message-${ticketId}`
+  }, "message"));
+  const sourceMessageId = messageRecord.messages.at(-1)?.id;
+  assert.ok(sourceMessageId, "RSS-1.2E.2 source ticket must have a durable message");
+  const evidenceRecord = await applyTicketWorkflowCommand(workflowInput({
+    kind: "attach_resolution_evidence",
+    evidenceType: "customer_confirmation",
+    sourceMessageId,
+    note: "Customer confirmation for the disposable RSS-1.2E.2 source ticket.",
+    idempotencyKey: `rss12e2-evidence-${ticketId}`
+  }, "evidence"));
+  const evidenceId = evidenceRecord.resolutionEvidence.at(-1)?.id;
+  assert.ok(evidenceId, "RSS-1.2E.2 source ticket must have durable evidence");
+  await applyTicketWorkflowCommand(workflowInput({ kind: "resolve_with_evidence", evidenceId }, "resolve"));
 }
 
 function knowledgeItem(id, sourceTicketId, versions) {
@@ -118,7 +148,7 @@ async function main() {
   await prisma.organization.create({ data: { id: organizationId, name: "RSS-1.2E.2 Disposable", industry: "Test", description: "Disposable concurrency probe", settings: {}, createdAt: now, updatedAt: now } });
   await prisma.orgMetrics.create({ data: zeroMetrics() });
   try {
-    const concurrentTickets = Array.from({ length: 100 }, (_, index) => saveTicketRecords(organizationId, [ticket(index + 1)]));
+    const concurrentTickets = Array.from({ length: 100 }, (_, index) => saveTicketRecords(organizationId, [ticket(index + 1, index === 0 ? "in_review" : "open")]));
     await Promise.all(concurrentTickets);
     counters.concurrentTicketWrites = 100;
     assert.deepEqual((await metricValues()).lifetimeTickets, 100);
@@ -131,6 +161,7 @@ async function main() {
     assert.deepEqual((await metricValues()).lifetimeTickets, 200);
 
     const sourceTicketId = "RSS12E2-0001";
+    await resolveSourceTicketWithEvidence(sourceTicketId);
     const knowledgeId = "rss12e2-concurrency-knowledge";
     const versions = [{ versionId: `${knowledgeId}-v1`, version: 1, createdAt: now.toISOString(), changeReason: "initial", sourceTicketId }];
     const promoted = knowledgeItem(knowledgeId, sourceTicketId, versions);

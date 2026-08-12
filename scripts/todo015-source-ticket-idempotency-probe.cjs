@@ -17,6 +17,7 @@ const { root } = installProbeHarness();
 
 
 const service = require(path.join(root, "lib", "server", "persistenceService.ts"));
+const { applyTicketWorkflowCommand } = require(path.join(root, "lib", "server", "tickets", "ticketWorkflow.ts"));
 const { getPrismaClient } = require(path.join(root, "lib", "server", "prisma.ts"));
 const { recordResolution } = require(path.join(root, "lib", "trustEngine.ts"));
 const { withCanonicalProblemDefaults } = require(path.join(root, "lib", "canonicalProblemEngine.ts"));
@@ -52,6 +53,57 @@ function payload({ orgId, candidateId, validationId, memoryId, action, sourceTic
   };
 }
 async function loadItem(orgId, id) { return (await service.loadKnowledge(orgId)).find((i) => i.id === id); }
+async function seedResolvedSourceTickets(orgId, ticketIds, evidenceType = "customer_confirmation") {
+  const uniqueTicketIds = [...new Set(ticketIds)];
+  await service.saveTicketRecords(orgId, uniqueTicketIds.map((ticketId, index) => ({
+    ticketId,
+    orgId,
+    createdAt: new Date(Date.parse(NOW) + index * 1000).toISOString(),
+    rawMessage: `Disposable source ticket ${ticketId}.`,
+    subject: `TODO-015 source ticket ${ticketId}`,
+    classification: null,
+    memoryMatch: null,
+    draftSource: "deterministic",
+    resolution: { finalResponse: null, humanEdited: false, editDistanceNote: null, resolvedAt: null, draftRevision: 0 },
+    reflection: { decision: null, lessonCreatedId: null, lessonReinforcedId: null, knowledgeChanged: null, validationEligible: false, validationEligibilityReason: "Resolution evidence is required before validation." },
+    validationRecordIds: [],
+    labels: [],
+    status: "in_review",
+    resolutionMode: null
+  })));
+
+  for (const ticketId of uniqueTicketIds) {
+    const input = (command, suffix) => ({
+      organizationId: orgId,
+      actorId: ACTOR.id,
+      ticketId,
+      command,
+      requestId: `todo015-${ticketId}-${suffix}`,
+      correlationId: `todo015-${ticketId}`,
+      source: "todo015-fixture"
+    });
+    let sourceMessageId = null;
+    if (evidenceType === "customer_confirmation") {
+      const messageRecord = await applyTicketWorkflowCommand(input({
+        kind: "append_customer_message",
+        content: `Customer confirms the disposable source issue ${ticketId} is fixed.`,
+        idempotencyKey: `todo015-message-${orgId}-${ticketId}`
+      }, "message"));
+      sourceMessageId = messageRecord.messages.at(-1)?.id;
+      assert.ok(sourceMessageId, `source ticket ${ticketId} must have a durable customer message`);
+    }
+    const evidenceRecord = await applyTicketWorkflowCommand(input({
+      kind: "attach_resolution_evidence",
+      evidenceType,
+      sourceMessageId,
+      note: `Customer confirmation for disposable source ticket ${ticketId}.`,
+      idempotencyKey: `todo015-evidence-${ticketId}`
+    }, "evidence"));
+    const evidenceId = evidenceRecord.resolutionEvidence.at(-1)?.id;
+    assert.ok(evidenceId, `source ticket ${ticketId} must have durable resolution evidence`);
+    await applyTicketWorkflowCommand(input({ kind: "resolve_with_evidence", evidenceId }, "resolve"));
+  }
+}
 async function cleanup() {
   for (const id of [ORGA, ORGB]) {
     try { await service.deleteOrganization(id); } catch (e) { if (e?.code !== "ORGANIZATION_NOT_FOUND") throw e; }
@@ -81,6 +133,8 @@ async function main() {
     await service.upsertOrganizationProfiles([profile(ORGA), profile(ORGB)]);
     const profA = await service.getOrganizationProfile(ORGA);
     const profB = await service.getOrganizationProfile(ORGB);
+    await seedResolvedSourceTickets(ORGA, ["seed-ticket", "T-100", "T-200", "T-300", "T-301", "T-302", "T-400", "T-500"]);
+    await seedResolvedSourceTickets(ORGB, ["seed-ticket", "T-100"], "agent_verification");
     await service.commitValidation(ORGA, payload({ orgId: ORGA, candidateId: "c-seed", validationId: "v-seed", memoryId: "m-seed", action: "create_new", sourceTicketIds: ["seed-ticket"], item: baseItem(ORGA, "kA"), expectedRevision: null }), ACTOR);
     assert.equal((await loadItem(ORGA, "kA")).trustScore, 20, "baseline trust 20");
 
@@ -158,7 +212,7 @@ async function main() {
     const beforeJ = await loadItem(ORGA, "kA");
     await assert.rejects(
       () => trustCommit({ orgId: ORGA, itemId: "kA", suffix: "j1", sourceTicketIds: ["T-500"], profileObj: profA, expectedRevisionOverride: beforeJ.revision + 50 }),
-      (e) => e.code === "CONFLICT",
+      (e) => e.code === "CONFLICT" || e.code === "REVISION_CONFLICT",
       "J: stale-revision commit must fail"
     );
     assert.equal((await loadItem(ORGA, "kA")).trustScore, 40, "J: trust unchanged after rollback");

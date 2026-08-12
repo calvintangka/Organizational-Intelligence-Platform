@@ -122,7 +122,14 @@ export function buildAIAdvisory(input: {
       retries: input.diagnostics?.retries,
       fallbackPath: input.diagnostics?.fallbackPath,
       completionStatus: input.diagnostics?.completionStatus,
-      attempts: input.diagnostics?.attempts
+      attempts: input.diagnostics?.attempts,
+      timing: input.diagnostics?.timing,
+      failureClass: input.diagnostics?.failureClass,
+      timedOut: input.diagnostics?.timedOut,
+      httpStatus: input.diagnostics?.httpStatus,
+      completionLength: input.diagnostics?.completionLength,
+      jsonParseStatus: input.diagnostics?.jsonParseStatus,
+      structuredOutputValid: input.diagnostics?.structuredOutputValid
     },
     deterministicLabel: input.deterministicLabel,
     aiLabel,

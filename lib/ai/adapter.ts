@@ -152,7 +152,14 @@ function createChainProvider(config: AIConfig): AIProvider {
       retries: Math.max(0, attempts.filter((attempt) => attempt.status !== "skipped").length - 1) + (result.diagnostics?.retries ?? 0),
       fallbackPath: attempts.map((attempt) => attempt.provider),
       completionStatus: result.ok ? "succeeded" : "failed",
-      attempts
+      attempts,
+      failureClass: result.diagnostics?.failureClass,
+      timedOut: result.diagnostics?.timedOut,
+      httpStatus: result.diagnostics?.httpStatus,
+      completionLength: result.diagnostics?.completionLength,
+      jsonParseStatus: result.diagnostics?.jsonParseStatus,
+      structuredOutputValid: result.diagnostics?.structuredOutputValid,
+      timing: result.diagnostics?.timing
     });
     const chainStartedAt = Date.now();
     for (let i = 0; i < tiers.length; i++) {
@@ -215,7 +222,8 @@ function createChainProvider(config: AIConfig): AIProvider {
         retries: last.diagnostics?.retries ?? 0,
         completionLength: last.diagnostics?.completionLength,
         jsonParseStatus: last.diagnostics?.jsonParseStatus,
-        structuredOutputValid: last.diagnostics?.structuredOutputValid
+        structuredOutputValid: last.diagnostics?.structuredOutputValid,
+        latencyMs: Math.max(0, Date.now() - startedAt)
       });
       if (last.ok) {
         for (const skippedTier of tiers.slice(i + 1)) {

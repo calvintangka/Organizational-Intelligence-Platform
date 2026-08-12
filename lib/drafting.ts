@@ -17,6 +17,7 @@ import {
 import { extractConcepts, GENERIC_CONCEPT_IDS } from "@/lib/conceptExtraction";
 import { DEFAULT_LANGUAGE, detectLanguage } from "@/lib/languageDetection";
 import { foldForMatching } from "@/lib/textNormalization";
+import { assessRetrievalCompatibility } from "@/lib/retrievalCompatibility";
 
 /**
  * Is there an actual message here, rather than a bare term?
@@ -326,8 +327,12 @@ export function isCompatibleForDrafting(
     if (!ticket || !provisionalCategory || !isStrongValidatedLessonMatch(understanding, ticket, item)) return false;
   }
   if (!ticket) return true;
+  // A structured domain conflict is a hard veto. It must run before the
+  // strong-lesson shortcut so a highly trusted item cannot authorize a
+  // cross-domain reuse candidate.
+  if (assessCompatibilityDecision(understanding, item, ticket).state === "incompatible") return false;
   if (isStrongValidatedLessonMatch(understanding, ticket, item)) return true;
-  return assessRootCauseCompatibility(understanding, item, ticket).compatible;
+  return assessCompatibilityDecision(understanding, item, ticket).state === "compatible";
 }
 
 export type CompatibilityDecisionState = "compatible" | "incompatible" | "unknown";
@@ -353,7 +358,20 @@ export function assessCompatibilityDecision(
   item: KnowledgeItem,
   ticket: Ticket
 ): CompatibilityDecision {
+  if ((item.lessons ?? []).some((lesson) => ticketContradictsLesson(ticket, lesson))) {
+    return { state: "incompatible", reason: "Ticket evidence contradicts the lesson's required failure state." };
+  }
+  const facetCompatibility = assessRetrievalCompatibility(understanding, item);
+  if (facetCompatibility.state === "incompatible") {
+    return { state: "incompatible", reason: facetCompatibility.reason };
+  }
   if (!isCategoryCompatible(understanding.category, item.category)) {
+    const provisionalCategory = item.category === "General"
+      || item.category === UNCATEGORIZED_CATEGORY
+      || item.category === item.canonicalProblemTitle;
+    if (provisionalCategory && isStrongValidatedLessonMatch(understanding, ticket, item)) {
+      return { state: "compatible", reason: "Strong validated lesson evidence bridges a provisional category." };
+    }
     return { state: "incompatible", reason: `Category "${item.category}" is not compatible with ticket category "${understanding.category}".` };
   }
   if (isStrongValidatedLessonMatch(understanding, ticket, item)) {
@@ -368,6 +386,13 @@ export function assessCompatibilityDecision(
   }
   if (rootCause.ticketFamily !== "unknown" && rootCause.itemFamily !== "unknown") {
     return { state: "incompatible", reason: rootCause.reason };
+  }
+  if ((understanding.category === UNCATEGORIZED_CATEGORY || understanding.category === "General")
+      && facetCompatibility.state === "compatible") {
+    return { state: "compatible", reason: facetCompatibility.reason };
+  }
+  if (understanding.category === UNCATEGORIZED_CATEGORY || understanding.category === "General") {
+    return { state: "incompatible", reason: "Category is unknown and deterministic compatibility evidence is insufficient." };
   }
   return { state: "unknown", reason: rootCause.reason };
 }
@@ -384,7 +409,14 @@ export function isRetrievalCandidateEligible(
   item: KnowledgeItem,
   ticket: Ticket
 ): boolean {
-  return assessCompatibilityDecision(understanding, item, ticket).state !== "incompatible";
+  const state = assessCompatibilityDecision(understanding, item, ticket).state;
+  // Category-unknown tickets must have positive structured evidence; they may
+  // not keep an unknown candidate alive merely because the category is broad.
+  // Classified tickets retain the existing unknown state for the semantic
+  // fallback, but hard incompatibilities are still rejected here.
+  return understanding.category === UNCATEGORIZED_CATEGORY || understanding.category === "General"
+    ? state === "compatible"
+    : state !== "incompatible";
 }
 
 /**
@@ -649,6 +681,9 @@ export function ticketContradictsLesson(ticket: Ticket, lesson: Lesson): boolean
   const ticketText = normalizeLessonSignalText(`${ticket.subject} ${ticket.description}`);
   if (lessonRequiresLoginFailure(lesson) && ticketHasExplicitLoginContradiction(ticketText)) return true;
   const lessonText = normalizeLessonSignalText(`${lesson.title ?? ""} ${lesson.rootCause} ${lesson.solution} ${lesson.signals.join(" ")}`);
+  const lessonRequiresPermissionRecovery = /(?:\b(?:permission|permissions|access)\b[^.!?]{0,60}\b(?:disabled|denied|not granted|did not grant|does not grant|missing|blocked|unavailable)\b|\b(?:disabled|denied|not granted|did not grant|does not grant|missing|blocked|unavailable)\b[^.!?]{0,60}\b(?:permission|permissions|access)\b)/i.test(lessonText);
+  const ticketReportsPermissionHealthy = /\b(?:permission|permissions|access)\b[^.!?]{0,60}\b(?:enabled|granted|allowed|active|works correctly|working correctly)\b/i.test(ticketText);
+  if (lessonRequiresPermissionRecovery && ticketReportsPermissionHealthy) return true;
   const explicitSeatChange = /\b(?:changed|change|increase|decrease|added|removed|reduced|increased)\b[^.!?]{0,35}\b(?:seats?|plan|quantity|headcount)\b|\b(?:seats?|plan|quantity|headcount)\b[^.!?]{0,35}\b(?:changed|change|increased|decreased|added|removed)\b/i.test(ticketText);
   if (/\bseat change|seat reconciliation|plan change|quantity change|headcount change\b/i.test(lessonText) && !explicitSeatChange) return true;
   return false;
@@ -770,7 +805,15 @@ const CONCEPT_SYNONYMS: ReadonlyArray<ReadonlySet<string>> = [
   ]),
   // Mobile/device surface and offline state.
   new Set([
-    "mobile", "phone", "handset", "tablet", "device", "app", "application", "technician", "field"
+    "mobile", "phone", "handset", "tablet", "device", "android", "ios", "iphone", "ipad", "app", "application", "technician", "field"
+  ]),
+  // Attendance/check-in and location-access evidence. These are reusable
+  // problem concepts, not a product or acceptance-ticket rule.
+  new Set([
+    "clock", "clock-in", "check", "check-in", "attendance", "timekeeping", "punch", "punch-in"
+  ]),
+  new Set([
+    "location", "permission", "permissions", "access", "gps", "geolocation", "denied", "disabled", "allow", "allowed"
   ]),
   new Set([
     "offline", "disconnected", "coverage", "reception", "signal", "dead-zone", "flight", "network",
@@ -807,8 +850,8 @@ const CONCEPT_NAMES = [
   "sso-identity", "sso-signing-material", "sso-redirect-loop", "billing-object", "billing-duplicate",
   "billing-timing", "integration-surface", "webhook-delivery", "signature-verification", "integration-timing",
   "permission-surface", "guest-actor", "workspace-resource", "workspace-timing", "reporting-surface",
-  "export-surface", "encoding-corruption", "reporting-timing", "mobile-surface", "offline-state",
-  "mobile-synchronization", "mobile-timing", "notification-surface", "email-recipient", "notification-history"
+  "export-surface", "encoding-corruption", "reporting-timing", "mobile-surface", "attendance-checkin", "location-access",
+  "offline-state", "mobile-synchronization", "mobile-timing", "notification-surface", "email-recipient", "notification-history"
 ];
 
 // Tokens that negate an adjacent concept ("no certificate", "not redirected",
@@ -816,7 +859,11 @@ const CONCEPT_NAMES = [
 // unrelated"). Includes contraction stems produced by normalizeLessonSignalText
 // (apostrophes become spaces: "hasn't" -> "hasn").
 const CONCEPT_NEGATION_TOKENS = new Set([
-  "no", "not", "never", "cannot", "cant", "dont", "wont", "without",
+  // "cannot" / "can't" usually introduce the reported failure itself
+  // ("cannot clock in", "can't sign in"); they must not suppress the
+  // problem concept that follows. Explicit negation and healthy-state
+  // predicates remain covered by the other tokens and vetoes below.
+  "no", "not", "never", "dont", "wont", "without",
   "unchanged", "unrelated", "unaffected", "normally", "normal", "correct", "fine", "works", "working",
   "suspect", "suspected", "possibly", "possible", "maybe",
   "hasn", "havent", "haven", "hadn", "didn", "doesn", "wasn", "weren", "isn", "aren",
@@ -866,10 +913,12 @@ function affirmativeConceptsOf(rawText: string): Set<number> {
         // Trailing window of three tokens catches predicate negations such as
         // "signing certificate has not changed" without suppressing concepts
         // whose clause carries a distant, unrelated negation.
-        const trailingNegation =
+        const stoppedWorkingFailure = tokens.slice(index + 1, index + 4).join(" ").includes("stopped working");
+        const trailingNegation = !stoppedWorkingFailure && (
           (CONCEPT_NEGATION_TOKENS.has(tokens[index + 1] ?? "") && !(tokens[index + 1] === "no" && tokens[index + 2] === "longer")) ||
           (CONCEPT_NEGATION_TOKENS.has(tokens[index + 2] ?? "") && !(tokens[index + 2] === "no" && tokens[index + 3] === "longer")) ||
-          (CONCEPT_NEGATION_TOKENS.has(tokens[index + 3] ?? "") && !(tokens[index + 3] === "no" && tokens[index + 4] === "longer"));
+          (CONCEPT_NEGATION_TOKENS.has(tokens[index + 3] ?? "") && !(tokens[index + 3] === "no" && tokens[index + 4] === "longer"))
+        );
         const offlineStateAffirmed = concepts.includes(19)
           && (tokens[index - 1] === "without" || tokens[index - 1] === "no" || tokens[index - 1] === "working");
         const counts = offlineStateAffirmed || (!negationEarlier && !trailingNegation) ? affirmativeCounts : negatedCounts;
@@ -878,7 +927,10 @@ function affirmativeConceptsOf(rawText: string): Set<number> {
         }
         concepts.forEach((concept) => counts.set(concept, (counts.get(concept) ?? 0) + 1));
       }
-      if (CONCEPT_NEGATION_TOKENS.has(tokens[index]) && !(tokens[index] === "no" && tokens[index + 1] === "longer")) negationEarlier = true;
+      const failurePredicate = tokens[index] === "working" && tokens[index - 1] === "stopped";
+      if (CONCEPT_NEGATION_TOKENS.has(tokens[index])
+          && !failurePredicate
+          && !(tokens[index] === "no" && tokens[index + 1] === "longer")) negationEarlier = true;
     }
   }
   const result = new Set([...affirmativeCounts.keys()].filter((concept) =>
@@ -947,7 +999,7 @@ function affirmativeConceptsOf(rawText: string): Set<number> {
 // ("generic overlaps are not evidence") to semantic concept coverage. Every
 // discriminating domain signal also carries a non-generic surface/meaning
 // concept, so it is never a subset of this set and is unaffected.
-const GENERIC_SURFACE_TIMING_CONCEPTS = new Set([5, 9, 13, 14, 17, 21, 24]);
+const GENERIC_SURFACE_TIMING_CONCEPTS = new Set([5, 9, 13, 14, 17, 23, 26]);
 
 interface SignalMatchEvidence {
   matchType: "literal" | "semantic";

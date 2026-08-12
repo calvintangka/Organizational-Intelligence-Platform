@@ -3,6 +3,7 @@ import { findMatchingLesson } from "@/lib/drafting";
 import { buildMatchExplainability } from "@/lib/explainability";
 import type { MatchExplainability } from "@/types";
 import { formatLastUpdatedDisplay } from "@/lib/knowledgeTimestamps";
+import { reconcileGroundingForPresentation } from "@/lib/groundingPresentation";
 
 interface ProvenancePanelProps {
   topMatch: KnowledgeMatch | null;
@@ -17,7 +18,9 @@ function responseGroundingCopy(
   response?: SuggestedResponse | null,
   lessonMatch?: ReturnType<typeof findMatchingLesson> | null
 ): { title: string; body: string } | null {
-  if (!response) return null;
+  const reconciledResponse = reconcileGroundingForPresentation(response ?? null);
+  if (!reconciledResponse) return null;
+  response = reconciledResponse;
 
   if (
     response.draftMode === "lesson_grounded" &&
@@ -95,9 +98,10 @@ function ExplainabilityDetails({ explanation }: { explanation: MatchExplainabili
 
 export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized = false, response, fallbackTechnicalDetails }: ProvenancePanelProps) {
   const lessonMatch = topMatch && ticket ? findMatchingLesson(ticket, topMatch.item) : null;
-  const groundingCopy = responseGroundingCopy(response, lessonMatch);
-  const explanation = buildMatchExplainability(topMatch, ticket, response);
-  const lessonGrounded = !!lessonMatch || response?.draftMode === "lesson_grounded";
+  const reconciledResponse = reconcileGroundingForPresentation(response ?? null);
+  const groundingCopy = responseGroundingCopy(reconciledResponse, lessonMatch);
+  const explanation = buildMatchExplainability(topMatch, ticket, reconciledResponse);
+  const lessonGrounded = !!lessonMatch || reconciledResponse?.draftMode === "lesson_grounded";
 
   if (groundingCopy) {
     return (

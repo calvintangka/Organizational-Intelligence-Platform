@@ -1,4 +1,4 @@
-import { assessReflectionSafety, type ReflectionSafetyContext } from "@/lib/reflectionSafety";
+import { assessReflectionSafety, buildReflectionSafetyContext, type ReflectionSafetyContext } from "@/lib/reflectionSafety";
 import { generateReflection, type ReflectionLanguageContext } from "@/lib/reflection";
 import type { ValidationCommitResult } from "@/lib/persistence/adapter";
 import type { OrganizationPersistenceSession } from "@/lib/persistence/session";
@@ -173,8 +173,25 @@ const defaultIdempotency: LearningIdempotencyPort = {
   set: (key, value) => promotionReplayStore.set(key, value)
 };
 
+function persistenceConflictDiagnostics(cause: unknown): Record<string, string | number | boolean | undefined> | undefined {
+  if (!cause || typeof cause !== "object") return undefined;
+  const details = "details" in cause && cause.details && typeof cause.details === "object"
+    ? cause.details as Record<string, unknown>
+    : null;
+  if (!details) return undefined;
+  const metadata: Record<string, string | number | boolean | undefined> = {};
+  for (const key of ["resourceType", "resourceId", "expectedRevision", "currentRevision", "requestId"] as const) {
+    const value = details[key];
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === undefined) {
+      metadata[key] = value;
+    }
+  }
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
 function fail(command: { requestId: string; organizationId: string }, errorClass: LearningErrorClass, safeMessage: string, retryable = false, cause?: unknown): never {
-  throw new LearningApplicationError({ requestId: command.requestId, organizationId: command.organizationId, errorClass, retryable, safeMessage }, cause);
+  const diagnosticMetadata = persistenceConflictDiagnostics(cause);
+  throw new LearningApplicationError({ requestId: command.requestId, organizationId: command.organizationId, errorClass, retryable, safeMessage, ...(diagnosticMetadata ? { diagnosticMetadata } : {}) }, cause);
 }
 
 function assertScope(command: { organizationId: string; requestId: string; actor: LearningActorContext; authority: LearningAuthority }, profileId?: string): void {
@@ -342,7 +359,15 @@ export async function promoteKnowledgeCommand(command: PromoteKnowledgeCommand, 
       requestId: command.requestId,
       reflection: command.reflection,
       lessonDraft: command.lessonDraft,
-      safetyContext: { customerName: command.ticket.customerName, organizationName: command.organizationProfile.name, sourceTicketId: ticketReferenceId(command.ticket), sourceTicketText: `${command.ticket.subject} ${command.ticket.description}` }
+      safetyContext: buildReflectionSafetyContext({
+        customerName: command.ticket.customerName,
+        organizationName: command.organizationProfile.name,
+        sourceTicketId: ticketReferenceId(command.ticket),
+        sourceTicketText: `${command.ticket.subject} ${command.ticket.description}`,
+        extractedCustomerName: command.understanding.extractedFields.senderName,
+        extractedCompanyName: command.understanding.extractedFields.companyName,
+        reusableProblemName: command.problemName
+      })
     });
     if (!validation.accepted) fail(command, "validation_rejected", `Reflection rejected: ${validation.reasons.join(", ")}.`);
   }

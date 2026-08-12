@@ -10,6 +10,7 @@ import type {
   AIProviderMode,
   AIProviderFailureClass,
   AIJsonParseStatus,
+  AITiming,
   MatchDiscriminationResult,
   KnowledgeMatch,
   OrganizationProfile,
@@ -63,6 +64,7 @@ export interface AIProviderResultMetadata {
   jsonParseStatus?: AIJsonParseStatus;
   structuredOutputValid?: boolean;
   retries?: number;
+  timing?: AITiming;
 }
 
 export interface AnalyzeTicketInput {
@@ -137,6 +139,8 @@ export interface DraftCustomerResponseInput {
   /** The raw validated customer response template used as grounding source */
   deterministicDraft: string;
   matchedKnowledge: KnowledgeMatch | null;
+  /** Bounded prior conversation context for follow-up replies. */
+  conversationContext?: string;
 }
 
 export interface AIProvider {

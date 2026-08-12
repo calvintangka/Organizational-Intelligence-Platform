@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { SUPPORTED_LANGUAGES, languageLabel, type SupportedLanguageCode } from "@/lib/languageDetection";
-import type { TicketRecordLanguage } from "@/types/ticket";
+import type { TicketMessage, TicketRecordLanguage, TicketRecordStatus, TicketResolutionEvidence, TicketResolutionEvidenceType } from "@/types/ticket";
 import {
   curatedDeveloperDemoScenarios,
   curatedScenarioText,
@@ -29,6 +29,7 @@ import { ReflectionPanel } from "@/components/ReflectionPanel";
 import { ProvenancePanel } from "@/components/ProvenancePanel";
 import { findMatchingLesson } from "@/lib/drafting";
 import { buildMatchExplainability } from "@/lib/explainability";
+import { reconcileGroundingForPresentation } from "@/lib/groundingPresentation";
 
 export type TicketPhase =
   | "idle"
@@ -50,6 +51,8 @@ interface TicketWorkspaceProps {
   suggestedResponse: SuggestedResponse | null;
   reviewedResponse: string;
   reflectionDecision: ReflectionDecision | null;
+  reflectionValidationEligible?: boolean;
+  reflectionValidationBlockedReason?: string | null;
   knowledgeItems: KnowledgeItem[];
   businessRelevance: BusinessRelevance | null;
   domainClassification: BusinessDomainClassification | null;
@@ -75,6 +78,10 @@ interface TicketWorkspaceProps {
   darkMode: boolean;
   lastSavedKnowledgeId: string | null;
   aiModeEnabled: boolean;
+  conversationMessages?: TicketMessage[];
+  resolutionEvidence?: TicketResolutionEvidence[];
+  caseStatus?: TicketRecordStatus | null;
+  isConversationSubmitting?: boolean;
   isRetryingDraft: boolean;
   isValidationSubmitting: boolean;
   // Callbacks
@@ -91,6 +98,10 @@ interface TicketWorkspaceProps {
   onSwitchToBulk: () => void;
   onDiscardTicket: () => void;
   onRetryAIDraft: () => void;
+  onSendAgentResponse?: () => void;
+  onAddCustomerReply?: (text: string) => void;
+  onAttachResolutionEvidence?: (sourceMessageId: string | null, evidenceType: TicketResolutionEvidenceType, note: string) => void;
+  onResolveWithEvidence?: (evidenceId: string) => void;
 }
 
 type TimelineStatus = "pending" | "running" | "done" | "active";
@@ -290,16 +301,17 @@ function getTimelineItems(
 }
 
 function draftGroundingLabel(response: SuggestedResponse | null): string | undefined {
-  if (!response || response.source !== "ai_advisory") return undefined;
-  if (response.draftMode === "lesson_grounded") {
-    return `AI draft grounded in validated lesson: ${response.groundingLabel ?? "matched lesson"}`;
+  const reconciledResponse = reconcileGroundingForPresentation(response);
+  if (!reconciledResponse || reconciledResponse.source !== "ai_advisory") return undefined;
+  if (reconciledResponse.draftMode === "lesson_grounded") {
+    return `AI draft grounded in validated lesson: ${reconciledResponse.groundingLabel ?? "matched lesson"}`;
   }
-  if (response.draftMode === "memory_grounded") {
-    return response.groundingLabel === "organization profile"
+  if (reconciledResponse.draftMode === "memory_grounded") {
+    return reconciledResponse.groundingLabel === "organization profile"
       ? "AI draft grounded in organization profile"
       : "AI draft grounded in organizational memory";
   }
-  if (response.draftMode === "cold_start") {
+  if (reconciledResponse.draftMode === "cold_start") {
     return "AI suggestion - no organizational knowledge exists yet; this draft is not based on validated memory. Review carefully before sending.";
   }
   return "AI advisory draft. Human review is required before sending.";
@@ -316,6 +328,8 @@ export function TicketWorkspace({
   suggestedResponse,
   reviewedResponse,
   reflectionDecision,
+  reflectionValidationEligible = false,
+  reflectionValidationBlockedReason = null,
   knowledgeItems,
   domainClassification,
   ticketLanguage,
@@ -349,7 +363,16 @@ export function TicketWorkspace({
   onSwitchToBulk,
   onDiscardTicket,
   onRetryAIDraft,
+  conversationMessages = [],
+  resolutionEvidence = [],
+  caseStatus = null,
+  isConversationSubmitting = false,
+  onSendAgentResponse,
+  onAddCustomerReply,
+  onAttachResolutionEvidence,
+  onResolveWithEvidence,
 }: TicketWorkspaceProps) {
+  const [customerReply, setCustomerReply] = useState("");
   const topMatch = similarKnowledge.length > 0 ? similarKnowledge[0] : null;
   const extractedFields = aiAnalysis?.extractedFields;
   const hasExtractedFieldDetails = !!extractedFields && (
@@ -436,6 +459,16 @@ export function TicketWorkspace({
               <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${darkMode ? "bg-blue-900/50 text-blue-300" : "bg-blue-50 text-[#2563EB]"}`}>
                 {ticketPhase === "idle" ? "New ticket" : "Customer ticket"}
               </span>
+              {caseStatus === "waiting_for_customer" && (
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${darkMode ? "bg-blue-900/50 text-blue-300" : "bg-blue-50 text-blue-700"}`}>
+                  Waiting for customer
+                </span>
+              )}
+              {caseStatus === "in_review" && conversationMessages.length > 1 && (
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${darkMode ? "bg-amber-900/50 text-amber-300" : "bg-amber-50 text-amber-700"}`}>
+                  In review
+                </span>
+              )}
             </div>
 
             {ticketPhase === "idle" ? (
@@ -460,6 +493,87 @@ export function TicketWorkspace({
                 <div className={`rounded-xl p-3 text-sm leading-6 ${darkMode ? "bg-[#111827] text-slate-300" : "bg-slate-50 text-[#111827]"}`}>
                   {selectedTicket?.description ?? selectedTicket?.subject}
                 </div>
+                {conversationMessages.length > 0 && (
+                  <div className="mt-4">
+                    <p className={`mb-2 text-xs font-semibold ${darkMode ? "text-slate-400" : "text-slate-500"}`}>Conversation history</p>
+                    <div className="space-y-2">
+                      {conversationMessages.map((message) => {
+                        const sourceEvidence = resolutionEvidence.find((item) => item.sourceMessageId === message.id);
+                        return (
+                        <div key={message.id} className={`rounded-xl border p-3 ${darkMode ? "border-[#2d3f52] bg-[#111827]" : "border-slate-200 bg-white"}`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className={`text-[10px] font-bold uppercase tracking-wide ${message.direction === "agent" ? "text-emerald-600" : "text-blue-600"}`}>
+                              {message.direction === "agent" ? "Agent" : "Customer"} · #{message.sequence}
+                            </span>
+                            <span className={`text-[10px] ${darkMode ? "text-slate-500" : "text-slate-400"}`}>{new Date(message.createdAt).toLocaleString()}</span>
+                          </div>
+                          <p className={`mt-1 whitespace-pre-wrap text-xs leading-5 ${darkMode ? "text-slate-300" : "text-slate-700"}`}>{message.content}</p>
+                          {message.direction === "customer" && onAttachResolutionEvidence && (
+                            <button
+                              type="button"
+                              disabled={!!sourceEvidence || caseStatus === "resolved" || caseStatus === "discarded"}
+                              onClick={() => onAttachResolutionEvidence(message.id, "customer_confirmation", "Customer confirmation was recorded from this customer message.")}
+                              className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {sourceEvidence ? "Resolution evidence recorded" : "Use as resolution evidence"}
+                            </button>
+                          )}
+                        </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {onAttachResolutionEvidence && caseStatus !== "resolved" && caseStatus !== "discarded" && (
+                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
+                    <p className="text-xs font-bold uppercase tracking-wide text-amber-800">Resolution evidence gate</p>
+                    <p className="mt-1 text-xs leading-5 text-amber-800">A sent response or Reflection alone does not resolve this case. Record an explicit verification, then resolve with that evidence.</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button type="button" onClick={() => onAttachResolutionEvidence(null, "agent_verification", "Agent verified that the latest response resolved the customer issue.")} className="rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-amber-800">Agent verified resolution</button>
+                      <button type="button" onClick={() => onAttachResolutionEvidence(null, "manual_verified_resolution", "Manual verified resolution recorded by the authorized reviewer.")} className="rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-amber-800">Manual verified resolution</button>
+                    </div>
+                  </div>
+                )}
+                {resolutionEvidence.length > 0 && (
+                  <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
+                    <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">Recorded resolution evidence</p>
+                    <div className="mt-2 space-y-2">
+                      {resolutionEvidence.map((item) => (
+                        <div key={item.id} className="rounded-lg border border-emerald-100 bg-white p-2.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-[11px] font-bold text-emerald-800">{item.type.replaceAll("_", " ")}</span>
+                            {onResolveWithEvidence && caseStatus !== "resolved" && <button type="button" onClick={() => onResolveWithEvidence(item.id)} className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-semibold text-white">Resolve with evidence</button>}
+                          </div>
+                          <p className="mt-1 text-xs leading-5 text-emerald-900">{item.note}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {caseStatus === "waiting_for_customer" && onAddCustomerReply && (
+                  <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50/60 p-3">
+                    <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Customer follow-up</p>
+                    <textarea
+                      value={customerReply}
+                      onChange={(event) => setCustomerReply(event.target.value)}
+                      placeholder="Add the next customer message to reopen this case"
+                      className="mt-2 min-h-24 w-full rounded-lg border border-blue-200 bg-white p-2 text-xs leading-5 text-slate-800 outline-none focus:ring-2 focus:ring-blue-200"
+                    />
+                    <button
+                      type="button"
+                      disabled={!customerReply.trim() || isConversationSubmitting}
+                      onClick={() => {
+                        const value = customerReply.trim();
+                        if (!value) return;
+                        setCustomerReply("");
+                        onAddCustomerReply(value);
+                      }}
+                      className="mt-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                    >
+                      {isConversationSubmitting ? "Saving..." : "Add customer reply"}
+                    </button>
+                  </div>
+                )}
                 {canDiscard && (
                   <button
                     type="button"
@@ -560,6 +674,16 @@ export function TicketWorkspace({
               {suggestedResponse.confidenceNote && (
                 <p className={`mt-3 text-xs ${darkMode ? "text-slate-500" : "text-slate-400"}`}>{suggestedResponse.confidenceNote}</p>
               )}
+              {onSendAgentResponse && (
+                <button
+                  type="button"
+                  onClick={onSendAgentResponse}
+                  disabled={!reviewedResponse.trim() || isConversationSubmitting}
+                  className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 disabled:opacity-50"
+                >
+                  {isConversationSubmitting ? "Sending..." : "Send response · Wait for customer"}
+                </button>
+              )}
             </div>
           )}
 
@@ -608,6 +732,8 @@ export function TicketWorkspace({
               decision={reflectionDecision}
               onConfirm={onConfirmReflection}
               isSubmitting={isValidationSubmitting}
+              validationEligible={reflectionValidationEligible}
+              validationBlockedReason={reflectionValidationBlockedReason}
               existingLessons={reflectionDecision.existingItemId ? knowledgeItems.find(k => k.id === reflectionDecision.existingItemId)?.lessons : undefined}
               reviewedResponse={reviewedResponse}
               darkMode={darkMode}

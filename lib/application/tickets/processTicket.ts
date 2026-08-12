@@ -133,7 +133,24 @@ export interface ProcessTicketResult {
   reviewState: "in_review";
   processingState: "in_review";
   auditSummary: { organizationId: string; actorId?: string; requestId: string; idempotencyKey?: string };
-  telemetrySummary: { requestId: string; stages: string[] };
+  telemetrySummary: {
+    requestId: string;
+    stages: string[];
+    timing: {
+      totalMs: number;
+      preRetrievalMs: number;
+      retrievalMs: number;
+      draftProcessingMs: number;
+      persistenceMs: number;
+      initialPersistenceMs: number;
+      finalPersistenceMs: number;
+      providerMs?: number;
+      promptBuildMs?: number;
+      parseMs?: number;
+      providerAttempts: number;
+      fallbackUsed: boolean;
+    };
+  };
   persisted: true;
   replayed: boolean;
   followUp: ProcessTicketFollowUp[];
@@ -304,7 +321,14 @@ function diagnosticsFor(adapter: AIAdapter, results: Array<AIProviderResult<unkn
     retries: first?.retries,
     fallbackPath: first?.fallbackPath,
     completionStatus: results.some((result) => result.ok) ? "succeeded" : results.length > 0 ? "failed" : "skipped",
-    attempts: first?.attempts
+    attempts: first?.attempts,
+    timing: first?.timing,
+    failureClass: first?.failureClass,
+    timedOut: first?.timedOut,
+    httpStatus: first?.httpStatus,
+    completionLength: first?.completionLength,
+    jsonParseStatus: first?.jsonParseStatus,
+    structuredOutputValid: first?.structuredOutputValid
   };
 }
 
@@ -508,6 +532,14 @@ function replaySnapshot(result: ProcessTicketResult): ProcessTicketResult {
   return JSON.parse(JSON.stringify({ ...result, persistedTicket: undefined })) as ProcessTicketResult;
 }
 
+function monotonicNow(): number {
+  return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
+
+function elapsedMs(startedAt: number): number {
+  return Number(Math.max(0, monotonicNow() - startedAt).toFixed(3));
+}
+
 export async function processTicket(command: ProcessTicketCommand, ports: ProcessTicketPorts): Promise<ProcessTicketResult> {
   requireCommand(command);
   if (
@@ -538,8 +570,12 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
   const now = ports.now?.() ?? new Date().toISOString();
   const profile = command.organizationProfile;
   const adapter = ports.ai;
+  const pipelineStartedAt = monotonicNow();
+  const preRetrievalStartedAt = pipelineStartedAt;
   let record: TicketRecord | null = null;
   const stages: string[] = [];
+  let initialPersistenceMs = 0;
+  let finalPersistenceMs = 0;
   const span = startTelemetrySpan("ticket_processing", "pipeline", { unit: "tickets", tags: { organizationId: command.organizationId, requestId: command.requestId, authority: command.authority } });
   try {
     assertNotAborted(command, "received");
@@ -559,7 +595,9 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
     const ticketId = await ports.persistence.generateTicketId(profile);
     const ticket = makeTicket(command.ticketInput, ticketId, now);
     record = { ...createTicketRecord(ticketId, command.organizationId, ticket.description, ticket.subject), actorId: command.actorContext.id, processingIdempotencyKey: key, processingPayloadHash: payloadHash, processingRequestId: command.requestId };
+    const initialPersistenceStartedAt = monotonicNow();
     await ports.persistence.saveTicketRecord(record);
+    initialPersistenceMs = elapsedMs(initialPersistenceStartedAt);
     stages.push("persisted");
     emit(ports, "Ticket received", ticketId);
     assertNotAborted(command, "persisted", record);
@@ -597,6 +635,7 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
     stages.push("analyzing");
     assertNotAborted(command, "analyzing", record);
 
+    const retrievalStartedAt = monotonicNow();
     const knowledgeItems = command.processingOptions?.knowledgeItems ?? [];
     const sessionCreatedIds = command.processingOptions?.sessionCreatedIds ?? new Set<string>();
     const rawMatches = securityRouted ? [] : withPreDiscriminationLessonMatches(ticket, enriched, retrieveMemory(enriched, knowledgeItems, sessionCreatedIds), knowledgeItems, canonical.title);
@@ -620,6 +659,8 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
     stages.push("retrieved");
     assertNotAborted(command, "retrieved", record);
 
+    const retrievalMs = elapsedMs(retrievalStartedAt);
+    const draftStartedAt = monotonicNow();
     const deterministicDraft = securityRouted
       ? securityIncidentDraft(ticket.id)
       : enriched.businessClassification?.inquiryType === "business_inquiry" && !businessMemory
@@ -629,8 +670,23 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
     const draftResult = securityRouted
       ? { response: { ...deterministic, draftMode: "cold_start" as const, groundingLabel: "security escalation" }, advisory, usedAIDraft: false }
       : await requestDraft(ports, ticket, enriched, profile, canonical.title, memoryMatch, deterministic, advisory, semantic?.authorization ?? null);
-    record = { ...record, draftSource: draftResult.response.source as TicketRecord["draftSource"], status: "in_review" };
+    const generatedDraft = draftResult.response.draftResponse.trim();
+    const draftProcessingMs = elapsedMs(draftStartedAt);
+    record = {
+      ...record,
+      draftSource: draftResult.response.source as TicketRecord["draftSource"],
+      status: "in_review",
+      resolution: {
+        ...record.resolution,
+        finalResponse: generatedDraft || null,
+        humanEdited: false,
+        resolvedAt: null,
+        draftRevision: generatedDraft ? 1 : 0
+      }
+    };
+    const finalPersistenceStartedAt = monotonicNow();
     await ports.persistence.saveTicketRecord(record);
+    finalPersistenceMs = elapsedMs(finalPersistenceStartedAt);
     stages.push("drafted", "in_review");
     assertNotAborted(command, "in_review", record);
     const result: ProcessTicketResult = {
@@ -652,7 +708,24 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
       reviewState: "in_review",
       processingState: "in_review",
       auditSummary: { organizationId: command.organizationId, actorId: command.actorContext.id, requestId: command.requestId, idempotencyKey: key },
-      telemetrySummary: { requestId: command.requestId, stages },
+      telemetrySummary: {
+        requestId: command.requestId,
+        stages,
+        timing: {
+          totalMs: elapsedMs(pipelineStartedAt),
+          preRetrievalMs: elapsedMs(preRetrievalStartedAt),
+          retrievalMs,
+          draftProcessingMs,
+          persistenceMs: initialPersistenceMs + finalPersistenceMs,
+          initialPersistenceMs,
+          finalPersistenceMs,
+          providerMs: draftResult.advisory.diagnostics.timing?.totalMs,
+          promptBuildMs: draftResult.advisory.diagnostics.timing?.promptBuildMs,
+          parseMs: draftResult.advisory.diagnostics.timing?.parseMs,
+          providerAttempts: draftResult.advisory.diagnostics.attempts?.length ?? 0,
+          fallbackUsed: draftResult.advisory.fallbackUsed
+        }
+      },
       persisted: true,
       replayed: false,
       followUp: securityRouted || hasSpecificCanonicalMatch(enriched, knowledgeItems)

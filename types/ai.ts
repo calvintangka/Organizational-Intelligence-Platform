@@ -55,6 +55,16 @@ export type AIProviderFailureClass =
 
 export type AIJsonParseStatus = "not_attempted" | "valid" | "invalid";
 
+/** Metadata-only timing breakdown for one AI provider operation. */
+export interface AITiming {
+  promptChars?: number;
+  promptBuildMs?: number;
+  requestMs?: number;
+  responseBodyMs?: number;
+  parseMs?: number;
+  totalMs?: number;
+}
+
 export interface AIChainAttempt {
   label: string;
   provider: string;
@@ -67,6 +77,7 @@ export interface AIChainAttempt {
   completionLength?: number;
   jsonParseStatus?: AIJsonParseStatus;
   structuredOutputValid?: boolean;
+  latencyMs?: number;
 }
 
 export interface AIDiagnostics {
@@ -91,6 +102,7 @@ export interface AIDiagnostics {
   completionLength?: number;
   jsonParseStatus?: AIJsonParseStatus;
   structuredOutputValid?: boolean;
+  timing?: AITiming;
 }
 
 export interface AIAnalysisSuggestion {

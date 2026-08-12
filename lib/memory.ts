@@ -1,6 +1,7 @@
 import type { Understanding } from "@/types/oip";
 import type { KnowledgeItem, KnowledgeMatch } from "@/types";
 import { withCanonicalProblemDefaults } from "@/lib/canonicalProblemEngine";
+import { assessRetrievalCompatibility } from "@/lib/retrievalCompatibility";
 
 const RETRIEVAL_STOPWORDS = new Set([
   "and", "are", "for", "from", "has", "have", "into", "not", "that", "the", "their", "this", "was", "were", "with"
@@ -89,6 +90,8 @@ export function retrieveMemory(
       const phrasePoints = exactCanonicalPhrase ? 20 : 0;
       const sessionPoints = isSessionCreated ? 8 : 0;
       const compatibility = assessIntentCompatibility(understanding, item);
+      const facetCompatibility = assessRetrievalCompatibility(understanding, item);
+      const categoryUnknown = understanding.category === "General" || understanding.category === "Uncategorized";
 
       const matchScore =
         categoryPoints +
@@ -98,7 +101,8 @@ export function retrieveMemory(
         phrasePoints +
         sessionPoints +
         reuseBoost +
-        (compatibility.score > 0 ? compatibility.score : 0);
+        (compatibility.score > 0 ? compatibility.score : 0) +
+        (categoryUnknown && facetCompatibility.score > 0 ? facetCompatibility.score : 0);
 
       const reasonParts = [
         categoryMatch ? `category match: "${item.category}"` : "",
@@ -111,7 +115,8 @@ export function retrieveMemory(
         item.timesSeen ? `examples seen: ${item.timesSeen}` : "",
         item.knowledgeVersions?.length ? `knowledge versions: ${item.knowledgeVersions.length}` : "",
         item.timesReused > 0 ? `validated and reused ${item.timesReused}x before` : "",
-        compatibility.reason
+        compatibility.reason,
+        facetCompatibility.reason
       ].filter(Boolean);
 
       const matchReason =
@@ -126,8 +131,10 @@ export function retrieveMemory(
         matchedTags,
         matchedKeywords: matchedKeywords.slice(0, 4),
         matchedCategory: categoryMatch ? item.category : null,
-        compatibilityScore: compatibility.score,
-        compatibilityReason: compatibility.reason,
+        compatibilityScore: categoryUnknown
+          ? Math.min(100, compatibility.score + facetCompatibility.score)
+          : compatibility.score,
+        compatibilityReason: `${compatibility.reason} ${facetCompatibility.reason}`,
         relevanceEvidence: {
           categoryPoints,
           tagPoints,

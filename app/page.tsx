@@ -39,7 +39,7 @@ import {
   buildPackCandidateContent
 } from "@/lib/knowledgePacks";
 import { generateReflection } from "@/lib/reflection";
-import { assessReflectionSafety } from "@/lib/reflectionSafety";
+import { assessReflectionSafety, buildReflectionSafetyContext } from "@/lib/reflectionSafety";
 import {
   createCanonicalProblem,
   createGeneralizedEvidenceExample,
@@ -148,6 +148,7 @@ import type {
   DraftGroundingMode,
   BusinessDomainClassification,
   TicketRecord,
+  TicketResolutionEvidenceType,
   TicketWorkflowCommand,
   KnowledgePack,
   KnowledgePackCandidateDraft,
@@ -175,6 +176,16 @@ const EMAIL_RECOVERY_VALIDATION_TERMS = [
 ];
 
 type KnowledgeHistoryLoadState = "not_loaded" | "loading" | "loaded" | "error";
+
+interface KnowledgeConflictRecovery {
+  organizationId: string;
+  resourceId: string;
+  operation: string;
+  expectedRevision: number | null;
+  currentRevision: number | null;
+  localWorkPreserved: boolean;
+  latestLoaded: boolean;
+}
 
 function mergeRecordsById<T extends { id: string }>(current: T[], incoming: T[]): T[] {
   const merged = new Map(current.map((record) => [record.id, record]));
@@ -549,6 +560,7 @@ export default function Home() {
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [secondTicket, setSecondTicket] = useState<Ticket | null>(null);
+  const [secondTicketRecord, setSecondTicketRecord] = useState<TicketRecord | null>(null);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [similarKnowledge, setSimilarKnowledge] = useState<KnowledgeMatch[]>([]);
   const [suggestedResponse, setSuggestedResponse] = useState<SuggestedResponse | null>(null);
@@ -572,6 +584,7 @@ export default function Home() {
   // BUG-009: non-blocking notice shown after stale-profile conflict recovery.
   const [profileConflictNotice, setProfileConflictNotice] = useState("");
   const [revisionConflictNotice, setRevisionConflictNotice] = useState("");
+  const [knowledgeConflictRecovery, setKnowledgeConflictRecovery] = useState<KnowledgeConflictRecovery | null>(null);
 
   async function openPersistenceSession(organizationId: string, operation: string, requestId?: string): Promise<OrganizationPersistenceSession> {
     const id = requestId ?? `${operation}:${organizationId}:${Date.now()}`;
@@ -615,12 +628,15 @@ export default function Home() {
 
   // Ticket records (first-class persisted case records)
   const ticketSaveChains = useRef<Record<string, Promise<void>>>({});
+  const draftSaveChains = useRef<Record<string, Promise<void>>>({});
+  const draftSaveState = useRef<Record<string, { record: TicketRecord; value: string }>>({});
   // Profile edits have their own resource-specific write chain. This lets a
   // switch drain an actual pending profile edit without treating navigation as
   // a reason to re-save an unchanged whole organization snapshot.
   const profileSaveChains = useRef<Record<string, Promise<void>>>({});
   const bulkTicketRecords = useRef<Record<string, TicketRecord>>({});
   const [activeTicketRecord, setActiveTicketRecord] = useState<TicketRecord | null>(null);
+  const [isConversationSubmitting, setIsConversationSubmitting] = useState(false);
 
   // LLM match discrimination — reasoning surfaced in the analysis step
   const [discriminationReasoning, setDiscriminationReasoning] = useState<string | null>(null);
@@ -901,12 +917,13 @@ export default function Home() {
   }, [authStatus]);
 
   function reportPersistenceError(scope: string, error: unknown) {
-    console.error(`Persistence ${scope} failed.`, error);
     if (error instanceof ServerPersistenceAdapterError && error.code === "REVISION_CONFLICT") {
+      console.warn(`Expected recoverable persistence conflict in ${scope}.`, error);
       setRevisionConflictNotice("This item was updated elsewhere. Reload the latest version before saving again.");
       setErrorMessage("Your change was not saved because the item changed elsewhere.");
       return;
     }
+    console.error(`Persistence ${scope} failed.`, error);
     const detail = error instanceof Error ? error.message : "The browser could not persist the latest change.";
     setErrorMessage(`Persistence failed for ${scope}: ${detail}`);
     setMigrationWarning((current) => current ? `${current} Persistence failed for ${scope}: ${detail}` : `Persistence failed for ${scope}: ${detail}`);
@@ -954,6 +971,66 @@ export default function Home() {
     return payload.data;
   }
 
+  function recordKnowledgeConflict(
+    operation: string,
+    error: unknown,
+    resourceId: string,
+    expectedRevision: number | null
+  ) {
+    if (!(error instanceof ServerPersistenceAdapterError) || error.code !== "REVISION_CONFLICT") return;
+    setKnowledgeConflictRecovery({
+      organizationId: organizationProfile.id,
+      resourceId,
+      operation,
+      expectedRevision: error.details?.expectedRevision ?? expectedRevision,
+      currentRevision: error.details?.currentRevision ?? null,
+      localWorkPreserved: true,
+      latestLoaded: false
+    });
+  }
+
+  function queueInReviewDraftSave(record: TicketRecord, value: string) {
+    const ticketId = record.ticketId;
+    const state = draftSaveState.current[ticketId] ?? { record, value };
+    state.value = value;
+    draftSaveState.current[ticketId] = state;
+    const previous = draftSaveChains.current[ticketId] ?? Promise.resolve();
+    const operation = previous
+      .catch(() => undefined)
+      .then(async () => {
+        const nextValue = state.value;
+        const expectedDraftRevision = state.record.resolution.draftRevision ?? 0;
+        let persisted: TicketRecord;
+        if (persistenceMode === "local") {
+          persisted = {
+            ...state.record,
+            resolution: {
+              ...state.record.resolution,
+              finalResponse: nextValue.trim() || null,
+              humanEdited: true,
+              resolvedAt: null,
+              draftRevision: expectedDraftRevision + 1
+            }
+          };
+          const session = await openPersistenceSession(record.orgId, "save-in-review-draft");
+          await session.saveTicketRecord(persisted);
+        } else {
+          persisted = await transitionTicket(ticketId, {
+            kind: "save_draft",
+            finalResponse: nextValue,
+            humanEdited: true,
+            expectedDraftRevision
+          });
+        }
+        state.record = persisted;
+        if (state.value === nextValue && activeTicketRecord?.ticketId === ticketId) {
+          setActiveTicketRecord(persisted);
+        }
+      });
+    draftSaveChains.current[ticketId] = operation;
+    queuePersistenceSave("saveInReviewDraft", operation);
+  }
+
   function persistTicketRecord(record: TicketRecord) {
     const organizationId = record.orgId;
     const previous = ticketSaveChains.current[organizationId] ?? Promise.resolve();
@@ -985,6 +1062,14 @@ export default function Home() {
 
   async function flushTicketSaves(organizationId: string): Promise<void> {
     await ticketSaveChains.current[organizationId];
+    const draftTicketIds = Object.values(draftSaveState.current)
+      .filter((state) => state.record.orgId === organizationId)
+      .map((state) => state.record.ticketId);
+    await Promise.all(draftTicketIds.map((ticketId) => draftSaveChains.current[ticketId] ?? Promise.resolve()));
+  }
+
+  async function flushDraftSave(ticketId: string): Promise<void> {
+    await draftSaveChains.current[ticketId];
   }
 
   const loadCasePage = useCallback(
@@ -1223,6 +1308,17 @@ export default function Home() {
     return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   }
 
+  // Reuse approvals are retried from the browser, so their durable identity
+  // must be stable across renders and repeated clicks. This is intentionally
+  // scoped to the approval tuple; ordinary learning commits remain unique.
+  function stableReuseId(prefix: string, key: string): string {
+    let hash = 2166136261;
+    for (let index = 0; index < key.length; index += 1) {
+      hash = Math.imul(hash ^ key.charCodeAt(index), 16777619);
+    }
+    return `${prefix}-${(hash >>> 0).toString(16)}`;
+  }
+
   function snapshotKnowledgeItem(item: KnowledgeItem | null): KnowledgeItem | null {
     return item ? JSON.parse(JSON.stringify(item)) as KnowledgeItem : null;
   }
@@ -1267,7 +1363,12 @@ export default function Home() {
     candidate: KnowledgeCandidate,
     beforeState: KnowledgeItem | null,
     afterState: KnowledgeItem,
-    rationale = "Prototype knowledge validation"
+    rationale = "Prototype knowledge validation",
+    commitIdentity?: {
+      validationId: string;
+      memoryChangeId: string;
+      idempotencyKey: string;
+    }
   ): Promise<{
     validatedItem: KnowledgeItem;
     validatedCandidate: KnowledgeCandidate;
@@ -1293,7 +1394,7 @@ export default function Home() {
     const organizationId = candidate.organizationId ?? organizationProfile.id;
     const stampedAfterState = stampKnowledgeItemOrganization(afterState);
     const validation: ValidationRecord = {
-      id: makeRecordId("validation"),
+      id: commitIdentity?.validationId ?? makeRecordId("validation"),
       organizationId,
       candidateId: candidate.id,
       knowledgeId: stampedAfterState.id,
@@ -1316,7 +1417,7 @@ export default function Home() {
       revision: (expectedKnowledgeRevision ?? 0) + 1
     };
     const memoryChange: MemoryChangeRecord = {
-      id: makeRecordId("memory-change"),
+      id: commitIdentity?.memoryChangeId ?? makeRecordId("memory-change"),
       organizationId,
       knowledgeId: validatedItem.id,
       candidateId: validatedCandidate.id,
@@ -1337,12 +1438,20 @@ export default function Home() {
         memoryChange,
         knowledgeItem: validatedItem,
         expectedKnowledgeRevision,
-        idempotencyKey: validation.id
+        idempotencyKey: commitIdentity?.idempotencyKey ?? validation.id
       });
       const committedItem = committed.knowledgeItem;
       const committedCandidate = committed.candidate;
       const committedValidation = committed.validation;
       const committedMemoryChange = committed.memoryChange;
+      setKnowledgeConflictRecovery(null);
+      setRevisionConflictNotice("");
+      // The governed commit already persisted the authoritative aggregate.
+      // Do not echo that returned snapshot through the legacy collection-save
+      // effects, which would turn a successful revision bump into a second
+      // unsolicited write before the next approval can read it.
+      suppressedHydrationPersistence.current.add("knowledge");
+      suppressedHydrationPersistence.current.add("candidates");
       setKnowledgeCandidates((prev) => {
         const exists = prev.some((item) => item.id === committedCandidate.id);
         return exists
@@ -1370,6 +1479,12 @@ export default function Home() {
         memoryChange: committedMemoryChange
       };
     } catch (error) {
+      recordKnowledgeConflict(
+        "commitValidatedMemoryChange",
+        error,
+        afterState.id,
+        expectedKnowledgeRevision
+      );
       reportPersistenceError("commitValidatedMemoryChange", error);
       throw error;
     } finally {
@@ -1382,7 +1497,12 @@ export default function Home() {
     candidate: KnowledgeCandidate,
     beforeState: KnowledgeItem | null,
     afterState: KnowledgeItem,
-    rationale = "Prototype knowledge validation"
+    rationale = "Prototype knowledge validation",
+    commitIdentity?: {
+      validationId: string;
+      memoryChangeId: string;
+      idempotencyKey: string;
+    }
   ) {
     return measureTelemetry(
       "knowledge_promotion",
@@ -1393,7 +1513,7 @@ export default function Home() {
         () => measureTelemetry(
           "memory_change_commit",
           "pipeline",
-          () => applyValidatedMemoryChangeInternal(candidate, beforeState, afterState, rationale),
+          () => applyValidatedMemoryChangeInternal(candidate, beforeState, afterState, rationale, commitIdentity),
           { unit: "operations", tags: { action: candidate.proposedAction } }
         ),
         { unit: "operations", tags: { action: candidate.proposedAction } }
@@ -1412,13 +1532,25 @@ export default function Home() {
   }
 
   async function reloadLatestKnowledge(): Promise<void> {
+    const organizationId = organizationProfile.id;
+    const generation = organizationSwitchGeneration.current;
     try {
-      const session = await openPersistenceSession(organizationProfile.id, "reload-revision-conflict");
+      const session = await openPersistenceSession(organizationId, "reload-revision-conflict");
       const latest = await session.loadKnowledge();
+      if (generation !== organizationSwitchGeneration.current || latest.some((item) => item.organizationId && item.organizationId !== organizationId)) return;
       suppressHydratedCollectionPersistence();
       setKnowledgeItems(latest);
+      setSimilarKnowledge((current) => current.map((match) => {
+        const refreshed = latest.find((item) => item.id === match.item.id);
+        return refreshed ? { ...match, item: refreshed } : match;
+      }));
       clearKnowledgeHistoryCache();
-      setRevisionConflictNotice("");
+      setKnowledgeConflictRecovery((current) => current ? { ...current, currentRevision: latest.find((item) => item.id === current.resourceId)?.revision ?? current.currentRevision, latestLoaded: true } : current);
+      setRevisionConflictNotice(
+        knowledgeConflictRecovery
+          ? "Latest server state loaded. Your unsaved review remains open; reconcile it with the latest version before retrying."
+          : ""
+      );
       setErrorMessage("");
     } catch (error) {
       reportPersistenceError("reloadLatestKnowledge", error);
@@ -1429,9 +1561,14 @@ export default function Home() {
     candidate: KnowledgeCandidate,
     beforeState: KnowledgeItem | null,
     afterState: KnowledgeItem,
-    rationale = "Prototype knowledge validation"
+    rationale = "Prototype knowledge validation",
+    commitIdentity?: {
+      validationId: string;
+      memoryChangeId: string;
+      idempotencyKey: string;
+    }
   ): Promise<KnowledgeItem> {
-    return (await applyValidatedMemoryChange(candidate, beforeState, afterState, rationale)).validatedItem;
+    return (await applyValidatedMemoryChange(candidate, beforeState, afterState, rationale, commitIdentity)).validatedItem;
   }
 
   function createCandidate(input: {
@@ -1831,18 +1968,95 @@ export default function Home() {
     };
   }
 
+  async function loadTicketRecordById(ticketId: string): Promise<TicketRecord> {
+    const response = await fetch(`/api/organizations/${encodeURIComponent(organizationProfile.id)}/tickets?full=true`);
+    const payload = await response.json().catch(() => null) as { data?: TicketRecord[]; error?: { message?: string } } | null;
+    if (!response.ok) throw new Error(payload?.error?.message ?? `Could not load ticket ${ticketId}.`);
+    const record = payload?.data?.find((item) => item.ticketId === ticketId);
+    if (!record) throw new Error(`The persisted source ticket ${ticketId} was not found in this organization.`);
+    return record;
+  }
+
+  async function persistReuseTicket(description: string): Promise<{ ticket: Ticket; record: TicketRecord }> {
+    const idempotencyKey = stableReuseId("reuse-ticket", `${organizationProfile.id}|${description.trim()}`);
+    const response = await fetch(`/api/organizations/${encodeURIComponent(organizationProfile.id)}/tickets/process`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        description: description.trim(),
+        customerName: "Demo User",
+        idempotencyKey
+      })
+    });
+    const payload = await response.json().catch(() => null) as { data?: ProcessTicketResult; error?: { message?: string } } | null;
+    if (!response.ok || !payload?.data?.ticket || !payload.data.persistedTicket) {
+      throw new Error(payload?.error?.message ?? "The reuse ticket could not be persisted. Retry is safe.");
+    }
+    setSecondTicketRecord(payload.data.persistedTicket);
+    draftSaveState.current[payload.data.persistedTicket.ticketId] = {
+      record: payload.data.persistedTicket,
+      value: payload.data.persistedTicket.resolution.finalResponse ?? ""
+    };
+    return { ticket: payload.data.ticket, record: payload.data.persistedTicket };
+  }
+
+  async function ensureReuseTicketResolved(ticketId: string, itemId: string, mode: ResolutionMode): Promise<TicketRecord> {
+    let record = await loadTicketRecordById(ticketId);
+    const reuseKey = `${organizationProfile.id}|${ticketId}|${itemId}|${mode}`;
+    const evidenceKey = stableReuseId("reuse-evidence", reuseKey);
+    const evidenceType: TicketResolutionEvidenceType = mode === "human" ? "manual_verified_resolution" : "agent_verification";
+    let evidence = record.resolutionEvidence?.find((item) => item.idempotencyKey === evidenceKey);
+
+    if (!evidence) {
+      if (record.status === "resolved" || record.status === "discarded" || record.status === "rejected") {
+        throw new Error("The persisted reuse ticket is already terminal without the required resolution evidence.");
+      }
+      record = await transitionTicket(ticketId, {
+        kind: "attach_resolution_evidence",
+        evidenceType,
+        sourceMessageId: null,
+        note: mode === "human"
+          ? `Human-approved reuse of knowledge item ${itemId}; reviewer verification of reuse correctness, not customer confirmation.`
+          : `Agent-verified reuse of knowledge item ${itemId}; this is not customer confirmation.`,
+        idempotencyKey: evidenceKey
+      });
+      evidence = record.resolutionEvidence?.find((item) => item.idempotencyKey === evidenceKey);
+    }
+
+    if (!evidence) throw new Error("The reuse ticket did not return durable resolution evidence.");
+    if (record.status !== "resolved") {
+      record = await transitionTicket(ticketId, { kind: "resolve_with_evidence", evidenceId: evidence.id });
+    }
+    setSecondTicketRecord(record);
+    return record;
+  }
+
   /** Apply a successful resolution outcome to a knowledge item and record learning. */
   async function applyResolution(itemId: string, mode: ResolutionMode, evidenceTicket?: Ticket) {
-    const target = knowledgeItems.find((i) => i.id === itemId);
+    // A preceding Reflection commit may have advanced the canonical revision
+    // while this workspace still holds the earlier hydrated snapshot. Reuse
+    // must calculate its trust update from the authoritative current item so
+    // the governed commit remains retryable rather than manufacturing a stale
+    // client-side version.
+    const latestKnowledge = await (await openPersistenceSession(organizationProfile.id, "load-reuse-knowledge")).loadKnowledge();
+    const target = latestKnowledge.find((i) => i.id === itemId) ?? knowledgeItems.find((i) => i.id === itemId);
     if (!target) return;
+
+    const sourceTicketId = evidenceTicket ? ticketReferenceId(evidenceTicket) : target.sourceTicketId;
+    if (!sourceTicketId) throw new Error("A reuse approval requires a persisted source ticket.");
+    const sourceRecord = evidenceTicket
+      ? await ensureReuseTicketResolved(sourceTicketId, itemId, mode)
+      : null;
 
     const targetWithEvidence = evidenceTicket
       ? mergeIntoCanonicalProblem(target, evidenceTicket, understandForProfile(evidenceTicket, organizationProfile), undefined, mode)
       : target;
     const result = recordResolution(targetWithEvidence, { mode, success: true }, organizationProfile, validationRecords);
-    const candidate = createCandidate({
+    const reuseKey = `${organizationProfile.id}|${itemId}|${sourceTicketId}|${mode}`;
+    const candidate = {
+      ...createCandidate({
       action: "trust_update_only",
-      sourceTicketIds: evidenceTicket ? [evidenceTicket.id] : [target.sourceTicketId],
+      sourceTicketIds: [sourceTicketId],
       solution: result.item.problemSummary ?? result.item.problem,
       customerResponseTemplate: result.item.customerResponseTemplate ?? result.item.approvedAnswer,
       internalGuidance: result.item.internalGuidance ?? result.item.problem,
@@ -1850,20 +2064,50 @@ export default function Home() {
       category: result.item.category,
       relatedKnowledgeId: itemId,
       rationale: `${mode === "automatic" ? "Automatic" : "Human-approved"} successful reuse updated trust from ${result.trustFrom} to ${result.trustTo}.`
-    });
-    const committedItem = await commitValidatedMemoryChange(candidate, target, result.item, candidate.rationale);
-    setLastTrustDelta(result.trustDelta);
-    addLogEntries(result.events.map((e) => createLogEntry(e.event, e.detail)));
-    addLogEntries([
-      createLogEntry("Validation record created", `Candidate ${candidate.id} approved for trust update`),
-      createLogEntry("Memory change recorded", `Before/after snapshot stored for ${committedItem.title}`)
-    ]);
-    recordOrgResolution(mode);
-    updateMetrics({
-      knowledgeItemsReused: 1,
-      estimatedTimeSavedMinutes: mode === "automatic" ? 12 : 8,
-      autoResolutions: mode === "automatic" ? 1 : 0
-    });
+      }),
+      id: stableReuseId("reuse-candidate", reuseKey)
+    };
+    const committed = await applyValidatedMemoryChange(
+      candidate,
+      target,
+      result.item,
+      candidate.rationale,
+      {
+        validationId: stableReuseId("reuse-validation", reuseKey),
+        memoryChangeId: stableReuseId("reuse-memory-change", reuseKey),
+        idempotencyKey: stableReuseId("reuse-commit", reuseKey)
+      }
+    );
+    const committedItem = committed.validatedItem;
+
+    if (sourceRecord && !sourceRecord.validationRecordIds.includes(committed.validation.id)) {
+      const committedTicket = await transitionTicket(sourceTicketId, {
+        kind: "commit",
+        validationRecordIds: [committed.validation.id],
+        knowledgeId: committedItem.id,
+        action: "trust_update_only",
+        knowledgeChanged: committedItem.id,
+        finalResponse: evidenceTicket ? result.item.customerResponseTemplate ?? result.item.approvedAnswer : undefined,
+        automatic: mode === "automatic"
+      });
+      setSecondTicketRecord(committedTicket);
+    }
+
+    if (!committed.replayed) {
+      setLastTrustDelta(result.trustDelta);
+      addLogEntries(result.events.map((e) => createLogEntry(e.event, e.detail)));
+      addLogEntries([
+        createLogEntry("Validation record created", `Candidate ${candidate.id} approved for trust update`),
+        createLogEntry("Memory change recorded", `Before/after snapshot stored for ${committedItem.title}`)
+      ]);
+      recordOrgResolution(mode);
+      updateMetrics({
+        knowledgeItemsReused: 1,
+        estimatedTimeSavedMinutes: mode === "automatic" ? 12 : 8,
+        autoResolutions: mode === "automatic" ? 1 : 0
+      });
+    }
+    return committed;
   }
 
   async function checkPatternDiscovery(ticket: Ticket, analysis: AIAnalysis, requestGeneration?: number) {
@@ -1924,6 +2168,7 @@ export default function Home() {
   function resetWorkflowState() {
     setSelectedTicket(null);
     setSecondTicket(null);
+    setSecondTicketRecord(null);
     setAiAnalysis(null);
     setSimilarKnowledge([]);
     setSuggestedResponse(null);
@@ -1983,20 +2228,26 @@ export default function Home() {
    *
    * The persisted TicketRecord stores everything required to restore the
    * pipeline at the safe "Human Review" step: classification, memory match,
-   * draft source, and the edited reviewed text (if any). We reconstruct the
-   * runtime Ticket, aiAnalysis, and re-run the deterministic draft for
-   * comparison; the AI advisory draft is not persisted, so the user lands at
-   * step 5 (Human Review) with the deterministic draft in the editor.
+   * draft source, and the durable work-in-progress response. We reconstruct
+   * the runtime Ticket, aiAnalysis, and deterministic comparison draft; the
+   * persisted response remains authoritative in the editor.
    *
    * Does NOT re-run classification or memory retrieval — the stored results
    * stand. Only the safe display layer is rebuilt.
    *
-   * Refuses to resume resolved / rejected / discarded / open cases. Warns
-   * before clobbering a different in-progress workspace.
-   */
+   * Resolved cases may resume only when the server has already marked their
+   * prepared Reflection eligible after resolution evidence was recorded. This
+   * restores the validation screen after a refresh without reopening the
+   * conversation or weakening the evidence gate. Warns before clobbering a
+   * different in-progress workspace.
+  */
   function resumeTicketFromRecord(record: TicketRecord) {
-    // Only in-review tickets can be resumed.
-    if (record.status !== "in_review") return;
+    // A waiting case is the same conversation after an agent response and is
+    // intentionally resumable so a customer follow-up can reopen it.
+    const resumableReflection = record.status === "resolved"
+      && record.reflection.validationEligible === true
+      && !!record.reflection.preparedDecision;
+    if (record.status !== "in_review" && record.status !== "waiting_for_customer" && !resumableReflection) return;
 
     // Warn before clobbering a different in-progress ticket.
     const otherInProgress =
@@ -2103,22 +2354,29 @@ export default function Home() {
       source: draft.source,
       draftMode: reconstructedUnderstanding.businessClassification?.inquiryType === "business_inquiry" && !restoredBusinessMemory
         ? "memory_grounded"
-        : record.draftSource === "ai_advisory" ? "memory_grounded" : record.memoryMatch?.matchType === "lesson" ? "lesson_grounded" : "memory_grounded",
+        : record.memoryMatch?.matchType === "lesson"
+        ? "lesson_grounded"
+        : record.memoryMatch?.knowledgeId
+        ? "memory_grounded"
+        : "cold_start",
       groundingLabel: reconstructedUnderstanding.businessClassification?.inquiryType === "business_inquiry" && !restoredBusinessMemory
         ? "organization profile"
-        : restoredKnowledge?.title ?? "organizational memory"
+        : restoredKnowledge?.title ?? (record.memoryMatch?.knowledgeId ? "organizational memory" : "no organizational knowledge")
     };
 
-    const reviewedText =
-      record.resolution.finalResponse && record.resolution.finalResponse.trim().length > 0
+    const reviewedText = record.status === "waiting_for_customer"
+      ? ""
+      : record.resolution.finalResponse && record.resolution.finalResponse.trim().length > 0
         ? record.resolution.finalResponse
         : draft.draftResponse;
 
+    const preparedDecision = record.reflection.preparedDecision ?? null;
     setActiveTicketRecord(record);
+    draftSaveState.current[record.ticketId] = { record, value: record.resolution.finalResponse ?? "" };
     setSelectedTicket(reconstructedTicket);
     setAiAnalysis(understandingToAnalysis(reconstructedUnderstanding));
     setSimilarKnowledge(reconstructedSimilarKnowledge);
-    setSuggestedResponse(reconstructedResponse);
+    setSuggestedResponse(record.status === "waiting_for_customer" ? null : reconstructedResponse);
     setReviewedResponse(reviewedText);
     setBusinessRelevance(null);
     setDomainClassification(null);
@@ -2130,11 +2388,11 @@ export default function Home() {
     setReuseResolvedMode(null);
     setLastTrustDelta(0);
     setRunCount(0);
-    setReflectionDecision(null);
+    setReflectionDecision(preparedDecision);
     setCustomSecondText("");
     setActiveView("tickets");
     setTicketIntakeMode("single");
-    setCurrentStep(5); // Human Review
+    setCurrentStep(preparedDecision ? 7 : 5); // Restore prepared Reflection, otherwise Human Review / conversation waiting state
     addLogEntries([
       createLogEntry(
         "Ticket resumed from Cases",
@@ -2926,7 +3184,8 @@ export default function Home() {
     deterministicSource: SuggestedResponse["source"],
     baseAdvisory: AIAdvisory | null,
     requestGeneration?: number,
-    semanticAuthorization?: SemanticLessonAuthorization | null
+    semanticAuthorization?: SemanticLessonAuthorization | null,
+    conversationContext?: string
   ): Promise<{
     advisory: AIAdvisory | null;
     response: SuggestedResponse;
@@ -3012,7 +3271,8 @@ export default function Home() {
           }
         : undefined,
       deterministicDraft,
-      matchedKnowledge
+      matchedKnowledge,
+      conversationContext
     });
     const enrichmentRequest: Promise<AIProviderResult<AIKnowledgeEnrichment>> =
       draftMode === "cold_start" || (isBusinessInquiry && !isBusinessMemoryReuse)
@@ -3171,7 +3431,8 @@ export default function Home() {
     deterministicSource: SuggestedResponse["source"],
     baseAdvisory: AIAdvisory | null,
     requestGeneration?: number,
-    semanticAuthorization?: SemanticLessonAuthorization | null
+    semanticAuthorization?: SemanticLessonAuthorization | null,
+    conversationContext?: string
   ) {
     return measureTelemetry(
       "ai_drafting",
@@ -3186,7 +3447,8 @@ export default function Home() {
         deterministicSource,
         baseAdvisory,
         requestGeneration,
-        semanticAuthorization
+        semanticAuthorization,
+        conversationContext
       ),
       { unit: "requests", tags: { providerMode: aiAdapter.config.mode } }
     );
@@ -3194,6 +3456,141 @@ export default function Home() {
 
   function updateReviewedResponse(value: string) {
     setReviewedResponse(value);
+    if (activeTicketRecord?.status === "in_review") {
+      queueInReviewDraftSave(activeTicketRecord, value);
+    }
+  }
+
+  async function sendAgentConversationResponse() {
+    const current = activeTicketRecord;
+    if (!current || current.status !== "in_review" || !reviewedResponse.trim() || isConversationSubmitting) return;
+    setIsConversationSubmitting(true);
+    try {
+      await flushDraftSave(current.ticketId);
+      const latest = draftSaveState.current[current.ticketId]?.record ?? current;
+      const next = await transitionTicket(current.ticketId, {
+        kind: "send_agent_message",
+        finalResponse: reviewedResponse,
+        humanEdited: true,
+        expectedDraftRevision: latest.resolution.draftRevision ?? 0,
+        idempotencyKey: `ui:agent:${current.ticketId}:${digestJobInput({ response: reviewedResponse })}`
+      });
+      setActiveTicketRecord(next);
+      draftSaveState.current[current.ticketId] = { record: next, value: "" };
+      setSuggestedResponse(null);
+      setReviewedResponse("");
+      addLogEntries([createLogEntry("Agent response sent", `${current.ticketId} is waiting for the customer`)]);
+    } catch (error) {
+      reportPersistenceError("sendAgentConversationResponse", error);
+    } finally {
+      setIsConversationSubmitting(false);
+    }
+  }
+
+  async function addCustomerConversationReply(content: string) {
+    const current = activeTicketRecord;
+    if (!current || current.status !== "waiting_for_customer" || isConversationSubmitting) return;
+    setIsConversationSubmitting(true);
+    try {
+      const next = await transitionTicket(current.ticketId, {
+        kind: "append_customer_message",
+        content,
+        idempotencyKey: `ui:customer:${current.ticketId}:${digestJobInput({ content })}`
+      });
+      const messages = next.messages ?? [];
+      const boundedContext = messages.slice(-8).map((message) => `${message.direction === "customer" ? "Customer" : "Agent"}: ${message.content}`).join("\n\n");
+      const followUpTicket = selectedTicket
+        ? { ...selectedTicket, description: boundedContext }
+        : null;
+      if (!followUpTicket || !aiAnalysis) {
+        setActiveTicketRecord(next);
+        setSuggestedResponse(null);
+        setReviewedResponse("");
+        return;
+      }
+      const followUpUnderstanding = toUnderstanding(aiAnalysis);
+      const deterministicFollowUpDraft = draftResponse(
+        followUpTicket,
+        followUpUnderstanding,
+        similarKnowledge[0] ?? null,
+        organizationProfile,
+        knowledgeItems.length === 0
+      );
+      const followUpAdvisory = await requestDraftAdvisory(
+        followUpTicket,
+        followUpUnderstanding,
+        identifyCanonicalProblem(followUpUnderstanding, organizationProfile).title,
+        similarKnowledge[0] ?? null,
+        deterministicFollowUpDraft.draftResponse,
+        deterministicFollowUpDraft.confidenceNote,
+        deterministicFollowUpDraft.source ?? "deterministic",
+        aiAdvisory,
+        undefined,
+        undefined,
+        boundedContext
+      );
+      const followUpDraft = followUpAdvisory.response;
+      if (followUpAdvisory.usedAIDraft) {
+        setAiAdvisory(followUpAdvisory.advisory);
+        setLastDraftUsedAI(true);
+      }
+      setActiveTicketRecord(next);
+      draftSaveState.current[current.ticketId] = { record: next, value: followUpDraft.draftResponse };
+      setSelectedTicket(followUpTicket);
+      setSuggestedResponse({
+        ticketId: next.ticketId,
+        draftResponse: followUpDraft.draftResponse,
+        basedOnKnowledgeIds: followUpDraft.basedOnKnowledgeIds,
+        confidenceNote: followUpDraft.confidenceNote,
+        source: followUpDraft.source,
+        draftMode: followUpDraft.draftMode,
+        groundingLabel: followUpDraft.groundingLabel
+      });
+      setReviewedResponse(followUpDraft.draftResponse);
+      queueInReviewDraftSave(next, followUpDraft.draftResponse);
+      addLogEntries([createLogEntry("Customer follow-up received", `${current.ticketId} reopened with bounded conversation context`)]);
+    } catch (error) {
+      reportPersistenceError("addCustomerConversationReply", error);
+    } finally {
+      setIsConversationSubmitting(false);
+    }
+  }
+
+  async function attachResolutionEvidence(sourceMessageId: string | null, evidenceType: TicketResolutionEvidenceType, note: string) {
+    const current = activeTicketRecord;
+    if (!current || current.status === "resolved" || current.status === "discarded" || isConversationSubmitting) return;
+    setIsConversationSubmitting(true);
+    try {
+      const next = await transitionTicket(current.ticketId, {
+        kind: "attach_resolution_evidence",
+        evidenceType,
+        sourceMessageId,
+        note,
+        idempotencyKey: `ui:evidence:${current.ticketId}:${evidenceType}:${sourceMessageId ?? "manual"}:${digestJobInput({ note })}`
+      });
+      setActiveTicketRecord(next);
+      addLogEntries([createLogEntry("Resolution evidence recorded", `${evidenceType.replaceAll("_", " ")} attached to ${current.ticketId}`)]);
+    } catch (error) {
+      reportPersistenceError("attachResolutionEvidence", error);
+    } finally {
+      setIsConversationSubmitting(false);
+    }
+  }
+
+  async function resolveWithEvidence(evidenceId: string) {
+    const current = activeTicketRecord;
+    if (!current || isConversationSubmitting) return;
+    setIsConversationSubmitting(true);
+    try {
+      const next = await transitionTicket(current.ticketId, { kind: "resolve_with_evidence", evidenceId });
+      setActiveTicketRecord(next);
+      addLogEntries([createLogEntry("Case resolved with evidence", `${current.ticketId} is now eligible for Reflection validation`)]);
+      if (reflectionDecision) setCurrentStep(7);
+    } catch (error) {
+      reportPersistenceError("resolveWithEvidence", error);
+    } finally {
+      setIsConversationSubmitting(false);
+    }
   }
 
   function resolveDraftSourceMatch(): KnowledgeMatch | null {
@@ -3224,6 +3621,7 @@ export default function Home() {
       setErrorMessage("Out-of-scope tickets cannot be approved into Organizational Memory.");
       return;
     }
+    if (activeTicketRecord) await flushDraftSave(activeTicketRecord.ticketId);
     const und = toUnderstanding(aiAnalysis);
     const draftedMatch = resolveDraftSourceMatch();
     const existingMatch = draftedMatch
@@ -3287,6 +3685,20 @@ export default function Home() {
     learningCommandContext.current = { requestId: reflectionRequestId, idempotencyKey: reflectionIdempotencyKey };
     setReflectionDecision(reflection);
 
+    if (activeTicketRecord) {
+      try {
+        const prepared = await transitionTicket(activeTicketRecord.ticketId, {
+          kind: "prepare_reflection",
+          reflection
+        });
+        setActiveTicketRecord(prepared);
+      } catch (error) {
+        reportPersistenceError("prepareReflection", error);
+        setErrorMessage("Reflection could not be saved for resume. Retry approval safely.");
+        return;
+      }
+    }
+
     // Keep the ticket in the reviewable state until reflection is committed.
     // RSS-1.2S3's `approve` command is a terminal response approval, while
     // this customer journey still has a governed knowledge commit to perform.
@@ -3349,6 +3761,11 @@ export default function Home() {
   /** Thin UI controller for the extracted reflection/learning commands. */
   async function confirmReflectionApplication(input?: ReflectionCommitInput) {
     if (!selectedTicket || !aiAnalysis || !reflectionDecision) return;
+    if (activeTicketRecord?.status !== "resolved" || activeTicketRecord.reflection.validationEligible !== true) {
+      setErrorMessage(activeTicketRecord?.reflection.validationEligibilityReason ?? "Resolution evidence is required before this Reflection can be validated.");
+      setCurrentStep(7);
+      return;
+    }
     const context = learningCommandContext.current ?? {
       requestId: `reflection-${ticketReferenceId(selectedTicket)}-${Date.now()}`,
       idempotencyKey: `reflection:${ticketReferenceId(selectedTicket)}:${Date.now()}`
@@ -3363,12 +3780,15 @@ export default function Home() {
       requestId: context.requestId,
       reflection: reflectionDecision,
       lessonDraft,
-      safetyContext: {
+      safetyContext: buildReflectionSafetyContext({
         customerName: selectedTicket.customerName,
         organizationName: organizationProfile.name,
         sourceTicketId: ticketReferenceId(selectedTicket),
-        sourceTicketText: `${selectedTicket.subject} ${selectedTicket.description}`
-      }
+        sourceTicketText: `${selectedTicket.subject} ${selectedTicket.description}`,
+        extractedCustomerName: aiAnalysis.extractedFields?.senderName,
+        extractedCompanyName: aiAnalysis.extractedFields?.companyName,
+        reusableProblemName: input?.problemName
+      })
     });
     if (!validation.accepted) {
       setErrorMessage(`Reflection rejected: ${validation.reasons.join(", ")} before promoting this lesson.`);
@@ -3445,10 +3865,24 @@ export default function Home() {
         ...(result.ticketReflection.lessonReinforcedId ? [createLogEntry("Lesson strengthened", result.ticketReflection.lessonReinforcedId)] : [])
       ]);
       setErrorMessage("");
+      setKnowledgeConflictRecovery(null);
+      setRevisionConflictNotice("");
       setCurrentStep(8);
     } catch (error) {
       if (error instanceof LearningApplicationError) {
         if (error.failure.errorClass === "stale_revision") {
+          const resourceId = reflectionDecision?.existingItemId ?? "selected knowledge item";
+          const expectedRevision = knowledgeItems.find((item) => item.id === resourceId)?.revision ?? null;
+          setKnowledgeConflictRecovery({
+            organizationId: organizationProfile.id,
+            resourceId,
+            operation: "promoteKnowledge",
+            expectedRevision,
+            currentRevision: typeof error.failure.diagnosticMetadata?.currentRevision === "number" ? error.failure.diagnosticMetadata.currentRevision : null,
+            localWorkPreserved: true,
+            latestLoaded: false
+          });
+          console.warn("Expected recoverable learning promotion conflict.", error);
           setRevisionConflictNotice("This item was updated elsewhere. Reload the latest version before saving again.");
           setErrorMessage("Your change was not saved because the item changed elsewhere.");
         } else {
@@ -3817,21 +4251,22 @@ export default function Home() {
    * Calling again with the same ticket lets judges watch trust climb to auto-resolution.
    */
   async function processSecondTicket(customText?: string) {
-    const second =
+    const requestedSecond =
       customText && customText.trim().length >= 5
         ? makeCustomTicket(customText.trim())
         : secondTicket;
-    if (!second) {
+    if (!requestedSecond) {
       setErrorMessage("Type a support issue in the text box below to test memory reuse.");
       return;
     }
     const requestGeneration = ticketRequestGuard.current.begin();
 
-    const relevance = assessBusinessRelevanceForProfile(`${second.subject} ${second.description}`, organizationProfile);
+    const relevance = assessBusinessRelevanceForProfile(`${requestedSecond.subject} ${requestedSecond.description}`, organizationProfile);
     setBusinessRelevance(relevance);
 
     if (!relevance.isRelevant && relevance.status === "out_of_scope") {
-      setSecondTicket({ ...second, status: "new" });
+      setSecondTicket({ ...requestedSecond, status: "new" });
+      setSecondTicketRecord(null);
       setAiAnalysis(null);
       setSimilarKnowledge([]);
       setAiAdvisory(null);
@@ -3843,6 +4278,20 @@ export default function Home() {
       setErrorMessage("");
       setCurrentStep(8);
       return;
+    }
+
+    let second = requestedSecond;
+    let persistedSecondRecord = secondTicketRecord;
+    if (customText && customText.trim().length >= 5) {
+      const persisted = await persistReuseTicket(customText.trim());
+      second = persisted.ticket;
+      persistedSecondRecord = persisted.record;
+    } else if (!second.ticketId || !persistedSecondRecord || persistedSecondRecord.ticketId !== second.ticketId) {
+      if (!second.ticketId) {
+        throw new Error("The reuse ticket is not persisted. Submit it through the ticket workflow before approval.");
+      }
+      persistedSecondRecord = await loadTicketRecordById(second.ticketId);
+      setSecondTicketRecord(persistedSecondRecord);
     }
 
     // Business Domain Classification for reuse ticket
@@ -3991,9 +4440,9 @@ export default function Home() {
     ]);
 
     if (effectiveReuseDecision === "auto_resolution") {
-      setReuseResolvedMode("automatic");
       addLogEntries([createLogEntry("Auto-resolution path", `Trust >= ${organizationProfile.autoResolutionThreshold} - validated template rendered from organizational memory`)]);
       await applyResolution(effectiveReuseMatch.item.id, "automatic", second);
+      setReuseResolvedMode("automatic");
     } else {
       setReuseResolvedMode(null);
       addLogEntries([
@@ -4015,13 +4464,18 @@ export default function Home() {
 
   /** Human approves the reuse — records a human-approved successful resolution (+trust). */
   async function approveReuse() {
-    if (!reuseMatchId) return;
-    await applyResolution(reuseMatchId, "human", secondTicket ?? undefined);
-    setReuseResolvedMode("human");
-    if (lastDraftUsedAI) {
-      recordHumanAcceptedAISuggestion();
+    if (!reuseMatchId || !secondTicket?.ticketId || reuseResolvedMode !== null) return;
+    try {
+      await applyResolution(reuseMatchId, "human", secondTicket);
+      setReuseResolvedMode("human");
+      if (lastDraftUsedAI) {
+        recordHumanAcceptedAISuggestion();
+      }
+      addLogEntries([createLogEntry("Human approved reuse", "Knowledge confirmed correct — trust increased")]);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "The reuse approval could not be persisted.";
+      setErrorMessage(`Reuse approval was not committed: ${detail}`);
     }
-    addLogEntries([createLogEntry("Human approved reuse", "Knowledge confirmed correct — trust increased")]);
   }
 
   /** Submit a ticket to the transport-independent application service. */
@@ -4059,6 +4513,7 @@ export default function Home() {
       if (!ticketRequestIsCurrent(requestGeneration)) return;
       setSelectedTicket(result.ticket);
       setActiveTicketRecord(result.persistedTicket);
+      draftSaveState.current[result.persistedTicket.ticketId] = { record: result.persistedTicket, value: result.persistedTicket.resolution.finalResponse ?? "" };
       setBusinessRelevance(result.businessRelevance);
       setDomainClassification(result.domainClassification);
       setAiAnalysis(result.analysis);
@@ -4225,7 +4680,17 @@ export default function Home() {
 
         {revisionConflictNotice && (
           <div className={`mx-4 mb-3 flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm md:mx-6 ${darkMode ? "border-amber-700/50 bg-amber-900/20 text-amber-200" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
-            <span><strong>Updated elsewhere:</strong> {revisionConflictNotice}</span>
+            <div className="min-w-0">
+              <p><strong>Updated elsewhere:</strong> {revisionConflictNotice}</p>
+              {knowledgeConflictRecovery?.localWorkPreserved && (
+                <p className="mt-1 text-xs opacity-90">
+                  Your unsaved review remains available in this workspace. Reloading changes the authoritative knowledge item only; it does not auto-merge or overwrite your local review.
+                </p>
+              )}
+              {knowledgeConflictRecovery?.latestLoaded && (
+                <p className="mt-1 text-xs font-semibold opacity-90">Review the latest version, then retry the original action deliberately.</p>
+              )}
+            </div>
             <button
               type="button"
               onClick={() => { void reloadLatestKnowledge(); }}
@@ -4264,6 +4729,8 @@ export default function Home() {
                   suggestedResponse={suggestedResponse}
                   reviewedResponse={reviewedResponse}
                   reflectionDecision={reflectionDecision}
+                  reflectionValidationEligible={activeTicketRecord?.status === "resolved" && activeTicketRecord.reflection.validationEligible === true}
+                  reflectionValidationBlockedReason={activeTicketRecord?.reflection.validationEligibilityReason ?? "Resolution evidence is required before this Reflection can be validated."}
                   knowledgeItems={knowledgeItems}
                   businessRelevance={businessRelevance}
                   domainClassification={domainClassification}
@@ -4300,6 +4767,14 @@ export default function Home() {
                   isRetryingDraft={isRetryingDraft}
                   onDiscardTicket={discardTicket}
                   onRetryAIDraft={() => { void retryAIDraft(); }}
+                  conversationMessages={activeTicketRecord?.messages ?? []}
+                  resolutionEvidence={activeTicketRecord?.resolutionEvidence ?? []}
+                  caseStatus={activeTicketRecord?.status ?? null}
+                  isConversationSubmitting={isConversationSubmitting}
+                  onSendAgentResponse={() => { void sendAgentConversationResponse(); }}
+                  onAddCustomerReply={(text) => { void addCustomerConversationReply(text); }}
+                  onAttachResolutionEvidence={(sourceMessageId, evidenceType, note) => { void attachResolutionEvidence(sourceMessageId, evidenceType, note); }}
+                  onResolveWithEvidence={(evidenceId) => { void resolveWithEvidence(evidenceId); }}
                 />
               ) : (
                 <BulkUploadWorkspace

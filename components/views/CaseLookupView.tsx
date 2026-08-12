@@ -18,6 +18,7 @@ const FILTER_CHIPS: { id: CaseFilterChip; label: string }[] = [
   { id: "heavily_edited", label: "Heavily edited" },
   { id: "cold_start", label: "Cold start" },
   { id: "uncategorized", label: "Uncategorized" },
+  { id: "waiting_for_customer", label: "Waiting for customer" },
   { id: "rejected", label: "Rejected" },
   { id: "discarded", label: "Discarded" },
 ];
@@ -34,6 +35,10 @@ function statusBadge(status: TicketRecord["status"], darkMode: boolean): string 
       return darkMode
         ? "bg-amber-900/40 text-amber-300"
         : "bg-amber-50 text-amber-700";
+    case "waiting_for_customer":
+      return darkMode
+        ? "bg-blue-900/40 text-blue-300"
+        : "bg-blue-50 text-blue-700";
     case "rejected":
       return darkMode
         ? "bg-red-900/40 text-red-300"
@@ -47,6 +52,10 @@ function statusBadge(status: TicketRecord["status"], darkMode: boolean): string 
         ? "bg-slate-700 text-slate-300"
         : "bg-slate-100 text-slate-600";
   }
+}
+
+function statusLabel(status: TicketRecord["status"]): string {
+  return status === "waiting_for_customer" ? "Waiting for customer" : status.replace(/_/g, " ");
 }
 
 function formatDate(iso: string): string {
@@ -234,7 +243,7 @@ export function CaseLookupView({
                       darkMode
                     )}`}
                   >
-                    {record.status.replace("_", " ")}
+                    {statusLabel(record.status)}
                   </span>
                   {record.resolution.humanEdited && (
                     <span
@@ -391,12 +400,10 @@ function CaseDetailView({
               darkMode
             )}`}
           >
-            {record.status.replace("_", " ")}
+            {statusLabel(record.status)}
           </span>
-          {/* F-1: Resume in workspace button. Only available for in_review
-              tickets; resolved / rejected / discarded / open records do not
-              expose it because there is nothing half-done to resume. */}
-          {record.status === "in_review" && onResume && (
+          {/* Resume is available for active conversations or an evidence-gated Reflection. */}
+          {(record.status === "in_review" || record.status === "waiting_for_customer" || (record.status === "resolved" && record.reflection.validationEligible === true && !!record.reflection.preparedDecision)) && onResume && (
             <button
               type="button"
               onClick={onResume}
@@ -407,7 +414,7 @@ function CaseDetailView({
                   : "bg-[#2563EB] hover:bg-blue-700"
               }`}
             >
-              Resume in workspace
+              {record.status === "resolved" ? "Resume Reflection" : "Resume in workspace"}
             </button>
           )}
         </div>
@@ -536,7 +543,7 @@ function CaseDetailView({
               <div className={subCard}>
                 <p className={`text-[10px] ${mutedCls}`}>Final response</p>
                 <p
-                  className={`mt-1 text-sm leading-6 ${
+                  className={`mt-1 whitespace-pre-wrap text-sm leading-6 ${
                     darkMode ? "text-slate-300" : "text-[#111827]"
                   }`}
                 >
@@ -647,12 +654,43 @@ function CaseDetailView({
                 </div>
               )}
             </div>
+          ) : record.reflection.preparedDecision ? (
+            <div className="mt-2 space-y-2">
+              <div className={subCard}>
+                <p className={`text-[10px] ${mutedCls}`}>Reflection status</p>
+                <p className={`text-sm font-semibold ${headingCls}`}>Prepared for human validation</p>
+              </div>
+              <div className={subCard}>
+                <p className={`text-[10px] ${mutedCls}`}>Validation eligibility</p>
+                <p className={`text-sm font-semibold ${headingCls}`}>
+                  {record.reflection.validationEligible === true ? "Eligible after resolution evidence" : "Blocked until resolution evidence"}
+                </p>
+              </div>
+            </div>
           ) : (
             <p className={`mt-2 text-sm ${mutedCls}`}>
               No reflection recorded yet
             </p>
           )}
         </div>
+
+        {/* Resolution evidence */}
+        {record.resolutionEvidence && record.resolutionEvidence.length > 0 && (
+          <div className={`${card} p-5`}>
+            <h3 className={sectionHeading}>Resolution evidence</h3>
+            <div className="mt-2 space-y-2">
+              {record.resolutionEvidence.map((evidence) => (
+                <div key={evidence.id} className={subCard}>
+                  <p className={`text-[10px] ${mutedCls}`}>Recorded evidence</p>
+                  <p className={`text-sm font-semibold ${headingCls}`}>
+                    {evidence.type.replace(/_/g, " ")}
+                  </p>
+                  {evidence.note && <p className={`mt-1 text-sm ${mutedCls}`}>{evidence.note}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

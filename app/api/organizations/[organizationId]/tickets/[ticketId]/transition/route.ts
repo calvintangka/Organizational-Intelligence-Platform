@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { withOrganizationRoute } from "@/lib/server/organizationRoute";
 import { applyTicketWorkflowCommand } from "@/lib/server/tickets/ticketWorkflow";
 import { requestIdentity } from "@/lib/server/rateLimit";
-import { TicketWriteError, type TicketRecordClassification, type TicketRecordMemoryMatch, type TicketWorkflowCommand } from "@/types";
+import { TicketWriteError, type ReflectionDecision, type TicketRecordClassification, type TicketRecordMemoryMatch, type TicketResolutionEvidenceType, type TicketWorkflowCommand } from "@/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +22,45 @@ function parseCommand(body: unknown): TicketWorkflowCommand {
       };
     case "approve":
       return { kind: "approve", finalResponse: typeof record.finalResponse === "string" ? record.finalResponse : "", humanEdited: record.humanEdited === true };
+    case "save_draft":
+      return {
+        kind: "save_draft",
+        finalResponse: typeof record.finalResponse === "string" ? record.finalResponse : "",
+        humanEdited: record.humanEdited === true,
+        expectedDraftRevision: typeof record.expectedDraftRevision === "number" ? record.expectedDraftRevision : Number.NaN
+      };
+    case "prepare_reflection":
+      return {
+        kind: "prepare_reflection",
+        reflection: (record.reflection ?? null) as ReflectionDecision
+      };
+    case "append_customer_message":
+      return {
+        kind: "append_customer_message",
+        content: typeof record.content === "string" ? record.content : "",
+        idempotencyKey: typeof record.idempotencyKey === "string" ? record.idempotencyKey : ""
+      };
+    case "send_agent_message":
+      return {
+        kind: "send_agent_message",
+        finalResponse: typeof record.finalResponse === "string" ? record.finalResponse : "",
+        humanEdited: record.humanEdited === true,
+        expectedDraftRevision: typeof record.expectedDraftRevision === "number" ? record.expectedDraftRevision : Number.NaN,
+        idempotencyKey: typeof record.idempotencyKey === "string" ? record.idempotencyKey : ""
+      };
+    case "attach_resolution_evidence":
+      return {
+        kind: "attach_resolution_evidence",
+        evidenceType: record.evidenceType as TicketResolutionEvidenceType,
+        sourceMessageId: typeof record.sourceMessageId === "string" ? record.sourceMessageId : null,
+        note: typeof record.note === "string" ? record.note : "",
+        idempotencyKey: typeof record.idempotencyKey === "string" ? record.idempotencyKey : ""
+      };
+    case "resolve_with_evidence":
+      return {
+        kind: "resolve_with_evidence",
+        evidenceId: typeof record.evidenceId === "string" ? record.evidenceId : ""
+      };
     case "discard":
       return { kind: "discard" };
     case "reinstate":

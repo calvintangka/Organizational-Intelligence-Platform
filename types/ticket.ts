@@ -1,3 +1,5 @@
+import type { ReflectionDecision } from "./knowledge";
+
 export type TicketStatus = "new" | "analyzed" | "drafted" | "reviewed" | "approved" | "resolved";
 
 export interface Ticket {
@@ -11,7 +13,38 @@ export interface Ticket {
   createdAt: string;
 }
 
-export type TicketRecordStatus = "open" | "in_review" | "resolved" | "rejected" | "discarded";
+export type TicketRecordStatus = "open" | "in_review" | "waiting_for_customer" | "resolved" | "rejected" | "discarded";
+
+export type TicketMessageDirection = "customer" | "agent";
+
+export interface TicketMessage {
+  id: string;
+  orgId: string;
+  ticketId: string;
+  sequence: number;
+  direction: TicketMessageDirection;
+  content: string;
+  actorId?: string | null;
+  createdAt: string;
+  idempotencyKey?: string | null;
+}
+
+export type TicketResolutionEvidenceType =
+  | "customer_confirmation"
+  | "agent_verification"
+  | "manual_verified_resolution";
+
+export interface TicketResolutionEvidence {
+  id: string;
+  orgId: string;
+  ticketId: string;
+  type: TicketResolutionEvidenceType;
+  sourceMessageId?: string | null;
+  actorId: string;
+  note: string;
+  createdAt: string;
+  idempotencyKey?: string | null;
+}
 
 export interface TicketRecordClassification {
   category: string;
@@ -89,6 +122,10 @@ export interface TicketRecordResolution {
   humanEdited: boolean;
   editDistanceNote: string | null;
   resolvedAt: string | null;
+  /** Monotonic revision for an in-review work-in-progress draft. */
+  draftRevision?: number;
+  resolvedBy?: string | null;
+  evidenceIds?: string[];
 }
 
 export interface TicketRecordReflection {
@@ -96,6 +133,11 @@ export interface TicketRecordReflection {
   lessonCreatedId: string | null;
   lessonReinforcedId: string | null;
   knowledgeChanged: string | null;
+  validationEligible?: boolean;
+  validationEligibilityReason?: string | null;
+  evidenceIds?: string[];
+  /** Prepared human-review analysis; never implies resolution or validation eligibility. */
+  preparedDecision?: ReflectionDecision | null;
 }
 
 export interface TicketRecord {
@@ -123,6 +165,9 @@ export interface TicketRecord {
   validationRecordIds: string[];
   labels?: string[];
   status: TicketRecordStatus;
+  /** Immutable, ordered conversation history. The current draft is not a message. */
+  messages?: TicketMessage[];
+  resolutionEvidence?: TicketResolutionEvidence[];
   /**
    * TODO-026: durable auto-vs-human auditability of a completed resolution.
    * `null`/absent means unresolved or a historical row whose mode was never
@@ -190,7 +235,9 @@ export type TicketWriteErrorCode =
   | "CROSS_ORGANIZATION_REJECTED"
   | "TICKET_NOT_FOUND"
   | "INVALID_TRANSITION"
-  | "INVALID_TRANSITION_REFERENCE";
+  | "INVALID_TRANSITION_REFERENCE"
+  | "RESOLUTION_EVIDENCE_REQUIRED"
+  | "REVISION_CONFLICT";
 
 export class TicketWriteError extends Error {
   constructor(
@@ -210,6 +257,18 @@ export class TicketWriteError extends Error {
  */
 export type TicketWorkflowCommand =
   | { kind: "attach_analysis"; classification: TicketRecordClassification | null; memoryMatch: TicketRecordMemoryMatch | null; bulkClusterId?: string | null }
+  | { kind: "save_draft"; finalResponse: string; humanEdited: boolean; expectedDraftRevision: number }
+  | { kind: "prepare_reflection"; reflection: ReflectionDecision }
+  | { kind: "append_customer_message"; content: string; idempotencyKey: string }
+  | { kind: "send_agent_message"; finalResponse: string; humanEdited: boolean; expectedDraftRevision: number; idempotencyKey: string }
+  | {
+      kind: "attach_resolution_evidence";
+      evidenceType: TicketResolutionEvidenceType;
+      sourceMessageId?: string | null;
+      note: string;
+      idempotencyKey: string;
+    }
+  | { kind: "resolve_with_evidence"; evidenceId: string }
   | { kind: "approve"; finalResponse: string; humanEdited: boolean }
   | { kind: "discard" }
   | { kind: "reinstate" }
@@ -240,6 +299,7 @@ export type TicketRecordFilter =
   | "heavily_edited"
   | "cold_start"
   | "uncategorized"
+  | "waiting_for_customer"
   | "rejected"
   | "discarded";
 

@@ -8,6 +8,7 @@ import type { BulkAnalysisResult, BulkUploadEntry, TicketRecord } from "@/types"
 import { detectLanguage, isSupportedLanguage } from "@/lib/languageDetection";
 import { resolveLanguagePolicy, resolveResponseLanguage } from "@/lib/languagePolicy";
 import { generateReflectionCommand, validateReflectionCommand } from "@/lib/application/learning/reflectionCommands";
+import { buildReflectionSafetyContext } from "@/lib/reflectionSafety";
 import { preparedReflectionStore } from "@/lib/server/jobs/preparedReflectionStore";
 import { patternDiscoveryStore, PatternDiscoveryError } from "@/lib/server/jobs/patternDiscoveryStore";
 import { durableJobRepository } from "@/lib/server/jobs/jobRepository";
@@ -250,7 +251,14 @@ export function createDefaultJobHandlerRegistry(): JobHandlerRegistry {
       authority: job.authority,
       requestId: job.requestId,
       reflection: generated.reflection,
-      safetyContext: { customerName: ticket.customerName, organizationName: profile.name, sourceTicketId: ticketId, sourceTicketText: `${ticket.subject} ${ticket.description}` }
+      safetyContext: buildReflectionSafetyContext({
+        customerName: ticket.customerName,
+        organizationName: profile.name,
+        sourceTicketId: ticketId,
+        sourceTicketText: `${ticket.subject} ${ticket.description}`,
+        extractedCustomerName: (input.understanding as any).extractedFields?.senderName,
+        extractedCompanyName: (input.understanding as any).extractedFields?.companyName
+      })
     });
     if (!validation.accepted) throw new Error(`Reflection validation rejected: ${validation.reasons.join(", ")}.`);
     await reportProgress({ stage: "persisting", completed: 3, total: 4, percent: 75, message: "Persisting prepared reflection for human review" });

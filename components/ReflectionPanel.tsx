@@ -43,9 +43,11 @@ interface ReflectionPanelProps {
   reviewedResponse?: string;
   darkMode?: boolean;
   isSubmitting?: boolean;
+  validationEligible?: boolean;
+  validationBlockedReason?: string | null;
 }
 
-export function ReflectionPanel({ decision, onConfirm, existingLessons = [], reviewedResponse = "", darkMode = false, isSubmitting = false }: ReflectionPanelProps) {
+export function ReflectionPanel({ decision, onConfirm, existingLessons = [], darkMode = false, isSubmitting = false, validationEligible = true, validationBlockedReason = null }: ReflectionPanelProps) {
   const actionColor = ACTION_COLORS[decision.action];
   const trustColor = TRUST_IMPACT_COLORS[decision.trustImpact];
   const requiresProblemName = !!decision.problemNameRequired;
@@ -56,7 +58,10 @@ export function ReflectionPanel({ decision, onConfirm, existingLessons = [], rev
   const [problemName, setProblemName] = useState(decision.suggestedProblemName ?? "");
   const [rootCause, setRootCause] = useState("");
   const [solution, setSolution] = useState("");
-  const [customerResponse, setCustomerResponse] = useState(reviewedResponse);
+  // The reviewed AI response is customer-specific by design. A new lesson's
+  // reusable template must be authored explicitly instead of inheriting that
+  // response into the promotion payload.
+  const [customerResponse, setCustomerResponse] = useState("");
   const [signalInput, setSignalInput] = useState("");
   const [signals, setSignals] = useState<string[]>([]);
   const [selectedExistingId, setSelectedExistingId] = useState<string | undefined>(existingLessons[0]?.id);
@@ -96,6 +101,11 @@ export function ReflectionPanel({ decision, onConfirm, existingLessons = [], rev
     if (isSubmitting) return;
     setValidationMessage("");
 
+    if (!validationEligible) {
+      setValidationMessage(validationBlockedReason ?? "Resolution evidence is required before this Reflection can be validated.");
+      return;
+    }
+
     if (requiresProblemName && !problemName.trim()) {
       setValidationMessage("Name the new problem before committing this learning.");
       return;
@@ -118,7 +128,7 @@ export function ReflectionPanel({ decision, onConfirm, existingLessons = [], rev
         mode: lessonMode,
         rootCause: rootCause.trim(),
         solution: solution.trim(),
-        customerResponse: customerResponse.trim() || reviewedResponse,
+        customerResponse: customerResponse.trim(),
         signals,
         existingLessonId: lessonMode !== "new" ? selectedExistingId : undefined
       }
@@ -303,13 +313,16 @@ export function ReflectionPanel({ decision, onConfirm, existingLessons = [], rev
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className={`font-semibold ${text}`}>
-              {decision.action === "create_new" && "Ready to validate this candidate as new organizational knowledge."}
-              {decision.action === "merge_existing" && "Ready to validate this ticket as supporting evidence for existing knowledge."}
-              {decision.action === "create_version" && "Ready to validate an improved version of existing knowledge."}
-              {decision.action === "trust_update_only" && "Ready to validate this confirmation and update trust."}
+              {!validationEligible && "Reflection is preliminary — resolution evidence is still required."}
+              {validationEligible && decision.action === "create_new" && "Ready to validate this candidate as new organizational knowledge."}
+              {validationEligible && decision.action === "merge_existing" && "Ready to validate this ticket as supporting evidence for existing knowledge."}
+              {validationEligible && decision.action === "create_version" && "Ready to validate an improved version of existing knowledge."}
+              {validationEligible && decision.action === "trust_update_only" && "Ready to validate this confirmation and update trust."}
             </p>
             <p className={`mt-0.5 text-sm ${textFaint}`}>
-              {hasLessonData
+              {!validationEligible
+                ? validationBlockedReason ?? "Resolution evidence is required before this Reflection can be validated as organizational knowledge."
+                : hasLessonData
                 ? `A lesson will be ${lessonMode === "new" ? "created" : lessonMode === "improves_existing" ? "updated" : "confirmed"} alongside this validation.`
                 : decision.isLearningEvent
                 ? requiresLesson
@@ -319,7 +332,7 @@ export function ReflectionPanel({ decision, onConfirm, existingLessons = [], rev
             </p>
             {validationMessage && <p className="mt-2 text-sm font-medium text-red-600">{validationMessage}</p>}
           </div>
-          <button type="button" onClick={handleConfirm} disabled={isSubmitting} className={`rounded-2xl px-6 py-3 font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${darkMode ? "bg-[#27469e] hover:bg-[#1e3a8a]" : "bg-ink hover:bg-slate-700"}`}>
+          <button type="button" onClick={handleConfirm} disabled={isSubmitting || !validationEligible} className={`rounded-2xl px-6 py-3 font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${darkMode ? "bg-[#27469e] hover:bg-[#1e3a8a]" : "bg-ink hover:bg-slate-700"}`}>
             {isSubmitting ? "Committing validation…" : "Validate & Commit to Organizational Memory"}
           </button>
         </div>

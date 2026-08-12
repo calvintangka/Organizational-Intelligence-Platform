@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { commitValidation } from "@/lib/server/persistenceService";
+import { commitValidation, toSafePersistenceError } from "@/lib/server/persistenceService";
 import { withOrganizationRoute } from "@/lib/server/organizationRoute";
 
 export const runtime = "nodejs";
@@ -22,6 +22,14 @@ export const POST = withOrganizationRoute("ticket.review", async ({ request, org
       { status: 400 }
     );
   }
-  const result = await commitValidation(organizationId, body, { id: user.id, name: user.name });
-  return NextResponse.json({ data: result }, { status: 200 });
+  try {
+    const result = await commitValidation(organizationId, body, { id: user.id, name: user.name });
+    return NextResponse.json({ data: result }, { status: 200 });
+  } catch (error) {
+    const safe = toSafePersistenceError(error);
+    return NextResponse.json(
+      { error: { code: safe.code, message: safe.message, ...(safe.details ?? {}) } },
+      { status: safe.status }
+    );
+  }
 });

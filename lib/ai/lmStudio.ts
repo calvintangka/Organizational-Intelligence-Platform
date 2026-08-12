@@ -26,6 +26,7 @@ import type {
   ExtractedTicketFields,
   AIKnowledgeEnrichment,
   AIPatternSuggestion,
+  AITiming,
   MatchDiscriminationResult
 } from "@/types";
 import { recordTelemetryEvent } from "@/lib/telemetry";
@@ -43,6 +44,14 @@ interface ChatCompletionOptions {
 }
 
 const MAX_AI_TIMEOUT_MS = 120000;
+
+function monotonicNow(): number {
+  return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
+
+function elapsedMs(startedAt: number): number {
+  return Number(Math.max(0, monotonicNow() - startedAt).toFixed(3));
+}
 
 function diagnosticId(): string {
   if (typeof globalThis.crypto?.randomUUID === "function") return globalThis.crypto.randomUUID();
@@ -173,6 +182,8 @@ async function callChatCompletion<T>(
   retryAttempt = 0
 ): Promise<AIProviderResult<T>> {
   const startedAt = Date.now();
+  const monotonicStartedAt = monotonicNow();
+  const timing: AITiming = {};
   const controller = new AbortController();
   const requestedTimeout = options.timeoutMs ?? config.timeoutMs;
   const timeoutMs = Math.max(5000, Math.min(requestedTimeout, MAX_AI_TIMEOUT_MS));
@@ -182,6 +193,7 @@ async function callChatCompletion<T>(
   const endpoint = viaProxy
     ? config.proxyPath
     : `${config.baseUrl.replace(/\/$/, "")}/chat/completions`;
+  timing.promptChars = prompt.system.length + prompt.user.length;
 
   const resolvedMaxTokens = Math.max(options.maxTokens ?? 700, config.minMaxTokens ?? 0);
   const maxRetries = Math.max(0, Math.min(2, Math.floor(config.maxRetries ?? 0)));
@@ -201,7 +213,17 @@ async function callChatCompletion<T>(
         : next.diagnostics
     };
   };
+  const diagnostics = (
+    proxySucceeded?: boolean,
+    fallbackReason?: string,
+    headers?: Headers,
+    metadata: AIProviderResultMetadata = {}
+  ) => readDiagnostics(config, endpoint, proxySucceeded, fallbackReason, headers, {
+    ...metadata,
+    timing: { ...timing, totalMs: elapsedMs(monotonicStartedAt) }
+  });
   try {
+    const requestStartedAt = monotonicNow();
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
@@ -227,6 +249,7 @@ async function callChatCompletion<T>(
       }),
       signal: controller.signal
     });
+    timing.requestMs = elapsedMs(requestStartedAt);
     const responseReceivedAt = Date.now();
     recordTelemetryEvent({
       name: "request_latency",
@@ -251,7 +274,7 @@ async function callChatCompletion<T>(
         model: config.model,
         latencyMs: Date.now() - startedAt,
         error,
-        diagnostics: readDiagnostics(config, endpoint, false, `HTTP ${response.status}`, response.headers, {
+        diagnostics: diagnostics(false, `HTTP ${response.status}`, response.headers, {
           httpStatus: response.status,
           failureClass: authenticationFailure ? "authentication" : response.status === 429 ? "rate_limit" : response.status >= 500 ? "provider_unavailable" : "unexpected_error",
           jsonParseStatus: "not_attempted"
@@ -259,13 +282,14 @@ async function callChatCompletion<T>(
       }, response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500);
     }
 
-    const bodyStartedAt = Date.now();
+    const bodyStartedAt = monotonicNow();
     const payload = (await response.json()) as {
       choices?: Array<{
         finish_reason?: string;
         message?: { content?: string; reasoning_content?: string };
       }>;
     };
+    timing.responseBodyMs = elapsedMs(bodyStartedAt);
     recordTelemetryEvent({
       name: "response_latency",
       category: "provider",
@@ -290,7 +314,7 @@ async function callChatCompletion<T>(
         model: config.model,
         latencyMs: Date.now() - startedAt,
         error: "AI output truncated before valid JSON",
-        diagnostics: readDiagnostics(config, endpoint, false, "AI output truncated before valid JSON", response.headers, {
+        diagnostics: diagnostics(false, "AI output truncated before valid JSON", response.headers, {
           failureClass: "truncated_response",
           completionLength: (content?.length ?? 0) + (reasoningContent?.length ?? 0),
           jsonParseStatus: "not_attempted",
@@ -317,12 +341,13 @@ async function callChatCompletion<T>(
         model: config.model,
         latencyMs: Date.now() - startedAt,
         error: "Malformed AI response",
-        diagnostics: readDiagnostics(config, endpoint, false, "Malformed AI response", response.headers, { failureClass: "malformed_response", jsonParseStatus: "not_attempted", structuredOutputValid: false })
+        diagnostics: diagnostics(false, "Malformed AI response", response.headers, { failureClass: "malformed_response", jsonParseStatus: "not_attempted", structuredOutputValid: false })
       }, true, undefined, true);
     }
 
-    const parseStartedAt = Date.now();
+    const parseStartedAt = monotonicNow();
     const parsed = parseJsonObject(content);
+    timing.parseMs = elapsedMs(parseStartedAt);
     recordTelemetryEvent({
       name: "json_parsing",
       category: "provider",
@@ -345,7 +370,7 @@ async function callChatCompletion<T>(
         model: config.model,
         latencyMs: Date.now() - startedAt,
         error: "AI response did not contain valid JSON",
-        diagnostics: readDiagnostics(config, endpoint, false, "AI response did not contain valid JSON", response.headers, { failureClass: "malformed_response", completionLength: content.length, jsonParseStatus: "invalid", structuredOutputValid: false })
+        diagnostics: diagnostics(false, "AI response did not contain valid JSON", response.headers, { failureClass: "malformed_response", completionLength: content.length, jsonParseStatus: "invalid", structuredOutputValid: false })
       }, true, undefined, true);
     }
 
@@ -358,7 +383,7 @@ async function callChatCompletion<T>(
         model: config.model,
         latencyMs: Date.now() - startedAt,
         error: "AI response failed structured schema validation",
-        diagnostics: readDiagnostics(config, endpoint, false, "AI response failed structured schema validation", response.headers, {
+        diagnostics: diagnostics(false, "AI response failed structured schema validation", response.headers, {
           failureClass: "invalid_structured_output",
           completionLength: content.length,
           jsonParseStatus: "valid",
@@ -374,7 +399,7 @@ async function callChatCompletion<T>(
       model: config.model,
       latencyMs: Date.now() - startedAt,
       data: parsed as T,
-      diagnostics: readDiagnostics(config, endpoint, true, undefined, response.headers, { completionLength: content.length, jsonParseStatus: "valid", structuredOutputValid: true })
+      diagnostics: diagnostics(true, undefined, response.headers, { completionLength: content.length, jsonParseStatus: "valid", structuredOutputValid: true })
     };
   } catch (error) {
     const message =
@@ -390,7 +415,7 @@ async function callChatCompletion<T>(
       model: config.model,
       latencyMs: Date.now() - startedAt,
       error: message,
-        diagnostics: readDiagnostics(config, endpoint, false, message, undefined, { failureClass: message.includes("timed out") ? "timeout" : /fetch|network|connect|refused|socket/i.test(message) ? "network" : "unexpected_error", timedOut: message.includes("timed out"), jsonParseStatus: "not_attempted" })
+        diagnostics: diagnostics(false, message, undefined, { failureClass: message.includes("timed out") ? "timeout" : /fetch|network|connect|refused|socket/i.test(message) ? "network" : "unexpected_error", timedOut: message.includes("timed out"), jsonParseStatus: "not_attempted" })
     };
     return retry(failure, /timed out|network|fetch|connect|refused|socket/i.test(message));
   } finally {
@@ -541,19 +566,26 @@ export function createLMStudioProvider(config: AIConfig, labelOverride?: string)
       });
     },
     async draftCustomerResponse(input: DraftCustomerResponseInput) {
+      const promptBuildStartedAt = monotonicNow();
+      const prompt = buildDraftCustomerResponsePrompt(input);
+      const promptBuildMs = elapsedMs(promptBuildStartedAt);
       const result = await callChatCompletion<Record<string, unknown>>(
         config,
-        buildDraftCustomerResponsePrompt(input),
+        prompt,
         { maxTokens: 650, providerLabel: lbl, validateStructuredOutput: validates.draft }
       );
-      if (!result.ok || !result.data) return relabel(mapFailure<AICustomerResponseSuggestion>(result));
-      if (!hasNonEmptyString(result.data.customerResponse) && !hasNonEmptyString(result.data.draftResponse)) return relabel(mapStructuredFailure<AICustomerResponseSuggestion>(result));
+      const withPromptTiming = <T>(value: AIProviderResult<T>): AIProviderResult<T> => value.diagnostics
+        ? { ...value, diagnostics: { ...value.diagnostics, timing: { ...value.diagnostics.timing, promptBuildMs } } }
+        : value;
+      const timedResult = withPromptTiming(result);
+      if (!timedResult.ok || !timedResult.data) return relabel(mapFailure<AICustomerResponseSuggestion>(timedResult));
+      if (!hasNonEmptyString(timedResult.data.customerResponse) && !hasNonEmptyString(timedResult.data.draftResponse)) return relabel(mapStructuredFailure<AICustomerResponseSuggestion>(timedResult));
       return relabel({
-        ...result,
+        ...timedResult,
         data: {
-          draftResponse: String(result.data.customerResponse ?? result.data.draftResponse ?? input.deterministicDraft),
-          confidence: clampConfidence(result.data.confidence),
-          rationale: typeof result.data.rationale === "string" ? result.data.rationale : undefined,
+          draftResponse: String(timedResult.data.customerResponse ?? timedResult.data.draftResponse ?? input.deterministicDraft),
+          confidence: clampConfidence(timedResult.data.confidence),
+          rationale: typeof timedResult.data.rationale === "string" ? timedResult.data.rationale : undefined,
           groundingMode: input.groundingMode,
           groundingLabel: input.groundingLabel
         }

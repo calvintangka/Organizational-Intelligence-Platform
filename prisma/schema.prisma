@@ -27,9 +27,21 @@ enum ValidationDecision {
 enum TicketRecordLifecycle {
   open
   in_review
+  waiting_for_customer
   resolved
   rejected
   discarded
+}
+
+enum TicketMessageDirection {
+  customer
+  agent
+}
+
+enum TicketResolutionEvidenceType {
+  customer_confirmation
+  agent_verification
+  manual_verified_resolution
 }
 
 enum EmergingPatternLifecycle {
@@ -109,24 +121,23 @@ enum PersistenceAuthority {
 }
 
 model User {
-  id           String        @id @default(cuid())
-  name         String
-  email        String        @unique
-  passwordHash String
+  id                   String   @id @default(cuid())
+  name                 String
+  email                String   @unique
+  passwordHash         String
   activeOrganizationId String?
-  createdAt    DateTime      @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime      @updatedAt @db.Timestamptz(6)
+  createdAt            DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime @updatedAt @db.Timestamptz(6)
 
-  sessions AuthSession[]
-  memberships OrganizationMembership[]
-  roleAssignments OrganizationRoleAssignment[] @relation("RoleAssignmentUser")
-  assignedRoleAssignments OrganizationRoleAssignment[] @relation("RoleAssignmentActor")
-  authorizationAudits AuthorizationDecisionAudit[] @relation("AuthorizationAuditActor")
+  sessions                     AuthSession[]
+  memberships                  OrganizationMembership[]
+  roleAssignments              OrganizationRoleAssignment[]  @relation("RoleAssignmentUser")
+  assignedRoleAssignments      OrganizationRoleAssignment[]  @relation("RoleAssignmentActor")
+  authorizationAudits          AuthorizationDecisionAudit[]  @relation("AuthorizationAuditActor")
   organizationCreationRequests OrganizationCreationRequest[] @relation("OrganizationCreationRequestCreator")
-  activeOrganization Organization? @relation("UserActiveOrganization", fields: [activeOrganizationId], references: [id], onDelete: SetNull)
+  activeOrganization           Organization?                 @relation("UserActiveOrganization", fields: [activeOrganizationId], references: [id], onDelete: SetNull)
 
   @@index([activeOrganizationId])
-
   @@map("users")
 }
 
@@ -153,19 +164,19 @@ model Organization {
   createdAt   DateTime @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @db.Timestamptz(6)
 
-  knowledgeItems      KnowledgeItem[]
-  knowledgeCandidates KnowledgeCandidate[]
-  validationRecords   ValidationRecord[]
-  memoryChangeRecords MemoryChangeRecord[]
-  ticketRecords       TicketRecord[]
-  trustEvidence       TrustEvidence[]
-  emergingPatterns    EmergingPattern[]
-  intelligenceLogs    IntelligenceLog[]
-  orgMetrics          OrgMetrics?
-  ticketSequence      TicketSequence?
-  migrationImportBatches    MigrationImportBatch[]
-  migrationImportConflicts  MigrationImportConflict[]
-  persistenceAuthority      OrganizationPersistenceAuthority?
+  knowledgeItems           KnowledgeItem[]
+  knowledgeCandidates      KnowledgeCandidate[]
+  validationRecords        ValidationRecord[]
+  memoryChangeRecords      MemoryChangeRecord[]
+  ticketRecords            TicketRecord[]
+  trustEvidence            TrustEvidence[]
+  emergingPatterns         EmergingPattern[]
+  intelligenceLogs         IntelligenceLog[]
+  orgMetrics               OrgMetrics?
+  ticketSequence           TicketSequence?
+  migrationImportBatches   MigrationImportBatch[]
+  migrationImportConflicts MigrationImportConflict[]
+  persistenceAuthority     OrganizationPersistenceAuthority?
   durableJobs              DurableJob[]
   preparedReflections      PreparedReflection[]
   patternDiscoveryOutcomes PatternDiscoveryOutcome[]
@@ -173,14 +184,14 @@ model Organization {
   connectorInstallations   ConnectorInstallation[]
   connectorInboundEvents   ConnectorInboundEvent[]
   externalObjectMappings   ExternalObjectMapping[]
-  governedActions           GovernedAction[]
-  actionLedgerEntries       ActionLedgerEntry[]
-  actionPolicy              OrganizationActionPolicy?
-  memberships               OrganizationMembership[]
-  roleAssignments           OrganizationRoleAssignment[]
-  authorizationAudits       AuthorizationDecisionAudit[]
-  creationRequest           OrganizationCreationRequest?
-  activeUsers               User[]                   @relation("UserActiveOrganization")
+  governedActions          GovernedAction[]
+  actionLedgerEntries      ActionLedgerEntry[]
+  actionPolicy             OrganizationActionPolicy?
+  memberships              OrganizationMembership[]
+  roleAssignments          OrganizationRoleAssignment[]
+  authorizationAudits      AuthorizationDecisionAudit[]
+  creationRequest          OrganizationCreationRequest?
+  activeUsers              User[]                            @relation("UserActiveOrganization")
 
   @@map("organizations")
 }
@@ -191,8 +202,8 @@ model OrganizationMembership {
   role           String   @default("member")
   createdAt      DateTime @default(now()) @db.Timestamptz(6)
 
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   roleAssignment OrganizationRoleAssignment?
 
   @@id([userId, organizationId])
@@ -247,10 +258,10 @@ model OrganizationRoleAssignment {
   createdAt        DateTime @default(now()) @db.Timestamptz(6)
   updatedAt        DateTime @updatedAt @db.Timestamptz(6)
 
-  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user         User                  @relation("RoleAssignmentUser", fields: [userId], references: [id], onDelete: Cascade)
-  role         Role                  @relation(fields: [roleId], references: [id], onDelete: Restrict)
-  assignedBy   User?                 @relation("RoleAssignmentActor", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User                   @relation("RoleAssignmentUser", fields: [userId], references: [id], onDelete: Cascade)
+  role         Role                   @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  assignedBy   User?                  @relation("RoleAssignmentActor", fields: [assignedByUserId], references: [id], onDelete: SetNull)
   membership   OrganizationMembership @relation(fields: [userId, organizationId], references: [userId, organizationId], onDelete: Cascade)
 
   @@unique([organizationId, userId])
@@ -456,7 +467,9 @@ model TicketRecord {
   resolutionMode      TicketResolutionMode?
   createdAt           DateTime              @db.Timestamptz(6)
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization       Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  messages           TicketMessage[]
+  resolutionEvidence TicketResolutionEvidence[]
 
   @@unique([organizationId, ticketId])
   @@unique([organizationId, bulkUploadKey, bulkEntryId])
@@ -466,17 +479,57 @@ model TicketRecord {
   @@map("ticket_records")
 }
 
+model TicketMessage {
+  id             String                 @id
+  organizationId String
+  ticketId       String
+  sequence       Int
+  direction      TicketMessageDirection
+  content        String
+  actorId        String?
+  createdAt      DateTime               @default(now()) @db.Timestamptz(6)
+  idempotencyKey String?
+
+  ticket         TicketRecord               @relation(fields: [organizationId, ticketId], references: [organizationId, ticketId], onDelete: Cascade)
+  sourceEvidence TicketResolutionEvidence[] @relation("ResolutionEvidenceSource")
+
+  @@unique([organizationId, ticketId, sequence])
+  @@unique([organizationId, ticketId, idempotencyKey])
+  @@index([organizationId, ticketId, sequence])
+  @@map("ticket_messages")
+}
+
+model TicketResolutionEvidence {
+  id              String                       @id
+  organizationId  String
+  ticketId        String
+  type            TicketResolutionEvidenceType
+  sourceMessageId String?
+  actorId         String
+  note            String
+  createdAt       DateTime                     @default(now()) @db.Timestamptz(6)
+  idempotencyKey  String?
+
+  ticket        TicketRecord   @relation(fields: [organizationId, ticketId], references: [organizationId, ticketId], onDelete: Cascade)
+  sourceMessage TicketMessage? @relation("ResolutionEvidenceSource", fields: [sourceMessageId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, ticketId, idempotencyKey])
+  @@index([organizationId, ticketId, createdAt])
+  @@index([organizationId, sourceMessageId])
+  @@map("ticket_resolution_evidence")
+}
+
 model OrganizationActionPolicy {
-  id                    String   @id @default(cuid())
-  organizationId        String   @unique
-  version               Int      @default(1)
-  allowedLabels         Json
-  disabledLabels        Json
-  maximumLabelsPerTicket Int     @default(10)
-  duplicateBehavior     String   @default("idempotent_success")
-  updatedByActorId      String?
-  createdAt             DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt             DateTime @updatedAt @db.Timestamptz(6)
+  id                     String   @id @default(cuid())
+  organizationId         String   @unique
+  version                Int      @default(1)
+  allowedLabels          Json
+  disabledLabels         Json
+  maximumLabelsPerTicket Int      @default(10)
+  duplicateBehavior      String   @default("idempotent_success")
+  updatedByActorId       String?
+  createdAt              DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt              DateTime @updatedAt @db.Timestamptz(6)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -484,10 +537,10 @@ model OrganizationActionPolicy {
 }
 
 model GovernedAction {
-  id                    String   @id @default(cuid())
+  id                    String    @id @default(cuid())
   organizationId        String
   actionType            String
-  actionVersion         Int      @default(1)
+  actionVersion         Int       @default(1)
   targetType            String
   targetId              String
   status                String
@@ -496,18 +549,18 @@ model GovernedAction {
   proposedPayload       Json
   proposedPayloadDigest String
   preparedByActorId     String?
-  preparedBySystem      Boolean  @default(false)
+  preparedBySystem      Boolean   @default(false)
   preparationReason     String
   requiredCapabilities  Json
   policyDecision        Json
   policyVersion         Int
-  approvalRequired      Boolean  @default(true)
+  approvalRequired      Boolean   @default(true)
   approvedByActorId     String?
   approvedAt            DateTime? @db.Timestamptz(6)
   approvalDecision      String?
   approvalComment       String?
   executionJobId        String?
-  executionAttemptCount Int      @default(0)
+  executionAttemptCount Int       @default(0)
   executedByActorId     String?
   executedByWorkerId    String?
   executedAt            DateTime? @db.Timestamptz(6)
@@ -520,10 +573,10 @@ model GovernedAction {
   requestId             String
   correlationId         String
   idempotencyKey        String
-  createdAt             DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt             DateTime @updatedAt @db.Timestamptz(6)
+  createdAt             DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(6)
 
-  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization  Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   ledgerEntries ActionLedgerEntry[]
 
   @@unique([organizationId, idempotencyKey])
@@ -573,7 +626,7 @@ model EmergingPattern {
   firstSeenAt               DateTime                 @db.Timestamptz(6)
   lastSeenAt                DateTime                 @db.Timestamptz(6)
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization      Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   discoveryEvidence PatternDiscoveryEvidence[]
   discoveryOutcomes PatternDiscoveryOutcome[]
 
@@ -638,33 +691,33 @@ model TicketSequence {
 }
 
 model MigrationImportBatch {
-  id                    String                   @id @default(cuid())
-  organizationId        String
-  format                String
-  formatVersion         Int
-  resourcePayloadDigest String
-  metadataDigest        String?
-  sourceOrganizationId  String
-  sourcePersistenceMode String
-  sourceSchemaVersion   String
-  exportedAt            DateTime                 @db.Timestamptz(6)
-  counts                Json
-  resourceDigests       Json
+  id                      String                     @id @default(cuid())
+  organizationId          String
+  format                  String
+  formatVersion           Int
+  resourcePayloadDigest   String
+  metadataDigest          String?
+  sourceOrganizationId    String
+  sourcePersistenceMode   String
+  sourceSchemaVersion     String
+  exportedAt              DateTime                   @db.Timestamptz(6)
+  counts                  Json
+  resourceDigests         Json
   // Immutable, validated oip-localstorage-export-v1 package retained for a
   // later Batch 5.4 import attempt. This is not arbitrary browser storage.
-  packagePayload         Json?
-  status                MigrationImportBatchStatus @default(pending)
-  attemptCount          Int                      @default(0)
-  errorSummary          String?
-  createdAt             DateTime                 @default(now()) @db.Timestamptz(6)
-  startedAt             DateTime?                @db.Timestamptz(6)
-  completedAt           DateTime?                @db.Timestamptz(6)
-  verificationCompletedAt DateTime?              @db.Timestamptz(6)
-  verificationReport    Json?
-  verificationError     String?
-  updatedAt             DateTime                 @updatedAt @db.Timestamptz(6)
+  packagePayload          Json?
+  status                  MigrationImportBatchStatus @default(pending)
+  attemptCount            Int                        @default(0)
+  errorSummary            String?
+  createdAt               DateTime                   @default(now()) @db.Timestamptz(6)
+  startedAt               DateTime?                  @db.Timestamptz(6)
+  completedAt             DateTime?                  @db.Timestamptz(6)
+  verificationCompletedAt DateTime?                  @db.Timestamptz(6)
+  verificationReport      Json?
+  verificationError       String?
+  updatedAt               DateTime                   @updatedAt @db.Timestamptz(6)
 
-  organization Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization                       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   resources    MigrationImportResource[]
   conflicts    MigrationImportConflict[]
   cutovers     OrganizationPersistenceAuthority[]
@@ -676,22 +729,22 @@ model MigrationImportBatch {
 }
 
 model MigrationImportResource {
-  id                    String                    @id @default(cuid())
+  id                    String                        @id @default(cuid())
   batchId               String
   resourceType          MigrationImportResourceType
-  expectedCount         Int                       @default(0)
-  importedCount         Int                       @default(0)
-  skippedIdenticalCount  Int                       @default(0)
-  conflictCount         Int                       @default(0)
-  sourceDigest           String
-  targetDigest           String?
+  expectedCount         Int                           @default(0)
+  importedCount         Int                           @default(0)
+  skippedIdenticalCount Int                           @default(0)
+  conflictCount         Int                           @default(0)
+  sourceDigest          String
+  targetDigest          String?
   status                MigrationImportResourceStatus @default(pending)
-  attemptCount          Int                       @default(0)
+  attemptCount          Int                           @default(0)
   errorSummary          String?
-  createdAt             DateTime                  @default(now()) @db.Timestamptz(6)
-  startedAt             DateTime?                 @db.Timestamptz(6)
-  completedAt           DateTime?                 @db.Timestamptz(6)
-  updatedAt             DateTime                  @updatedAt @db.Timestamptz(6)
+  createdAt             DateTime                      @default(now()) @db.Timestamptz(6)
+  startedAt             DateTime?                     @db.Timestamptz(6)
+  completedAt           DateTime?                     @db.Timestamptz(6)
+  updatedAt             DateTime                      @updatedAt @db.Timestamptz(6)
 
   batch MigrationImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
 
@@ -701,7 +754,7 @@ model MigrationImportResource {
 }
 
 model MigrationImportConflict {
-  id             String                       @id @default(cuid())
+  id             String                        @id @default(cuid())
   batchId        String
   organizationId String
   resourceType   MigrationImportResourceType
@@ -714,10 +767,10 @@ model MigrationImportConflict {
   targetSnapshot Json?
   reason         String
   status         MigrationImportConflictStatus @default(open)
-  detectedAt     DateTime                     @default(now()) @db.Timestamptz(6)
-  resolvedAt     DateTime?                    @db.Timestamptz(6)
-  createdAt      DateTime                     @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime                     @updatedAt @db.Timestamptz(6)
+  detectedAt     DateTime                      @default(now()) @db.Timestamptz(6)
+  resolvedAt     DateTime?                     @db.Timestamptz(6)
+  createdAt      DateTime                      @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime                      @updatedAt @db.Timestamptz(6)
 
   batch        MigrationImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -748,7 +801,7 @@ model OrganizationPersistenceAuthority {
   updatedAt         DateTime              @updatedAt @db.Timestamptz(6)
 
   organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  migrationBatch MigrationImportBatch?  @relation(fields: [migrationBatchId], references: [id], onDelete: SetNull)
+  migrationBatch MigrationImportBatch? @relation(fields: [migrationBatchId], references: [id], onDelete: SetNull)
 
   @@index([authority])
   @@index([migrationBatchId])
@@ -758,42 +811,42 @@ model OrganizationPersistenceAuthority {
 // TODO-018: durable asynchronous work. Status/type/outcome stay strings so
 // handlers can evolve by version without a flag-day Prisma enum migration.
 model DurableJob {
-  id                    String   @id @default(cuid())
-  organizationId        String
-  actorId               String?
-  type                  String
-  version               Int      @default(1)
-  status                String
-  priority              Int      @default(100)
-  authority             String
-  input                 Json
-  inputDigest           String
-  idempotencyKey        String
-  correlationId         String
-  requestId             String
-  progress              Json
-  progressMessage       String?
-  result                Json?
-  resultDigest          String?
-  error                 Json?
-  retryable             Boolean  @default(false)
-  attemptCount          Int      @default(0)
-  maxAttempts           Int      @default(3)
-  nextAttemptAt         DateTime?
-  leaseOwner            String?
-  leaseExpiresAt        DateTime?
+  id                      String    @id @default(cuid())
+  organizationId          String
+  actorId                 String?
+  type                    String
+  version                 Int       @default(1)
+  status                  String
+  priority                Int       @default(100)
+  authority               String
+  input                   Json
+  inputDigest             String
+  idempotencyKey          String
+  correlationId           String
+  requestId               String
+  progress                Json
+  progressMessage         String?
+  result                  Json?
+  resultDigest            String?
+  error                   Json?
+  retryable               Boolean   @default(false)
+  attemptCount            Int       @default(0)
+  maxAttempts             Int       @default(3)
+  nextAttemptAt           DateTime?
+  leaseOwner              String?
+  leaseExpiresAt          DateTime?
   cancellationRequestedAt DateTime?
-  cancelledAt           DateTime?
-  startedAt             DateTime?
-  completedAt           DateTime?
-  failedAt              DateTime?
-  deadLetteredAt        DateTime?
-  createdAt             DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt             DateTime @updatedAt @db.Timestamptz(6)
+  cancelledAt             DateTime?
+  startedAt               DateTime?
+  completedAt             DateTime?
+  failedAt                DateTime?
+  deadLetteredAt          DateTime?
+  createdAt               DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime  @updatedAt @db.Timestamptz(6)
 
-  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  attempts     DurableJobAttempt[]
-  preparedReflection PreparedReflection?
+  organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  attempts                DurableJobAttempt[]
+  preparedReflection      PreparedReflection?
   patternDiscoveryOutcome PatternDiscoveryOutcome?
   connectorInboundEvent   ConnectorInboundEvent?
 
@@ -805,11 +858,11 @@ model DurableJob {
 }
 
 model DurableJobAttempt {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   jobId           String
   attemptNumber   Int
   workerId        String
-  startedAt       DateTime @db.Timestamptz(6)
+  startedAt       DateTime  @db.Timestamptz(6)
   heartbeatAt     DateTime? @db.Timestamptz(6)
   finishedAt      DateTime? @db.Timestamptz(6)
   outcome         String
@@ -829,23 +882,23 @@ model DurableJobAttempt {
 // TODO-075: process-level worker health is persisted so operations views do
 // not depend on the memory of a particular web or worker process.
 model DurableWorkerHeartbeat {
-  id                   String   @id @default(cuid())
-  workerId             String   @unique
-  status               String
-  version              String
-  startedAt            DateTime @db.Timestamptz(6)
-  lastHeartbeatAt      DateTime @db.Timestamptz(6)
-  lastPollAt           DateTime? @db.Timestamptz(6)
-  currentJobId         String?
+  id                    String    @id @default(cuid())
+  workerId              String    @unique
+  status                String
+  version               String
+  startedAt             DateTime  @db.Timestamptz(6)
+  lastHeartbeatAt       DateTime  @db.Timestamptz(6)
+  lastPollAt            DateTime? @db.Timestamptz(6)
+  currentJobId          String?
   currentLeaseExpiresAt DateTime? @db.Timestamptz(6)
-  processedJobs        Int      @default(0)
-  succeededJobs        Int      @default(0)
-  failedJobs           Int      @default(0)
-  cancelledJobs        Int      @default(0)
-  retryCount           Int      @default(0)
-  concurrency          Int      @default(1)
-  lastErrorSafe        String?
-  updatedAt            DateTime @updatedAt @db.Timestamptz(6)
+  processedJobs         Int       @default(0)
+  succeededJobs         Int       @default(0)
+  failedJobs            Int       @default(0)
+  cancelledJobs         Int       @default(0)
+  retryCount            Int       @default(0)
+  concurrency           Int       @default(1)
+  lastErrorSafe         String?
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(6)
 
   @@index([status, lastHeartbeatAt])
   @@map("durable_worker_heartbeats")
@@ -854,31 +907,31 @@ model DurableWorkerHeartbeat {
 // TODO-076: connector state is durable, organization-scoped, and contains no
 // plaintext credentials or raw webhook payloads.
 model ConnectorInstallation {
-  id                   String   @id @default(cuid())
-  organizationId       String
-  connectorType        String
-  adapterVersion       Int      @default(1)
-  name                 String
-  status               String   @default("draft")
-  configuration        Json
-  capabilities         Json
-  externalAccountId    String?
-  externalWorkspaceId  String?
-  activeCredentialId   String?
-  cursor               Json?
-  lastSyncAt           DateTime? @db.Timestamptz(6)
-  lastSuccessAt        DateTime? @db.Timestamptz(6)
-  lastFailureAt        DateTime? @db.Timestamptz(6)
-  lastFailureSafe      String?
-  createdBy            String?
-  createdAt            DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt            DateTime @updatedAt @db.Timestamptz(6)
+  id                  String    @id @default(cuid())
+  organizationId      String
+  connectorType       String
+  adapterVersion      Int       @default(1)
+  name                String
+  status              String    @default("draft")
+  configuration       Json
+  capabilities        Json
+  externalAccountId   String?
+  externalWorkspaceId String?
+  activeCredentialId  String?
+  cursor              Json?
+  lastSyncAt          DateTime? @db.Timestamptz(6)
+  lastSuccessAt       DateTime? @db.Timestamptz(6)
+  lastFailureAt       DateTime? @db.Timestamptz(6)
+  lastFailureSafe     String?
+  createdBy           String?
+  createdAt           DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime  @updatedAt @db.Timestamptz(6)
 
-  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  credentials       ConnectorCredential[] @relation("InstallationCredentials")
-  activeCredential  ConnectorCredential?  @relation("ActiveConnectorCredential", fields: [activeCredentialId], references: [id], onDelete: SetNull)
-  inboundEvents     ConnectorInboundEvent[]
-  externalMappings  ExternalObjectMapping[]
+  organization     Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  credentials      ConnectorCredential[]   @relation("InstallationCredentials")
+  activeCredential ConnectorCredential?    @relation("ActiveConnectorCredential", fields: [activeCredentialId], references: [id], onDelete: SetNull)
+  inboundEvents    ConnectorInboundEvent[]
+  externalMappings ExternalObjectMapping[]
 
   @@index([organizationId, status, createdAt])
   @@index([connectorType, status])
@@ -886,15 +939,15 @@ model ConnectorInstallation {
 }
 
 model ConnectorCredential {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   installationId    String
   encryptedMaterial String
-  keyVersion        String   @default("local-v1")
-  status            String   @default("active")
+  keyVersion        String    @default("local-v1")
+  status            String    @default("active")
   createdBy         String?
   rotatedAt         DateTime? @db.Timestamptz(6)
   revokedAt         DateTime? @db.Timestamptz(6)
-  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(6)
 
   installation ConnectorInstallation   @relation("InstallationCredentials", fields: [installationId], references: [id], onDelete: Cascade)
   activeFor    ConnectorInstallation[] @relation("ActiveConnectorCredential")
@@ -904,7 +957,7 @@ model ConnectorCredential {
 }
 
 model ConnectorInboundEvent {
-  id                      String   @id @default(cuid())
+  id                      String    @id @default(cuid())
   organizationId          String
   connectorInstallationId String
   connectorType           String
@@ -912,23 +965,23 @@ model ConnectorInboundEvent {
   eventType               String
   eventVersion            String?
   payloadDigest           String
-  receivedAt              DateTime @default(now()) @db.Timestamptz(6)
+  receivedAt              DateTime  @default(now()) @db.Timestamptz(6)
   sourceTimestamp         DateTime? @db.Timestamptz(6)
   normalizedAt            DateTime? @db.Timestamptz(6)
   status                  String
-  jobId                   String?  @unique
-  replayCount             Int      @default(0)
+  jobId                   String?   @unique
+  replayCount             Int       @default(0)
   safeMetadata            Json
   normalizedSignal        Json?
   errorClass              String?
   errorMessage            String?
   completedAt             DateTime? @db.Timestamptz(6)
-  createdAt               DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt               DateTime @updatedAt @db.Timestamptz(6)
+  createdAt               DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime  @updatedAt @db.Timestamptz(6)
 
-  organization  Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  installation  ConnectorInstallation @relation(fields: [connectorInstallationId], references: [id], onDelete: Cascade)
-  job           DurableJob?           @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  installation ConnectorInstallation @relation(fields: [connectorInstallationId], references: [id], onDelete: Cascade)
+  job          DurableJob?           @relation(fields: [jobId], references: [id], onDelete: SetNull)
 
   @@unique([connectorInstallationId, externalEventId, eventType])
   @@index([organizationId, status, receivedAt])
@@ -937,7 +990,7 @@ model ConnectorInboundEvent {
 }
 
 model ExternalObjectMapping {
-  id                      String   @id @default(cuid())
+  id                      String    @id @default(cuid())
   organizationId          String
   connectorInstallationId String
   externalObjectType      String
@@ -947,9 +1000,9 @@ model ExternalObjectMapping {
   externalVersion         String?
   lastExternalUpdatedAt   DateTime? @db.Timestamptz(6)
   lastOipUpdatedAt        DateTime? @db.Timestamptz(6)
-  syncState               String   @default("active")
-  createdAt               DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt               DateTime @updatedAt @db.Timestamptz(6)
+  syncState               String    @default("active")
+  createdAt               DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime  @updatedAt @db.Timestamptz(6)
 
   organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   installation ConnectorInstallation @relation(fields: [connectorInstallationId], references: [id], onDelete: Cascade)
@@ -960,25 +1013,25 @@ model ExternalObjectMapping {
 }
 
 model PreparedReflection {
-  id                String   @id @default(cuid())
-  organizationId    String
-  jobId             String   @unique
-  ticketId          String
-  actorId           String?
-  requestId         String
-  correlationId     String
-  idempotencyKey    String
-  inputDigest       String
-  status            String   @default("prepared")
-  ticket            Json
-  understanding    Json
-  reviewedResponse String
-  reflection       Json
-  warnings         Json
-  reasons          Json
+  id                 String   @id @default(cuid())
+  organizationId     String
+  jobId              String   @unique
+  ticketId           String
+  actorId            String?
+  requestId          String
+  correlationId      String
+  idempotencyKey     String
+  inputDigest        String
+  status             String   @default("prepared")
+  ticket             Json
+  understanding      Json
+  reviewedResponse   String
+  reflection         Json
+  warnings           Json
+  reasons            Json
   generationMetadata Json
-  createdAt        DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt        DateTime @updatedAt @db.Timestamptz(6)
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(6)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   job          DurableJob   @relation(fields: [jobId], references: [id], onDelete: Cascade)
@@ -1008,8 +1061,8 @@ model PatternDiscoveryOutcome {
   createdAt          DateTime @default(now()) @db.Timestamptz(6)
   updatedAt          DateTime @updatedAt @db.Timestamptz(6)
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  job          DurableJob   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  job          DurableJob       @relation(fields: [jobId], references: [id], onDelete: Cascade)
   pattern      EmergingPattern? @relation(fields: [patternId], references: [id], onDelete: SetNull)
 
   @@unique([organizationId, idempotencyKey])
@@ -1028,7 +1081,7 @@ model PatternDiscoveryEvidence {
   language       String?
   createdAt      DateTime @default(now()) @db.Timestamptz(6)
 
-  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   pattern      EmergingPattern @relation(fields: [patternId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, patternId, ticketId])
@@ -1043,11 +1096,11 @@ model PatternDiscoveryEvidence {
 // composite primary key makes `INSERT ... ON CONFLICT DO UPDATE` the atomic
 // increment primitive, so concurrent requests can never exceed a window limit.
 model RateLimitCounter {
-  policyKey     String
-  dimensionKey  String
-  windowStart   DateTime @db.Timestamptz(6)
-  count         Int      @default(0)
-  updatedAt     DateTime @updatedAt @db.Timestamptz(6)
+  policyKey    String
+  dimensionKey String
+  windowStart  DateTime @db.Timestamptz(6)
+  count        Int      @default(0)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
 
   @@id([policyKey, dimensionKey, windowStart])
   @@index([policyKey, updatedAt])
@@ -1060,21 +1113,21 @@ model RateLimitCounter {
 // intentionally free-form (no foreign keys) so defense logging never depends on
 // an organization or user still existing.
 model RateLimitEvent {
-  id                 String   @id @default(cuid())
-  policyKey          String
-  route              String
-  decision           String
-  dimensionClass     String?
-  actorUserId        String?
-  organizationId     String?
-  limitValue         Int
-  remaining          Int
-  resetAt            DateTime? @db.Timestamptz(6)
-  retryAfterSeconds  Int?
-  reason             String?
-  requestId          String?
-  correlationId      String?
-  createdAt          DateTime @default(now()) @db.Timestamptz(6)
+  id                String    @id @default(cuid())
+  policyKey         String
+  route             String
+  decision          String
+  dimensionClass    String?
+  actorUserId       String?
+  organizationId    String?
+  limitValue        Int
+  remaining         Int
+  resetAt           DateTime? @db.Timestamptz(6)
+  retryAfterSeconds Int?
+  reason            String?
+  requestId         String?
+  correlationId     String?
+  createdAt         DateTime  @default(now()) @db.Timestamptz(6)
 
   @@index([createdAt])
   @@index([policyKey, createdAt])
