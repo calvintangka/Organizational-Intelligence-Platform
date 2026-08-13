@@ -2,9 +2,9 @@ import {
   AnimatedValue,
   Chip,
   ConnectionLine,
-  FLYWHEEL_MOMENTS,
   FlywheelScene,
   MemoryGlyph,
+  OIPCycle,
   Stagger,
   StagePanel,
   useFlywheel,
@@ -277,40 +277,16 @@ export function OIPRevealScene() {
         <div className="lp-reveal-lockup" aria-hidden="true"><MemoryGlyph small /><span>Organizational Intelligence Platform</span></div>
         <p>OIP turns resolved work into trusted, reusable Organizational Memory.</p>
       </div>
-      <div className="lp-wide lp-reveal-ring-stage" role="img" aria-label="The OIP Knowledge Flywheel: understand, remember, assist, learn, reuse, and automate around Organizational Memory. Nine internal stages preserve grounding, review, observation, and governance.">
-        <div className="lp-flywheel-ring" aria-hidden="true">
-          <div className="lp-ring-track" />
-          <div className="lp-reveal-fragments">
-            <span className="fragment-tickets">TICKETS</span>
-            <span className="fragment-docs">DOCS</span>
-            <span className="fragment-chat">CHAT</span>
-            <span className="fragment-outcomes">OUTCOMES</span>
-            <span className="fragment-policy">POLICY</span>
-            <span className="fragment-agents">AGENTS</span>
-          </div>
-          <div className="lp-ring-core">
-            <MemoryGlyph />
-            <small>ORGANIZATIONAL</small>
-            <b>MEMORY</b>
-            <em>validated · versioned · traceable</em>
-          </div>
-          {FLYWHEEL_MOMENTS.map((moment, index) => (
-            <div className={`lp-ring-node moment-${index + 1}`} key={moment.key}>
-              <span>{String(index + 1).padStart(2, "0")}</span>
-              <b>{moment.label}</b>
-            </div>
-          ))}
+      <OIPCycle />
+      <div className="lp-reveal-signature">
+        <div className="lp-reveal-sig-flow" aria-hidden="true">
+          <span className="lp-sig-chip">PROBLEM ARRIVES</span>
+          <ConnectionLine live={inView} />
+          <span className="lp-sig-chip is-memory"><MemoryGlyph small />MEMORY RESPONDS</span>
+          <ConnectionLine live={inView} />
+          <span className="lp-sig-chip is-outcome">OUTCOME OCCURS</span>
         </div>
-        <div className="lp-reveal-signature">
-          <div className="lp-reveal-sig-flow" aria-hidden="true">
-            <span className="lp-sig-chip">PROBLEM ARRIVES</span>
-            <ConnectionLine live={inView} />
-            <span className="lp-sig-chip is-memory"><MemoryGlyph small />MEMORY RESPONDS</span>
-            <ConnectionLine live={inView} />
-            <span className="lp-sig-chip is-outcome">OUTCOME OCCURS</span>
-          </div>
-          <p>A problem arrives. Memory responds. The outcome makes the next response better.</p>
-        </div>
+        <p>A problem arrives. Memory responds. The outcome makes the next response better.</p>
       </div>
       <p className="lp-editorial-line lp-editorial-line-indigo">Every resolved issue should make the whole organization <em>smarter.</em></p>
     </section>

@@ -1,18 +1,12 @@
 import {
   AIContextScene,
-  AnalyzeScene,
-  AssistReviewScene,
-  AutomateScene,
   HeroVillainScene,
   OIPRevealScene,
-  ObserveLearnScene,
   RememberingAttemptScene,
-  RememberGroundScene,
-  ReuseScene,
   SupportPressureScene,
   VisionScene
 } from "./scenes";
-import { FlywheelZone } from "./flywheel";
+import { KnowledgeFlywheel } from "./flywheel";
 
 function LandingNav() {
   return (
@@ -54,14 +48,7 @@ export function LandingPage() {
             <h2 id="flywheel-title">One problem becomes <em>organizational memory.</em></h2>
             <p>Six clear moments. Nine governed stages underneath.</p>
           </div>
-          <FlywheelZone>
-            <AnalyzeScene />
-            <RememberGroundScene />
-            <AssistReviewScene />
-            <ObserveLearnScene />
-            <ReuseScene />
-            <AutomateScene />
-          </FlywheelZone>
+          <KnowledgeFlywheel />
         </section>
         <VisionScene />
       </main>
