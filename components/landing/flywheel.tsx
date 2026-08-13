@@ -49,106 +49,86 @@ export function useFlywheel(): FlywheelContextValue | null {
 }
 
 /**
- * The Knowledge Flywheel zone owns one IntersectionObserver that watches every
- * flywheel scene and reports which stage group is currently on screen. The
- * sticky progress rail renders from the same state, so the visitor always sees
- * where the story is inside the flywheel. No scroll-jacking: normal scrolling
- * is untouched.
+ * The Knowledge Flywheel is one pinned product stage on desktop. Normal page
+ * scrolling advances a single horizontal track; the six readable moments are
+ * backed by the same nine internal stages used by the product story.
  */
 export function FlywheelZone({ children }: { children: ReactNode }) {
-  const entriesRef = useRef(new Map<HTMLElement, { stages: number[]; ratio: number }>());
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  const [activeStages, setActiveStages] = useState<number[]>([]);
+  const zoneRef = useRef<HTMLDivElement | null>(null);
+  const [activeMomentIndex, setActiveMomentIndex] = useState(0);
 
   useEffect(() => {
-    if (typeof IntersectionObserver === "undefined") return;
-    const observer = new IntersectionObserver(
-      (records) => {
-        let changed = false;
-        for (const record of records) {
-          const target = record.target as HTMLElement;
-          const entry = entriesRef.current.get(target);
-          if (!entry) continue;
-          const ratio = record.isIntersecting ? record.intersectionRatio : 0;
-          if (entry.ratio !== ratio) {
-            entry.ratio = ratio;
-            changed = true;
-          }
-        }
-        if (!changed) return;
-        let best: { stages: number[]; ratio: number } | null = null;
-        for (const entry of entriesRef.current.values()) {
-          if (entry.ratio > 0 && (best === null || entry.ratio > best.ratio)) best = entry;
-        }
-        setActiveStages(best ? [...best.stages] : []);
-      },
-      { rootMargin: "-38% 0px -38% 0px", threshold: [0, 0.2, 0.5, 1] }
-    );
-    observerRef.current = observer;
-    for (const element of entriesRef.current.keys()) observer.observe(element);
+    const update = () => {
+      const zone = zoneRef.current;
+      if (!zone || window.innerWidth <= 1050) return;
+      const maxScroll = Math.max(1, zone.offsetHeight - window.innerHeight);
+      const zoneTop = zone.getBoundingClientRect().top + window.scrollY;
+      const progress = Math.min(1, Math.max(0, (window.scrollY - zoneTop) / maxScroll));
+      setActiveMomentIndex(Math.min(FLYWHEEL_MOMENTS.length - 1, Math.floor(progress * FLYWHEEL_MOMENTS.length)));
+    };
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    document.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
     return () => {
-      observer.disconnect();
-      observerRef.current = null;
+      window.removeEventListener("scroll", update);
+      document.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
     };
   }, []);
 
-  const register = useCallback((element: HTMLElement, stages: number[]) => {
-    entriesRef.current.set(element, { stages, ratio: 0 });
-    observerRef.current?.observe(element);
-    return () => {
-      entriesRef.current.delete(element);
-      observerRef.current?.unobserve(element);
-    };
-  }, []);
+  const register = useCallback(() => () => undefined, []);
+  const activeStages = [...FLYWHEEL_MOMENTS[activeMomentIndex].stages];
 
   const value = useMemo<FlywheelContextValue>(() => ({ register, activeStages }), [register, activeStages]);
-  const furthestActive = activeStages.length > 0 ? Math.max(...activeStages) : 0;
-  const activeMomentIndex = FLYWHEEL_MOMENTS.findIndex((moment) =>
-    moment.stages.some((stage) => activeStages.includes(stage))
-  );
+  const furthestActive = Math.max(...activeStages);
+  const currentMoment = FLYWHEEL_MOMENTS[activeMomentIndex];
   const completedMoments = activeMomentIndex + 1;
-  const currentMoment = activeMomentIndex >= 0 ? FLYWHEEL_MOMENTS[activeMomentIndex] : null;
 
   return (
     <FlywheelContext.Provider value={value}>
-      <div className="lp-fw-zone">
-        <div className="lp-fw-rail-wrap">
-          <div className="lp-fw-rail" aria-label={`Knowledge Flywheel progress. Current moment: ${currentMoment?.label ?? "not started"}. Internal stage ${furthestActive || 0} of ${FLYWHEEL_STAGES.length}.`}>
-            <span className="lp-fw-rail-name">KNOWLEDGE FLYWHEEL</span>
-            <div className="lp-fw-rail-track" aria-hidden="true">
-              <i style={{ width: `${(completedMoments / FLYWHEEL_MOMENTS.length) * 100}%` }} />
+      <div ref={zoneRef} className="lp-fw-zone">
+        <div className="lp-fw-sticky">
+          <div className="lp-fw-rail-wrap">
+            <div className="lp-fw-rail" aria-label={`Knowledge Flywheel progress. Current moment: ${currentMoment.label}. Internal stage ${furthestActive} of ${FLYWHEEL_STAGES.length}.`}>
+              <span className="lp-fw-rail-name">KNOWLEDGE FLYWHEEL</span>
+              <div className="lp-fw-rail-track" aria-hidden="true">
+                <i style={{ width: `${(completedMoments / FLYWHEEL_MOMENTS.length) * 100}%` }} />
+              </div>
+              <div className="lp-fw-rail-nodes">
+                {FLYWHEEL_MOMENTS.map((moment, index) => {
+                  const state =
+                    completedMoments >= index + 1
+                      ? index === activeMomentIndex
+                        ? "active"
+                        : "done"
+                      : "pending";
+                  return (
+                    <span key={moment.key} className={`lp-fw-rail-node is-${state}`}>
+                      <i aria-hidden="true" />
+                      {moment.label}
+                    </span>
+                  );
+                })}
+              </div>
+              <span className="lp-fw-rail-now" aria-hidden="true">
+                {completedMoments}/{FLYWHEEL_MOMENTS.length} · {currentMoment.label}
+              </span>
             </div>
-            <div className="lp-fw-rail-nodes">
-              {FLYWHEEL_MOMENTS.map((moment, index) => {
-                const state =
-                  completedMoments >= index + 1
-                    ? index === activeMomentIndex
-                      ? "active"
-                      : "done"
-                    : "pending";
-                return (
-                  <span key={moment.key} className={`lp-fw-rail-node is-${state}`}>
-                    <i aria-hidden="true" />
-                    {moment.label}
-                  </span>
-                );
-              })}
-            </div>
-            <span className="lp-fw-rail-now" aria-hidden="true">
-              {completedMoments || 0}/{FLYWHEEL_MOMENTS.length} · {currentMoment?.label ?? "STANDBY"}
-            </span>
+          </div>
+          <div className="lp-fw-horizontal-track" style={{ transform: `translateX(-${activeMomentIndex * (100 / FLYWHEEL_MOMENTS.length)}%)` }}>
+            {children}
           </div>
         </div>
-        {children}
       </div>
     </FlywheelContext.Provider>
   );
 }
 
 /**
- * One continuous step of the Knowledge Flywheel. The scene registers its stage
- * indexes with the zone observer; when it crosses the viewport middle it
- * becomes `is-live` (one-shot reveal animations) and `is-active` (rail sync).
+ * One continuous step of the Knowledge Flywheel. The scene keeps its internal
+ * stage mapping for accessibility and motion while the zone owns active-state
+ * selection for the unified desktop track.
  */
 export function FlywheelScene({
   stages,
