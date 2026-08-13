@@ -727,6 +727,7 @@ function OIP20StepVisual({ stepKey }: { stepKey: string }) {
   }
   return (
     <div className="lp-c31-final">
+      <div className="lp-c31-final-title">OIP 2.0</div>
       <div className="lp-c31-final-flow"><span>HUMANS</span><i aria-hidden="true">↘</i><div className="lp-c31-memory-node"><MemoryGlyph small /><span>ORGANIZATIONAL MEMORY</span></div><i aria-hidden="true">↗</i><span>AI AGENTS</span></div>
       <p className="lp-c31-final-line">OIP 2.0 — The memory layer for an organization of humans and AI.</p>
     </div>

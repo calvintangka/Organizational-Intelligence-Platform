@@ -1549,3 +1549,38 @@
 @media (prefers-reduced-motion: reduce) {
   .lp-c31-stage { animation: none; }
 }
+
+/* C.3.2 release-candidate micro-polish */
+.lp-c31-reveal { margin-bottom: 28px; border-color: #c7cdf0; background: linear-gradient(160deg, #ffffff 0%, #f5f6ff 100%); }
+.lp-c31-stage { border-color: #d9deef; background: #fbfcfe; }
+.lp-c31-memory-node { border-color: #aeb9ee; background: linear-gradient(145deg, #ffffff, #f1f3ff); box-shadow: 0 16px 40px rgba(88, 101, 242, .13); }
+.lp-c31-memory-node span { color: #3846d6; }
+.lp-c31-memory-node b { color: #1e2948; }
+.lp-c31-net-sources span { border-color: #9aa7ef; color: #2f3bb5; }
+.lp-c31-source-grid.is-fragmented span { border-color: #c3c9d8; color: #626e84; }
+.lp-c31-agent-card { border-color: #b9c3f2; background: #f2f4ff; }
+.lp-c31-loaded { border-color: #b6e2c5; background: #eefaf2; }
+.lp-c31-context-list span { color: #477a58; }
+.lp-c31-version-flow span { border-color: #d2d8e6; color: #46526b; }
+.lp-c31-version-flow span.is-new { border-color: #a9dab8; background: #eaf8ee; color: #166c3a; }
+.lp-c31-copy h3 { color: #111a35; }
+.lp-c31-copy > p { color: #55617a; }
+
+.lp-c31-final-title { color: var(--indigo); font-family: "Aptos Display", sans-serif; font-size: clamp(34px, 4.2vw, 54px); font-weight: 620; letter-spacing: -.04em; line-height: 1; }
+.lp-c31-final .lp-c31-memory-node { border-color: #7c86e8; box-shadow: 0 18px 44px rgba(88, 101, 242, .15); animation: lpC31FinalSettle .9s cubic-bezier(.2, .7, .2, 1) both; }
+.lp-c31-final .lp-c31-final-line { animation: lpC31FinalLine 1s cubic-bezier(.2, .7, .2, 1) .35s both; }
+
+@keyframes lpC31FinalSettle {
+  from { opacity: 0; transform: scale(.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes lpC31FinalLine {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-c31-final .lp-c31-memory-node,
+  .lp-c31-final .lp-c31-final-line { animation: none; }
+}
