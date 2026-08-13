@@ -638,33 +638,33 @@ export function AutomateScene() {
 /* SCENE 12 — VISION + CTA                                             */
 /* ------------------------------------------------------------------ */
 
-const OIP20_SOURCES = ["Tickets", "Docs", "Email", "Chat", "Decisions", "Processes", "Cases", "Outcomes", "Guidance"];
+const OIP20_SOURCES = ["DOCS", "EMAIL", "CHAT", "DECISIONS", "PROCESSES", "CASES", "OUTCOMES", "POLICIES", "EXPERT KNOWLEDGE"];
 
 const OIP20_STEPS = [
   {
     key: "begin",
     title: "Tickets were only the beginning.",
-    copy: "Resolved support work becomes the first structured memory layer. The rest of the organization is still fragmented."
+    copy: "Customer support is where OIP starts learning. But organizational knowledge lives far beyond tickets."
   },
   {
     key: "fragmented",
     title: "What if your whole organization could remember?",
-    copy: "Knowledge lives in documents, email, chat, decisions, processes, cases, and outcomes — disconnected."
+    copy: "The organization already knows enormous amounts. It simply doesn't possess one persistent, structured memory of everything it has learned."
   },
   {
     key: "structured",
-    title: "OIP 2.0 structures scattered knowledge into living memory.",
-    copy: "The same validated, versioned, connected memory model expands beyond tickets."
+    title: "Turn scattered knowledge into living Organizational Memory.",
+    copy: "OIP 2.0 structures related concepts, relationships, evidence, and lessons into one evolving memory network."
   },
   {
     key: "updating",
-    title: "Memory that stays updated as the organization changes.",
-    copy: "New knowledge enters, old knowledge revises, and the network reflects what is true now."
+    title: "Memory should evolve as the organization evolves.",
+    copy: "New evidence strengthens knowledge. Conflicting evidence can revise it. Old versions remain historically traceable."
   },
   {
     key: "agents",
     title: "AI agents shouldn't have to start from zero either.",
-    copy: "An agent connects to accumulated organizational experience before it begins difficult work."
+    copy: "Today's agents can reason and act. The future OIP vision is to give them continuously evolving Organizational Memory built from what the company itself has learned."
   },
   {
     key: "vision",
@@ -677,6 +677,7 @@ function OIP20StepVisual({ stepKey }: { stepKey: string }) {
   if (stepKey === "begin") {
     return (
       <div className="lp-c31-v-begin">
+        <span className="lp-c31-beachhead">BEACHHEAD</span>
         <div className="lp-c31-memory-node"><MemoryGlyph small /><span>ORGANIZATIONAL MEMORY</span></div>
         <span className="lp-c31-source-chip">Tickets</span>
       </div>
@@ -691,39 +692,50 @@ function OIP20StepVisual({ stepKey }: { stepKey: string }) {
   }
   if (stepKey === "structured") {
     return (
-      <div className="lp-c31-source-grid is-structured">
+      <div className="lp-c31-net">
         <div className="lp-c31-memory-node is-core"><MemoryGlyph small /><span>OIP 2.0</span></div>
-        {OIP20_SOURCES.map((source) => <span key={source}>{source}</span>)}
+        <div className="lp-c31-net-sources">
+          {OIP20_SOURCES.slice(0, 6).map((source) => <span key={source}>{source}</span>)}
+        </div>
       </div>
     );
   }
   if (stepKey === "updating") {
     return (
       <div className="lp-c31-updating">
-        <div className="lp-c31-memory-node"><MemoryGlyph small /><span>LIVING MEMORY</span><em>v2 → v3 · updated</em></div>
-        <span className="lp-c31-update-chip">new knowledge in</span>
-        <span className="lp-c31-update-chip is-revised">outdated revised</span>
+        <div className="lp-c31-version-flow">
+          <span>v3</span><i aria-hidden="true">↓</i>
+          <span>NEW EVIDENCE</span><i aria-hidden="true">↓</i>
+          <span>REVIEWED</span><i aria-hidden="true">↓</i>
+          <span className="is-new">v4</span>
+        </div>
+        <div className="lp-c31-memory-node"><MemoryGlyph small /><span>LIVING MEMORY</span><em>versioned · evidenced · traceable</em></div>
+        <div className="lp-c31-update-chips">
+          <span>validation ✓</span><span>evidence +1</span><span>trust updated</span>
+        </div>
       </div>
     );
   }
   if (stepKey === "agents") {
     return (
       <div className="lp-c31-agent">
-        <div className="lp-c31-agent-card"><span>AI AGENT</span><b>Investigate why enterprise customers are failing SSO onboarding</b></div>
-        <div className="lp-c31-loaded">ORGANIZATIONAL CONTEXT LOADED</div>
+        <div className="lp-c31-agent-card"><span>AI AGENT</span><b>Investigate why enterprise customers are failing SSO onboarding and recommend the next action.</b></div>
+        <div className="lp-c31-loaded"><b>ORGANIZATIONAL CONTEXT LOADED</b><div className="lp-c31-context-list"><span>Relevant lessons: 4</span><span>Current process: v7</span><span>Known exceptions: 2</span><span>Validated outcomes: 6</span><span>Policy constraints: loaded</span></div></div>
         <div className="lp-c31-memory-node is-small"><MemoryGlyph small /><span>MEMORY</span></div>
       </div>
     );
   }
   return (
     <div className="lp-c31-final">
-      <div className="lp-c31-memory-node"><MemoryGlyph small /><span>OIP 2.0</span><b>The memory layer for an organization of humans and AI.</b></div>
+      <div className="lp-c31-final-flow"><span>HUMANS</span><i aria-hidden="true">↘</i><div className="lp-c31-memory-node"><MemoryGlyph small /><span>ORGANIZATIONAL MEMORY</span></div><i aria-hidden="true">↗</i><span>AI AGENTS</span></div>
+      <p className="lp-c31-final-line">OIP 2.0 — The memory layer for an organization of humans and AI.</p>
     </div>
   );
 }
 
 export function OIP20FutureReveal() {
   const [open, setOpen] = useState(false);
+  const [step, setStep] = useState(0);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
@@ -733,6 +745,12 @@ export function OIP20FutureReveal() {
       if (event.key === "Escape") {
         setOpen(false);
         triggerRef.current?.focus();
+      }
+      if (event.key === "ArrowRight") {
+        setStep((previous) => Math.min(OIP20_STEPS.length - 1, previous + 1));
+      }
+      if (event.key === "ArrowLeft") {
+        setStep((previous) => Math.max(0, previous - 1));
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -745,10 +763,17 @@ export function OIP20FutureReveal() {
     }
   }, [open]);
 
+  const openReveal = () => {
+    setStep(0);
+    setOpen(true);
+  };
+
   const close = () => {
     setOpen(false);
     triggerRef.current?.focus();
   };
+
+  const activeStep = OIP20_STEPS[step];
 
   return (
     <div className="lp-c31">
@@ -758,7 +783,7 @@ export function OIP20FutureReveal() {
         className="lp-c31-trigger"
         aria-expanded={open}
         aria-controls="oip20-future-reveal"
-        onClick={() => setOpen((previous) => !previous)}
+        onClick={() => (open ? close() : openReveal())}
       >
         <span>See where this is going</span>
         <i aria-hidden="true">→</i>
@@ -767,19 +792,35 @@ export function OIP20FutureReveal() {
         <div id="oip20-future-reveal" ref={panelRef} className="lp-c31-reveal" tabIndex={-1} role="region" aria-label="OIP 2.0 future reveal">
           <div className="lp-c31-reveal-inner">
             <div className="lp-c31-reveal-head">
-              <p className="lp-scene-index">OIP 2.0 / FUTURE DIRECTION</p>
+              <p className="lp-scene-index">OIP 2.0 / FUTURE VISION</p>
               <h2>Beyond tickets. <em>Toward organizational intelligence.</em></h2>
-              <p className="lp-c31-sub">A concise view of where OIP is heading — not what ships today.</p>
+              <p className="lp-c31-sub">Where OIP is going — not what ships today.</p>
             </div>
-            <div className="lp-c31-steps">
-              {OIP20_STEPS.map((step, index) => (
-                <article className="lp-c31-step" key={step.key}>
-                  <div className="lp-c31-step-head">
-                    <span>{String(index + 1).padStart(2, "0")}</span>
-                    <div><h3>{step.title}</h3><p>{step.copy}</p></div>
-                  </div>
-                  <OIP20StepVisual stepKey={step.key} />
-                </article>
+            <div className="lp-c31-layout">
+              <div className="lp-c31-copy" key={step} aria-live="polite">
+                <p className="lp-c31-step-count">{String(step + 1).padStart(2, "0")} / {String(OIP20_STEPS.length).padStart(2, "0")}</p>
+                <h3>{activeStep.title}</h3>
+                <p>{activeStep.copy}</p>
+                <div className="lp-c31-nav">
+                  <button type="button" className="lp-c31-nav-button" onClick={() => setStep((previous) => Math.max(0, previous - 1))} disabled={step === 0} aria-label="Previous step">←</button>
+                  <button type="button" className="lp-c31-nav-button" onClick={() => setStep((previous) => Math.min(OIP20_STEPS.length - 1, previous + 1))} disabled={step === OIP20_STEPS.length - 1} aria-label="Next step">→</button>
+                </div>
+              </div>
+              <div className="lp-c31-stage" key={activeStep.key} aria-hidden="true">
+                <OIP20StepVisual stepKey={activeStep.key} />
+              </div>
+            </div>
+            <div className="lp-c31-dots" role="tablist" aria-label="OIP 2.0 steps">
+              {OIP20_STEPS.map((item, index) => (
+                <button
+                  type="button"
+                  key={item.key}
+                  className={index === step ? "is-active" : ""}
+                  role="tab"
+                  aria-selected={index === step}
+                  aria-label={`Step ${index + 1}: ${item.title}`}
+                  onClick={() => setStep(index)}
+                />
               ))}
             </div>
             <div className="lp-c31-close-row">

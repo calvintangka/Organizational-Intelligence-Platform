@@ -509,7 +509,18 @@ export function OIPCycle() {
   useEffect(() => {
     const onResize = () => measureLine();
     window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    const visualViewport = window.visualViewport;
+    if (visualViewport) visualViewport.addEventListener("resize", onResize);
+    let observer: ResizeObserver | null = null;
+    if (cycleRef.current && typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(() => measureLine());
+      observer.observe(cycleRef.current);
+    }
+    return () => {
+      window.removeEventListener("resize", onResize);
+      visualViewport?.removeEventListener("resize", onResize);
+      observer?.disconnect();
+    };
   }, [measureLine]);
 
   useEffect(() => {
