@@ -94,6 +94,7 @@ import {
   createTicketRecord,
   computeEditDistance,
 } from "@/lib/ticketRecords";
+import { LandingPage } from "@/components/landing/LandingPage";
 import { CaseLookupView } from "@/components/views/CaseLookupView";
 import { AuthorizationProvider } from "@/components/AuthorizationContext";
 import { DeveloperDiagnosticsView } from "@/components/views/DeveloperDiagnosticsView";
@@ -446,8 +447,8 @@ function resolveTicketLanguage(ticket: Ticket, profile: OrganizationProfile) {
   return { policy, detection, response: resolveResponseLanguage(policy, detection) };
 }
 
-function LoginScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUser) => void }) {
-  const [mode, setMode] = useState<"login" | "signup">("login");
+function LoginScreen({ onAuthenticated, initialMode = "login" }: { onAuthenticated: (user: AuthUser) => void; initialMode?: "login" | "signup" }) {
+  const [mode, setMode] = useState<"login" | "signup">(initialMode);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -482,6 +483,7 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUser) =>
       <form onSubmit={submit} className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#2563EB]">Powered by OIP</p>
         <h1 className="mt-3 text-3xl font-bold text-[#111827]">{mode === "signup" ? "Create your OIP account" : "Sign in to OIP"}</h1>
+        <a href="/" className="mb-6 inline-flex min-h-11 items-center text-sm font-semibold text-slate-500 hover:text-slate-900">{"\u2190"} Back to OIP</a>
         <p className="mt-2 text-sm text-slate-500">{mode === "signup" ? "Start with an account, then create your first organization." : "Use your authenticated OIP account to continue."}</p>
         {mode === "signup" && <>
           <label className="mt-8 block text-sm font-semibold text-slate-700" htmlFor="auth-name">Name</label>
@@ -4598,11 +4600,16 @@ export default function Home() {
   const accent = normalizeAccentColor(organizationProfile.accentColor);
   const currentOrganizationForMenu = authorizedOrganizations.find((organization) => organization.id === organizationProfile.id) ?? null;
 
+  const authEntryMode = typeof window === "undefined"
+    ? null
+    : new URLSearchParams(window.location.search).get("auth");
+  const requestedAuthMode = authEntryMode === "signup" ? "signup" : "login";
   if (authStatus === "loading") {
     return <main className="flex min-h-screen items-center justify-center bg-[#F3F6FA] text-sm text-slate-500">Checking authentication…</main>;
   }
   if (!authUser) {
-    return <LoginScreen onAuthenticated={(user) => { setAuthUser(user); setAuthStatus("authenticated"); }} />;
+    if (authEntryMode !== "login" && authEntryMode !== "signup") return <LandingPage />;
+    return <LoginScreen initialMode={requestedAuthMode} onAuthenticated={(user) => { setAuthUser(user); setAuthStatus("authenticated"); }} />;
   }
   if (organizationBootstrapState === "loading") {
     return <main role="status" aria-live="polite" className="flex min-h-screen items-center justify-center bg-[#F3F6FA] text-sm text-slate-500">Loading your organizations and workspace…</main>;
