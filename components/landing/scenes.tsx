@@ -1,3 +1,18 @@
+import { Fragment } from "react";
+import {
+  AnimatedValue,
+  Chip,
+  ConnectionLine,
+  FLYWHEEL_STAGES,
+  FlywheelScene,
+  MemoryGlyph,
+  Stagger,
+  StagePanel,
+  useFlywheel,
+  useInView,
+  useLatchedLive
+} from "./flywheel";
+
 const Arrow = ({ muted = false }: { muted?: boolean }) => (
   <span className={muted ? "lp-arrow lp-arrow-muted" : "lp-arrow"} aria-hidden="true">→</span>
 );
@@ -16,6 +31,20 @@ function TicketRow({ id, title, meta, repeat, resolved }: { id: string; title: s
   );
 }
 
+function WorkspaceTopbar() {
+  return (
+    <div className="lp-workspace-topbar">
+      <div className="lp-workspace-brand"><span className="lp-avatar">NS</span><span><b>Northstar Support</b><small>Customer operations</small></span></div>
+      <div className="lp-workspace-search">Search conversations… <kbd>⌘ K</kbd></div>
+      <div className="lp-live-status"><span /> 284 waiting</div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* SCENE 01 — THE VILLAIN                                             */
+/* ------------------------------------------------------------------ */
+
 export function HeroVillainScene() {
   return (
     <section className="lp-scene lp-hero" aria-labelledby="hero-title">
@@ -23,15 +52,15 @@ export function HeroVillainScene() {
       <div className="lp-container lp-hero-copy">
         <SceneIndex>01 / ORGANIZATIONAL FORGETTING</SceneIndex>
         <h1 id="hero-title">Your company keeps solving the same problems.<br /><em>And forgetting the answers.</em></h1>
-        <p>A small support team faces a constant stream of questions. Problems get solved, tickets get closed—and the knowledge disappears into history.</p>
-        <a className="lp-text-link" href="#how-it-works">See what happens next <span aria-hidden="true">↓</span></a>
-      </div>
-      <div className="lp-wide lp-support-stage" role="img" aria-label="A support workspace showing high ticket volume and the same mobile attendance problem repeatedly returning after earlier resolutions disappear into an archive">
-        <div className="lp-workspace-topbar">
-          <div className="lp-workspace-brand"><span className="lp-avatar">NS</span><span><b>Northstar Support</b><small>Customer operations</small></span></div>
-          <div className="lp-workspace-search">Search conversations… <kbd>⌘ K</kbd></div>
-          <div className="lp-live-status"><span /> 284 waiting</div>
+        <p>A small support team answers hundreds of questions every day. Problems get solved, tickets get closed—and the knowledge disappears into history.</p>
+        <div className="lp-hero-expectations" aria-label="Customers expect fast, accurate, consistent answers">
+          <span>Customers expect</span>
+          <b>FAST</b><b>ACCURATE</b><b>CONSISTENT</b><span>answers</span>
         </div>
+        <a className="lp-text-link" href="#pressure">Watch it happen <span aria-hidden="true">↓</span></a>
+      </div>
+      <div className="lp-wide lp-support-stage" role="img" aria-label="A support workspace where the same mobile attendance problem returns again and again: earlier resolutions disappear into ticket history and no connection to the past remains">
+        <WorkspaceTopbar />
         <div className="lp-workspace-body">
           <aside className="lp-support-sidebar">
             <b>Inbox</b>
@@ -55,180 +84,687 @@ export function HeroVillainScene() {
           <div className="lp-forgetting-panel">
             <div className="lp-forgetting-label"><span className="lp-warning-dot" /> SAME PROBLEM · THIRD TIME</div>
             <h2>“I can’t submit attendance from my phone.”</h2>
-            <p>The answer exists. Somewhere.</p>
-            <div className="lp-buried-stack">
-              <div><span>Ticket #3912</span><b>Resolved 47 days ago</b></div>
-              <div><span>Slack · #support</span><b>Buried in 183 messages</b></div>
-              <div><span>Ticket #2840</span><b>Archived 6 months ago</b></div>
+            <div className="lp-forget-loop" aria-hidden="true">
+              <div className="lp-forget-phase lp-forget-phase-1">
+                <div className="lp-forget-card is-resolved">
+                  <span className="lp-forget-card-glyph">✓</span>
+                  <div><b>Ticket #3912</b><small>“I can’t submit attendance from my phone.”</small></div>
+                  <em>RESOLVED · 47 DAYS AGO</em>
+                </div>
+                <div className="lp-forget-sink"><span>disappears into ticket history</span><i /></div>
+              </div>
+              <div className="lp-forget-phase lp-forget-phase-2">
+                <div className="lp-forget-card is-new">
+                  <span className="lp-forget-card-glyph">↗</span>
+                  <div><b>Ticket #4821</b><small>“I can’t submit attendance from my phone.”</small></div>
+                  <em>NEW · TODAY</em>
+                </div>
+                <div className="lp-forget-void">
+                  <span className="lp-forget-no-conn">no connection to the past</span>
+                  <div className="lp-forget-empty"><MemoryGlyph small /><span>ORGANIZATIONAL MEMORY · NOTHING RETAINED</span></div>
+                </div>
+              </div>
             </div>
-            <div className="lp-zero-state"><span>STARTING AGAIN</span><b>0%</b></div>
+            <p className="lp-forgetting-foot">The answer exists. Somewhere.</p>
           </div>
         </div>
       </div>
+      <p className="lp-hero-note">This is <em>organizational forgetting.</em></p>
     </section>
   );
 }
 
-export function AIContextScene() {
+/* ------------------------------------------------------------------ */
+/* SCENE 02 — SUPPORT PRESSURE                                         */
+/* ------------------------------------------------------------------ */
+
+const QUEUE_ROWS = [
+  { id: "#4832", title: "Attendance won't submit", meta: "2m ago", repeat: true },
+  { id: "#4830", title: "Location unavailable on phone", meta: "3m ago", repeat: true },
+  { id: "#4828", title: "Can't record attendance", meta: "6m ago", repeat: true },
+  { id: "#4827", title: "Export fails with large dataset", meta: "9m ago" },
+  { id: "#4826", title: "Login keeps asking for 2FA", meta: "12m ago" },
+  { id: "#4824", title: "Mobile submit button greyed out", meta: "15m ago", repeat: true },
+  { id: "#4823", title: "Wrong rate shown on invoice", meta: "17m ago" },
+  { id: "#4821", title: "Attendance not saving from phone", meta: "19m ago", repeat: true }
+];
+
+const AGENT_ACTIVITY = [
+  { glyph: "⌕", label: "Searching old tickets", detail: "maybe someone solved this before" },
+  { glyph: "#", label: "Asking in #support", detail: "does anyone remember this one?" },
+  { glyph: "≡", label: "Checking internal docs", detail: "was this ever written down?" },
+  { glyph: "?", label: "Trying to remember", detail: "I think this happened in March…" }
+];
+
+export function SupportPressureScene() {
+  const { ref, inView } = useInView<HTMLElement>("0px 0px -15% 0px");
   return (
-    <section className="lp-scene lp-context-scene" aria-labelledby="context-title">
+    <section ref={ref} className={`lp-scene lp-pressure-scene${inView ? " is-live" : ""}`} id="pressure" aria-labelledby="pressure-title">
+      <div className="lp-container lp-split-heading lp-split-heading-dark">
+        <div>
+          <SceneIndex>02 / THE REAL BOTTLENECK</SceneIndex>
+          <h2 id="pressure-title">A few people.<br />Thousands of questions.<br /><em>Every day.</em></h2>
+        </div>
+        <p>Agents search old tickets, ask coworkers, dig through documentation, and try to remember previous cases. The team isn’t the problem. The organization has no durable memory.</p>
+      </div>
+      <div className="lp-wide lp-pressure-stage" role="img" aria-label="A support queue keeps growing while one agent splits attention between searching old tickets, asking coworkers, checking documentation, and trying to remember">
+        <div className="lp-queue-panel">
+          <div className="lp-panel-head"><span>SUPPORT QUEUE</span><b className="is-warm">+42% volume today</b></div>
+          <div className="lp-queue-viewport">
+            <div className="lp-queue-track">
+              {[...QUEUE_ROWS, ...QUEUE_ROWS].map((row, index) => (
+                <div className={`lp-queue-row${row.repeat ? " is-repeat" : ""}`} key={`${row.id}-${index}`}>
+                  <span className="lp-ticket-channel" aria-hidden="true">{row.repeat ? "↻" : "↗"}</span>
+                  <b>{row.title}</b>
+                  <small>{row.id} · {row.meta}</small>
+                </div>
+              ))}
+            </div>
+          </div>
+          <p className="lp-queue-note">The same three questions keep resurfacing.</p>
+        </div>
+        <div className="lp-agent-panel">
+          <div className="lp-panel-head"><span>ONE AGENT’S DAY</span><b>Maya · 5 open chats</b></div>
+          <div className="lp-agent-activity">
+            {AGENT_ACTIVITY.map((item, index) => (
+              <div className="lp-agent-activity-row" key={item.label}>
+                <span aria-hidden="true">{item.glyph}</span>
+                <div><b>{item.label}</b><small>{item.detail}</small></div>
+                <i aria-hidden="true" />
+              </div>
+            ))}
+          </div>
+          <div className="lp-pressure-stat"><span>time spent re-solving known issues</span><b>≈68%</b></div>
+          <p className="lp-agent-note">Recurring work becomes the bottleneck—<b>none of it becomes reusable knowledge.</b></p>
+        </div>
+      </div>
+      <p className="lp-editorial-line lp-editorial-line-dark">The team is not the problem. <em>The memory is missing.</em></p>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* SCENE 03 — COMPANIES TRIED TO REMEMBER                              */
+/* ------------------------------------------------------------------ */
+
+const MEMORY_TOOLS = [
+  { name: "Help desk", line: "routes the conversations" },
+  { name: "Knowledge base", line: "stores written articles" },
+  { name: "Documentation", line: "captures the processes" },
+  { name: "Ticket history", line: "keeps the record" },
+  { name: "Search", line: "finds what was indexed" },
+  { name: "Email", line: "holds the threads" },
+  { name: "Internal chat", line: "buries the answers" }
+];
+
+const HUMAN_BURDEN = [
+  { n: "01", label: "Someone must notice", detail: "that this was worth documenting" },
+  { n: "02", label: "Someone must write it", detail: "and keep it maintained" },
+  { n: "03", label: "Someone must know", detail: "that it exists, later" }
+];
+
+export function RememberingAttemptScene() {
+  const { ref, inView } = useInView<HTMLElement>("0px 0px -15% 0px");
+  return (
+    <section ref={ref} className={`lp-scene lp-attempt-scene${inView ? " is-live" : ""}`} aria-labelledby="attempt-title">
       <div className="lp-container lp-split-heading">
         <div>
-          <SceneIndex light>02 / CONTEXT ≠ MEMORY</SceneIndex>
-          <h2 id="context-title">AI has context.<br />Your organization needs memory.</h2>
+          <SceneIndex light>03 / COMPANIES TRIED TO REMEMBER</SceneIndex>
+          <h2 id="attempt-title">So companies tried to remember.</h2>
         </div>
-        <p>AI can summarize, reason, draft, and retrieve. But a context window does not remember whether an answer worked—or whether your organization trusts it.</p>
+        <p>Help desks, knowledge bases, documentation, ticket history, search, email, internal chat. Every one of these tools is useful. Every one depends on someone doing the extra work.</p>
       </div>
-      <div className="lp-container lp-context-stage" role="img" aria-label="An AI draft is created from a customer problem and temporary context, but source, validation, outcome, and organizational trust are missing">
+      <div className="lp-container lp-tool-strip" role="list" aria-label="Tools companies use to try to remember">
+        {MEMORY_TOOLS.map((tool) => (
+          <div className="lp-tool-cell" role="listitem" key={tool.name}>
+            <span aria-hidden="true" />
+            <b>{tool.name}</b>
+            <small>{tool.line}</small>
+          </div>
+        ))}
+      </div>
+      <figure className="lp-container lp-attempt-quote">
+        <blockquote>
+          The organization’s most valuable knowledge is often created <em>while solving problems</em>—not while writing documentation.
+        </blockquote>
+        <figcaption>The gap every knowledge base inherits</figcaption>
+      </figure>
+      <div className="lp-container lp-attempt-chain" aria-label="Three human steps knowledge depends on">
+        {HUMAN_BURDEN.map((step, index) => (
+          <Fragment key={step.n}>
+            <div>
+              <span>{step.n}</span>
+              <div><b>{step.label}</b><small>{step.detail}</small></div>
+            </div>
+            {index < HUMAN_BURDEN.length - 1 && <Arrow muted />}
+          </Fragment>
+        ))}
+      </div>
+      <div className="lp-wide lp-attempt-diagram" role="img" aria-label="A hundred solved cases produce a few documented articles while most of the learning stays with the people who were there">
+        <div className="lp-solved-box">
+          <small>SOLVED WORK · THIS WEEK</small>
+          <b>100 cases</b>
+          <div className="lp-solved-chips" aria-hidden="true">
+            {["✓", "✓", "✓", "✓", "✓", "✓", "✓", "✓"].map((mark, index) => <i key={index}>{mark}</i>)}
+          </div>
+          <p>The knowledge is created <b>here</b>—during the work.</p>
+        </div>
+        <div className="lp-attempt-split" aria-hidden="true">
+          <div className="lp-attempt-pipe is-kept"><span /></div>
+          <div className="lp-attempt-pipe is-lost"><span /></div>
+        </div>
+        <div className="lp-attempt-outcomes">
+          <div className="lp-kept-box">
+            <small>WHAT GETS DOCUMENTED</small>
+            <b>a few articles</b>
+            <p>Written when someone has the time—and remembers.</p>
+          </div>
+          <div className="lp-lost-box">
+            <small>WHAT GETS LOST</small>
+            <b>everything else</b>
+            <p>It lives in heads, threads, and closed tickets—until people leave.</p>
+          </div>
+        </div>
+      </div>
+      <p className="lp-editorial-line">Some becomes documentation. <em>Much does not.</em></p>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* SCENE 04 — AI HAS CONTEXT, ORGANIZATIONS NEED MEMORY               */
+/* ------------------------------------------------------------------ */
+
+const AI_PIPELINE = ["READ", "REASON", "DRAFT"];
+const CONTEXT_QUESTIONS = [
+  { n: "01", label: "SOURCE?", detail: "Where did this answer come from?" },
+  { n: "02", label: "VALIDATED?", detail: "Did the organization approve it?" },
+  { n: "03", label: "WORKED BEFORE?", detail: "Did it solve this problem already?" },
+  { n: "04", label: "OUTCOME?", detail: "Did the customer confirm it?" },
+  { n: "05", label: "STILL CURRENT?", detail: "Is it true for this product today?" },
+  { n: "06", label: "TRUST?", detail: "How much should we rely on it?" }
+];
+
+export function AIContextScene() {
+  const { ref, inView } = useInView<HTMLElement>("0px 0px -18% 0px");
+  return (
+    <section ref={ref} className={`lp-scene lp-context-scene${inView ? " is-live" : ""}`} aria-labelledby="context-title">
+      <div className="lp-container lp-split-heading">
+        <div>
+          <SceneIndex light>04 / CONTEXT ≠ MEMORY</SceneIndex>
+          <h2 id="context-title">AI has context.<br />Your organization needs <em>memory.</em></h2>
+        </div>
+        <p>AI can read the ticket, reason about it, and draft an answer in seconds. That’s powerful. But a context window doesn’t know whether an answer worked before—or whether your organization trusts it.</p>
+      </div>
+      <div className="lp-container lp-context-stage" role="img" aria-label="An AI pipeline drafts a fast answer from temporary context while source, validation, previous outcomes, currency, and trust remain unanswered">
         <div className="lp-context-flow">
           <div className="lp-flow-object lp-flow-problem"><small>Customer problem</small><b>Mobile attendance fails</b><span>“Submit does nothing on my phone.”</span></div>
           <Arrow />
-          <div className="lp-ai-window"><div><span className="lp-ai-spark">✦</span><small>AI context</small></div><p>Recent ticket · Help article · Account details</p><div className="lp-context-bar"><i /><i /><i /></div></div>
+          <div className="lp-ai-window">
+            <div><span className="lp-ai-spark" aria-hidden="true">✦</span><small>AI · TEMPORARY CONTEXT</small></div>
+            <div className="lp-ai-pipeline" aria-hidden="true">
+              {AI_PIPELINE.map((step, index) => <span key={step} style={{ "--i": index } as React.CSSProperties}>{step}</span>)}
+            </div>
+            <p>Recent ticket · Help article · Account details</p>
+            <div className="lp-ai-speed"><span>DRAFT READY</span><b>0.8s</b></div>
+          </div>
           <Arrow />
-          <div className="lp-flow-object lp-flow-answer"><small>Generated answer</small><b>Enable location access</b><span>Draft ready to review</span></div>
+          <div className="lp-flow-object lp-flow-answer"><small>Generated answer</small><b>Enable location access</b><span>Fast. Confident. Ungrounded.</span></div>
         </div>
         <div className="lp-missing-grid">
-          <div><span>01</span><b>SOURCE?</b><small>Where did this answer come from?</small></div>
-          <div><span>02</span><b>VALIDATED?</b><small>Did the organization approve it?</small></div>
-          <div><span>03</span><b>OUTCOME?</b><small>Did it actually solve the problem?</small></div>
-          <div><span>04</span><b>TRUST?</b><small>How much should we rely on it?</small></div>
+          {CONTEXT_QUESTIONS.map((question) => (
+            <div key={question.n}><span>{question.n}</span><b>{question.label}</b><small>{question.detail}</small></div>
+          ))}
         </div>
-        <p className="lp-context-conclusion"><span>Temporary context</span><i /> <strong>Durable learning requires a memory of what happened.</strong></p>
+        <div className="lp-context-conclusion">
+          <span>Temporary context</span><i /> <strong>Durable learning requires a memory of what happened.</strong>
+        </div>
+        <p className="lp-context-bridge">A context window is not the same thing as durable, validated organizational memory. AI becomes far more valuable when it’s grounded in what the organization has actually learned. <a href="#how-it-works">OIP provides that memory <span aria-hidden="true">→</span></a></p>
       </div>
     </section>
   );
 }
 
-function LearningPath() {
-  const steps = ["Customer problem", "Investigation", "Resolution", "Evidence", "Validated lesson", "Organizational Memory"];
-  return <div className="lp-learning-path">{steps.map((step, index) => <span key={step} className={index === steps.length - 1 ? "is-memory" : ""}><b>{String(index + 1).padStart(2, "0")}</b>{step}{index < steps.length - 1 && <Arrow />}</span>)}</div>;
-}
+/* ------------------------------------------------------------------ */
+/* SCENE 05 — ENTER OIP                                                */
+/* ------------------------------------------------------------------ */
 
 export function OIPRevealScene() {
+  const { ref, inView } = useInView<HTMLElement>("0px 0px -20% 0px");
   return (
-    <section className="lp-scene lp-reveal-scene" id="how-it-works" aria-labelledby="reveal-title">
+    <section ref={ref} id="how-it-works" className={`lp-scene lp-reveal-scene${inView ? " is-live" : ""}`} aria-labelledby="reveal-title">
       <div className="lp-container lp-reveal-heading">
-        <div className="lp-reveal-brand"><span className="lp-brand-mark lp-brand-mark-indigo" aria-hidden="true"><i /><i /><i /></span><span><b>OIP</b><small>Organizational Intelligence Platform</small></span></div>
-        <SceneIndex light>03 / MEET OIP</SceneIndex>
-        <h2 id="reveal-title">Every solved problem becomes <em>organizational memory.</em></h2>
-        <p>OIP captures what happened, what worked, the evidence behind it, and the lesson your organization chose to keep.</p>
+        <SceneIndex light>05 / MEET OIP</SceneIndex>
+        <p className="lp-reveal-kicker">What if every solved problem made the next one easier?</p>
+        <h2 id="reveal-title">Meet <em>OIP.</em></h2>
+        <div className="lp-reveal-lockup" aria-hidden="true"><MemoryGlyph small /><span>Organizational Intelligence Platform</span></div>
+        <p>OIP turns resolved operational work into trusted, reusable Organizational Memory—so every solved problem makes the whole organization smarter.</p>
       </div>
-      <div className="lp-wide lp-product-stage" role="img" aria-label="OIP turns a resolved ticket, evidence, reflection, and validation into a versioned Organizational Memory item with provenance and trust">
-        <div className="lp-product-chrome"><div><span /><span /><span /></div><b>OIP · Support workspace</b><span>Northstar</span></div>
-        <LearningPath />
-        <div className="lp-product-grid">
-          <div className="lp-case-pane">
-            <div className="lp-pane-label"><span>Temporary work</span><b>CASE #3912</b></div>
-            <div className="lp-case-title"><span className="lp-avatar lp-avatar-indigo">MH</span><div><b>Mobile attendance won’t submit</b><small>Marina H. · Acme Field Ops</small></div></div>
-            <div className="lp-thread"><p><span>Customer</span>I tap submit, but nothing happens on my phone.</p><p className="agent"><span>Support</span>Please enable location permission for the OIP mobile app, then reopen attendance.</p><p><span>Customer</span>That fixed it—attendance submitted successfully.</p></div>
-            <div className="lp-evidence-strip"><span>✓</span><div><b>Outcome evidence attached</b><small>Customer confirmed resolution · message 8</small></div></div>
+      <div className="lp-wide lp-reveal-ring-stage" role="img" aria-label="The OIP Knowledge Flywheel: nine stages—analyze, remember, ground, assist, review, observe, learn, reuse, automate—around Organizational Memory, with the signature flow of a problem connecting to memory and producing an outcome">
+        <div className="lp-flywheel-ring" aria-hidden="true">
+          <div className="lp-ring-track" />
+          <div className="lp-ring-core">
+            <MemoryGlyph />
+            <small>ORGANIZATIONAL</small>
+            <b>MEMORY</b>
+            <em>validated · versioned · traceable</em>
           </div>
-          <div className="lp-reflection-rail"><div className="lp-active-line" /><div><span>01</span><b>Resolved</b></div><div><span>02</span><b>Evidence</b></div><div><span>03</span><b>Reflection</b></div><div className="active"><span>04</span><b>Validated</b></div></div>
-          <div className="lp-memory-pane">
-            <div className="lp-memory-top"><span className="lp-memory-glyph" aria-hidden="true"><i /><i /><i /></span><div><small>ORGANIZATIONAL MEMORY</small><b>Mobile Attendance — Location Permission Disabled</b></div><span className="lp-version">v4</span></div>
-            <p className="lp-memory-summary">When mobile attendance submission is unresponsive, verify operating-system location permission before troubleshooting connectivity.</p>
-            <div className="lp-memory-columns"><div><small>Validated resolution</small><p>Enable location access, reopen the app, and retry attendance submission.</p></div><div><small>Supporting evidence</small><p><span className="lp-trusted-dot" /> 3 confirmed outcomes<br /><span className="lp-trusted-dot" /> 2 human reviews</p></div></div>
-            <div className="lp-memory-meta"><div><small>PROVENANCE</small><b>3 cases · 4 evidence items</b></div><div><small>LAST REVIEWED</small><b>12 Jun · Maya Chen</b></div><div><small>TRUST</small><b className="lp-trust-number">72</b></div></div>
+          {FLYWHEEL_STAGES.map((stage, index) => (
+            <div className={`lp-ring-node node-${index + 1}`} key={stage.key}>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <b>{stage.label}</b>
+            </div>
+          ))}
+        </div>
+        <div className="lp-reveal-signature">
+          <div className="lp-reveal-sig-flow" aria-hidden="true">
+            <span className="lp-sig-chip">PROBLEM ARRIVES</span>
+            <ConnectionLine live={inView} />
+            <span className="lp-sig-chip is-memory"><MemoryGlyph small />MEMORY RESPONDS</span>
+            <ConnectionLine live={inView} />
+            <span className="lp-sig-chip is-outcome">OUTCOME OCCURS</span>
+          </div>
+          <p>A problem arrives. A connection activates. Memory responds. An outcome occurs. <b>The organization learns.</b></p>
+        </div>
+      </div>
+      <p className="lp-editorial-line lp-editorial-line-indigo">Every resolved issue should make the whole organization <em>smarter.</em></p>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* FLYWHEEL SHARED PIECES                                              */
+/* ------------------------------------------------------------------ */
+
+function CaseCard({ stamp, channel, id, quote, customer, meta, initials, faded = false }: { stamp: string; channel: string; id: string; quote: string; customer: string; meta: string; initials: string; faded?: boolean }) {
+  return (
+    <div className={`lp-fw-case${faded ? " is-faded" : ""}`}>
+      <div className="lp-fw-case-head"><span className="lp-fw-stamp">{stamp}</span><span>{channel} · {meta}</span></div>
+      <div className="lp-fw-case-id">CASE {id}</div>
+      <p className="lp-fw-case-quote">“{quote}”</p>
+      <div className="lp-fw-case-customer"><span className="lp-avatar">{initials}</span><div><b>{customer}</b><small>Customer</small></div></div>
+    </div>
+  );
+}
+
+function MemoryCard({
+  version,
+  trust,
+  outcomes,
+  evidence,
+  provenance,
+  solution,
+  ground = false,
+  className = ""
+}: {
+  version: React.ReactNode;
+  trust: React.ReactNode;
+  outcomes: React.ReactNode;
+  evidence: React.ReactNode;
+  provenance: string;
+  solution: string;
+  ground?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={`lp-fw-memory${ground ? " is-grounded" : ""} ${className}`}>
+      <div className="lp-fw-memory-head">
+        <MemoryGlyph />
+        <div><small>ORGANIZATIONAL MEMORY</small><b>Mobile Attendance — Location Permission Disabled</b></div>
+        <span className="lp-version">{version}</span>
+      </div>
+      <p className="lp-fw-memory-solution"><small>VALIDATED SOLUTION</small>{solution}</p>
+      <div className="lp-fw-memory-meta">
+        <div><small>TRUST</small><b className="lp-trust-number">{trust}</b></div>
+        <div><small>SUPPORTING CASES</small><b>{outcomes}</b></div>
+        <div><small>EVIDENCE</small><b>{evidence}</b></div>
+        <div><small>PROVENANCE</small><b>{provenance}</b></div>
+      </div>
+    </div>
+  );
+}
+
+function FlywheelHead({ id, title, lead }: { id: string; title: React.ReactNode; lead: string }) {
+  return (
+    <div className="lp-fscene-head">
+      <h3 id={id}>{title}</h3>
+      <p>{lead}</p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* FLYWHEEL 01 — ANALYZE                                               */
+/* ------------------------------------------------------------------ */
+
+export function AnalyzeScene() {
+  const flywheel = useFlywheel();
+  const live = flywheel?.activeStages.includes(1) ?? false;
+  return (
+    <FlywheelScene stages={[1]} stageChip="06 / FLYWHEEL 01·09 — ANALYZE">
+      <FlywheelHead id="fw-analyze" title="First, OIP understands the problem." lead="The ticket arrives. OIP reads the language, detects the signals, and forms a hypothesis about the underlying problem." />
+      <StagePanel label="A customer ticket arrives and OIP analyzes signals, category, and a canonical problem hypothesis">
+        <div className="lp-fw-grid lp-fw-grid-3">
+          <div className="lp-fw-case-wrap">
+            <CaseCard stamp="INCOMING" channel="Email" id="#4821" quote="One of our staff can’t record attendance from their phone." customer="Marina H. · Acme Field Ops" meta="09:42" initials="MH" />
+            <div className="lp-fw-scan" aria-hidden="true"><i /></div>
+          </div>
+          <ConnectionLine live={live} label="ANALYZING" />
+          <div className="lp-fw-analysis">
+            <div className="lp-fw-panel-head"><span aria-hidden="true">✦</span><b>OIP ANALYZES</b></div>
+            <Stagger className="lp-fw-signal-list">
+              <div className="lp-fw-signal"><small>SIGNAL</small><b>mobile</b></div>
+              <div className="lp-fw-signal"><small>SIGNAL</small><b>attendance</b></div>
+              <div className="lp-fw-signal"><small>SIGNAL</small><b>phone</b></div>
+              <div className="lp-fw-signal is-category"><small>CATEGORY</small><b>Attendance</b></div>
+            </Stagger>
+            <div className="lp-fw-hypothesis">
+              <small>CANONICAL PROBLEM HYPOTHESIS</small>
+              <b>Mobile Attendance Failure</b>
+              <ConnectionLine live={live} />
+              <b className="is-refined">Location permission unavailable</b>
+            </div>
           </div>
         </div>
-      </div>
-      <p className="lp-editorial-line">Work passes. <em>Knowledge remains.</em></p>
-    </section>
+      </StagePanel>
+    </FlywheelScene>
   );
 }
 
-export function RecurrenceScene() {
-  return (
-    <section className="lp-scene lp-recurrence-scene" aria-labelledby="recurrence-title">
-      <div className="lp-container lp-split-heading lp-split-heading-dark">
-        <div><SceneIndex>04 / REUSE</SceneIndex><h2 id="recurrence-title">The same problem comes back.<br /><em>This time, you don’t start from zero.</em></h2></div>
-        <p>OIP recognizes the canonical problem, retrieves validated knowledge, and prepares a grounded response for human review.</p>
-      </div>
-      <div className="lp-container lp-recurrence-flow" role="img" aria-label="A returning customer issue is matched to validated Organizational Memory, used in a reviewed response, and a confirmed outcome raises organizational trust from 72 to 78">
-        <div className="lp-incoming-case"><div className="lp-case-stamp"><span>NEW CASE</span><b>#4821</b></div><small>Today · 09:42</small><h3>“I can’t submit attendance from my phone.”</h3><div className="lp-match-scan"><i /><span>Canonical problem detected</span></div></div>
-        <div className="lp-connection-column"><span>MATCH FOUND</span><i /><i /><i /><Arrow /></div>
-        <div className="lp-match-memory"><div className="lp-match-heading"><span className="lp-memory-glyph" aria-hidden="true"><i /><i /><i /></span><div><small>VALIDATED ORGANIZATIONAL KNOWLEDGE</small><b>Mobile Attendance — Location Permission Disabled</b></div></div><ul><li><span>✓</span> Evidence verified</li><li><span>✓</span> Previous outcome confirmed</li><li><span>✓</span> Reviewed by support lead</li></ul><div className="lp-trust-base"><span>ORGANIZATIONAL TRUST</span><b>72</b></div></div>
-        <div className="lp-grounded-response"><div className="lp-response-top"><span>Grounded response</span><b>Human review</b></div><p>It looks like location permission is disabled. Please enable location access for the mobile app, reopen it, then submit attendance again.</p><button type="button" tabIndex={-1}>Reviewed &amp; sent <span>✓</span></button><div className="lp-customer-confirm"><span>Customer · 10:06</span>That worked—thank you!</div></div>
-      </div>
-      <div className="lp-container lp-trust-change"><div><small>WHY TRUST CHANGED</small><span><b>+1</b> successful reuse</span><span><b>+1</b> confirmed outcome</span><span><b>+1</b> review recorded</span></div><div className="lp-trust-progress"><span>TRUST</span><b>72</b><i><i /></i><b className="new">78</b></div><p>Trust is organizational confidence built through evidence and outcomes—not model confidence.</p></div>
-    </section>
-  );
-}
+/* ------------------------------------------------------------------ */
+/* FLYWHEEL 02–03 — REMEMBER + GROUND                                  */
+/* ------------------------------------------------------------------ */
 
-export function AutomationScene() {
-  const maturity = [
-    ["REMEMBER", "Human acts", "OIP preserves the lesson"],
-    ["ASSIST", "Human reviews", "OIP prepares the response"],
-    ["RECOMMEND", "Human approves", "OIP proposes the action"],
-    ["AUTOMATE", "Policy permits", "OIP performs the action"]
-  ];
+export function RememberGroundScene() {
+  const flywheel = useFlywheel();
+  const live = (flywheel?.activeStages.includes(2) ?? false) || (flywheel?.activeStages.includes(3) ?? false);
   return (
-    <section className="lp-scene lp-automation-scene" id="automation" aria-labelledby="automation-title">
-      <div className="lp-container lp-automation-heading"><SceneIndex light>05 / GOVERNED AUTONOMY</SceneIndex><h2 id="automation-title">Trust unlocks automation.</h2><p>When your organization already knows what to do, why should someone have to do it manually every time?</p></div>
-      <div className="lp-container lp-maturity-line">{maturity.map(([name, gate, detail], index) => <div key={name} className={index === 3 ? "active" : ""}><span>{String(index + 1).padStart(2, "0")}</span><h3>{name}</h3><b>{gate}</b><p>{detail}</p>{index < maturity.length - 1 && <Arrow muted />}</div>)}</div>
-      <div className="lp-wide lp-policy-stage" id="security" role="img" aria-label="A known problem passes memory, evidence, trust, and policy checks before an authorized automated response; uncertain or conflicting cases are routed to human review">
-        <div className="lp-policy-title"><div><small>OIP DECISION TRACE · CASE #5093</small><b>Known problem received</b></div><span className="lp-audit-badge">AUDIT LOG ON</span></div>
-        <div className="lp-policy-flow">
-          <div className="lp-policy-node complete"><span>01</span><small>Memory</small><b>Retrieved</b><i>✓</i></div><Arrow />
-          <div className="lp-policy-node complete"><span>02</span><small>Evidence</small><b>Verified</b><i>✓</i></div><Arrow />
-          <div className="lp-policy-node complete"><span>03</span><small>Trust</small><b>78 ≥ 75</b><i>✓</i></div><Arrow />
-          <div className="lp-policy-gate"><span>04</span><small>POLICY GATE</small><b>Customer reply</b><div><i /><strong>ALLOWED</strong></div></div><Arrow />
-          <div className="lp-policy-result"><span>AUTHORIZED</span><b>OIP responds</b><small>Action ID · ACT-8821</small></div>
+    <FlywheelScene stages={[2, 3]} stageChip="07 / FLYWHEEL 02·09 — REMEMBER · GROUND">
+      <FlywheelHead id="fw-remember" title={<>OIP asks: <em>has this organization solved something like this before?</em></>} lead="A connection reaches into Organizational Memory—the lessons this organization has already validated and kept." />
+      <StagePanel label="The ticket connects to Organizational Memory: a matching validated lesson is found and the case is grounded in it">
+        <div className="lp-fw-grid lp-fw-grid-2">
+          <div className="lp-fw-case-wrap">
+            <CaseCard stamp="ANALYZED" channel="Email" id="#4821" quote="One of our staff can’t record attendance from their phone." customer="Marina H. · Acme Field Ops" meta="09:42" initials="MH" />
+          </div>
+          <ConnectionLine live={live} label="MATCH FOUND" />
+          <div className="lp-fw-memory-wrap">
+            <MemoryCard
+              version="v2"
+              trust={42}
+              outcomes={2}
+              evidence="2 confirmed outcomes"
+              provenance="Tickets #2840 · #3912"
+              solution="Enable OS location permission for the app, reopen it, and retry attendance submission."
+              ground={live}
+            />
+            <div className={`lp-fw-ground-banner${live ? " is-live" : ""}`}>
+              <span aria-hidden="true">⛓</span>
+              <div><b>GROUNDED</b><small>This answer comes from organizational knowledge supported by previous work—not generic AI memory.</small></div>
+            </div>
+          </div>
         </div>
-        <div className="lp-escalation-branch"><span>Uncertain · conflicting · unknown</span><i /><b>↳ Human review</b><small>Judgment stays with the team</small></div>
-      </div>
-      <p className="lp-editorial-line lp-editorial-line-dark">Autonomy is earned through <em>organizational trust.</em></p>
-    </section>
+      </StagePanel>
+    </FlywheelScene>
   );
 }
 
-export function IntegrationsScene() {
-  const channels = [["G", "Gmail"], ["O", "Outlook"], ["S", "Slack"], ["W", "WhatsApp"], ["T", "Telegram"]];
-  return (
-    <section className="lp-scene lp-integrations-scene" aria-labelledby="integrations-title">
-      <div className="lp-container lp-split-heading"><div><SceneIndex light>06 / INTELLIGENCE LAYER</SceneIndex><h2 id="integrations-title">Keep the tools your team already uses.</h2></div><p>Don’t replace the tools where work already happens. Make them smarter. OIP sits behind your communication channels as the memory and decision layer.</p></div>
-      <div className="lp-container lp-integration-stage" role="img" aria-label="Messages from Gmail, Outlook, Slack, WhatsApp, and Telegram flow into OIP, which uses Organizational Memory, trust, and policy to automate, route for review, or investigate; outcomes flow back into memory">
-        <div className="lp-channel-rail"><small>MESSAGES FLOW IN</small>{channels.map(([letter, name]) => <div key={name}><span>{letter}</span><b>{name}</b><i>→</i></div>)}</div>
-        <div className="lp-integration-core"><div className="lp-core-orbit" aria-hidden="true"><i /><i /><i /></div><span className="lp-brand-mark lp-brand-mark-indigo" aria-hidden="true"><i /><i /><i /></span><b>OIP</b><small>ORGANIZATIONAL MEMORY</small><div className="lp-core-eval"><span>Understand</span><span>Remember</span><span>Evaluate</span></div></div>
-        <div className="lp-outcome-rail"><small>DECISIONS FLOW OUT</small><div className="auto"><span>78</span><b>Automatic response</b><i>Policy permitted</i></div><div className="review"><span>?</span><b>Human review</b><i>Needs judgment</i></div><div className="unknown"><span>…</span><b>Investigation</b><i>Unknown problem</i></div><p><span>↩</span> Outcomes return to memory</p></div>
-      </div>
-    </section>
-  );
-}
+/* ------------------------------------------------------------------ */
+/* FLYWHEEL 04–05 — ASSIST + HUMAN REVIEW                              */
+/* ------------------------------------------------------------------ */
 
-export function LearningLoopScene() {
-  const loop = ["UNDERSTAND", "REMEMBER", "EVALUATE", "ACT", "OBSERVE", "LEARN"];
+export function AssistReviewScene() {
+  const flywheel = useFlywheel();
+  const live = (flywheel?.activeStages.includes(4) ?? false) || (flywheel?.activeStages.includes(5) ?? false);
   return (
-    <section className="lp-scene lp-loop-scene" aria-labelledby="loop-title">
-      <div className="lp-container lp-loop-heading"><SceneIndex light>07 / THE LEARNING LOOP</SceneIndex><h2 id="loop-title">Every interaction can make the next one better.</h2></div>
-      <div className="lp-wide lp-loop-stage" role="img" aria-label="OIP's learning loop moves through understand, remember, evaluate, act, observe, and learn around Organizational Memory, increasing knowledge, trust, safe automation, and support capacity">
-        <div className="lp-loop-visual">
-          <div className="lp-loop-core"><span className="lp-memory-glyph" aria-hidden="true"><i /><i /><i /></span><small>ORGANIZATIONAL</small><b>MEMORY</b><em>Validated · versioned · traceable</em></div>
-          {loop.map((item, index) => <div key={item} className={`lp-loop-step step-${index + 1}`}><span>{String(index + 1).padStart(2, "0")}</span><b>{item}</b></div>)}
-          <div className="lp-loop-track" aria-hidden="true" />
+    <FlywheelScene stages={[4, 5]} stageChip="08 / FLYWHEEL 03·09 — ASSIST · REVIEW">
+      <FlywheelHead id="fw-assist" title="OIP drafts. The human decides." lead="A grounded response arrives with the knowledge it used. The agent approves, edits, rejects, or escalates—human judgment stays part of the loop." />
+      <StagePanel label="OIP drafts a response grounded in Organizational Memory and a human agent reviews, approves, and sends it">
+        <div className="lp-fw-grid lp-fw-grid-3">
+          <div className="lp-fw-memory-wrap">
+            <MemoryCard
+              className="is-compact"
+              version="v2"
+              trust={42}
+              outcomes={2}
+              evidence="2 confirmed outcomes"
+              provenance="Tickets #2840 · #3912"
+              solution="Enable OS location permission for the app, reopen it, and retry attendance submission."
+            />
+            <div className="lp-fw-knowledge-used"><small>KNOWLEDGE USED</small><span>Location permission fix · v2</span><span>Evidence from #2840, #3912</span></div>
+          </div>
+          <ConnectionLine live={live} />
+          <div className="lp-fw-draft">
+            <Stagger className="lp-fw-draft-stack">
+              <div className="lp-fw-draft-head"><span>AI DRAFT · GROUNDED IN ORGANIZATIONAL MEMORY</span><b className="is-amber">HUMAN REVIEW REQUIRED</b></div>
+              <p className="lp-fw-draft-body">Hi Marina, it looks like location permission is disabled for the mobile app. Please enable location access, reopen the app, then record attendance again.</p>
+              <div className="lp-fw-draft-evidence"><span aria-hidden="true">✓</span><div><b>Evidence &amp; provenance attached</b><small>Mobile Attendance — Location Permission Disabled · v2</small></div></div>
+              <div className="lp-fw-review-row">
+                <div className="lp-fw-reviewer"><span className="lp-avatar">MC</span><div><b>Maya Chen</b><small>Support · reviewer</small></div></div>
+                <div className="lp-fw-review-actions">
+                  <span className="is-primary">Approve</span><span>Edit</span><span>Reject</span><span>Escalate</span>
+                </div>
+              </div>
+              <div className="lp-fw-sent"><span aria-hidden="true">✓</span><b>REVIEWED &amp; SENT</b><small>response delivered · 09:58</small></div>
+            </Stagger>
+          </div>
         </div>
-        <div className="lp-capacity-copy"><small>THE CAPACITY EFFECT</small><div className="lp-capacity-sequence"><span>More problems solved</span><Arrow /><span>More knowledge</span><Arrow /><span>More trust</span><Arrow /><span>More safe automation</span></div><h3>Human attention moves to the work that needs judgment.</h3><p>New problems. Exceptions. Relationships. Difficult cases. Situations the organization has not learned yet.</p></div>
-      </div>
-      <div className="lp-container lp-difference-line"><span>Help desks manage conversations.</span><span>Knowledge bases store documentation.</span><span>Search finds information.</span><strong>OIP learns from what actually happened.</strong></div>
-    </section>
+      </StagePanel>
+      <p className="lp-fscene-note">Human review is part of OIP governance—not a temporary obstacle.</p>
+    </FlywheelScene>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* FLYWHEEL 06–07 — OBSERVE + LEARN                                    */
+/* ------------------------------------------------------------------ */
+
+const LEARN_STEPS = ["EVIDENCE ATTACHED", "LESSON STRENGTHENED", "COMMIT TO ORGANIZATIONAL MEMORY"];
+
+export function ObserveLearnScene() {
+  const flywheel = useFlywheel();
+  const live = (flywheel?.activeStages.includes(6) ?? false) || (flywheel?.activeStages.includes(7) ?? false);
+  const countLive = useLatchedLive(live);
+  return (
+    <FlywheelScene stages={[6, 7]} stageChip="09 / FLYWHEEL 04·09 — OBSERVE · LEARN" labelId="fw-observe">
+      <FlywheelHead id="fw-observe" title={<>The ticket closes. <em>The learning doesn’t.</em></>} lead="The customer confirms the outcome. OIP attaches the evidence, strengthens the lesson, and commits a new version to Organizational Memory." />
+      <StagePanel label="The customer confirms the solution worked; OIP confirms the outcome, attaches evidence, strengthens the lesson, and commits it to Organizational Memory">
+        <div className="lp-fw-grid lp-fw-grid-3">
+          <div className="lp-fw-learn">
+            <Stagger className="lp-fw-learn-stack">
+              <div className="lp-fw-customer-reply"><small>CUSTOMER · 10:06</small><b>“That worked. Thank you.”</b></div>
+              <div className="lp-fw-outcome"><span aria-hidden="true">✓</span><b>OUTCOME CONFIRMED</b><small>resolution verified by the customer</small></div>
+              <div className="lp-fw-learn-steps">
+                {LEARN_STEPS.map((step, index) => (
+                  <div key={step} className="lp-fw-learn-step" style={{ "--i": index } as React.CSSProperties}>
+                    <span>{String(index + 1).padStart(2, "0")}</span><b>{step}</b>
+                  </div>
+                ))}
+              </div>
+              <div className="lp-fw-closed-ticket"><span>CLOSED</span><small>temporary work is done</small></div>
+            </Stagger>
+          </div>
+          <ConnectionLine live={live} tone="green" label="LEARN" />
+          <div className="lp-fw-memory-wrap">
+            <MemoryCard
+              version={<><s>v2</s> <b className="is-new">v3</b></>}
+              trust={<AnimatedValue from={42} to={55} start={countLive} />}
+              outcomes={<><s>2</s> <AnimatedValue from={2} to={3} start={countLive} /></>}
+              evidence="3 confirmed outcomes"
+              provenance="Tickets #2840 · #3912 · #4821"
+              solution="Enable OS location permission for the app, reopen it, and retry attendance submission."
+              ground={live}
+            />
+            <Stagger className="lp-fw-trust-reasons">
+              <Chip tone="green">+1 confirmed outcome</Chip>
+              <Chip tone="green">+1 evidence item</Chip>
+              <Chip tone="green">+1 human validation</Chip>
+            </Stagger>
+          </div>
+        </div>
+      </StagePanel>
+      <p className="lp-fscene-note">Temporary ticket work becomes persistent organizational knowledge.</p>
+    </FlywheelScene>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* FLYWHEEL 08 — REUSE                                                 */
+/* ------------------------------------------------------------------ */
+
+export function ReuseScene() {
+  const flywheel = useFlywheel();
+  const live = flywheel?.activeStages.includes(8) ?? false;
+  const countLive = useLatchedLive(live);
+  return (
+    <FlywheelScene stages={[8]} stageChip="10 / FLYWHEEL 05·09 — REUSE">
+      <FlywheelHead id="fw-reuse" title={<>The same problem comes back.<br /><em>This time, you don’t start from zero.</em></>} lead="Weeks later, a different customer reports the same underlying problem. OIP recognizes it immediately." />
+      <StagePanel label="A new case from a different customer is matched immediately to the strengthened Organizational Memory, a grounded response is prepared, and trust rises again">
+        <div className="lp-fw-grid lp-fw-grid-3">
+          <div className="lp-fw-case-wrap">
+            <CaseCard stamp="NEW CASE" channel="Email" id="#5103" quote="My team can’t log attendance from the mobile app." customer="Sanjay R. · Brightline Retail" meta="Today · 10:02" initials="SR" />
+          </div>
+          <ConnectionLine live={live} label="MATCH FOUND IMMEDIATELY" />
+          <div className="lp-fw-memory-wrap">
+            <MemoryCard
+              version="v3"
+              trust={55}
+              outcomes={3}
+              evidence="3 confirmed outcomes"
+              provenance="Tickets #2840 · #3912 · #4821"
+              solution="Enable OS location permission for the app, reopen it, and retry attendance submission."
+              ground={live}
+            />
+            <div className="lp-fw-known"><span aria-hidden="true">✓</span><b>KNOWN SOLUTION · GROUNDED RESPONSE PREPARED</b></div>
+          </div>
+        </div>
+        <div className="lp-fw-reuse-strip">
+          <Stagger className="lp-fw-reuse-strip-grid">
+            <div className="lp-fw-customer-reply is-inline"><small>CUSTOMER · 10:31</small><b>“That worked. Thank you.”</b></div>
+            <div className="lp-fw-trust-delta">
+              <span>TRUST</span>
+              <b className="lp-trust-number"><AnimatedValue from={55} to={68} start={countLive} /></b>
+              <i aria-hidden="true" />
+              <span>SUPPORTING OUTCOMES</span>
+              <b><AnimatedValue from={3} to={4} start={countLive} /></b>
+            </div>
+            <p><b>Solve once. Learn. Reuse.</b> The organization compounds with every confirmed outcome.</p>
+          </Stagger>
+        </div>
+      </StagePanel>
+    </FlywheelScene>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* FLYWHEEL 09 — AUTOMATE                                              */
+/* ------------------------------------------------------------------ */
+
+const POLICY_CHECKS = ["KNOWN PROBLEM", "VALIDATED MEMORY", "EVIDENCE", "TRUST REQUIREMENT", "POLICY PERMITTED"];
+const CHANNELS = ["Gmail", "Outlook", "Slack", "WhatsApp", "Telegram"];
+
+export function AutomateScene() {
+  const flywheel = useFlywheel();
+  const live = flywheel?.activeStages.includes(9) ?? false;
+  const countLive = useLatchedLive(live);
+  return (
+    <FlywheelScene stages={[9]} stageChip="11 / FLYWHEEL 06·09 — AUTOMATE" id="automation">
+      <FlywheelHead id="fw-automate" title="Trust unlocks automation." lead="Solved, validated, reused, and confirmed again—this problem has earned organizational trust. Policy decides whether OIP may act on it." />
+      <StagePanel dark id="security" label="A trusted recurring problem passes every check and is authorized by policy; an uncertain case is routed to human review">
+        <div className="lp-policy-title"><div><small>OIP DECISION TRACE · CASE #5103</small><b>Known problem received</b></div><span className="lp-audit-badge">AUDIT LOG ON</span></div>
+        <div className="lp-policy-history">
+          <div className="lp-policy-history-item"><small>SUCCESSFUL REUSE</small><b>+1</b></div>
+          <div className="lp-policy-history-item"><small>CONFIRMED OUTCOME</small><b>+1</b></div>
+          <div className="lp-policy-history-item"><small>HUMAN VALIDATION</small><b>+1</b></div>
+          <div className="lp-policy-trust"><small>TRUST</small><b><AnimatedValue from={68} to={79} start={countLive} /></b><em>requirement ≥ 75</em></div>
+        </div>
+        <div className="lp-policy-flow" role="list" aria-label="Policy checks">
+          {POLICY_CHECKS.map((check, index) => (
+            <div className="lp-policy-check" role="listitem" key={check} style={{ "--i": index } as React.CSSProperties}>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <div><b>{check}</b><i aria-hidden="true">✓</i></div>
+            </div>
+          ))}
+          <div className="lp-policy-gate">
+            <span>06</span>
+            <div><b>POLICY GATE</b><em aria-hidden="true"><i /></em><strong>ALLOWED</strong></div>
+          </div>
+          <div className="lp-policy-result"><span>AUTHORIZED</span><b>OIP ACTS</b><small>Action ID · ACT-8821</small></div>
+        </div>
+      </StagePanel>
+      <StagePanel label="A customer email arrives through Gmail, OIP analyzes it, retrieves the memory, passes the trust and policy checks, and sends the authorized response through Gmail">
+        <div className="lp-channel-flow">
+          <div className="lp-channel-card is-inbound">
+            <div className="lp-channel-card-head"><span className="lp-channel-letter">G</span><div><b>Gmail</b><small>Inbox · 10:02</small></div></div>
+            <p>“Hi, our staff can’t record attendance from the phone app. Nothing happens when they tap submit.”</p>
+          </div>
+          <div className="lp-channel-mid">
+            <ConnectionLine live={live} />
+            <div className="lp-channel-steps">
+              <span>ANALYZE</span><span>MEMORY RETRIEVED</span><span>TRUST &amp; POLICY ✓</span>
+            </div>
+            <ConnectionLine live={live} />
+          </div>
+          <div className="lp-channel-card is-outbound">
+            <div className="lp-channel-card-head"><span className="lp-channel-letter">G</span><div><b>Gmail</b><small>Sent · 10:03</small></div></div>
+            <p>“It looks like location permission is disabled for the mobile app. Please enable location access, reopen the app, then record attendance again.”</p>
+          </div>
+        </div>
+        <div className="lp-channel-fallback">
+          <div className="lp-channel-fallback-card"><span className="is-amber" aria-hidden="true">⚠</span><div><b>TRUST REQUIREMENT NOT MET</b><small>or policy requires a human</small></div></div>
+          <span className="lp-channel-fallback-arrow" aria-hidden="true">↳</span>
+          <div className="lp-channel-fallback-human"><span aria-hidden="true">✋</span><div><b>HUMAN REVIEW</b><small>judgment stays with the team</small></div></div>
+        </div>
+        <div className="lp-channel-strip">
+          <span>THE SAME LAYER WORKS ACROSS</span>
+          {CHANNELS.map((channel) => <b key={channel}>{channel}</b>)}
+          <span>— the channels your team already uses.</span>
+        </div>
+      </StagePanel>
+      <p className="lp-fscene-note">Autonomy is earned through organizational trust.</p>
+      <p className="lp-fscene-note is-secondary">Keep the tools your team already uses. Give them organizational memory.</p>
+    </FlywheelScene>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* SCENE 12 — VISION + CTA                                             */
+/* ------------------------------------------------------------------ */
 
 export function VisionScene() {
+  const vision = [
+    { label: "MEMORY", detail: "preserve what worked" },
+    { label: "INTELLIGENCE", detail: "learn what to trust" },
+    { label: "AUTONOMY", detail: "act when policy permits" }
+  ];
   return (
     <section className="lp-scene lp-vision-scene" id="vision" aria-labelledby="vision-title">
       <div className="lp-container lp-vision-progression" aria-label="Memory to Intelligence to Autonomy">
-        <div><span>01</span><b>MEMORY</b><small>Preserve what worked</small></div><Arrow /><div><span>02</span><b>INTELLIGENCE</b><small>Learn what to trust</small></div><Arrow /><div><span>03</span><b>AUTONOMY</b><small>Act when policy permits</small></div>
+        {vision.map((stage, index) => (
+          <div key={stage.label} className="lp-vision-word">
+            {index > 0 && <span className="lp-vision-arrow" aria-hidden="true">↓</span>}
+            <div><b>{stage.label}</b><small>{stage.detail}</small></div>
+          </div>
+        ))}
       </div>
       <div className="lp-container lp-final-cta">
-        <SceneIndex light>08 / THE OIP VISION</SceneIndex>
+        <SceneIndex light>12 / THE OIP VISION</SceneIndex>
         <p className="lp-vision-kicker">Memory <span>→</span> Intelligence <span>→</span> Autonomy</p>
         <h2 id="vision-title">Stop starting from zero.</h2>
         <p>Turn today’s solved problems into trusted organizational memory for tomorrow’s work.</p>
-        <div className="lp-cta-actions"><a className="lp-button lp-button-primary" href="/?auth=signup">Sign Up Now <span aria-hidden="true">↗</span></a><a className="lp-signin-link" href="/?auth=login">Already have an account? <b>Sign in</b></a></div>
+        <p className="lp-villain-echo" aria-hidden="true"><s>Your company keeps solving the same problems. And forgetting the answers.</s></p>
+        <div className="lp-cta-actions">
+          <a className="lp-button lp-button-primary" href="/?auth=signup">Sign Up Now <span aria-hidden="true">↗</span></a>
+          <a className="lp-signin-link" href="/?auth=login">Already have an account? <b>Sign in</b></a>
+        </div>
         <p className="lp-beachhead">Customer support is where OIP starts.</p>
       </div>
-      <footer className="lp-footer"><div className="lp-container"><a className="lp-brand lp-brand-dark" href="#top"><span className="lp-brand-mark lp-brand-mark-indigo" aria-hidden="true"><i /><i /><i /></span><span>OIP</span></a><p>Every resolved issue should make the whole organization smarter.</p><span>Organizational Intelligence Platform</span></div></footer>
+      <footer className="lp-footer">
+        <div className="lp-container">
+          <a className="lp-brand lp-brand-dark" href="#top"><span className="lp-brand-mark lp-brand-mark-indigo" aria-hidden="true"><i /><i /><i /></span><span>OIP</span></a>
+          <p>Every resolved issue should make the whole organization smarter.</p>
+          <span>Organizational Intelligence Platform</span>
+        </div>
+      </footer>
     </section>
   );
 }

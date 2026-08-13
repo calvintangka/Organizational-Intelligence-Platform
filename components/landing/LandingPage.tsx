@@ -1,13 +1,18 @@
 import {
   AIContextScene,
-  AutomationScene,
+  AnalyzeScene,
+  AssistReviewScene,
+  AutomateScene,
   HeroVillainScene,
-  IntegrationsScene,
-  LearningLoopScene,
   OIPRevealScene,
-  RecurrenceScene,
+  ObserveLearnScene,
+  RememberingAttemptScene,
+  RememberGroundScene,
+  ReuseScene,
+  SupportPressureScene,
   VisionScene
 } from "./scenes";
+import { FlywheelZone } from "./flywheel";
 
 function LandingNav() {
   return (
@@ -19,9 +24,9 @@ function LandingNav() {
         </a>
         <div className="lp-nav-links" aria-label="Page sections">
           <a href="#how-it-works">How it works</a>
+          <a href="#memory">Memory</a>
           <a href="#automation">Automation</a>
           <a href="#security">Security</a>
-          <a href="#vision">Vision</a>
         </div>
         <div className="lp-nav-actions">
           <a className="lp-nav-signin" href="/?auth=login">Sign in</a>
@@ -39,12 +44,25 @@ export function LandingPage() {
       <LandingNav />
       <main id="main-content">
         <HeroVillainScene />
+        <SupportPressureScene />
+        <RememberingAttemptScene />
         <AIContextScene />
         <OIPRevealScene />
-        <RecurrenceScene />
-        <AutomationScene />
-        <IntegrationsScene />
-        <LearningLoopScene />
+        <section className="lp-scene lp-flywheel-zone" id="memory" aria-label="The Knowledge Flywheel">
+          <div className="lp-container lp-fw-zone-heading">
+            <p className="lp-scene-index lp-scene-index-light">06–11 / THE KNOWLEDGE FLYWHEEL</p>
+            <h2 id="flywheel-title">Watch one problem become <em>organizational memory.</em></h2>
+            <p>One case. Nine stages. The same story from analysis to automation—follow the indigo connection.</p>
+          </div>
+          <FlywheelZone>
+            <AnalyzeScene />
+            <RememberGroundScene />
+            <AssistReviewScene />
+            <ObserveLearnScene />
+            <ReuseScene />
+            <AutomateScene />
+          </FlywheelZone>
+        </section>
         <VisionScene />
       </main>
     </div>
