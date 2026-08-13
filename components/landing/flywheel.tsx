@@ -28,6 +28,15 @@ export const FLYWHEEL_STAGES = [
   { key: "automate", label: "AUTOMATE" }
 ] as const;
 
+export const FLYWHEEL_MOMENTS = [
+  { key: "understand", label: "UNDERSTAND", stages: [1] },
+  { key: "remember", label: "REMEMBER", stages: [2, 3] },
+  { key: "assist", label: "ASSIST", stages: [4, 5] },
+  { key: "learn", label: "LEARN", stages: [6, 7] },
+  { key: "reuse", label: "REUSE", stages: [8] },
+  { key: "automate", label: "AUTOMATE", stages: [9] }
+] as const;
+
 interface FlywheelContextValue {
   register: (element: HTMLElement, stages: number[]) => () => void;
   activeStages: number[];
@@ -94,35 +103,39 @@ export function FlywheelZone({ children }: { children: ReactNode }) {
 
   const value = useMemo<FlywheelContextValue>(() => ({ register, activeStages }), [register, activeStages]);
   const furthestActive = activeStages.length > 0 ? Math.max(...activeStages) : 0;
+  const activeMomentIndex = FLYWHEEL_MOMENTS.findIndex((moment) =>
+    moment.stages.some((stage) => activeStages.includes(stage))
+  );
+  const completedMoments = activeMomentIndex + 1;
+  const currentMoment = activeMomentIndex >= 0 ? FLYWHEEL_MOMENTS[activeMomentIndex] : null;
 
   return (
     <FlywheelContext.Provider value={value}>
       <div className="lp-fw-zone">
         <div className="lp-fw-rail-wrap">
-          <div className="lp-fw-rail" aria-label={`Knowledge Flywheel progress. Current stage: ${furthestActive > 0 ? FLYWHEEL_STAGES[furthestActive - 1].label : "not started"}.`}>
+          <div className="lp-fw-rail" aria-label={`Knowledge Flywheel progress. Current moment: ${currentMoment?.label ?? "not started"}. Internal stage ${furthestActive || 0} of ${FLYWHEEL_STAGES.length}.`}>
             <span className="lp-fw-rail-name">KNOWLEDGE FLYWHEEL</span>
             <div className="lp-fw-rail-track" aria-hidden="true">
-              <i style={{ width: `${(furthestActive / FLYWHEEL_STAGES.length) * 100}%` }} />
+              <i style={{ width: `${(completedMoments / FLYWHEEL_MOMENTS.length) * 100}%` }} />
             </div>
             <div className="lp-fw-rail-nodes">
-              {FLYWHEEL_STAGES.map((stage, index) => {
-                const stageIndex = index + 1;
+              {FLYWHEEL_MOMENTS.map((moment, index) => {
                 const state =
-                  furthestActive >= stageIndex
-                    ? activeStages.includes(stageIndex)
+                  completedMoments >= index + 1
+                    ? index === activeMomentIndex
                       ? "active"
                       : "done"
                     : "pending";
                 return (
-                  <span key={stage.key} className={`lp-fw-rail-node is-${state}`}>
+                  <span key={moment.key} className={`lp-fw-rail-node is-${state}`}>
                     <i aria-hidden="true" />
-                    {stage.label}
+                    {moment.label}
                   </span>
                 );
               })}
             </div>
             <span className="lp-fw-rail-now" aria-hidden="true">
-              NOW · {furthestActive > 0 ? FLYWHEEL_STAGES[furthestActive - 1].label : "STANDBY"}
+              {completedMoments || 0}/{FLYWHEEL_MOMENTS.length} · {currentMoment?.label ?? "STANDBY"}
             </span>
           </div>
         </div>

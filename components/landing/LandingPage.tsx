@@ -51,8 +51,8 @@ export function LandingPage() {
         <section className="lp-scene lp-flywheel-zone" id="memory" aria-label="The Knowledge Flywheel">
           <div className="lp-container lp-fw-zone-heading">
             <p className="lp-scene-index lp-scene-index-light">06–11 / THE KNOWLEDGE FLYWHEEL</p>
-            <h2 id="flywheel-title">Watch one problem become <em>organizational memory.</em></h2>
-            <p>One case. Nine stages. The same story from analysis to automation—follow the indigo connection.</p>
+            <h2 id="flywheel-title">One problem becomes <em>organizational memory.</em></h2>
+            <p>Six clear moments. Nine governed stages underneath.</p>
           </div>
           <FlywheelZone>
             <AnalyzeScene />
