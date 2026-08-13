@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from "react";
+
 import {
   AnimatedValue,
   Chip,
@@ -636,6 +638,160 @@ export function AutomateScene() {
 /* SCENE 12 — VISION + CTA                                             */
 /* ------------------------------------------------------------------ */
 
+const OIP20_SOURCES = ["Tickets", "Docs", "Email", "Chat", "Decisions", "Processes", "Cases", "Outcomes", "Guidance"];
+
+const OIP20_STEPS = [
+  {
+    key: "begin",
+    title: "Tickets were only the beginning.",
+    copy: "Resolved support work becomes the first structured memory layer. The rest of the organization is still fragmented."
+  },
+  {
+    key: "fragmented",
+    title: "What if your whole organization could remember?",
+    copy: "Knowledge lives in documents, email, chat, decisions, processes, cases, and outcomes — disconnected."
+  },
+  {
+    key: "structured",
+    title: "OIP 2.0 structures scattered knowledge into living memory.",
+    copy: "The same validated, versioned, connected memory model expands beyond tickets."
+  },
+  {
+    key: "updating",
+    title: "Memory that stays updated as the organization changes.",
+    copy: "New knowledge enters, old knowledge revises, and the network reflects what is true now."
+  },
+  {
+    key: "agents",
+    title: "AI agents shouldn't have to start from zero either.",
+    copy: "An agent connects to accumulated organizational experience before it begins difficult work."
+  },
+  {
+    key: "vision",
+    title: "OIP 2.0 — The memory layer for an organization of humans and AI.",
+    copy: "Give AI agents more than tools. Give them organizational experience."
+  }
+] as const;
+
+function OIP20StepVisual({ stepKey }: { stepKey: string }) {
+  if (stepKey === "begin") {
+    return (
+      <div className="lp-c31-v-begin">
+        <div className="lp-c31-memory-node"><MemoryGlyph small /><span>ORGANIZATIONAL MEMORY</span></div>
+        <span className="lp-c31-source-chip">Tickets</span>
+      </div>
+    );
+  }
+  if (stepKey === "fragmented") {
+    return (
+      <div className="lp-c31-source-grid is-fragmented">
+        {OIP20_SOURCES.map((source) => <span key={source}>{source}</span>)}
+      </div>
+    );
+  }
+  if (stepKey === "structured") {
+    return (
+      <div className="lp-c31-source-grid is-structured">
+        <div className="lp-c31-memory-node is-core"><MemoryGlyph small /><span>OIP 2.0</span></div>
+        {OIP20_SOURCES.map((source) => <span key={source}>{source}</span>)}
+      </div>
+    );
+  }
+  if (stepKey === "updating") {
+    return (
+      <div className="lp-c31-updating">
+        <div className="lp-c31-memory-node"><MemoryGlyph small /><span>LIVING MEMORY</span><em>v2 → v3 · updated</em></div>
+        <span className="lp-c31-update-chip">new knowledge in</span>
+        <span className="lp-c31-update-chip is-revised">outdated revised</span>
+      </div>
+    );
+  }
+  if (stepKey === "agents") {
+    return (
+      <div className="lp-c31-agent">
+        <div className="lp-c31-agent-card"><span>AI AGENT</span><b>Investigate why enterprise customers are failing SSO onboarding</b></div>
+        <div className="lp-c31-loaded">ORGANIZATIONAL CONTEXT LOADED</div>
+        <div className="lp-c31-memory-node is-small"><MemoryGlyph small /><span>MEMORY</span></div>
+      </div>
+    );
+  }
+  return (
+    <div className="lp-c31-final">
+      <div className="lp-c31-memory-node"><MemoryGlyph small /><span>OIP 2.0</span><b>The memory layer for an organization of humans and AI.</b></div>
+    </div>
+  );
+}
+
+export function OIP20FutureReveal() {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (open && panelRef.current) {
+      panelRef.current.focus({ preventScroll: true });
+    }
+  }, [open]);
+
+  const close = () => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  return (
+    <div className="lp-c31">
+      <button
+        ref={triggerRef}
+        type="button"
+        className="lp-c31-trigger"
+        aria-expanded={open}
+        aria-controls="oip20-future-reveal"
+        onClick={() => setOpen((previous) => !previous)}
+      >
+        <span>See where this is going</span>
+        <i aria-hidden="true">→</i>
+      </button>
+      {open && (
+        <div id="oip20-future-reveal" ref={panelRef} className="lp-c31-reveal" tabIndex={-1} role="region" aria-label="OIP 2.0 future reveal">
+          <div className="lp-c31-reveal-inner">
+            <div className="lp-c31-reveal-head">
+              <p className="lp-scene-index">OIP 2.0 / FUTURE DIRECTION</p>
+              <h2>Beyond tickets. <em>Toward organizational intelligence.</em></h2>
+              <p className="lp-c31-sub">A concise view of where OIP is heading — not what ships today.</p>
+            </div>
+            <div className="lp-c31-steps">
+              {OIP20_STEPS.map((step, index) => (
+                <article className="lp-c31-step" key={step.key}>
+                  <div className="lp-c31-step-head">
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <div><h3>{step.title}</h3><p>{step.copy}</p></div>
+                  </div>
+                  <OIP20StepVisual stepKey={step.key} />
+                </article>
+              ))}
+            </div>
+            <div className="lp-c31-close-row">
+              <button type="button" className="lp-c31-return" onClick={close}>← Back to OIP today</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function VisionScene() {
   const vision = [
     { label: "MEMORY", detail: "preserve what worked" },
@@ -651,6 +807,9 @@ export function VisionScene() {
             <div><b>{stage.label}</b><small>{stage.detail}</small></div>
           </div>
         ))}
+      </div>
+      <div className="lp-container lp-c31-placement">
+        <OIP20FutureReveal />
       </div>
       <div className="lp-container lp-final-cta">
         <SceneIndex light>12 / THE OIP VISION</SceneIndex>
