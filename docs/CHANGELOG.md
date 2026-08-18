@@ -12,7 +12,23 @@ Every significant implementation should append a new dated entry.
 
 ## Unreleased
 
-_No unreleased changes yet._
+- **NC-FIX-012 — Reflection source-provenance validation boundary (recovered and verified):**
+  Recovered the stash-only implementation (`effectiveReusablePromotionDraft`) that projects
+  the effective reusable payload for every promotion action so identity validation runs
+  against exactly what may be persisted. The contract audit found and closed three
+  remaining gaps: a blank authored response template on `create_new` now validates the
+  `reviewedResponse` fallback it would write; canonical tags persisted from
+  `understanding.tags` on `create_new`/`merge_existing`/`trust_update_only` are included in
+  the validated payload; and `trust_update_only` now validates persisted tags. The
+  permanent regression probe referenced by `probe:nc-fix-012-reflection-provenance-boundary`
+  was missing and has been reconstructed from the documented contract
+  (`RECONSTRUCTED_FROM_CONTRACT`). Verification (deterministic in-process probe): provenance
+  identity preserved, identity rejected in every reusable field, generalized lesson
+  accepted, no-authored-lesson fallback validated, blank-template fallback validated,
+  validation/write equivalence, atomic rejection, corrected retry, idempotency, and tenant
+  isolation. NC-FIX-011 probe and TypeScript pass. This entry records the recovered
+  implementation and its executable verification; it does not claim a release, tag, push,
+  or deployment.
 
 ## Version 0.2.0
 

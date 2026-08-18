@@ -211,6 +211,83 @@ function normalizeLessonDraft(draft: LessonDraft): LessonDraft {
   };
 }
 
+/**
+ * Return the content that the selected promotion action will actually write
+ * into reusable Organizational Memory. Source tickets, conversation messages,
+ * resolution evidence, and provenance identifiers are deliberately not part
+ * of this projection.
+ *
+ * NC-FIX-011 validated reviewer-authored lesson fields when present, but the
+ * no-lesson and generic-version paths can also persist fields from the
+ * understanding or reviewed response. Keeping this projection beside the
+ * command makes the validation boundary follow the write boundary.
+ *
+ * NC-FIX-012R2 audit additions to the recovered stash implementation:
+ * - create_new falls back to `reviewedResponse` when an authored response
+ *   template is blank; that fallback is projected so it cannot bypass
+ *   validation.
+ * - create_new / merge_existing / trust_update_only persist
+ *   `understanding.tags` as canonical item tags even when a lesson is
+ *   authored; those tags are projected into the safety draft's signals.
+ * - trust_update_only writes understanding tags when tags exist, so it
+ *   receives the same tag projection as merge_existing.
+ */
+function effectiveReusablePromotionDraft(
+  command: PromoteKnowledgeCommand,
+  submittedDraft: LessonDraft | undefined
+): LessonDraft | undefined {
+  const understandingTags = command.understanding.tags ?? [];
+
+  if (submittedDraft) {
+    if (command.reflection.action === "create_new") {
+      return {
+        ...submittedDraft,
+        customerResponse: submittedDraft.customerResponse.trim() || command.reviewedResponse,
+        signals: [...new Set([...(submittedDraft.signals ?? []), ...understandingTags])]
+      };
+    }
+    if (command.reflection.action === "merge_existing" || command.reflection.action === "trust_update_only") {
+      return {
+        ...submittedDraft,
+        signals: [...new Set([...(submittedDraft.signals ?? []), ...understandingTags])]
+      };
+    }
+    return submittedDraft;
+  }
+
+  if (command.reflection.action === "create_new") {
+    return {
+      mode: "new",
+      rootCause: command.understanding.coreProblem,
+      solution: command.understanding.summary,
+      customerResponse: command.reviewedResponse,
+      signals: understandingTags
+    };
+  }
+
+  if (command.reflection.action === "create_version" && command.suggestedResponse?.draftMode !== "lesson_grounded") {
+    return {
+      mode: "new",
+      rootCause: "",
+      solution: "",
+      customerResponse: command.reviewedResponse,
+      signals: []
+    };
+  }
+
+  if ((command.reflection.action === "merge_existing" || command.reflection.action === "trust_update_only") && understandingTags.length > 0) {
+    return {
+      mode: "new",
+      rootCause: "",
+      solution: "",
+      customerResponse: "",
+      signals: understandingTags
+    };
+  }
+
+  return undefined;
+}
+
 function stableId(prefix: string, key: string): string {
   let hash = 2166136261;
   for (let index = 0; index < key.length; index += 1) hash = Math.imul(hash ^ key.charCodeAt(index), 16777619);
@@ -351,14 +428,16 @@ export async function promoteKnowledgeCommand(command: PromoteKnowledgeCommand, 
     if (replay.payloadHash !== hash) fail(command, "duplicate_promotion", "This idempotency key was already used for a different promotion payload.");
     return { ...replay.result, replayed: true };
   }
-  if (command.lessonDraft) {
+  const submittedDraft = command.lessonDraft ? normalizeLessonDraft(command.lessonDraft) : undefined;
+  const safetyDraft = effectiveReusablePromotionDraft(command, submittedDraft);
+  if (safetyDraft) {
     const validation = validateReflectionCommand({
       organizationId: command.organizationId,
       actor: command.actor,
       authority: command.authority,
       requestId: command.requestId,
       reflection: command.reflection,
-      lessonDraft: command.lessonDraft,
+      lessonDraft: safetyDraft,
       safetyContext: buildReflectionSafetyContext({
         customerName: command.ticket.customerName,
         organizationName: command.organizationProfile.name,
@@ -374,7 +453,7 @@ export async function promoteKnowledgeCommand(command: PromoteKnowledgeCommand, 
   const now = command.now ?? new Date().toISOString();
   const ticketId = ticketReferenceId(command.ticket);
   const und = command.understanding;
-  const draft = command.lessonDraft ? normalizeLessonDraft(command.lessonDraft) : undefined;
+  const draft = submittedDraft;
   const action = command.reflection.action;
   const expectedKnowledgeRevision = command.reflection.existingItemId
     ? command.knowledgeItems.find((item) => item.id === command.reflection.existingItemId)?.revision ?? 0
