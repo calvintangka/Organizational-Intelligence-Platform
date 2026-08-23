@@ -29,6 +29,17 @@ Every significant implementation should append a new dated entry.
   isolation. NC-FIX-011 probe and TypeScript pass. This entry records the recovered
   implementation and its executable verification; it does not claim a release, tag, push,
   or deployment.
+- **NC-FIX-014 — Resolved-ticket Reflection recovery boundary:**
+  Restored a UI recovery path for resolved, evidence-eligible tickets whose Reflection has
+  not yet been prepared. The Cases resume action and the workspace resume guard now use a
+  shared availability predicate (`ticketWorkflowResumable` / `reflectionRecoveryNeeded` in
+  `lib/ticketReflectionRecovery.ts`); the resolved-and-not-prepared state exposes
+  "Prepare Reflection" so the existing "Approve & Continue to Reflection" step can run the
+  existing `prepare_reflection` transition. Resolution evidence remains authoritative and
+  preparation does not auto-promote knowledge. Permanent probe:
+  `probe:nc-fix-014-resolved-reflection-recovery`. Verification: NC-FIX-014/011/012 probes
+  pass, real-browser acceptance passes for a disposable resolved/evidence-backed case,
+  TypeScript passes, protected cases unchanged. Not committed, pushed, or deployed.
 
 ## Version 0.2.0
 

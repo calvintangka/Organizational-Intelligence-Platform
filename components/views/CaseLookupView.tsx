@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { KnowledgeItem, TicketPage, TicketPageRequest, TicketRecord } from "@/types";
 import type { CaseFilterChip } from "@/lib/ticketRecords";
+import { reflectionRecoveryNeeded, ticketWorkflowResumable } from "@/lib/ticketReflectionRecovery";
 
 interface CaseLookupViewProps {
   organizationId: string;
@@ -403,7 +404,7 @@ function CaseDetailView({
             {statusLabel(record.status)}
           </span>
           {/* Resume is available for active conversations or an evidence-gated Reflection. */}
-          {(record.status === "in_review" || record.status === "waiting_for_customer" || (record.status === "resolved" && record.reflection.validationEligible === true && !!record.reflection.preparedDecision)) && onResume && (
+          {ticketWorkflowResumable(record) && onResume && (
             <button
               type="button"
               onClick={onResume}
@@ -414,7 +415,9 @@ function CaseDetailView({
                   : "bg-[#2563EB] hover:bg-blue-700"
               }`}
             >
-              {record.status === "resolved" ? "Resume Reflection" : "Resume in workspace"}
+              {record.status === "resolved"
+                ? (reflectionRecoveryNeeded(record) ? "Prepare Reflection" : "Resume Reflection")
+                : "Resume in workspace"}
             </button>
           )}
         </div>

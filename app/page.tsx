@@ -94,6 +94,7 @@ import {
   createTicketRecord,
   computeEditDistance,
 } from "@/lib/ticketRecords";
+import { ticketWorkflowResumable } from "@/lib/ticketReflectionRecovery";
 import { LandingPage } from "@/components/landing/LandingPage";
 import { CaseLookupView } from "@/components/views/CaseLookupView";
 import { AuthorizationProvider } from "@/components/AuthorizationContext";
@@ -2237,19 +2238,16 @@ export default function Home() {
    * Does NOT re-run classification or memory retrieval — the stored results
    * stand. Only the safe display layer is rebuilt.
    *
-   * Resolved cases may resume only when the server has already marked their
-   * prepared Reflection eligible after resolution evidence was recorded. This
-   * restores the validation screen after a refresh without reopening the
-   * conversation or weakening the evidence gate. Warns before clobbering a
-   * different in-progress workspace.
-  */
+   * Active conversations resume in place. Resolved cases resume only when the
+   * server has marked them Reflection-eligible after resolution evidence was
+   * recorded; if a prepared Reflection exists the validation screen is
+   * restored, otherwise the ticket resumes at human review so the existing
+   * "Approve & Continue to Reflection" step can prepare it. This does not
+   * reopen the conversation or weaken the evidence gate. Warns before
+   * clobbering a different in-progress workspace.
+   */
   function resumeTicketFromRecord(record: TicketRecord) {
-    // A waiting case is the same conversation after an agent response and is
-    // intentionally resumable so a customer follow-up can reopen it.
-    const resumableReflection = record.status === "resolved"
-      && record.reflection.validationEligible === true
-      && !!record.reflection.preparedDecision;
-    if (record.status !== "in_review" && record.status !== "waiting_for_customer" && !resumableReflection) return;
+    if (!ticketWorkflowResumable(record)) return;
 
     // Warn before clobbering a different in-progress ticket.
     const otherInProgress =
@@ -4950,7 +4948,6 @@ export default function Home() {
     </AuthorizationProvider>
   );
 }
-
 
 
 
