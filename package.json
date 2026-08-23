@@ -46,6 +46,7 @@
     "probe:nc-fix-010-concurrency-recovery": "node scripts/nc-fix-010-optimistic-concurrency-reload-retry-probe.cjs",
     "probe:nc-fix-011-reflection-promotion-safety": "node scripts/nc-fix-011-human-reflection-promotion-safety-reconciliation-probe.cjs",
     "probe:nc-fix-012-reflection-provenance-boundary": "node scripts/nc-fix-012-real-world-reflection-provenance-boundary-probe.cjs",
+    "probe:nc-fix-013-dashboard-open-ticket-metric": "node scripts/nc-fix-013-dashboard-open-ticket-metric-probe.cjs",
     "probe:nc-fix-014-resolved-reflection-recovery": "node scripts/nc-fix-014-resolved-reflection-recovery-probe.cjs",
     "probe:test-organization": "node scripts/test-organization-probe.cjs",
     "probe:actor-propagation": "node scripts/actor-propagation-probe.cjs",

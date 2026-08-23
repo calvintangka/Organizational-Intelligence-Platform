@@ -94,6 +94,7 @@ import {
   createTicketRecord,
   computeEditDistance,
 } from "@/lib/ticketRecords";
+import { countOpenTicketRecords } from "@/lib/ticketMetrics";
 import { ticketWorkflowResumable } from "@/lib/ticketReflectionRecovery";
 import { LandingPage } from "@/components/landing/LandingPage";
 import { CaseLookupView } from "@/components/views/CaseLookupView";
@@ -599,6 +600,19 @@ export default function Home() {
     });
   }
 
+  async function refreshOpenTicketMetric(organizationId: string): Promise<void> {
+    const generation = organizationSwitchGeneration.current;
+    const session = await openPersistenceSession(organizationId, "refresh-open-ticket-metric");
+    const loaded = await session.loadOrgMetrics();
+    if (generation !== organizationSwitchGeneration.current) return;
+    let latest = loaded ?? session.seedOrgMetrics();
+    if (latest.openTickets === undefined && session.context.authority === "local") {
+      latest = { ...latest, openTickets: countOpenTicketRecords(await session.loadTicketRecords()) };
+    }
+    if (generation !== organizationSwitchGeneration.current) return;
+    setOrgMetrics((current) => ({ ...current, ...latest, organizationId }));
+  }
+
   // TODO-055: the browser tab follows the active organization. It reads the
   // organization state the app already holds — no extra request, no polling, no
   // extra global state. Anything short of a hydrated authenticated organization
@@ -753,6 +767,13 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (authStatus !== "authenticated" || !hydrated || activeView !== "home") return;
+    void refreshOpenTicketMetric(organizationProfile.id).catch((error) => {
+      reportPersistenceError("refreshOpenTicketMetricOnHomeNavigation", error);
+    });
+  }, [activeView, authStatus, hydrated, organizationProfile.id]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function hydrateAuthentication(): Promise<void> {
@@ -897,8 +918,12 @@ export default function Home() {
         clearKnowledgeHistoryCache();
         setValidationRecords(loadedValidationRecords);
         setMemoryChangeRecords(loadedMemoryChangeRecords);
+        let hydratedMetrics = loadedOrgMetrics ?? session.seedOrgMetrics();
+        if (hydratedMetrics.openTickets === undefined && session.context.authority === "local") {
+          hydratedMetrics = { ...hydratedMetrics, openTickets: countOpenTicketRecords(await session.loadTicketRecords()) };
+        }
         setOrgMetrics({
-          ...(loadedOrgMetrics ?? session.seedOrgMetrics()),
+          ...hydratedMetrics,
           organizationId: loadedOrgMetrics?.organizationId ?? orgId
         });
         setIntelligenceLog(loadedIntelligenceLog);
@@ -971,6 +996,11 @@ export default function Home() {
       throw new Error(payload?.error?.message ?? `Ticket transition failed (${response.status}).`);
     }
     if (!payload?.data) throw new Error("Ticket transition returned no result.");
+    try {
+      await refreshOpenTicketMetric(organizationId);
+    } catch (error) {
+      reportPersistenceError("refreshOpenTicketMetric", error);
+    }
     return payload.data;
   }
 
@@ -4948,7 +4978,6 @@ export default function Home() {
     </AuthorizationProvider>
   );
 }
-
 
 
 

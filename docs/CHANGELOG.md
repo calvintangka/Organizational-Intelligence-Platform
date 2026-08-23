@@ -29,6 +29,14 @@ Every significant implementation should append a new dated entry.
   isolation. NC-FIX-011 probe and TypeScript pass. This entry records the recovered
   implementation and its executable verification; it does not claim a release, tag, push,
   or deployment.
+- **NC-FIX-013 — Dashboard Open-ticket metric / discarded lifecycle reconciliation:**
+  Reconciled the stash-only implementation against the post-NC-FIX-014 branch after
+  reproducing QC-009. Added a current-state `openTickets` projection while preserving
+  `lifetimeTickets` as historical throughput. `open`, `in_review`, and
+  `waiting_for_customer` count as open; `resolved`, `rejected`, and `discarded` remain
+  retained but excluded. Home navigation and ticket transitions refresh the metric, and
+  the permanent probe plus fresh-browser acceptance cover discard retention, refresh,
+  resolution, waiting semantics, tenant isolation, and unrelated metric stability.
 - **NC-FIX-014 — Resolved-ticket Reflection recovery boundary:**
   Restored a UI recovery path for resolved, evidence-eligible tickets whose Reflection has
   not yet been prepared. The Cases resume action and the workspace resume guard now use a

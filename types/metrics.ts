@@ -25,6 +25,8 @@ export interface Metrics {
  * sessions in localStorage and accumulate over the organization's lifetime.
  */
 export interface OrgMetrics {
+  /** Current operationally active ticket count for the Home dashboard. */
+  openTickets?: number;
   lifetimeTickets: number;
   knowledgeReused: number;
   autoResolutions: number;

@@ -76,7 +76,7 @@ export function HomeView({ knowledgeItems, orgMetrics, emergingPatterns, orgName
 
       {/* Stats row */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 mb-6">
-        <StatCard label="Open tickets" value={orgMetrics.lifetimeTickets ?? 0} darkMode={darkMode} />
+        <StatCard label="Open tickets" value={orgMetrics.openTickets ?? 0} darkMode={darkMode} />
         <StatCard label="Knowledge reused today" value={orgMetrics.knowledgeReused ?? 0} darkMode={darkMode} />
         <StatCard label="Auto-resolved today" value={autoResolved} darkMode={darkMode} />
         <StatCard label="Trust growth" value={trustGrowth > 0 ? `+${trustGrowth}` : "—"} darkMode={darkMode} />

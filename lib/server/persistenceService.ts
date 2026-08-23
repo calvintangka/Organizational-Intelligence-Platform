@@ -45,6 +45,7 @@ import { dedupeLessonCollection, dedupeNewLessonProposals } from "@/lib/canonica
 import { withStableValidationProvenance } from "@/lib/knowledgeProvenance";
 import { recordTelemetryEvent, startTelemetrySpan } from "@/lib/telemetry";
 import type { ValidationCommitResult as AtomicValidationCommitResult } from "@/lib/persistence/adapter";
+import { OPEN_TICKET_STATUSES } from "@/lib/ticketMetrics";
 
 export type PersistenceServiceErrorCode =
   | "UNAUTHENTICATED"
@@ -341,9 +342,10 @@ function mapMemoryChange(row: PrismaMemoryChangeRecord): MemoryChangeRecord {
   };
 }
 
-function mapMetrics(row: PrismaOrgMetrics): OrgMetrics {
+function mapMetrics(row: PrismaOrgMetrics, openTickets?: number): OrgMetrics {
   return {
     organizationId: row.organizationId,
+    ...(typeof openTickets === "number" ? { openTickets } : {}),
     lifetimeTickets: row.lifetimeTickets,
     knowledgeReused: row.knowledgeReused,
     autoResolutions: row.autoResolutions,
@@ -624,8 +626,13 @@ export async function loadKnowledgeHistory(organizationId: string, knowledgeId: 
 
 export async function loadOrgMetrics(organizationId: string): Promise<OrgMetrics | null> {
   const organization = await requireOrganization(organizationId);
-  const row = await readDatabase("organization metrics", () => prisma.orgMetrics.findUnique({ where: { organizationId: organization.id } }));
-  return row ? mapMetrics(row) : null;
+  const [row, openTickets] = await Promise.all([
+    readDatabase("organization metrics", () => prisma.orgMetrics.findUnique({ where: { organizationId: organization.id } })),
+    readDatabase("open ticket metric", () => prisma.ticketRecord.count({
+      where: { organizationId: organization.id, status: { in: [...OPEN_TICKET_STATUSES] } }
+    }))
+  ]);
+  return row ? mapMetrics(row, openTickets) : null;
 }
 
 export async function loadIntelligenceLog(organizationId: string): Promise<IntelligenceLogEntry[]> {
