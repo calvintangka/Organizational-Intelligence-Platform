@@ -275,18 +275,29 @@ export function assessRootCauseCompatibility(
 
 /**
  * TODO-009 Step 3: is this lesson match strong enough EVIDENCE to authorize
- * reuse on its own? Requires >=2 matched signals AND multi-token signal
- * matches — a set of generic one-word overlaps ("webhook", "integration")
- * never qualifies. Tickets without a classified category (Uncategorized /
- * General) carry no category evidence, so their lesson evidence must be
- * doubly strong (>=2 multi-token matched signals).
+ * reuse on its own? The normal path requires >=2 matched signals AND
+ * multi-token signal matches. A human-authored lesson may instead contain one
+ * complete, root-cause-specific signal, but only when the classified ticket
+ * independently affirms at least two meaningful signal tokens. Generic
+ * one-word overlaps never qualify, and Uncategorized / General tickets retain
+ * the stricter multi-signal rule.
  */
 export function isStrongLessonEvidence(
   lessonMatch: LessonMatchResult | null | undefined,
   ticketCategoryClassified = true
 ): lessonMatch is LessonMatchResult {
-  if (!lessonMatch || lessonMatch.score < 2) return false;
-  return lessonMatch.multiTokenMatches >= (ticketCategoryClassified ? 1 : 2);
+  if (!lessonMatch || lessonMatch.score < 1) return false;
+  if (lessonMatch.score >= 2) {
+    return lessonMatch.multiTokenMatches >= (ticketCategoryClassified ? 1 : 2);
+  }
+
+  if (!ticketCategoryClassified || lessonMatch.score !== 1 || lessonMatch.multiTokenMatches !== 1) return false;
+  const signal = lessonMatch.matchedSignals[0] ?? "";
+  const meaningfulSignalTokens = tokenizeLessonSignal(signal);
+  if (meaningfulSignalTokens.length < 3) return false;
+  if (lessonMatch.ticketEvidenceCoverage >= 2) return true;
+  const evidence = lessonMatch.signalEvidence?.find((entry) => entry.signal === signal);
+  return (evidence?.matchedConcepts.length ?? 0) >= 2;
 }
 
 function isTicketCategoryClassified(understanding: Understanding): boolean {

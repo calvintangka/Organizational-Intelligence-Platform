@@ -12,6 +12,19 @@ Every significant implementation should append a new dated entry.
 
 ## Unreleased
 
+- **NC-FIX-015 — Persisted lesson evidence / grounded reuse authorization:**
+  Reconciled the persisted browser lesson shape in which a human-authored lesson
+  contains one specific multi-token signal. Retrieval, lesson selection, and
+  compatibility already succeeded, but the old score floor rejected that lesson
+  at the final grounding authorization gate. Classified tickets may now authorize
+  one such signal when it contains at least three meaningful tokens and the ticket
+  independently affirms at least two lexical or bounded semantic tokens; generic,
+  weak, negated, incompatible, and unclassified cases remain blocked. The permanent
+  `probe:nc-fix-015-grounded-reuse-evidence` covers persisted creation, real reuse,
+  resolution evidence, recurrence, opaque lesson provenance, tenant isolation,
+  negative controls, and idempotent replay. Fresh real-UI acceptance and the coupled
+  NC-FIX-006/007/009/011/012/013/014 probes pass. This behavior is verified but
+  remains unreleased, uncommitted, and undeployed.
 - **NC-FIX-012 — Reflection source-provenance validation boundary (recovered and verified):**
   Recovered the stash-only implementation (`effectiveReusablePromotionDraft`) that projects
   the effective reusable payload for every promotion action so identity validation runs

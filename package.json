@@ -48,6 +48,7 @@
     "probe:nc-fix-012-reflection-provenance-boundary": "node scripts/nc-fix-012-real-world-reflection-provenance-boundary-probe.cjs",
     "probe:nc-fix-013-dashboard-open-ticket-metric": "node scripts/nc-fix-013-dashboard-open-ticket-metric-probe.cjs",
     "probe:nc-fix-014-resolved-reflection-recovery": "node scripts/nc-fix-014-resolved-reflection-recovery-probe.cjs",
+    "probe:nc-fix-015-grounded-reuse-evidence": "node scripts/nc-fix-015-persisted-lesson-evidence-grounded-reuse-probe.cjs",
     "probe:test-organization": "node scripts/test-organization-probe.cjs",
     "probe:actor-propagation": "node scripts/actor-propagation-probe.cjs",
     "probe:todo012-canonical-regression": "node scripts/todo012-canonical-regression-probe.cjs",
