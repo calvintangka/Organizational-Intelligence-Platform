@@ -12,7 +12,7 @@ Every significant implementation should append a new dated entry.
 
 ## Unreleased
 
-- **NC-FIX-017 — Recurrence trust-update / Reflection commit optimistic-concurrency reconciliation:** Reproduced the legitimate `trust_update_only` recurrence HTTP 409 after a compatible lesson-grounded case reached Reflection. The server correctly rejected stale expected revision 1 against authoritative revision 2 and rolled back validation, memory-change, trust-evidence, and KnowledgeItem work atomically. Root cause was client revision propagation: canonical-item reconciliation merged content without carrying the newest `revision`, leaving the Reflection command stale while the display match showed the committed snapshot. The repair preserves the maximum known revision in `mergeCanonicalProblemItems`, keeps server-backed KnowledgeItems on the atomic validation-commit boundary, and leaves server optimistic concurrency, NC-FIX-010 Reload latest / deliberate retry semantics, trust policy, and lesson version stability unchanged. The permanent `probe:nc-fix-017-recurrence-concurrency` and fresh real-browser recurrence pass; navigation, refresh, resume, genuine stale 409/rollback, idempotency, tenant isolation, regression, build, benchmark, and protected-integrity gates are verified. This remains verified unreleased until the authorized NC-FIX-017A commit.
+- **NC-FIX-017 — Recurrence trust-update / Reflection commit optimistic-concurrency reconciliation:** Reproduced the legitimate `trust_update_only` recurrence HTTP 409 after a compatible lesson-grounded case reached Reflection. The server correctly rejected stale expected revision 1 against authoritative revision 2 and rolled back validation, memory-change, trust-evidence, and KnowledgeItem work atomically. Root cause was client revision propagation: canonical-item reconciliation merged content without carrying the newest `revision`, leaving the Reflection command stale while the display match showed the committed snapshot. The repair preserves the maximum known revision in `mergeCanonicalProblemItems`, keeps server-backed KnowledgeItems on the atomic validation-commit boundary, and leaves server optimistic concurrency, NC-FIX-010 Reload latest / deliberate retry semantics, trust policy, and lesson version stability unchanged. The permanent `probe:nc-fix-017-recurrence-concurrency` and fresh real-browser recurrence pass; navigation, refresh, resume, genuine stale 409/rollback, idempotency, tenant isolation, regression, build, benchmark, and protected-integrity gates are verified. This is committed in `d5a7ab7`, remains verified, and is unreleased pending a separately authorized publication/release decision.
 - **NC-FIX-015 — Persisted lesson evidence / grounded reuse authorization:**
   Reconciled the persisted browser lesson shape in which a human-authored lesson
   contains one specific multi-token signal. Retrieval, lesson selection, and
@@ -25,7 +25,7 @@ Every significant implementation should append a new dated entry.
   resolution evidence, recurrence, opaque lesson provenance, tenant isolation,
   negative controls, and idempotent replay. Fresh real-UI acceptance and the coupled
   NC-FIX-006/007/009/011/012/013/014 probes pass. This behavior is verified but
-  remains unreleased, uncommitted, and undeployed.
+  is committed in `62db93b`; it remains unreleased and undeployed.
 - **NC-FIX-012 — Reflection source-provenance validation boundary (recovered and verified):**
   Recovered the stash-only implementation (`effectiveReusablePromotionDraft`) that projects
   the effective reusable payload for every promotion action so identity validation runs
@@ -61,14 +61,14 @@ Every significant implementation should append a new dated entry.
   preparation does not auto-promote knowledge. Permanent probe:
   `probe:nc-fix-014-resolved-reflection-recovery`. Verification: NC-FIX-014/011/012 probes
   pass, real-browser acceptance passes for a disposable resolved/evidence-backed case,
-  TypeScript passes, protected cases unchanged. Not committed, pushed, or deployed.
+  TypeScript passes, protected cases unchanged. Committed in `a0176e4`; not pushed, tagged, released, or deployed.
 
 ## Version 0.2.0
 
 Date: 2026-08-12
 
 Release title: **OIP v0.2.0 — NusaCloud Learning Loop**
-Release type: Minor pre-1.0 capability release. The `v0.2.0` tag, push, release publication, and deployment remain pending separate authorization.
+Release type: Minor pre-1.0 capability release. The `v0.2.0` tag exists locally and remotely; release publication and deployment remain pending separate authorization.
 
 The entries below retain their historical technical context; statements about pre-release state describe the state at the time of each entry.
 
