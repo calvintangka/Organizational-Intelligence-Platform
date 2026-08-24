@@ -1758,6 +1758,11 @@ export function mergeCanonicalProblemItems(
   const failedResolutions = Math.max(x.failedResolutions ?? 0, y.failedResolutions ?? 0);
   const totalResolutions = successfulResolutions + failedResolutions;
   const trustScore = Math.max(xTrust, yTrust);
+  // Revision is persistence concurrency metadata, not content to select from
+  // the richer primary snapshot. Preserve the newest known server revision so
+  // a successful commit cannot leave the authoritative client collection
+  // carrying an older revision after reconciliation.
+  const revision = Math.max(x.revision ?? 0, y.revision ?? 0);
 
   return {
     ...primary,
@@ -1775,6 +1780,7 @@ export function mergeCanonicalProblemItems(
     timesReused: Math.max(x.timesReused ?? 0, y.timesReused ?? 0),
     successfulResolutions,
     failedResolutions,
+    revision: revision > 0 ? revision : undefined,
     successRate:
       totalResolutions > 0
         ? Math.round((successfulResolutions / totalResolutions) * 100)

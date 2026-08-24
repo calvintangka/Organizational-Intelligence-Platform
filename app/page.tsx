@@ -663,6 +663,11 @@ export default function Home() {
   const [reflectionDecision, setReflectionDecision] = useState<ReflectionDecision | null>(null);
   const [lastSavedKnowledgeId, setLastSavedKnowledgeId] = useState<string | null>(null);
   const [isValidationSubmitting, setIsValidationSubmitting] = useState(false);
+  // Keep the latest committed knowledge collection available to a later
+  // Reflection event even when that event handler was created before the
+  // preceding commit's React state update completed.
+  const knowledgeItemsRef = useRef<KnowledgeItem[]>([]);
+  knowledgeItemsRef.current = knowledgeItems;
 
   // Maesa Tech UI state
   const [activeView, setActiveView] = useState<ActiveView>("home");
@@ -1225,8 +1230,8 @@ export default function Home() {
   // Validation and memory-change history persist through the validated-memory
   // commit boundary, never through partial client snapshots.
   useEffect(() => {
-    if (shouldPersistHydratedCollection("knowledge")) queuePersistenceSave("saveKnowledge", openPersistenceSession(organizationProfile.id, "save-knowledge").then((session) => session.saveKnowledge(knowledgeItems)));
-  }, [knowledgeItems, organizationProfile.id, hydrated]);
+    if (persistenceMode === "local" && shouldPersistHydratedCollection("knowledge")) queuePersistenceSave("saveKnowledge", openPersistenceSession(organizationProfile.id, "save-knowledge").then((session) => session.saveKnowledge(knowledgeItems)));
+  }, [knowledgeItems, organizationProfile.id, hydrated, persistenceMode]);
 
   useEffect(() => {
     if (shouldPersistHydratedCollection("candidates")) queuePersistenceSave("saveKnowledgeCandidates", openPersistenceSession(organizationProfile.id, "save-candidates").then((session) => session.saveKnowledgeCandidates(knowledgeCandidates)));
@@ -3840,21 +3845,27 @@ export default function Home() {
         reflection: reflectionDecision,
         lessonDraft: validation.normalizedLessonDraft,
         problemName: input?.problemName,
-        knowledgeItems,
+        knowledgeItems: knowledgeItemsRef.current,
         validationRecords,
         currentOrgMetrics: orgMetrics
       }, {
         persistence: resourcePersistence,
         onEvent: (event) => addLogEntries([createLogEntry(event.name, event.detail)])
       });
-      const committedItem = result.knowledgeItem;
+      const committedItem = result.knowledgeItem.revision === result.committed.knowledgeRevision
+        ? result.knowledgeItem
+        : { ...result.knowledgeItem, revision: result.committed.knowledgeRevision };
       setKnowledgeCandidates((prev) => {
         const exists = prev.some((item) => item.id === result.candidate.id);
         return exists ? prev.map((item) => item.id === result.candidate.id ? result.candidate : item) : [...prev, result.candidate];
       });
       setValidationRecords((prev) => mergeRecordsById(prev, [result.validation]));
       setMemoryChangeRecords((prev) => mergeRecordsById(prev, [result.memoryChange]));
-      setKnowledgeItems((prev) => upsertCanonicalProblem(prev, committedItem));
+      setKnowledgeItems((prev) => {
+        const next = upsertCanonicalProblem(prev, committedItem);
+        knowledgeItemsRef.current = next;
+        return next;
+      });
       setSimilarKnowledge((prev) => prev.map((match) => match.item.id === committedItem.id ? { ...match, item: committedItem } : match));
       if (result.action === "create_new") setSessionCreatedIds((prev) => new Set([...prev, committedItem.id]));
       setLastSavedKnowledgeId(committedItem.id);
@@ -4978,6 +4989,3 @@ export default function Home() {
     </AuthorizationProvider>
   );
 }
-
-
-
