@@ -23,9 +23,14 @@ const PROBLEM_FACETS: Array<{ id: string; aliases: string[]; minimumAliases?: nu
   { id: "mobile-device", aliases: ["mobile app", "mobile application", "android", "ios", "iphone", "ipad", "tablet", "handset", "mobile"] },
   { id: "attendance-checkin", aliases: ["clock in", "clock-in", "check in", "check-in", "attendance", "timekeeping"] },
   { id: "location-access", aliases: ["location permission", "location access", "device location", "geolocation", "gps"], minimumAliases: 1 },
-  { id: "offline-synchronization", aliases: ["offline", "reconnect", "reconnecting", "synchronization", "synchronize", "sync conflict", "newer copy"] },
+  { id: "offline-synchronization", aliases: ["offline", "reconnect", "reconnecting", "synchronization", "synchronizing", "synchronized", "synchronize", "syncing", "sync conflict", "newer copy"] },
+  // A transition facet keeps a generic synchronization symptom from making
+  // every synchronization failure look like the same reusable lesson. The
+  // aliases are intentionally generic and cover ordinary inflection and
+  // movement wording without encoding a product or fixture.
+  { id: "network-transition-synchronization", aliases: ["roaming", "roam", "network band", "network bands", "move between", "moving between", "movement between", "scanning zones"] },
   { id: "billing-document", aliases: ["invoice", "billing", "charge", "payment", "receipt"] },
-  { id: "authentication", aliases: ["login", "log in", "sign in", "password", "authentication", "sso", "saml"] },
+  { id: "authentication", aliases: ["login", "log in", "sign in", "password", "authentication", "certificate", "certificates", "device authentication", "sso", "saml"] },
   {
     id: "role-workspace-access",
     aliases: ["guest workspace", "external collaborator", "shared workspace", "project access", "workspace access", "permission denied", "access denied", "role-based access"],
@@ -78,28 +83,124 @@ function candidateEvidenceText(item: KnowledgeItem): string {
     item.title,
     item.problemSummary,
     item.problem,
+    item.scopeNote,
     item.tags.join(" "),
+    ...(item.resolutionWorkflow ?? []),
+    item.internalGuidance,
+    item.customerResponseTemplate,
     ...(item.lessons ?? []).flatMap((lesson) => [lesson.title, lesson.rootCause, ...lesson.signals]),
     ...(item.exampleTickets ?? []).map((example) => example.originalIssue)
   ].filter(Boolean).join(" ");
+}
+
+type OperationalCondition = "healthy" | "outage" | null;
+
+function operationalConditionFor(text: string): OperationalCondition {
+  const normalized = normalize(text);
+  if (
+    /\b(?:backend|service|services|system|server|inventory)\b[^.?!]{0,45}\b(?:outage|outages|down|offline|unavailable)\b/iu.test(normalized) ||
+    /\b(?:outage|outages|unavailable)\b/iu.test(normalized)
+  ) return "outage";
+  if (
+    /\b(?:backend|service|services|system|server|inventory)\b[^.?!]{0,45}\b(?:healthy|operational|available|functioning|working|normal)\b/iu.test(normalized) ||
+    /\b(?:systems?|services?)\s+(?:remain|remained|are|were|was)\s+operational\b/iu.test(normalized)
+  ) return "healthy";
+  return null;
 }
 
 export function assessRetrievalCompatibility(
   understanding: Understanding,
   item: KnowledgeItem
 ): RetrievalCompatibility {
-  const current = facetsFor(currentEvidenceText(understanding));
-  const candidate = facetsFor(candidateEvidenceText(item));
+  const currentText = currentEvidenceText(understanding);
+  const candidateText = candidateEvidenceText(item);
+  const current = facetsFor(currentText);
+  const candidate = facetsFor(candidateText);
   const currentFacets = [...current].sort();
   const candidateFacets = [...candidate].sort();
   const sharedFacets = currentFacets.filter((facet) => candidate.has(facet));
   const categoryUnknown = CATEGORY_UNKNOWN.has(normalize(understanding.category));
-  const currentEvidence = facetEvidenceFor(currentEvidenceText(understanding));
-  const candidateEvidence = facetEvidenceFor(candidateEvidenceText(item));
+  const currentEvidence = facetEvidenceFor(currentText);
+  const candidateEvidence = facetEvidenceFor(candidateText);
+  const currentCondition = operationalConditionFor(currentText);
+  const candidateCondition = operationalConditionFor(candidateText);
   const strongCurrentFacet = currentFacets.some((facet) => (currentEvidence.get(facet) ?? 0) >= 2);
   const strongCandidateFacet = candidateFacets.some((facet) => (candidateEvidence.get(facet) ?? 0) >= 2);
   const sharedSpecificFacets = sharedFacets.filter((facet) => facet !== "mobile-device");
   const candidateHasSpecificProblemFacet = candidateFacets.some((facet) => facet !== "mobile-device");
+  const symptomFacets = new Set(["mobile-device", "offline-synchronization"]);
+  const currentRootCauseFacets = currentFacets.filter((facet) => !symptomFacets.has(facet));
+  const candidateRootCauseFacets = candidateFacets.filter((facet) => !symptomFacets.has(facet));
+  const transitionFacet = "network-transition-synchronization";
+  const currentTextNormalized = normalize(currentText);
+  const candidateRequiresTransitionEvidence = candidate.has(transitionFacet);
+
+  // A healthy backend and a backend outage are different operational
+  // conditions even when both cases mention scanners and synchronization.
+  // Keep this generic so it protects other operational domains without
+  // encoding the warehouse fixture into retrieval.
+  if (currentCondition && candidateCondition && currentCondition !== candidateCondition) {
+    return {
+      state: "incompatible",
+      score: -100,
+      code: "DOMAIN_CONFLICT",
+      reason: `Operational condition conflicts: current ${currentCondition} vs candidate ${candidateCondition}.`,
+      currentFacets,
+      candidateFacets,
+      sharedFacets
+    };
+  }
+
+  // Shared synchronization/offline wording is a symptom, not a root cause.
+  // When both sides expose distinct structured causes, require a shared cause
+  // before a candidate can survive unknown-category retrieval.
+  if (
+    categoryUnknown &&
+    currentRootCauseFacets.length > 0 &&
+    candidateRootCauseFacets.length > 0 &&
+    !currentRootCauseFacets.some((facet) => candidateRootCauseFacets.includes(facet))
+  ) {
+    return {
+      state: "incompatible",
+      score: -100,
+      code: "DOMAIN_CONFLICT",
+      reason: `Structured root-cause facets conflict: current ${currentRootCauseFacets.join(", ")} vs candidate ${candidateRootCauseFacets.join(", ")}.`,
+      currentFacets,
+      candidateFacets,
+      sharedFacets
+    };
+  }
+
+  // A generic synchronization symptom is not enough to reuse a lesson whose
+  // applicability depends on a network transition. This keeps certificate
+  // and backend-wide failures from becoming strong matches when the current
+  // category is otherwise unknown.
+  if (categoryUnknown && candidateRequiresTransitionEvidence && !sharedFacets.includes(transitionFacet)) {
+    return {
+      state: "incompatible",
+      score: -100,
+      code: "INSUFFICIENT_COMPATIBILITY_EVIDENCE",
+      reason: `Candidate requires shared transition evidence: ${transitionFacet}.`,
+      currentFacets,
+      candidateFacets,
+      sharedFacets
+    };
+  }
+
+  // Firmware-specific findings are a distinct root-cause family from a
+  // network-transition lesson. The memory can remain historically inspectable
+  // after a scope update, but it must not be presented as applicable guidance.
+  if (candidateRequiresTransitionEvidence && /\bfirmware\b/iu.test(currentTextNormalized)) {
+    return {
+      state: "incompatible",
+      score: -100,
+      code: "DOMAIN_CONFLICT",
+      reason: "Current evidence identifies a firmware-specific cause, which conflicts with the candidate's network-transition scope.",
+      currentFacets,
+      candidateFacets,
+      sharedFacets
+    };
+  }
 
   if (currentFacets.length > 0 && candidateFacets.length > 0 && sharedFacets.length === 0
       && (categoryUnknown || (strongCurrentFacet && strongCandidateFacet))) {

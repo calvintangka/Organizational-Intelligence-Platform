@@ -665,7 +665,7 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
       ? securityIncidentDraft(ticket.id)
       : enriched.businessClassification?.inquiryType === "business_inquiry" && !businessMemory
       ? draftBusinessInquiryResponse(ticket, enriched, profile, language.response.language)
-      : draftResponse(ticket, enriched, memoryMatch, profile, knowledgeItems.length === 0, semantic?.authorization ?? null);
+      : draftResponse(ticket, enriched, memoryMatch, profile, !memoryMatch, semantic?.authorization ?? null);
     const deterministic: SuggestedResponse = { ticketId: ticket.id, ...deterministicDraft };
     const draftResult = securityRouted
       ? { response: { ...deterministic, draftMode: "cold_start" as const, groundingLabel: "security escalation" }, advisory, usedAIDraft: false }
@@ -736,7 +736,11 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
         : memoryMatch
         ? [memoryMatch, ...matches.filter((item) => item.item.id !== memoryMatch.item.id)]
         : topMatch
-        ? matches.filter((item) => item.item.id !== topMatch.item.id)
+        // Preserve the explicit ranked/selected candidate when a later
+        // grounding or AI discrimination safety gate rejects it. Dropping it
+        // made the next candidate look like rank one and produced a silent
+        // ranking-to-projection substitution.
+        ? [topMatch, ...matches.filter((item) => item.item.id !== topMatch.item.id)]
         : matches
     };
     if (key) {

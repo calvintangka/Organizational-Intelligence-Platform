@@ -42,6 +42,8 @@ The platform does not exist to sound intelligent. It exists to help an Organizat
 
 Intelligence is therefore judged by behavior and consequence. A responsible refusal can be more intelligent than a fluent Answer. A precise follow-up question can be more valuable than a fast recommendation. An escalation that creates new validated knowledge can be more successful than an automated Resolution that teaches nothing.
 
+In this model, Organizational Memory is the durable foundation of evidence-backed learning, while Organizational Intelligence is the broader capability produced when that memory is retrieved, evaluated, evolved, reused, reasoned over, and safely applied. “Company Brain” may be used as a simple metaphor for this direction, but it is not a formal product name or an autonomous authority.
+
 ### Fluent AI vs. Trustworthy Organizational Intelligence
 
 | Fluent AI | Trustworthy Organizational Intelligence |
@@ -197,6 +199,8 @@ Understanding should remain revisable. New Evidence may split one apparent Issue
 ## 7. Cognitive Stage 3 — Retrieve
 
 **Retrieval** is contextual recall from Organizational Memory. It brings forward prior learning that may help interpret or resolve the current Issue.
+
+The current MVP expresses this through bounded, organization-scoped deterministic retrieval and grounding/explainability controls. Semantic retrieval, embeddings, vector indexes, and generalized RAG are design or future capabilities unless a later implementation document supplies evidence that they are current. Whatever mechanism is used, retrieval remains recall rather than truth: Reasoning must inspect Validation, Provenance, applicability, freshness, authority, conflict, and consequence.
 
 The platform may retrieve:
 
@@ -562,6 +566,8 @@ A language model is only one possible cognitive component. It may help interpret
 ### AI Advisory Operates After Governance
 
 The AI cognitive component's advisory role becomes active only after Governance and Validation have established trusted organizational knowledge. It does not operate upstream of that boundary as an independent authority.
+
+In the current product, AI remains advisory. It may help interpret, summarize, propose, retrieve, connect, and reason, but it cannot approve its own lesson, independently create trusted memory, bypass Human Validation, or grant itself automation authority. Future cognitive capability must preserve these boundaries rather than make the Company Brain metaphor sound autonomous.
 
 AI may assist:
 

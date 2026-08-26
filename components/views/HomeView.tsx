@@ -50,7 +50,7 @@ export function HomeView({ knowledgeItems, orgMetrics, emergingPatterns, orgName
     timelineEvents.push({ color: "purple", label: `Knowledge reused ${orgMetrics.knowledgeReused} times across tickets`, time: "this session" });
   }
   if (timelineEvents.length === 0) {
-    timelineEvents.push({ color: "blue", label: "Submit a ticket to start building organizational memory", time: "now" });
+    timelineEvents.push({ color: "blue", label: "Record an organizational experience or resolve a Support case", time: "now" });
     timelineEvents.push({ color: "green", label: "Knowledge grows from every approved resolution", time: "—" });
     timelineEvents.push({ color: "purple", label: "Trust earns auto-resolution over time", time: "—" });
   }
@@ -114,6 +114,13 @@ export function HomeView({ knowledgeItems, orgMetrics, emergingPatterns, orgName
             <button
               type="button"
               onClick={() => onNavigate("knowledge")}
+              className={`w-full rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors text-left ${darkMode ? "bg-[#1e3048] text-slate-200 hover:bg-[#24344d]" : "bg-blue-50 text-blue-800 hover:bg-blue-100"}`}
+            >
+              Record Organizational Experience
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate("knowledge")}
               className={`w-full rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors text-left ${darkMode ? "bg-[#111827] text-white hover:bg-[#0f1a27]" : "bg-[#111827] text-white hover:bg-slate-800"}`}
             >
               Search Knowledge
@@ -170,7 +177,7 @@ export function HomeView({ knowledgeItems, orgMetrics, emergingPatterns, orgName
           </div>
           {knowledgeItems.length === 0 && (
             <p className={`text-sm ${darkMode ? "text-slate-400" : "text-[#667085]"}`}>
-              No knowledge yet. Submit and approve a ticket to create the first organizational knowledge entry.
+              No knowledge yet. Record an organizational experience or resolve a Support case to create the first governed learning candidate.
             </p>
           )}
         </div>
@@ -180,14 +187,14 @@ export function HomeView({ knowledgeItems, orgMetrics, emergingPatterns, orgName
         <div className={`rounded-2xl border border-dashed p-10 text-center ${darkMode ? "border-[#2d3f52]" : "border-slate-300"}`}>
           <p className={`font-semibold ${darkMode ? "text-white" : "text-[#111827]"}`}>No organizational knowledge yet</p>
           <p className={`mt-1 text-sm ${darkMode ? "text-slate-400" : "text-[#667085]"}`}>
-            Submit a ticket and approve a resolution to teach OIP its first lesson.
+            Record an organizational experience or resolve a Support case. Both paths require evidence and human validation before memory is trusted.
           </p>
           <button
             type="button"
             onClick={onNewTicket}
             className="mt-4 rounded-xl bg-[#2563EB] px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
           >
-            Submit first ticket
+            Record organizational experience
           </button>
         </div>
       )}

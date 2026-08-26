@@ -190,6 +190,8 @@ export interface KnowledgeItem {
   createdAt: string;
   approvedAt: string;
   lifecycleState?: "active" | "candidate" | "deprecated";
+  /** OPEN challenges keep memory inspectable but remove automation authority. */
+  governanceState?: "trusted" | "challenged";
   provenance?: KnowledgeProvenance;
   validation?: KnowledgeValidation;
   auditCompleteness?: HistoricalAuditCompleteness;
@@ -213,6 +215,8 @@ export interface KnowledgeItem {
   internalGuidance?: string;
   customerResponseTemplate?: string;
   resolutionWorkflow?: string[];
+  /** Current human-governed applicability boundary, when a challenge narrowed scope. */
+  scopeNote?: string;
   exampleTickets?: CanonicalProblemExample[];
   knowledgeVersions?: KnowledgeVersion[];
   learningHistory?: LearningHistoryEntry[];
@@ -251,6 +255,28 @@ export interface KnowledgeMatch {
     sessionPoints: number;
     reusePoints: number;
     conceptMatches: string[];
+    evidenceKeywordPoints?: number;
+    conditionPoints?: number;
+    specificityPoints?: number;
+    lifecyclePenalty?: number;
+    groundingReady?: boolean;
+    matchedEvidenceKeywords?: string[];
+  };
+  /**
+   * Deterministic selection evidence kept separate from raw relevance. These
+   * fields explain why a candidate wins a near-duplicate comparison without
+   * making trust, reuse count, or array order a relevance signal.
+   */
+  selectionEvidence?: {
+    compatibilityRank: number;
+    scopeApplicability: number;
+    conditionCompatibility: number;
+    problemCompatibility: number;
+    causalInterventionCompatibility: number;
+    groundingReadiness: number;
+    governanceEligibility: number;
+    semanticTieKey: string;
+    validatedAt?: string;
   };
 }
 

@@ -7,6 +7,7 @@ import {
   isStrongLessonEvidence,
   type LessonMatchResult
 } from "@/lib/drafting";
+import { compareKnowledgeMatches } from "@/lib/memory";
 
 /**
  * Production lesson-selection glue (TODO-023).
@@ -80,8 +81,7 @@ export function selectPreferredMatch(ticket: Ticket, matches: KnowledgeMatch[]):
     const currentCoverage = current.lessonMatch?.ticketEvidenceCoverage ?? 0;
     if (currentCoverage !== bestCoverage) return currentCoverage > bestCoverage ? current : best;
 
-    if (current.match.matchScore !== best.match.matchScore) return current.match.matchScore > best.match.matchScore ? current : best;
-    return current.match.item.id.localeCompare(best.match.item.id) < 0 ? current : best;
+    return compareKnowledgeMatches(current.match, best.match) < 0 ? current : best;
   }, relevantCluster[0]);
 }
 

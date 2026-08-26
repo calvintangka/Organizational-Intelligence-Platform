@@ -275,7 +275,7 @@ function getTimelineItems(
         : step === 3 && isProcessing
         ? "Generating draft with AI..."
         : "Generating draft",
-      detail: suggestedResponse?.fallbackNotice ? "AI assistant unavailable — standard draft shown" : draftGroundingLabel(suggestedResponse),
+      detail: suggestedResponse?.fallbackNotice ? "AI assistant unavailable — standard draft shown" : draftGroundingLabel(suggestedResponse, topMatch),
       status: step >= 4 ? "done" : step === 3 && isProcessing ? "running" : "pending",
     },
     {
@@ -300,7 +300,7 @@ function getTimelineItems(
   ];
 }
 
-function draftGroundingLabel(response: SuggestedResponse | null): string | undefined {
+function draftGroundingLabel(response: SuggestedResponse | null, topMatch: KnowledgeMatch | null = null): string | undefined {
   const reconciledResponse = reconcileGroundingForPresentation(response);
   if (!reconciledResponse || reconciledResponse.source !== "ai_advisory") return undefined;
   if (reconciledResponse.draftMode === "lesson_grounded") {
@@ -312,6 +312,7 @@ function draftGroundingLabel(response: SuggestedResponse | null): string | undef
       : "AI draft grounded in organizational memory";
   }
   if (reconciledResponse.draftMode === "cold_start") {
+    if (topMatch) return "Related organizational memory found, but not authorized for grounded reuse. Human review required.";
     return "AI suggestion - no organizational knowledge exists yet; this draft is not based on validated memory. Review carefully before sending.";
   }
   return "AI advisory draft. Human review is required before sending.";
@@ -384,7 +385,7 @@ export function TicketWorkspace({
     extractedFields.urgencyIndicators.length > 0
   );
   const timelineItems = getTimelineItems(currentStep, isProcessing, aiAnalysis, topMatch, suggestedResponse, selectedTicket, reflectionDecision, lastSavedKnowledgeId, domainClassification);
-  const isColdStart = knowledgeItems.length === 0 || (!topMatch && !!suggestedResponse && suggestedResponse.basedOnKnowledgeIds.length === 0);
+  const isColdStart = !topMatch;
   const reuseLessonMatch = reuseItem && customSecondText.trim()
     ? findMatchingLesson(
         { id: "", customerName: "Customer", subject: customSecondText, description: customSecondText, category: "", status: "new" as const, createdAt: "" },

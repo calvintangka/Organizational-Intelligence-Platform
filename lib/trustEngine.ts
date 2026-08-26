@@ -123,7 +123,9 @@ export function evaluateTrust(
   const scoreDecision = getTrustDecision(score, threshold);
   const hasValidation = hasApprovedValidationForActiveVersion(item, validationRecords);
   const decision =
-    profile && requiresHumanReview(item, profile)
+    item.governanceState === "challenged"
+      ? "human_required"
+      : profile && requiresHumanReview(item, profile)
       ? "human_required"
       : scoreDecision === "auto_resolution" && !hasValidation
       ? "human_recommended"

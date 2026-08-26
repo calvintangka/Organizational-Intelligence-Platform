@@ -75,6 +75,17 @@ export type {
   ReflectionCommitInput,
   LessonMode
 } from "./knowledge";
+export type {
+  ReuseOutcomeClassification,
+  KnowledgeChallengeState,
+  KnowledgeChallengeDisposition,
+  OrganizationalSourceView,
+  EvidenceRecordView,
+  KnowledgeReuseOutcomeView,
+  KnowledgeChallengeView,
+  OrganizationalMemoryInspection,
+  PreparedOrganizationalLearning
+} from "./organizationalMemory";
 export type { Metrics, OrgMetrics } from "./metrics";
 export type { Observation, ExtractedTicketFields, Understanding, ReasoningSummary, Confidence, BusinessRelevance, BusinessDomainClassification, IntelligenceLogEntry } from "./oip";
 export type { EmergingPattern, EmergingPatternExample } from "./patterns";

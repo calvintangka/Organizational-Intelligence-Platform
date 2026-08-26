@@ -59,6 +59,10 @@ Not every piece of information deserves permanent storage. Some information exis
 
 Storage is therefore a governance concern, not merely an infrastructure concern.
 
+### Current OIP v2 Memory Foundation
+
+The implemented persistence foundation makes the source/evidence and governance boundaries explicit without replacing existing Support authority. `OrganizationalSource` identifies a source object, `EvidenceRecord` preserves a durable evidence assertion, and `MemoryEvidenceLink` connects evidence to a KnowledgeItem. `KnowledgeReuseOutcome` stores reusable outcome events and trust deltas, while `KnowledgeChallenge` and `KnowledgeChallengeDecision` preserve human challenge, revalidation, scope-update, and deprecation history. All records are organization-scoped, protected by composite tenant foreign keys, and written with idempotency and optimistic concurrency where a KnowledgeItem changes. This is an additive foundation; the Knowledge surface provides a practical operator entry and inspection path over these records. It does not introduce vector retrieval, connectors, autonomous promotion, or an alternate source of truth for Support evidence.
+
 # 1. Introduction
 
 Storage Architecture preserves Organizational Intelligence rather than simply storing application data.

@@ -181,6 +181,25 @@ Examples include Case lifecycle, Knowledge interaction, Workflow progression, Re
 
 Application APIs are the main public expression of the Organizational Intelligence Platform.
 
+### Implemented Memory Foundation Contracts
+
+The current server implementation exposes organization-scoped contracts for the first domain-neutral memory foundation and its operator entry/inspection flow:
+
+- `POST /api/organizations/{organizationId}/memory/experiences` records a domain-neutral organizational Source without requiring a TicketRecord.
+- `GET|POST /api/organizations/{organizationId}/memory/experiences/{sourceId}/evidence` lists or records immutable Evidence for that Source.
+- `POST /api/organizations/{organizationId}/memory/experiences/{sourceId}/prepare` prepares an advisory Learning Candidate; it does not create trusted memory.
+- `POST /api/organizations/{organizationId}/memory/experiences/{sourceId}/validate` performs the existing governed validation commit for a neutral Source/Evidence set.
+- `GET /api/organizations/{organizationId}/memory/knowledge/{knowledgeItemId}` returns the inspectable Source, Evidence, validation, outcome, challenge, version, and provenance story for a memory item.
+
+Neutral preparation and validation share the canonical `neutral-candidate-{sourceId}` identity contract. The validation boundary verifies that the submitted candidate is the canonical candidate for the selected Source inside the authoritative transaction before any candidate, validation, memory-change, trust, or KnowledgeItem write can occur.
+
+- `GET /api/organizations/{organizationId}/memory/knowledge/{knowledgeItemId}/evidence` reads inspectable source/evidence links.
+- `GET|POST /api/organizations/{organizationId}/memory/outcomes` lists or records reusable outcome events with `SUCCESS`, `CORRECTION_REQUIRED`, or `FAILURE` classification.
+- `GET|POST /api/organizations/{organizationId}/memory/challenges` lists or opens a human challenge.
+- `PATCH /api/organizations/{organizationId}/memory/challenges/{challengeId}` resolves a challenge as `REVALIDATED`, `SCOPE_UPDATED`, or `DEPRECATED`.
+
+These commands require organization authorization, optimistic knowledge-revision checks, and idempotency keys. Challenge state is not an AI promotion mechanism: an open challenge remains evidence-backed and retrievable for inspection, but is not eligible for automatic response. Support remains backward-compatible through an in-transaction adapter from existing ticket and resolution evidence into the neutral source/evidence records.
+
 ## Internal Service APIs
 
 Internal Service APIs support communication between internal software modules.

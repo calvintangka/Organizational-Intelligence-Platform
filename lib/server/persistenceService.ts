@@ -46,6 +46,7 @@ import { withStableValidationProvenance } from "@/lib/knowledgeProvenance";
 import { recordTelemetryEvent, startTelemetrySpan } from "@/lib/telemetry";
 import type { ValidationCommitResult as AtomicValidationCommitResult } from "@/lib/persistence/adapter";
 import { OPEN_TICKET_STATUSES } from "@/lib/ticketMetrics";
+import { ensureSupportSourceAndEvidenceTx, getNeutralCandidateId } from "@/lib/server/organizationalMemoryPrimitives";
 
 export type PersistenceServiceErrorCode =
   | "UNAUTHENTICATED"
@@ -271,6 +272,7 @@ function mapKnowledge(row: PrismaKnowledgeItem): KnowledgeItem {
     createdAt: iso(row.createdAt),
     approvedAt: iso(row.approvedAt),
     lifecycleState: row.lifecycleState,
+    governanceState: row.governanceState === "challenged" ? "challenged" : "trusted",
     provenance: optionalJsonRecord(content.provenance),
     validation: optionalJsonRecord(content.validation),
     ...(historicalAudit?.auditCompleteness ? { auditCompleteness: historicalAudit.auditCompleteness } : {}),
@@ -290,6 +292,7 @@ function mapKnowledge(row: PrismaKnowledgeItem): KnowledgeItem {
     internalGuidance: optionalString(content.internalGuidance),
     customerResponseTemplate: optionalString(content.customerResponseTemplate),
     resolutionWorkflow: optionalStringArray(content.resolutionWorkflow),
+    scopeNote: optionalString(content.scopeNote),
     exampleTickets: jsonArray(content.exampleTickets),
     knowledgeVersions: jsonArray(content.knowledgeVersions),
     learningHistory: jsonArray(content.learningHistory),
@@ -827,6 +830,14 @@ export function toSafePersistenceError(error: unknown): {
   if (error instanceof AuthorizationError) {
     return { code: error.code, message: error.message, status: error.status };
   }
+  // Domain-neutral memory commands use a separate server-only module to avoid
+  // coupling the new foundation back into the legacy persistence service. Its
+  // safe error shape is intentionally accepted at this shared route boundary.
+  const memoryError = error as { code?: unknown; message?: unknown; status?: unknown } | null;
+  const memoryCodes: PersistenceServiceErrorCode[] = ["INVALID_REQUEST", "ORGANIZATION_NOT_FOUND", "RESOURCE_NOT_FOUND", "FORBIDDEN", "CONFLICT", "REVISION_CONFLICT"];
+  if (!(error instanceof PersistenceServiceError) && memoryError && typeof memoryError.code === "string" && memoryCodes.includes(memoryError.code as PersistenceServiceErrorCode) && typeof memoryError.message === "string" && typeof memoryError.status === "number") {
+    return { code: memoryError.code as PersistenceServiceErrorCode, message: memoryError.message, status: memoryError.status };
+  }
   const safe = error instanceof PersistenceServiceError
     ? error
     : classifyDatabaseError(error, "the requested resource");
@@ -1029,6 +1040,7 @@ function knowledgeContent(item: KnowledgeItem): Prisma.InputJsonValue {
     internalGuidance: item.internalGuidance,
     customerResponseTemplate: item.customerResponseTemplate,
     resolutionWorkflow: item.resolutionWorkflow,
+    scopeNote: item.scopeNote,
     exampleTickets: item.exampleTickets ?? [],
     knowledgeVersions: item.knowledgeVersions ?? [],
     learningHistory: item.learningHistory ?? [],
@@ -1043,6 +1055,7 @@ function knowledgeColumns(item: KnowledgeItem): Omit<Prisma.KnowledgeItemUncheck
     canonicalProblemId: item.canonicalProblemId ?? null,
     canonicalProblemTitle: item.canonicalProblemTitle ?? null,
     lifecycleState: narrowEnum(item.lifecycleState, KNOWLEDGE_LIFECYCLES, "active"),
+    governanceState: item.governanceState === "challenged" ? "challenged" : "trusted",
     sourceTicketId: typeof item.sourceTicketId === "string" ? item.sourceTicketId : "",
     timesReused: typeof item.timesReused === "number" ? item.timesReused : 0,
     timesSeen: item.timesSeen ?? null,
@@ -1672,6 +1685,11 @@ export interface ValidationCommitPayload {
   /** Revision of the knowledge item before this commit; null asserts creation. */
   expectedKnowledgeRevision: number | null;
   idempotencyKey: string;
+  /** Domain-neutral validation context; Support commits continue using sourceTicketIds. */
+  neutralContext?: {
+    sourceId: string;
+    evidenceIds: string[];
+  };
 }
 
 export type ValidationCommitResult = AtomicValidationCommitResult;
@@ -1715,13 +1733,24 @@ function validateCommitPayload(organizationId: string, payload: unknown): Valida
   if (typeof idempotencyKey !== "string" || idempotencyKey.trim().length === 0) {
     throw invalidRequest("idempotencyKey must be a non-empty string.");
   }
+  const neutralContext = body.neutralContext;
+  if (neutralContext !== undefined) {
+    if (!neutralContext || typeof neutralContext !== "object" || typeof neutralContext.sourceId !== "string" || !Array.isArray(neutralContext.evidenceIds) || neutralContext.evidenceIds.some((id) => typeof id !== "string")) {
+      throw invalidRequest("neutralContext must include a sourceId and evidenceIds array.");
+    }
+    if (neutralContext.evidenceIds.length === 0) throw invalidRequest("neutralContext.evidenceIds must not be empty.");
+  }
   return {
     candidate: candidate as KnowledgeCandidate,
     validation: validation as ValidationRecord,
     memoryChange: memoryChange as MemoryChangeRecord,
     knowledgeItem: knowledgeItem as KnowledgeItem,
     expectedKnowledgeRevision: expected ?? null,
-    idempotencyKey
+    idempotencyKey,
+    neutralContext: neutralContext ? {
+      sourceId: neutralContext.sourceId,
+      evidenceIds: neutralContext.evidenceIds
+    } : undefined
   };
 }
 
@@ -1800,6 +1829,22 @@ export async function commitValidation(
 
   return writeDatabase("validation commit", () =>
     prisma.$transaction(async (tx) => {
+      if (payload.neutralContext) {
+        const neutralSource = await tx.organizationalSource.findUnique({ where: { id: payload.neutralContext.sourceId } });
+        if (!neutralSource || neutralSource.organizationId !== organization.id) {
+          throw conflict("The neutral validation source was not found in this organization.");
+        }
+        if (payload.candidate.id !== getNeutralCandidateId(neutralSource.id)) {
+          throw conflict("The prepared learning candidate is not valid for the selected organizational source.");
+        }
+        const storedCandidate = await tx.knowledgeCandidate.findUnique({
+          where: { id: payload.candidate.id },
+          select: { organizationId: true }
+        });
+        if (!storedCandidate || storedCandidate.organizationId !== organization.id) {
+          throw conflict("The neutral validation candidate was not found in this organization.");
+        }
+      }
       await ensureOrgMetricsRowTx(tx, organization.id);
       const existingValidation = await tx.validationRecord.findUnique({ where: { id: payload.validation.id } });
       if (existingValidation) {
@@ -1874,29 +1919,56 @@ export async function commitValidation(
             // source resolution must stay inside the commit's organization.
             where: { organizationId: organization.id, ticketId: { in: sourceTicketIds } },
             select: { organizationId: true, ticketId: true, status: true }
-          })
+        })
         : [];
-      if (sourceTickets.length !== sourceTicketIds.length) {
-        throw conflict("A validation candidate references a missing source ticket in this organization.");
-      }
-      const unresolvedSourceTickets = sourceTickets.filter((ticket) => ticket.status !== "resolved");
-      if (unresolvedSourceTickets.length > 0) {
-        throw new PersistenceServiceError(
-          "RESOLUTION_EVIDENCE_REQUIRED",
-          "Every source ticket must be resolved with resolution evidence before its Reflection can be validated.",
-          409
-        );
-      }
-      const evidenceRows = await tx.ticketResolutionEvidence.findMany({
-        where: { organizationId: organization.id, ticketId: { in: sourceTicketIds } },
-        select: { ticketId: true }
-      });
-      const evidencedTicketIds = new Set(evidenceRows.map((row) => row.ticketId));
-      if (sourceTicketIds.some((ticketId) => !evidencedTicketIds.has(ticketId))) {
-        throw new PersistenceServiceError(
-          "RESOLUTION_EVIDENCE_REQUIRED",
-          "Every source ticket must have durable resolution evidence before its Reflection can be validated.",
-          409
+      let neutralSupportEvidence = new Map<string, { sourceId: string; evidenceIds: string[] }>();
+      if (payload.neutralContext) {
+        if (sourceTicketIds.length > 0) throw invalidRequest("A neutral validation cannot also reference Support tickets.");
+        const neutralSource = await tx.organizationalSource.findUnique({ where: { id: payload.neutralContext.sourceId } });
+        if (!neutralSource || neutralSource.organizationId !== organization.id) {
+          throw conflict("The neutral validation source was not found in this organization.");
+        }
+        const neutralEvidence = await tx.evidenceRecord.findMany({
+          where: { organizationId: organization.id, id: { in: payload.neutralContext.evidenceIds }, sourceId: neutralSource.id },
+          select: { id: true }
+        });
+        if (neutralEvidence.length !== new Set(payload.neutralContext.evidenceIds).size) {
+          throw conflict("Every neutral validation evidence item must belong to the selected source and organization.");
+        }
+        neutralSupportEvidence.set(neutralSource.id, { sourceId: neutralSource.id, evidenceIds: neutralEvidence.map((row) => row.id) });
+      } else {
+        if (sourceTickets.length !== sourceTicketIds.length) {
+          throw conflict("A validation candidate references a missing source ticket in this organization.");
+        }
+        const unresolvedSourceTickets = sourceTickets.filter((ticket) => ticket.status !== "resolved");
+        if (unresolvedSourceTickets.length > 0) {
+          throw new PersistenceServiceError(
+            "RESOLUTION_EVIDENCE_REQUIRED",
+            "Every source ticket must be resolved with resolution evidence before its Reflection can be validated.",
+            409
+          );
+        }
+        const evidenceRows = await tx.ticketResolutionEvidence.findMany({
+          where: { organizationId: organization.id, ticketId: { in: sourceTicketIds } },
+          select: { ticketId: true }
+        });
+        const evidencedTicketIds = new Set(evidenceRows.map((row) => row.ticketId));
+        if (sourceTicketIds.some((ticketId) => !evidencedTicketIds.has(ticketId))) {
+          throw new PersistenceServiceError(
+            "RESOLUTION_EVIDENCE_REQUIRED",
+            "Every source ticket must have durable resolution evidence before its Reflection can be validated.",
+            409
+          );
+        }
+
+        // Adapt the existing Support source/evidence rows into the neutral
+        // Organizational Memory foundation inside the same transaction. The
+        // Support gate above remains authoritative; this creates linkage only.
+        neutralSupportEvidence = await ensureSupportSourceAndEvidenceTx(
+          tx,
+          organization.id,
+          sourceTicketIds,
+          actor.id
         );
       }
 
@@ -2013,6 +2085,71 @@ export async function commitValidation(
         payload.expectedKnowledgeRevision
       );
       await runValidationCommitTestHook("afterKnowledgeUpdate");
+
+      // Preserve immutable evidence-to-memory provenance for both first
+      // promotion and later reuse. The original sourceTicketId remains on the
+      // KnowledgeItem; these links add neutral evidence without replacing it.
+      const memoryEvidenceLinks = payload.neutralContext
+        ? (neutralSupportEvidence.get(payload.neutralContext.sourceId)?.evidenceIds ?? []).map((evidenceId) => ({
+            organizationId: organization.id,
+            knowledgeItemId: normalizedKnowledgeItem.id,
+            evidenceId,
+            relationship: "origin",
+            knowledgeVersionId: payload.validation.knowledgeVersionId ?? null
+          }))
+        : sourceTicketIds.flatMap((sourceTicketId) => {
+        const link = neutralSupportEvidence.get(sourceTicketId);
+        const evidenceId = link?.evidenceIds.at(-1);
+        return evidenceId
+          ? [{
+              organizationId: organization.id,
+              knowledgeItemId: normalizedKnowledgeItem.id,
+              evidenceId,
+              relationship: payload.candidate.proposedAction === "create_new" ? "origin" : "support",
+              knowledgeVersionId: payload.validation.knowledgeVersionId ?? null
+            }]
+          : [];
+      });
+      if (memoryEvidenceLinks.length > 0) {
+        await tx.memoryEvidenceLink.createMany({ data: memoryEvidenceLinks, skipDuplicates: true });
+      }
+
+      if (TRUST_ADDING_REUSE_ACTIONS.has(payload.candidate.proposedAction)) {
+        const reuseMode = /automatic/i.test(payload.candidate.rationale) ? "automatic" : "human";
+        for (const sourceTicketId of sourceTicketIds) {
+          const link = neutralSupportEvidence.get(sourceTicketId);
+          const evidenceId = link?.evidenceIds.at(-1);
+          if (!evidenceId) continue;
+          const trustEvidence = await tx.trustEvidence.findFirst({
+            where: {
+              organizationId: organization.id,
+              knowledgeItemId: normalizedKnowledgeItem.id,
+              sourceTicketId,
+              trustEventType: HUMAN_REUSE_TRUST_EVENT,
+              validationRecordId: payload.validation.id
+            },
+            select: { id: true }
+          });
+          await tx.knowledgeReuseOutcome.create({
+            data: {
+              organizationId: organization.id,
+              knowledgeItemId: normalizedKnowledgeItem.id,
+              knowledgeVersionId: payload.validation.knowledgeVersionId ?? null,
+              sourceId: neutralSupportEvidence.get(sourceTicketId)!.sourceId,
+              evidenceId,
+              actorId: actor.id,
+              reuseMode,
+              classification: "SUCCESS",
+              requiredEdits: false,
+              trustAction: trustApplied ? "trust_increased" : "already_counted",
+              trustDelta: trustApplied ? ((knowledgeToPersist.trustScore ?? 0) - (storedKnowledge?.trustScore ?? 0)) : 0,
+              trustEvidenceId: trustEvidence?.id ?? null,
+              knowledgeRevision,
+              idempotencyKey: `reuse-outcome:${payload.idempotencyKey}:${sourceTicketId}`
+            }
+          });
+        }
+      }
       await recomputeAuthoritativeOrgMetricsTx(tx, organization.id);
       return loadCommittedValidationAggregate(
         tx,

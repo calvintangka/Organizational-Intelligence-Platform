@@ -10,6 +10,19 @@ These workflows describe organizational learning, not software execution. They a
 
 The central question is not merely how a Case reaches Resolution. It is whether the Organization captures knowledge before it decays, handles work responsibly, recognizes what it does not know, and preserves any reusable lesson so that future work starts from a stronger place.
 
+### Current and long-term boundary
+
+This workflow model defines the platform's durable learning behavior. The current implementation is the `CURRENT_IMPLEMENTED` Live Customer Support Learning Loop: work is captured, Evidence and resolution state are preserved, Reflection can produce a Knowledge Candidate, Human Validation gates promotion, and approved learning can update organization-scoped memory. The broader intake doors, domains, and lifecycle states in this model are `CURRENT_DESIGNED`, `PLANNED`, or `NORTH_STAR` unless implementation evidence says otherwise.
+
+The workflow answers four enduring questions:
+
+1. **Remember:** can the organization preserve Evidence-backed learning?
+2. **Retrieve:** can it find relevant memory without treating retrieval as truth?
+3. **Evolve:** can new Evidence, outcomes, and human judgment change memory through governed lifecycle steps?
+4. **Trust:** can people inspect why memory is currently suitable—or unsuitable—for use?
+
+These questions describe capability direction, not a guarantee of unlimited storage, universal retrieval, automatic updating, or absolute accuracy.
+
 ---
 
 ## 2. Relationship to Previous Documents
@@ -126,7 +139,9 @@ This convergence is a key architectural principle: new intake doors should feed 
 
 ### Workflow States
 
-Knowledge may move through the following workflow states:
+The following are conceptual lifecycle states. The current MVP implements only a bounded subset of the full model; the presence of a state here does not by itself claim that its complete runtime behavior exists.
+
+Knowledge may move through these workflow states:
 
 - **Captured:** information, experience, or work signal has entered through an intake door.
 - **Candidate:** proposed reusable knowledge has been formed but not trusted.
@@ -190,6 +205,8 @@ flowchart TD
 ```
 
 The downward line is not a guarantee that every support Work Signal completes every step. It represents the full learning opportunity for Door 3. The transitions have the following meaning.
+
+In the current implementation, durable resolution evidence is required before an eligible Reflection can proceed to validation or reusable-memory promotion. Reflection prepares learning; it does not itself grant trust or mutate trusted memory.
 
 ### Knowledge Intake -> Live Workflow Capture
 
@@ -580,6 +597,7 @@ The following rules apply across all behavioral workflows:
 1. **Every workflow begins with Knowledge Intake.** Work, change, correction, outcome, human experience, historical material, or a live system provides the reason to act or learn.
 2. **Every intake produces a Knowledge Candidate.** Intake creates proposed knowledge, not trusted memory.
 3. **Knowledge Candidates must be validated before entering Organizational Memory.** Resolution, repetition, extraction, import, or AI confidence alone does not grant organizational trust.
+   A single sufficiently evidenced organizational experience may be admitted after authorized human validation. Repeated occurrence, prior reuse, prior successful Outcomes, Pattern recurrence, and elevated trust are not universal prerequisites; they strengthen reliability and later-use decisions over time.
 4. **Every workflow preserves Provenance.** The Organization should be able to understand the relevant source, Context, Evidence, Reasoning, knowledge, transformation, and authority.
 5. **Trust increases through successful reuse.** Reuse and outcomes provide evidence about whether validated memory remains applicable and useful.
 6. **Pattern Discovery only analyzes validated organizational knowledge.** Patterns should improve trusted memory rather than amplify unvalidated archives or guesses.

@@ -59,6 +59,23 @@ enum TicketResolutionMode {
   automatic
 }
 
+enum KnowledgeReuseOutcomeClassification {
+  SUCCESS
+  CORRECTION_REQUIRED
+  FAILURE
+}
+
+enum KnowledgeChallengeState {
+  OPEN
+  RESOLVED
+}
+
+enum KnowledgeChallengeDisposition {
+  REVALIDATED
+  SCOPE_UPDATED
+  DEPRECATED
+}
+
 enum MigrationImportBatchStatus {
   pending
   validating
@@ -184,6 +201,12 @@ model Organization {
   connectorInstallations   ConnectorInstallation[]
   connectorInboundEvents   ConnectorInboundEvent[]
   externalObjectMappings   ExternalObjectMapping[]
+  organizationalSources     OrganizationalSource[]
+  evidenceRecords           EvidenceRecord[]
+  memoryEvidenceLinks      MemoryEvidenceLink[]
+  reuseOutcomes             KnowledgeReuseOutcome[]
+  knowledgeChallenges       KnowledgeChallenge[]
+  challengeDecisions        KnowledgeChallengeDecision[]
   governedActions          GovernedAction[]
   actionLedgerEntries      ActionLedgerEntry[]
   actionPolicy             OrganizationActionPolicy?
@@ -322,6 +345,7 @@ model KnowledgeItem {
   canonicalProblemId       String?
   canonicalProblemTitle    String?
   lifecycleState           KnowledgeLifecycleState @default(active)
+  governanceState          String                  @default("trusted")
   sourceTicketId           String
   timesReused              Int                     @default(0)
   timesSeen                Int?
@@ -343,12 +367,181 @@ model KnowledgeItem {
   revision                 Int                     @default(0)
   content                  Json
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memoryEvidenceLinks MemoryEvidenceLink[]
+  reuseOutcomes       KnowledgeReuseOutcome[]
+  challenges          KnowledgeChallenge[]
 
   @@index([organizationId])
   @@index([organizationId, category])
   @@index([organizationId, canonicalProblemId])
+  @@unique([organizationId, id])
   @@map("knowledge_items")
+}
+
+/** Domain-neutral origin for an organizational observation or work event. */
+model OrganizationalSource {
+  id                String   @id @default(cuid())
+  organizationId    String
+  sourceKind        String
+  sourceSystem      String
+  sourceObjectType  String
+  sourceObjectId    String
+  occurredAt        DateTime?
+  capturedAt        DateTime?
+  actorId           String?
+  metadata          Json?
+  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ticket         TicketRecord?
+  evidenceRecords EvidenceRecord[]
+  reuseOutcomes  KnowledgeReuseOutcome[]
+  challenges     KnowledgeChallenge[]
+
+  @@unique([organizationId, sourceSystem, sourceObjectType, sourceObjectId])
+  @@unique([organizationId, id])
+  @@index([organizationId, sourceKind, createdAt])
+  @@index([organizationId, sourceSystem, sourceObjectId])
+  @@map("organizational_sources")
+}
+
+/** Immutable material used to support, challenge, scope, or validate memory. */
+model EvidenceRecord {
+  id                String   @id @default(cuid())
+  organizationId    String
+  sourceId          String
+  evidenceType      String
+  evidenceRole      String
+  actorId           String?
+  occurredAt        DateTime?
+  content           String?
+  reference         String?
+  state             String   @default("active")
+  metadata          Json?
+  idempotencyKey    String
+  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+
+  organization     Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  source           OrganizationalSource     @relation(fields: [organizationId, sourceId], references: [organizationId, id], onDelete: Restrict)
+  ticketResolution TicketResolutionEvidence?
+  memoryLinks      MemoryEvidenceLink[]
+  reuseOutcomes     KnowledgeReuseOutcome[]
+  challenges        KnowledgeChallenge[]
+
+  @@unique([organizationId, sourceId, idempotencyKey])
+  @@unique([organizationId, id])
+  @@index([organizationId, sourceId, createdAt])
+  @@index([organizationId, evidenceType, createdAt])
+  @@map("evidence_records")
+}
+
+/** Links immutable evidence to memory without rewriting original provenance. */
+model MemoryEvidenceLink {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  knowledgeItemId    String
+  evidenceId         String
+  knowledgeVersionId String?
+  relationship       String
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  knowledgeItem KnowledgeItem @relation(fields: [organizationId, knowledgeItemId], references: [organizationId, id], onDelete: Cascade)
+  evidence     EvidenceRecord @relation(fields: [organizationId, evidenceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, knowledgeItemId, evidenceId, relationship])
+  @@unique([organizationId, id])
+  @@index([organizationId, knowledgeItemId, createdAt])
+  @@index([organizationId, evidenceId])
+  @@map("memory_evidence_links")
+}
+
+/** Durable reuse result; KnowledgeItem counters remain projections. */
+model KnowledgeReuseOutcome {
+  id                 String                              @id @default(cuid())
+  organizationId    String
+  knowledgeItemId   String
+  knowledgeVersionId String?
+  sourceId          String
+  evidenceId        String
+  actorId           String
+  reuseMode         String?
+  classification    KnowledgeReuseOutcomeClassification
+  requiredEdits     Boolean                              @default(false)
+  trustAction       String?
+  trustDelta        Int?
+  trustEvidenceId   String?
+  knowledgeRevision Int
+  idempotencyKey    String
+  createdAt         DateTime                            @default(now()) @db.Timestamptz(6)
+
+  organization  Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  knowledgeItem KnowledgeItem        @relation(fields: [organizationId, knowledgeItemId], references: [organizationId, id], onDelete: Cascade)
+  source        OrganizationalSource @relation(fields: [organizationId, sourceId], references: [organizationId, id], onDelete: Restrict)
+  evidence      EvidenceRecord       @relation(fields: [organizationId, evidenceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, idempotencyKey])
+  @@unique([organizationId, id])
+  @@index([organizationId, knowledgeItemId, createdAt])
+  @@index([organizationId, sourceId, createdAt])
+  @@index([organizationId, evidenceId])
+  @@map("knowledge_reuse_outcomes")
+}
+
+/** Human-governed question about memory applicability, correctness, or scope. */
+model KnowledgeChallenge {
+  id                 String                         @id @default(cuid())
+  organizationId    String
+  knowledgeItemId   String
+  knowledgeVersionId String?
+  sourceId          String
+  evidenceId        String
+  openedBy          String
+  rationale         String
+  state             KnowledgeChallengeState         @default(OPEN)
+  disposition       KnowledgeChallengeDisposition?
+  reviewedBy        String?
+  reviewedAt        DateTime?
+  decisionRationale String?
+  idempotencyKey    String
+  createdAt         DateTime                       @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime                       @updatedAt @db.Timestamptz(6)
+
+  organization  Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  knowledgeItem KnowledgeItem        @relation(fields: [organizationId, knowledgeItemId], references: [organizationId, id], onDelete: Cascade)
+  source        OrganizationalSource @relation(fields: [organizationId, sourceId], references: [organizationId, id], onDelete: Restrict)
+  evidence      EvidenceRecord       @relation(fields: [organizationId, evidenceId], references: [organizationId, id], onDelete: Restrict)
+  decision      KnowledgeChallengeDecision?
+
+  @@unique([organizationId, idempotencyKey])
+  @@unique([organizationId, id])
+  @@index([organizationId, knowledgeItemId, state, createdAt])
+  @@index([organizationId, sourceId, createdAt])
+  @@map("knowledge_challenges")
+}
+
+/** Atomic append-only disposition record for a challenge. */
+model KnowledgeChallengeDecision {
+  id                String                         @id @default(cuid())
+  organizationId    String
+  challengeId       String                         @unique
+  knowledgeItemId   String
+  disposition       KnowledgeChallengeDisposition
+  actorId           String
+  rationale         String
+  beforeState       Json
+  afterState        Json
+  expectedRevision  Int
+  resultingRevision Int
+  createdAt         DateTime                       @default(now()) @db.Timestamptz(6)
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  challenge    KnowledgeChallenge  @relation(fields: [organizationId, challengeId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, challengeId])
+  @@index([organizationId, knowledgeItemId, createdAt])
+  @@map("knowledge_challenge_decisions")
 }
 
 model KnowledgeCandidate {
@@ -462,17 +655,20 @@ model TicketRecord {
   validationRecordIds Json
   labels              Json                  @default("[]")
   actorId             String?
+  sourceId            String?               @unique
   // TODO-026: nullable so existing rows and unresolved tickets stay distinct
   // from a genuine human resolution. Backfill only via an approved migration.
   resolutionMode      TicketResolutionMode?
   createdAt           DateTime              @db.Timestamptz(6)
 
   organization       Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  source             OrganizationalSource?      @relation(fields: [organizationId, sourceId], references: [organizationId, id], onDelete: Restrict)
   messages           TicketMessage[]
   resolutionEvidence TicketResolutionEvidence[]
 
   @@unique([organizationId, ticketId])
   @@unique([organizationId, bulkUploadKey, bulkEntryId])
+  @@unique([organizationId, sourceId])
   @@index([organizationId])
   @@index([organizationId, status])
   @@index([organizationId, createdAt])
@@ -509,11 +705,14 @@ model TicketResolutionEvidence {
   note            String
   createdAt       DateTime                     @default(now()) @db.Timestamptz(6)
   idempotencyKey  String?
+  evidenceRecordId String?                     @unique
 
   ticket        TicketRecord   @relation(fields: [organizationId, ticketId], references: [organizationId, ticketId], onDelete: Cascade)
   sourceMessage TicketMessage? @relation("ResolutionEvidenceSource", fields: [sourceMessageId], references: [id], onDelete: Restrict)
+  evidenceRecord EvidenceRecord? @relation(fields: [organizationId, evidenceRecordId], references: [organizationId, id], onDelete: Restrict)
 
   @@unique([organizationId, ticketId, idempotencyKey])
+  @@unique([organizationId, evidenceRecordId])
   @@index([organizationId, ticketId, createdAt])
   @@index([organizationId, sourceMessageId])
   @@map("ticket_resolution_evidence")

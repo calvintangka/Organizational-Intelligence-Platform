@@ -20,6 +20,12 @@
     "probe:migration-cutover": "node scripts/migration-cutover-probe.cjs",
     "probe:persistence-boundary": "node scripts/persistence-boundary-probe.cjs",
     "probe:server-persistence": "node scripts/server-persistence-probe.cjs",
+    "probe:oip-v2-fix-003": "node scripts/oip-v2-fix-003-retrieval-outcome-trust-probe.cjs",
+    "probe:oip-v2-fix-004": "node scripts/oip-v2-fix-004-retrieval-candidate-selection-event-time-copy-probe.cjs",
+    "probe:oip-v2-fix-005": "node scripts/oip-v2-fix-005-near-duplicate-selection-probe.cjs",
+    "probe:oip-v2-fix-006": "node scripts/oip-v2-fix-006-candidate-source-provenance-probe.cjs",
+    "probe:doc-fix-003": "node scripts/doc-fix-003-single-experience-regression-probe.cjs",
+    "qa:oip-v2-001r-r2-auto": "node scripts/oip-v2-qa-001r-r2-auto.cjs",
     "probe:db-writes": "node scripts/db-write-probe.cjs",
     "probe:authentication": "node scripts/authentication-probe.cjs",
     "probe:membership-authorization": "node scripts/membership-authorization-probe.cjs",
@@ -161,6 +167,7 @@
     "probe:rss-1.2e2-orgmetrics-reconciliation": "node scripts/rss-1.2e2-orgmetrics-reconciliation.cjs",
     "probe:rss-1.2e2-orgmetrics-concurrency": "node scripts/rss-1.2e2-orgmetrics-concurrency-probe.cjs",
     "certify": "node scripts/certify.cjs",
+    "probe:oip-v2-fix-001": "node scripts/oip-v2-fix-001-foundation-probe.cjs",
     "worker:jobs": "node scripts/async-worker.cjs",
     "probe:todo060-business-inquiry": "node scripts/todo060-business-inquiry-probe.cjs",
     "probe:todo061-business-memory": "node scripts/todo061-business-memory-probe.cjs",
@@ -174,7 +181,8 @@
     "simulate:developer-demo": "node scripts/developer-demo/simulate.cjs",
     "seed:development-memberships": "node scripts/seed-development-memberships.cjs",
     "prisma:validate": "prisma validate",
-    "prisma:generate": "prisma generate"
+    "prisma:generate": "prisma generate",
+    "probe:oip-v2-fix-002": "node scripts/oip-v2-fix-002-entry-inspection-probe.cjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",

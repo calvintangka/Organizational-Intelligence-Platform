@@ -32,6 +32,14 @@ The [Founder's Thesis](./00_FOUNDERS_THESIS.md) establishes the company's reason
 
 This document is the bridge between that philosophy and later system architecture. It translates concepts such as memory before automation, visible uncertainty, provenance, human expertise, and knowledge compounding into abilities the platform must possess. Later documents may decide how to implement or sequence these abilities, but should not remove or weaken them for convenience.
 
+### Organizational Memory and Organizational Intelligence
+
+Organizational Memory is the durable foundation of the platform: evidence-backed organizational learning preserved across people, systems, and time with its context, Provenance, Validation, reuse history, outcomes, trust signals, and lifecycle state where those are available. It is not a raw dump of every enterprise record, and it does not imply that OIP knows everything an Organization knows.
+
+Organizational Intelligence is the broader capability enabled by that foundation. It emerges when Organizational Memory can be retrieved, evaluated, updated, reused, compared with new Evidence, reasoned over, and safely applied to future work. Memory is therefore a foundational capability or substrate; Organizational Intelligence remains the broader product and category outcome.
+
+The **Company Brain** is an accessible metaphor for this long-term direction. It is not a formal product name, a replacement for Organizational Intelligence, or a claim that the current MVP is a complete Company Brain.
+
 ---
 
 ## 3. Capability Map Overview
@@ -158,17 +166,19 @@ Knowledge Validation is the ability to evaluate whether captured knowledge is su
 
 ### Validation signals
 
-The platform must support validation through a combination of:
+The platform must support validation through a combination of signals selected for the subject, consequence, and governance context:
 
 - Human review appropriate to the subject and consequence.
 - Source evidence and traceable reasoning.
 - Expert approval or accountable ownership.
-- Repeated successful use in applicable situations.
+- Repeated successful use in applicable situations, where later use exists and is relevant.
 - Checks for contradictions with trusted knowledge.
-- Confidence thresholds that reflect evidence quality and risk.
+- Confidence thresholds that reflect evidence quality and risk where the applicable policy requires them.
 - Revalidation when new cases, policies, or outcomes challenge existing guidance.
 
-No single signal is sufficient in every domain. Repetition does not make an incorrect practice true, and authority without evidence may not resolve a factual contradiction. Validation must preserve the basis on which trust was granted.
+No single signal is sufficient in every domain, and not every signal is available at admission time. A sufficiently evidenced single organizational experience may be admitted into Organizational Memory through authorized human validation. Recurrence, prior reuse, prior successful Outcomes, Pattern frequency, and minimum trust or Confidence thresholds are not universal prerequisites for admission. They may instead strengthen later reliability assessment, revalidation, scope decisions, or automation eligibility when the applicable Domain policy calls for them. Repetition does not make an incorrect practice true, and authority without evidence may not resolve a factual contradiction. Validation must preserve the basis on which trust was granted.
+
+For the domain-neutral entry path, at least one Evidence item must be linked to the Source before learning can be prepared or validated. This is a structural evidence-safety floor, not a universal claim that one Evidence item is always sufficient or that any fixed larger count is required. Human reviewers determine whether the Source, its Evidence, rationale, applicability, and consequence support admission.
 
 ### Core validation states
 
@@ -535,7 +545,20 @@ Maturity need not be equal across all capabilities at all times, but capability 
 
 ## 18. What Capabilities Are Not in Scope Yet
 
-This document intentionally does not define:
+### Capability status boundary
+
+This model defines enduring abilities, not a claim that every ability is implemented today. The current implementation is a bounded Customer Support learning loop. In particular:
+
+| Status | Meaning in this model |
+| --- | --- |
+| `CURRENT_IMPLEMENTED` | Confirmed by the current product and implementation, including organization-scoped persistence, governed learning, deterministic retrieval, evidence/provenance, and trust boundaries. |
+| `CURRENT_DESIGNED` | Defined as part of the current logical product or architecture, but not necessarily complete in the running implementation. |
+| `PLANNED` | Explicitly sequenced for later implementation, such as additional intake doors, broader storage, or enterprise expansion. |
+| `NORTH_STAR` | Long-term direction, including organizational-scale memory across more domains and systems. |
+
+Semantic/vector retrieval, generalized RAG, unlimited enterprise ingestion, automatic trust decay, automatic supersession or retirement, and autonomous mutation of trusted memory must not be described as `CURRENT_IMPLEMENTED` without new implementation evidence. Human Validation, Provenance, Evidence requirements, Reflection boundaries, Retrieval-versus-Trust separation, and Governance remain required at every status.
+
+This document intentionally does not define implementation specifics such as:
 
 - User-interface screens or navigation.
 - Detailed user journeys or interaction specifications.

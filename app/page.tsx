@@ -8,6 +8,7 @@ import { TicketWorkspace } from "@/components/views/TicketWorkspace";
 import type { TicketPhase } from "@/components/views/TicketWorkspace";
 import { BulkUploadWorkspace } from "@/components/views/BulkUploadWorkspace";
 import { KnowledgeView } from "@/components/views/KnowledgeView";
+import { OrganizationalMemorySurface } from "@/components/views/OrganizationalMemorySurface";
 import { DashboardView } from "@/components/views/DashboardView";
 import { OperationsView } from "@/components/views/OperationsView";
 import { OrganizationView, type NewOrganizationInput } from "@/components/views/OrganizationView";
@@ -2378,7 +2379,7 @@ export default function Home() {
           reconstructedUnderstanding,
           reconstructedSimilarKnowledge[0] ?? null,
           organizationProfile,
-          knowledgeItems.length === 0
+          !restoredKnowledge
         );
 
     const reconstructedResponse: SuggestedResponse = {
@@ -2446,7 +2447,7 @@ export default function Home() {
       const und = toUnderstanding(aiAnalysis);
       const canonicalProblem = identifyCanonicalProblem(und, organizationProfile);
       const topMatch = similarKnowledge.length > 0 ? similarKnowledge[0] : null;
-      const draft = draftResponse(selectedTicket, und, topMatch, organizationProfile, knowledgeItems.length === 0);
+      const draft = draftResponse(selectedTicket, und, topMatch, organizationProfile, !topMatch);
       const aiDraft = await requestDraftAdvisory(
         selectedTicket, und, canonicalProblem.title, topMatch,
         draft.draftResponse, draft.confidenceNote, draft.source ?? "deterministic", aiAdvisory, requestGeneration
@@ -3549,7 +3550,7 @@ export default function Home() {
         followUpUnderstanding,
         similarKnowledge[0] ?? null,
         organizationProfile,
-        knowledgeItems.length === 0
+        !similarKnowledge[0]
       );
       const followUpAdvisory = await requestDraftAdvisory(
         followUpTicket,
@@ -4850,23 +4851,41 @@ export default function Home() {
           )}
 
           {activeView === "knowledge" && (
-            <KnowledgeView
-              knowledgeItems={knowledgeItems}
-              knowledgeCandidates={knowledgeCandidates}
-              emergingPatterns={emergingPatterns}
-              validationRecords={validationRecords}
-              memoryChangeRecords={memoryChangeRecords}
-              historyLoadState={historyLoadState}
-              darkMode={darkMode}
-              orgId={organizationProfile.id}
-              onPromote={promotePattern}
-              onImportPack={importKnowledgePack}
-              onValidatePackCandidate={validateKnowledgePackCandidate}
-              onRejectPackCandidate={rejectKnowledgePackCandidate}
-              onLoadHistory={async (knowledgeId) => {
-                await ensureKnowledgeHistory(organizationProfile.id, knowledgeId);
-              }}
-            />
+            <div>
+              <OrganizationalMemorySurface
+                organizationId={organizationProfile.id}
+                knowledgeItems={knowledgeItems}
+                darkMode={darkMode}
+                onRefresh={async () => {
+                  const refreshed = await loadOrganizationState(organizationProfile.id);
+                  suppressHydratedCollectionPersistence();
+                  setKnowledgeItems(refreshed.knowledge);
+                  setKnowledgeCandidates(refreshed.candidates);
+                  setValidationRecords(refreshed.validations);
+                  setMemoryChangeRecords(refreshed.changes);
+                  setOrgMetrics(refreshed.metrics);
+                  setIntelligenceLog(refreshed.log);
+                  setEmergingPatterns(refreshed.patterns);
+                }}
+              />
+              <KnowledgeView
+                knowledgeItems={knowledgeItems}
+                knowledgeCandidates={knowledgeCandidates}
+                emergingPatterns={emergingPatterns}
+                validationRecords={validationRecords}
+                memoryChangeRecords={memoryChangeRecords}
+                historyLoadState={historyLoadState}
+                darkMode={darkMode}
+                orgId={organizationProfile.id}
+                onPromote={promotePattern}
+                onImportPack={importKnowledgePack}
+                onValidatePackCandidate={validateKnowledgePackCandidate}
+                onRejectPackCandidate={rejectKnowledgePackCandidate}
+                onLoadHistory={async (knowledgeId) => {
+                  await ensureKnowledgeHistory(organizationProfile.id, knowledgeId);
+                }}
+              />
+            </div>
           )}
 
           {activeView === "dashboard" && (

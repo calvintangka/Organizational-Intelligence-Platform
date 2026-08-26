@@ -8,6 +8,7 @@ export const CAPABILITY_KEYS = [
   "organization.members.read", "organization.members.manage", "organization.settings.manage", "organization.ownership.transfer", "organization.audit.read",
   "ticket.read", "ticket.submit", "ticket.review", "ticket.allocate", "ticket.bulk_prepare",
   "knowledge.read", "knowledge.promote", "knowledge.version.create", "knowledge.trust.update",
+  "memory.evidence.read", "memory.source.create", "memory.evidence.create", "memory.learning.prepare", "memory.outcome.record", "memory.challenge.open", "memory.challenge.review", "memory.challenge.scope", "memory.challenge.deprecate",
   "reflection.read", "reflection.generate", "reflection.approve",
   "worker.read", "worker.retry", "worker.cancel", "worker.pause",
   "connector.read", "connector.install", "connector.activate", "connector.pause", "connector.delete",
@@ -32,10 +33,10 @@ const readOnly: CapabilityKey[] = ["organization.read", "ticket.read", "knowledg
 export const ROLE_CAPABILITIES: Record<RoleKey, CapabilityKey[]> = {
   owner: [...CAPABILITY_KEYS],
   administrator: CAPABILITY_KEYS.filter((key) => key !== "organization.ownership.transfer"),
-  reviewer: ["organization.read", "ticket.read", "ticket.review", "knowledge.read", "knowledge.promote", "knowledge.version.create", "knowledge.trust.update", "reflection.read", "reflection.generate", "reflection.approve", "worker.read", "connector.read", "connector.inspect", "operations.read", "metrics.read", "action.prepare", "action.approve", "ai.use"],
+  reviewer: ["organization.read", "ticket.read", "ticket.review", "knowledge.read", "knowledge.promote", "knowledge.version.create", "knowledge.trust.update", "memory.evidence.read", "memory.source.create", "memory.evidence.create", "memory.learning.prepare", "memory.outcome.record", "memory.challenge.open", "memory.challenge.review", "memory.challenge.scope", "memory.challenge.deprecate", "reflection.read", "reflection.generate", "reflection.approve", "worker.read", "connector.read", "connector.inspect", "operations.read", "metrics.read", "action.prepare", "action.approve", "ai.use"],
   operator: ["organization.read", "ticket.read", "worker.read", "worker.retry", "worker.cancel", "worker.pause", "connector.read", "connector.inspect", "connector.activate", "connector.pause", "connector.retry", "operations.read", "metrics.read", "action.prepare", "ai.use"],
-  support_agent: ["organization.read", "ticket.read", "ticket.submit", "ticket.review", "ticket.bulk_prepare", "knowledge.read", "reflection.read", "worker.read", "connector.read", "connector.inspect", "operations.read", "ai.use"],
-  viewer: readOnly
+  support_agent: ["organization.read", "ticket.read", "ticket.submit", "ticket.review", "ticket.bulk_prepare", "knowledge.read", "memory.evidence.read", "memory.source.create", "memory.evidence.create", "memory.learning.prepare", "memory.outcome.record", "memory.challenge.open", "reflection.read", "worker.read", "connector.read", "connector.inspect", "operations.read", "ai.use"],
+  viewer: [...readOnly, "memory.evidence.read"]
 };
 
 export function normalizeRoleKey(value: string | null | undefined): RoleKey {
