@@ -14,6 +14,19 @@ Every significant implementation should append a new dated entry.
 
 _No unreleased changes._
 
+## 0.4.1 — 2026-08-30
+
+Release title: **OIP v0.4.1 — Public Website & Organizational Memory Positioning**
+
+Release type: Patch follow-on release. This release presents the existing v0.4.0 Organizational Memory baseline through a redesigned public OIP homepage; it does not add new runtime, API, database, or migration capability.
+
+- **Public homepage:** Reframed OIP around Organizational Memory, with a clear Source → Evidence → Memory → Retrieval → Outcome learning-loop explanation and product proof for provenance, scope, validation, challenges, versions, and evidence-backed trust.
+- **Product boundary:** Clarified the current foundation versus future direction, including the distinct roles of people, systems, and AI agents. The page does not claim new integrations, autonomous behavior, semantic retrieval, broad Organizational Intelligence, or enterprise production readiness.
+- **Responsive and accessible presentation:** Added intentional mobile composition, responsive layouts, keyboard/focus affordances, skip navigation, and reduced-motion support for the public experience.
+- **Metadata boundary:** Kept the server-generated site metadata independent from organization-specific client runtime title behavior.
+
+The v0.4.0 Organizational Memory runtime baseline and its design-partner guardrails remain unchanged. Deployment, publication, tagging, and mainline integration remain separately governed.
+
 ## 0.4.0 — 2026-08-26
 
 Release title: **OIP v0.4.0 — Organizational Memory Baseline**
