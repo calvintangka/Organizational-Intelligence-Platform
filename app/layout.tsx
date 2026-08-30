@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "@/components/landing/landing.css";
-import { APP_TITLE } from "@/lib/documentTitle";
+import "@/components/landing/zendesk-landing.css";
+import "@/components/landing/zendesk-landing-overrides.css";
 import { headers } from "next/headers";
+
+const SITE_APP_TITLE = "OIP";
 
 // TODO-055: the static metadata title is the pre-hydration fallback only. The
 // browser tab follows the active organization at runtime (useOrganizationDocumentTitle
@@ -13,7 +16,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const socialImage = `${protocol}://${host}/og.png`;
-  const title = `${APP_TITLE} — Organizational Intelligence Platform`;
+  const title = `${SITE_APP_TITLE} — Organizational Intelligence Platform`;
   const description = "Turn resolved work into reusable, trusted Organizational Memory. OIP starts with customer support.";
 
   return {

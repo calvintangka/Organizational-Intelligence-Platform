@@ -34,6 +34,14 @@ The core model describes a learning system, not only a support workflow. An Orga
 
 Cross-cutting concepts—Role, Confidence, Provenance, Knowledge Lifecycle, and Governance Boundary—shape which knowledge can be trusted, used, changed, or applied.
 
+### Terminology boundary: Memory, Intelligence, and Company Brain
+
+Organizational Memory is the durable, contextual body of evidence-backed learning that an Organization has preserved through appropriate Validation. It is a governed knowledge boundary, not a raw dump of every enterprise record and not a claim that OIP knows everything the Organization knows.
+
+Organizational Intelligence is the broader capability measured by what the Organization can do better when that memory is retrieved, evaluated, updated, reused, reasoned over, and safely applied. Organizational Memory is foundational; Organizational Intelligence is the capability and outcome enabled by it.
+
+Company Brain is a plain-language metaphor for the long-term vision. It is not a Domain concept, formal product name, or authorization for autonomous memory mutation. Canon and technical documents should use Organizational Memory and Organizational Intelligence as the authoritative terms.
+
 ```mermaid
 flowchart LR
     WS["Work Signal"] --> C["Case"]
@@ -372,13 +380,13 @@ Once created, a Knowledge Item can be challenged, become stale, be deprecated, o
 
 ## 22. Core Concept: Organizational Memory
 
-**Organizational Memory** is the connected body of contextual knowledge owned by an Organization and preserved across people, systems, and time with trust intact.
+**Organizational Memory** is the connected body of contextual, evidence-backed knowledge owned by an Organization and preserved across people, systems, and time with trust and Provenance intact.
 
 It includes active Knowledge Items and the histories, relationships, Sources, Validations, Corrections, and lifecycle states required to interpret them. Disputed, deprecated, and replaced knowledge may remain in memory as history without remaining approved guidance.
 
 Organizational Memory is not storage. Storage preserves records. Memory makes knowledge findable, understandable, traceable, current enough to use, and bounded by Context and Governance.
 
-Memory belongs to the Organization rather than to an individual conversation, User, or interface. Its value is realized when it improves future Reasoning while remaining open to challenge and evolution.
+Memory belongs to the Organization rather than to an individual conversation, User, or interface. Its value is realized when it improves future Reasoning while remaining open to challenge and evolution. Memory is not automatically complete, current, or correct; those properties depend on Evidence, Validation, lifecycle state, applicability, and Governance.
 
 ---
 
@@ -386,17 +394,19 @@ Memory belongs to the Organization rather than to an individual conversation, Us
 
 **Validation** is the process by which a Knowledge Candidate or Knowledge Item earns, loses, or changes organizational trust.
 
-The **Validation Gate** is the governed boundary that determines whether a Knowledge Candidate can become trusted Organizational Memory. It may involve human review, source checking, provenance review, domain authority, contradiction checks, successful use, risk assessment, and trust scoring.
+The **Validation Gate** is the governed boundary that determines whether a Knowledge Candidate can become trusted Organizational Memory. It may involve human review, source checking, provenance review, domain authority, contradiction checks, successful use, risk assessment, and trust scoring, selected according to the Domain and consequence.
 
 Validation may depend on:
 
 - Human Review and Domain authority.
 - Source quality and supporting Evidence.
-- Successful use in applicable Cases.
+- Successful use in applicable Cases, when such later use exists.
 - Contradiction checks and observed outcomes.
 - Risk level and consequence.
 - Governance requirements.
 - Freshness and continued applicability.
+
+A sufficiently evidenced single organizational experience may become Organizational Memory after an authorized human validates the proposed learning. The domain-neutral entry path requires at least one Source-linked Evidence item before preparation or validation; this is a structural safety floor, not a fixed universal Evidence count. Evidence sufficiency remains a human and governance judgment about the Source, Evidence, rationale, applicability, and consequence. Recurrence, prior reuse, prior successful Outcomes, Pattern recurrence, and minimum trust or Confidence thresholds are not universal prerequisites for admission. They may inform later reliability, revalidation, retrieval, or automation decisions.
 
 Relevant states may include proposed, validated, disputed, stale, deprecated, and replaced. These states do not all mean the same thing: *disputed* signals unresolved conflict; *stale* signals insufficient assurance of currency; *deprecated* prohibits current reliance; and *replaced* connects prior guidance to its successor.
 

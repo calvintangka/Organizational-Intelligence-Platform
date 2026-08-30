@@ -39,10 +39,14 @@ This policy derives from the complete Canon specification established by:
 ```text
 Current Canon Version
 
-v1.0.0
+v1.0.2
 ```
 
 Version `v1.0.0` is the first complete conceptual specification of the Organizational Intelligence Platform. It includes the Founder's Thesis, Product Vision, Product Principles, Product Capability Model, Product Domain Model, Product Workflow Model, and AI Cognitive Model.
+
+Version `v1.0.1` is a Patch clarification of that same specification. It makes the relationship among Organizational Memory, Organizational Intelligence, and the Company Brain metaphor explicit; makes the Customer Support beachhead and long-term organizational scope easier to distinguish; and clarifies the four questions of remembering, retrieving, evolving, and trusting organizational learning. It does not rename OIP, redefine a core concept, add a required capability, broaden current implementation scope, or weaken any trust boundary.
+
+Version `v1.0.2` is a Patch clarification of the same specification. It makes explicit that a single sufficiently evidenced organizational experience may become Organizational Memory after authorized human validation, while recurrence, prior reuse, prior successful Outcomes, Pattern frequency, and minimum trust or Confidence thresholds remain non-universal admission prerequisites. It preserves the existing Evidence, human-governance, retrieval, automation, and AI authority boundaries.
 
 Together, these documents define the complete path from purpose to cognitive behavior:
 
@@ -54,7 +58,7 @@ Together, these documents define the complete path from purpose to cognitive beh
 - How those concepts behave over time.
 - How intelligence should think.
 
-The governance policy itself controls the evolution of that specification. It does not change the platform meaning represented by version `v1.0.0`.
+The governance policy itself controls the evolution of that specification. It does not change the platform meaning represented by version `v1.0.2`; the Patch clarifications preserve the meaning of the `v1.0.0` foundation.
 
 ---
 
@@ -343,6 +347,8 @@ This traceability allows future engineers to answer, without ambiguity: *Which c
 
 | Version | Date | Summary |
 | --- | --- | --- |
+| 1.0.2 | 2026-08-26 | Patch clarification that one sufficiently evidenced organizational experience may enter memory after authorized human validation; recurrence, prior reuse, prior successful Outcomes, Pattern frequency, and minimum trust or Confidence are not universal admission prerequisites. Existing safety boundaries preserved. |
+| 1.0.1 | 2026-08-24 | Patch clarification of Organizational Memory as the durable foundation, Organizational Intelligence as the broader outcome/category, Company Brain as a non-formal metaphor, the Customer Support beachhead, and current-versus-long-term boundaries. No conceptual redefinition or safety-boundary change. |
 | 1.0.0 | 2026-06-22 | Initial release. First complete Canon including Philosophy, Vision, Principles, Capabilities, Domain Model, Workflow Model, and AI Cognitive Model. |
 
 Future releases should add one row per published Canon version. Each summary should describe conceptual impact rather than list every edited line.

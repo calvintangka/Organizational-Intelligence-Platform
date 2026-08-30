@@ -58,6 +58,22 @@ Customer support is often described as a communication problem because the visib
 
 The company exists to solve that deeper problem.
 
+### Organizational Memory, Organizational Intelligence, and the Company Brain
+
+OIP remains an **Organizational Intelligence Platform**. The product name and category do not change.
+
+**Organizational Memory** is the durable organizational substrate that preserves evidence-backed learning over time. It may include Sources, Evidence, Lessons, Validation, Provenance, reuse history, outcomes, trust or reliability signals, lifecycle state, and relevant relationships. It is not a raw dump of every enterprise record, a claim that OIP knows everything the company knows, or a guarantee that every stored or retrieved claim is correct.
+
+**Organizational Intelligence** is the broader capability that becomes possible when Organizational Memory can be retrieved, evaluated, updated, reused, compared with new Evidence, reasoned over, and safely applied to future work. Memory is the foundation; Organizational Intelligence is the capability and product outcome enabled by that foundation.
+
+**Company Brain** is an accessible metaphor for this long-term vision. It is not the formal product name, a replacement for Organizational Intelligence, or a claim that OIP is a complete company brain today. Use the metaphor only when it helps a non-technical audience understand the direction; use Canon terminology for product, architecture, and governance decisions.
+
+The north-star principle is:
+
+> The company should never have to forget what it has genuinely learned.
+
+This means that OIP should make supported organizational learning durable, current enough to inspect and use, and available when relevant. It does not mean that OIP stores everything, knows everything, automatically knows what is true, or autonomously mutates trusted memory.
+
 ---
 
 ## 2. Why This Product Exists
@@ -334,6 +350,19 @@ In this future:
 
 The long-term company vision is not to automate conversations. It is to make organizational knowledge durable, useful, and alive.
 
+### Four Foundational Questions
+
+The long-term platform direction can be understood through four questions. The current product answers them within a bounded Customer Support learning loop; the broader answers remain a design and roadmap direction.
+
+| Question | Current product truth | Long-term direction |
+| --- | --- | --- |
+| **Remember — can we preserve it?** | `CURRENT_IMPLEMENTED`: organization-scoped persistence preserves current Knowledge Items, Candidates, ticket/resolution Evidence, Validation, Trust Evidence, Memory Changes, Reflection state, and reuse/outcome signals. | `NORTH_STAR`: preserve the organizational learning that deserves to remain useful without implying unlimited scale or universal enterprise ingestion. |
+| **Retrieve — can we find it?** | `CURRENT_IMPLEMENTED`: deterministic lexical, category, canonical, and lesson matching with grounding and explainability controls. | `CURRENT_DESIGNED` / `PLANNED`: semantic retrieval, embeddings, vector indexes, and generalized RAG only when implemented with authority and explainability gates. |
+| **Evolve — can it change?** | `CURRENT_IMPLEMENTED`: Reflection, Knowledge Candidates, Human Validation, governed promotion, reuse/outcome signals, and auditable Memory Changes. | `NORTH_STAR`: richer challenge, stale, superseded, retired, invalidated, and revalidated lifecycle behavior as implementation and governance mature. |
+| **Trust — can we inspect why?** | `CURRENT_IMPLEMENTED`: Evidence, Source/Provenance, human review, validation rationale, lifecycle state, reuse, outcomes, and deterministic trust signals make selected memory inspectable. | `NORTH_STAR`: increasingly trustworthy organizational learning; never a universal or absolute accuracy guarantee. |
+
+Retrieval is not truth. AI generation is not organizational approval. Trust should emerge from Evidence and governed reuse, not from AI confidence alone.
+
 ---
 
 ## 5. Mission Statement
@@ -432,9 +461,9 @@ Modern organizations do not work that way. Knowledge is provisional. It changes 
 
 The product must support knowledge as a living system.
 
-### AI Should Become the Organization's Memory
+### AI Should Help the Organization Preserve and Apply Memory
 
-Memory is not only storage. Memory includes context, retrieval, judgment, and adaptation.
+Memory is not only storage. Memory includes context, retrieval, judgment, and adaptation. AI may help interpret, summarize, propose, retrieve, connect, and reason over that memory, but AI does not own the Organization's memory or grant itself authority.
 
 The product should help the organization remember:
 
@@ -488,6 +517,8 @@ It should help teams answer questions such as:
 The engine is not merely a search box. It is a system for preserving, organizing, reasoning over, and evolving knowledge.
 
 ### An AI Support Brain
+
+“Support Brain” is an accessible description of the first beachhead experience, not a replacement product name or a claim of autonomous support intelligence. The formal product remains the Organizational Intelligence Platform, with human review and governed system rules responsible for trust and authority.
 
 Support teams often operate with distributed partial knowledge. One agent knows refunds. Another knows a complex product behavior. A manager knows policy exceptions. A senior teammate remembers a decision from last year.
 

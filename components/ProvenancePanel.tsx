@@ -4,6 +4,7 @@ import { buildMatchExplainability } from "@/lib/explainability";
 import type { MatchExplainability } from "@/types";
 import { formatLastUpdatedDisplay } from "@/lib/knowledgeTimestamps";
 import { reconcileGroundingForPresentation } from "@/lib/groundingPresentation";
+import { deriveRetrievalPresentationState, retrievalPresentationCopy } from "@/lib/retrievalPresentation";
 
 interface ProvenancePanelProps {
   topMatch: KnowledgeMatch | null;
@@ -16,11 +17,19 @@ interface ProvenancePanelProps {
 
 function responseGroundingCopy(
   response?: SuggestedResponse | null,
-  lessonMatch?: ReturnType<typeof findMatchingLesson> | null
+  lessonMatch?: ReturnType<typeof findMatchingLesson> | null,
+  topMatch?: KnowledgeMatch | null
 ): { title: string; body: string } | null {
   const reconciledResponse = reconcileGroundingForPresentation(response ?? null);
   if (!reconciledResponse) return null;
   response = reconciledResponse;
+
+  if (response.draftMode === "cold_start" && topMatch) {
+    return {
+      title: "Relevant organizational memory found, but not authorized for reuse",
+      body: "A related candidate was found, but its compatibility or evidence was not sufficient to ground this response. Human review remains required; this is not a cold-start claim."
+    };
+  }
 
   if (
     response.draftMode === "lesson_grounded" &&
@@ -99,11 +108,23 @@ function ExplainabilityDetails({ explanation }: { explanation: MatchExplainabili
 export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized = false, response, fallbackTechnicalDetails }: ProvenancePanelProps) {
   const lessonMatch = topMatch && ticket ? findMatchingLesson(ticket, topMatch.item) : null;
   const reconciledResponse = reconcileGroundingForPresentation(response ?? null);
-  const groundingCopy = responseGroundingCopy(reconciledResponse, lessonMatch);
+  const groundingCopy = responseGroundingCopy(reconciledResponse, lessonMatch, topMatch);
   const explanation = buildMatchExplainability(topMatch, ticket, reconciledResponse);
   const lessonGrounded = !!lessonMatch || reconciledResponse?.draftMode === "lesson_grounded";
+  const presentationState = deriveRetrievalPresentationState(topMatch, reconciledResponse);
+  const presentationCopy = retrievalPresentationCopy(presentationState);
 
   if (groundingCopy) {
+    if (topMatch && presentationState !== "GROUNDED_REUSABLE" && presentationState !== "HUMAN_REVIEW_REQUIRED") {
+      return (
+        <section className="rounded-3xl border border-amber-200 bg-amber-50/60 p-5 shadow-soft">
+          <p className="text-xs font-bold uppercase tracking-wide text-amber-700">Why this response?</p>
+          <p className="mt-2 font-semibold text-ink">{presentationCopy.title}</p>
+          <p className="mt-1 text-sm leading-6 text-slate-700">{presentationCopy.body}</p>
+          <ExplainabilityDetails explanation={explanation} />
+        </section>
+      );
+    }
     return (
       <section className="rounded-3xl border border-amber-200 bg-amber-50/60 p-5 shadow-soft">
         <p className="text-xs font-bold uppercase tracking-wide text-amber-700">Why this response?</p>
@@ -124,11 +145,11 @@ export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized
     return (
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
         <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Why this response?</p>
-        <p className="mt-2 font-semibold text-ink">{isUncategorized ? "No template available" : "No approved knowledge available yet"}</p>
+        <p className="mt-2 font-semibold text-ink">{isUncategorized ? "No template available" : presentationCopy.title}</p>
         <p className="mt-1 text-sm leading-6 text-slate-600">
           {isUncategorized
             ? "This issue type has not been seen before. Your response will become the organization's first knowledge for this problem type."
-            : "This response was drafted from the category template - a safe starting point. Once a resolution is approved and reflected upon, the organization will have its first knowledge entry for this problem type and future drafts will draw from real approved experience."}
+            : presentationCopy.body}
         </p>
       </section>
     );

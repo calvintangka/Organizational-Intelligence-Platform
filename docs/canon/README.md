@@ -36,4 +36,6 @@ These seven documents together define the platform's conceptual identity. Later 
 
 [CANON_GOVERNANCE.md](./CANON_GOVERNANCE.md) defines the current Canon version, Semantic Versioning policy, compatibility rules, change process, integrity rules, and traceability requirements for future documents.
 
-Current Canon Version: `v1.0.0`
+Current Canon Version: `v1.0.1`
+
+Version `v1.0.1` is a Patch clarification. It preserves the Canon's existing meaning while making Organizational Memory, Organizational Intelligence, the Company Brain metaphor, the Customer Support beachhead, and current-versus-long-term boundaries explicit. It does not rename OIP or claim that OIP knows everything an organization knows.

@@ -14,6 +14,33 @@ Every significant implementation should append a new dated entry.
 
 _No unreleased changes._
 
+## 0.4.1 — 2026-08-30
+
+Release title: **OIP v0.4.1 — Public Website & Organizational Memory Positioning**
+
+Release type: Patch follow-on release. This release presents the existing v0.4.0 Organizational Memory baseline through a redesigned public OIP homepage; it does not add new runtime, API, database, or migration capability.
+
+- **Public homepage:** Reframed OIP around Organizational Memory, with a clear Source → Evidence → Memory → Retrieval → Outcome learning-loop explanation and product proof for provenance, scope, validation, challenges, versions, and evidence-backed trust.
+- **Product boundary:** Clarified the current foundation versus future direction, including the distinct roles of people, systems, and AI agents. The page does not claim new integrations, autonomous behavior, semantic retrieval, broad Organizational Intelligence, or enterprise production readiness.
+- **Responsive and accessible presentation:** Added intentional mobile composition, responsive layouts, keyboard/focus affordances, skip navigation, and reduced-motion support for the public experience.
+- **Metadata boundary:** Kept the server-generated site metadata independent from organization-specific client runtime title behavior.
+
+The v0.4.0 Organizational Memory runtime baseline and its design-partner guardrails remain unchanged. Deployment, publication, tagging, and mainline integration remain separately governed.
+
+## 0.4.0 — 2026-08-26
+
+Release title: **OIP v0.4.0 — Organizational Memory Baseline**
+
+Release type: Minor pre-1.0 capability release. Design-partner ready with guardrails; publication, tag creation, push, and deployment remain separately authorized.
+
+This release establishes OIP's first certified domain-neutral Organizational Memory baseline. Organizations can record experiences outside support tickets, preserve explicit Source, Evidence, event-time, and provenance, and admit one sufficiently evidenced experience into memory after authorized human validation.
+
+- **Retrieval:** Relevant memory can be found for non-identical later situations. Competing candidates are selected deterministically with stable tie-breaking, and candidate identity remains bound through retrieval and grounding.
+- **Outcomes and evolution:** Successful, correction-required, and failed reuse outcomes persist durably with idempotent retry behavior. Humans can challenge memory, narrow or evolve its validated scope, and preserve earlier versions.
+- **Governance and safety:** AI remains advisory; human validation and human Challenge/scope review remain required. Candidate-to-Source provenance is fail-closed, and organization isolation remains enforced.
+- **Persistence:** Certified Organizational Memory survives an actual application-server restart with its Source, Evidence, validation, outcomes, challenge, versions, and trust history intact.
+- **Guardrails:** This is a controlled design-partner baseline with bounded deterministic retrieval, limited automation, and human operational monitoring. It does not claim broad production or enterprise readiness, generalized semantic/vector retrieval, general RAG, perfect accuracy, or autonomous trusted-memory creation. Trust and reliability remain evidence-backed signals rather than absolute truth.
+
 ## 0.3.0 — 2026-08-24
 
 Release title: **OIP v0.3.0 — Knowledge Flywheel**
