@@ -97,7 +97,7 @@ import {
 } from "@/lib/ticketRecords";
 import { countOpenTicketRecords } from "@/lib/ticketMetrics";
 import { ticketWorkflowResumable } from "@/lib/ticketReflectionRecovery";
-import { LandingPage } from "@/components/landing/LandingPage";
+import { ZendeskLandingPage } from "@/components/landing/LandingPageZendesk";
 import { CaseLookupView } from "@/components/views/CaseLookupView";
 import { AuthorizationProvider } from "@/components/AuthorizationContext";
 import { DeveloperDiagnosticsView } from "@/components/views/DeveloperDiagnosticsView";
@@ -4648,7 +4648,7 @@ export default function Home() {
     return <main className="flex min-h-screen items-center justify-center bg-[#F3F6FA] text-sm text-slate-500">Checking authentication…</main>;
   }
   if (!authUser) {
-    if (authEntryMode !== "login" && authEntryMode !== "signup") return <LandingPage />;
+    if (authEntryMode !== "login" && authEntryMode !== "signup") return <ZendeskLandingPage />;
     return <LoginScreen initialMode={requestedAuthMode} onAuthenticated={(user) => { setAuthUser(user); setAuthStatus("authenticated"); }} />;
   }
   if (organizationBootstrapState === "loading") {
