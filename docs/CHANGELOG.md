@@ -14,6 +14,15 @@ Every significant implementation should append a new dated entry.
 
 _No unreleased changes._
 
+## 0.4.2 — 2026-08-31
+
+Release title: **OIP v0.4.2 — Pre-Staging Health Hardening**
+
+Release type: Patch release / deployment hardening. This release adds the minimal process-liveness endpoint needed for hosting-provider health checks; it is not a new product capability release.
+
+- **Health endpoint:** Added `GET /api/health`, returning a minimal `{"status":"ok"}` response with `Cache-Control: no-store`. The endpoint remains independent of PostgreSQL, authentication, AI, and Organizational Memory business state.
+- **Deployment boundary:** This pre-staging hardening change adds no database schema or Prisma migration, no dependency change, and does not itself deploy OIP or provision production infrastructure.
+
 ## 0.4.1 — 2026-08-30
 
 Release title: **OIP v0.4.1 — Public Website & Organizational Memory Positioning**
