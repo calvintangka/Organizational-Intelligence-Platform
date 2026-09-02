@@ -14,6 +14,26 @@ Every significant implementation should append a new dated entry.
 
 _No unreleased changes._
 
+## 0.4.3 — 2026-09-02
+
+Release title: **OIP v0.4.3 — Public Waitlist CTA**
+
+### What changed
+
+- Added `Join the Waitlist` as the primary public homepage conversion action.
+- Added the waitlist action to both the hero and the existing design-partner CTA section.
+- Both actions use the same approved external Google Forms destination.
+- Preserved the existing Organizational Memory positioning, product hierarchy, responsive layout, and accessibility behavior.
+
+### Release boundary
+
+- No database schema change.
+- No Prisma migration.
+- No dependency change.
+- No authentication or AI behavior change.
+- No waitlist backend or internal lead-storage system was added.
+- This release does not itself deploy OIP or provision production infrastructure.
+
 ## 0.4.2 — 2026-08-31
 
 Release title: **OIP v0.4.2 — Pre-Staging Health Hardening**
