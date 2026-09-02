@@ -2,6 +2,8 @@
 
 import { useState, type KeyboardEvent } from "react";
 
+const WAITLIST_URL = "https://docs.google.com/forms/d/e/1FAIpQLScet84g9pbR0-rvZ4F7z93ve61QB1SuGQYXYy3ENl7Y-q4XAA/viewform?usp=publish-editor";
+
 function Logo({ inverse = false }: { inverse?: boolean }) {
   return (
     <span className={`zp-logo${inverse ? " is-inverse" : ""}`} aria-label="OIP">
@@ -217,7 +219,7 @@ export function ZendeskLandingPage() {
       <main id="main-content">
         <section className="zp-hero" id="product">
           <div className="zp-container zp-hero-grid">
-            <div className="zp-hero-copy"><span className="zp-eyebrow">ORGANIZATIONAL MEMORY &amp; INTELLIGENCE PLATFORM</span><h1>Every solved problem should make the organization <em>smarter.</em></h1><p>OIP turns scattered company knowledge and real-world experience into living, evidence-backed Organizational Memory that people and AI agents can use.</p><div className="zp-hero-actions"><a className="zp-button zp-button-dark" href="#access">Discuss a design partnership <ArrowIcon /></a><a className="zp-text-link" href="#how-it-works">See how OIP works <ArrowIcon /></a></div><div className="zp-hero-note"><CheckIcon /> AI may propose knowledge. Humans and policy govern it.</div></div>
+            <div className="zp-hero-copy"><span className="zp-eyebrow">ORGANIZATIONAL MEMORY &amp; INTELLIGENCE PLATFORM</span><h1>Every solved problem should make the organization <em>smarter.</em></h1><p>OIP turns scattered company knowledge and real-world experience into living, evidence-backed Organizational Memory that people and AI agents can use.</p><div className="zp-hero-actions"><a className="zp-button zp-button-dark" href={WAITLIST_URL}>Join the Waitlist <ArrowIcon /></a><a className="zp-text-link" href="#how-it-works">See how OIP works <ArrowIcon /></a></div><div className="zp-hero-note"><CheckIcon /> AI may propose knowledge. Humans and policy govern it.</div></div>
             <div className="zp-hero-proof"><MemoryProof /><div className="zp-proof-caption"><span>ONE MEMORY, FULLY EXPLAINED</span><span>Source · evidence · scope · validation · version</span></div></div>
           </div>
         </section>
@@ -236,7 +238,7 @@ export function ZendeskLandingPage() {
 
         <section className="zp-section zp-sources-section" id="sources"><div className="zp-container"><div className="zp-section-intro"><div><span className="zp-overline">WHERE LEARNING BEGINS</span><h2>Start with one beachhead. Build the layer around it.</h2></div><p>Customer support is a practical starting point because the work already contains Sources, evidence, outcomes, and repeated opportunities to learn. OIP itself is broader organizational infrastructure.</p></div><div className="zp-source-grid"><div className="zp-source-feature"><span className="zp-source-icon">S</span><div><span className="zp-card-label">CURRENT BEACHHEAD</span><h3>Support resolutions</h3><p>A resolved case becomes more than a closed ticket when the organization can preserve what worked and retrieve it next time.</p></div><ArrowIcon /></div><div className="zp-source-future"><span className="zp-card-label">FUTURE SOURCES · DIRECTION</span><div className="zp-source-pills"><span>Slack / Teams</span><span>Email</span><span>Jira / GitHub</span><span>Docs</span><span>CRM / ERP</span><span>Meetings</span><span>Agent activity</span><span>Operational systems</span></div><small>Potential sources, not a claim that every integration is available today.</small></div></div></div></section>
 
-        <section className="zp-access-section" id="access"><div className="zp-container zp-access-inner"><div><span className="zp-overline">FOR DESIGN PARTNERS</span><h2>Make the next solved problem count.</h2><p>We’re working with a small number of teams to shape the organizational memory layer around real work.</p></div><div className="zp-access-actions"><a className="zp-button zp-button-accent" href="/?auth=signup">Request early access <ArrowIcon /></a><a className="zp-text-link is-light" href="#top">Back to top ↑</a></div></div></section>
+        <section className="zp-access-section" id="access"><div className="zp-container zp-access-inner"><div><span className="zp-overline">FOR DESIGN PARTNERS</span><h2>Make the next solved problem count.</h2><p>We’re working with a small number of teams to shape the organizational memory layer around real work.</p></div><div className="zp-access-actions"><a className="zp-button zp-button-accent" href={WAITLIST_URL}>Join the Waitlist <ArrowIcon /></a><a className="zp-text-link is-light" href="#top">Back to top ↑</a></div></div></section>
 
         <section className="zp-section zp-faq-section"><div className="zp-container zp-faq-grid"><div><span className="zp-overline">NEED TO KNOW MORE?</span><h2>Clear answers for a new category.</h2></div><FAQ /></div></section>
       </main>
