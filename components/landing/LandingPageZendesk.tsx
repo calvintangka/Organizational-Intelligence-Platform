@@ -189,7 +189,11 @@ function FAQ() {
   return <div className="zp-faq-list">{items.map(([question, answer]) => <details key={question}><summary>{question}<span>+</span></summary><p>{answer}</p></details>)}</div>;
 }
 
-function LandingNav() {
+interface ZendeskLandingPageProps {
+  signInHref?: string | null;
+}
+
+function LandingNav({ signInHref }: { signInHref: string | null }) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -203,7 +207,7 @@ function LandingNav() {
             <a href="#direction" onClick={() => setOpen(false)}>Direction</a>
             <a href="#access" onClick={() => setOpen(false)}>Design partners</a>
           </div>
-          <div className="zp-nav-actions"><a className="zp-sign-in" href="/?auth=login">Sign in</a><a className="zp-button zp-button-dark" href="#access">Talk to us <ArrowIcon /></a></div>
+          <div className="zp-nav-actions">{signInHref && <a className="zp-sign-in" href={signInHref}>Sign in</a>}<a className="zp-button zp-button-dark" href="#access">Talk to us <ArrowIcon /></a></div>
           <button type="button" className="zp-menu-toggle" aria-expanded={open} aria-controls="oip-navigation" onClick={() => setOpen((value) => !value)}><span /><span /><span /><b className="zp-sr-only">Menu</b></button>
         </nav>
       </header>
@@ -211,11 +215,11 @@ function LandingNav() {
   );
 }
 
-export function ZendeskLandingPage() {
+export function ZendeskLandingPage({ signInHref = "/?auth=login" }: ZendeskLandingPageProps = {}) {
   return (
     <div className="oip-zendesk-page" id="top">
       <a className="zp-skip-link" href="#main-content">Skip to content</a>
-      <LandingNav />
+      <LandingNav signInHref={signInHref} />
       <main id="main-content">
         <section className="zp-hero" id="product">
           <div className="zp-container zp-hero-grid">
@@ -242,7 +246,7 @@ export function ZendeskLandingPage() {
 
         <section className="zp-section zp-faq-section"><div className="zp-container zp-faq-grid"><div><span className="zp-overline">NEED TO KNOW MORE?</span><h2>Clear answers for a new category.</h2></div><FAQ /></div></section>
       </main>
-      <footer className="zp-footer"><div className="zp-container"><div className="zp-footer-top"><div><Logo inverse /><p>Organizational Memory and Intelligence for the work your company is already doing.</p></div><div className="zp-footer-links"><div><span>Product</span><a href="#product">What OIP is</a><a href="#memory">Organizational Memory</a><a href="#how-it-works">How it works</a></div><div><span>Company</span><a href="#direction">Product direction</a><a href="#access">Design partners</a><a href="/?auth=login">Sign in</a></div><div><span>Resources</span><a href="#sources">Sources</a><a href="#memory">Trust and governance</a><a href="#top">Back to top</a></div></div></div><div className="zp-footer-bottom"><span>© 2026 OIP. Organizational Intelligence Platform.</span><span>Built around organizational learning.</span></div></div></footer>
+      <footer className="zp-footer"><div className="zp-container"><div className="zp-footer-top"><div><Logo inverse /><p>Organizational Memory and Intelligence for the work your company is already doing.</p></div><div className="zp-footer-links"><div><span>Product</span><a href="#product">What OIP is</a><a href="#memory">Organizational Memory</a><a href="#how-it-works">How it works</a></div><div><span>Company</span><a href="#direction">Product direction</a><a href="#access">Design partners</a>{signInHref && <a href={signInHref}>Sign in</a>}</div><div><span>Resources</span><a href="#sources">Sources</a><a href="#memory">Trust and governance</a><a href="#top">Back to top</a></div></div></div><div className="zp-footer-bottom"><span>© 2026 OIP. Organizational Intelligence Platform.</span><span>Built around organizational learning.</span></div></div></footer>
     </div>
   );
 }
