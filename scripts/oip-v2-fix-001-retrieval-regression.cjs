@@ -137,12 +137,24 @@ async function main() {
 
   const original = items.find((item) => item.title === "Dispatch roster access restored after regional group assignment");
   assert.ok(original, "Original evolved Memory is required for revision regression.");
-  assert.equal(original.revision, 5, "The existing evolved Memory no longer exposes its current revision.");
-  assert.equal(original.governanceState, "trusted");
-  assert.match(original.scopeNote ?? "", /Excludes expired temporary assignments and authentication failures/i);
+  // The shared QA corpus is intentionally allowed to evolve through supported
+  // outcomes and Challenges. Load the authoritative current item separately so
+  // this regression checks retrieval freshness without freezing one mutable
+  // revision, trust value, governance state, or scope string in the fixture.
+  const authoritativeItems = await persistence.loadKnowledge(MERIDIAN);
+  const authoritativeOriginal = authoritativeItems.find((item) => item.title === original.title);
+  assert.ok(authoritativeOriginal, "Authoritative current Memory is required for revision regression.");
+  const expectedCurrentRevision = authoritativeOriginal.revision;
+  assert.equal(original.revision, expectedCurrentRevision, "The corpus read did not expose the authoritative current revision.");
+  assert.equal(original.trustScore, authoritativeOriginal.trustScore, "The corpus read did not expose the authoritative current trust.");
+  assert.equal(original.governanceState, authoritativeOriginal.governanceState, "The corpus read did not expose the authoritative governance state.");
+  assert.equal(original.scopeNote, authoritativeOriginal.scopeNote, "The corpus read did not expose the authoritative current scope.");
   const originalResult = deterministicRetrieval(fixture.naturalRelevant.find((item) => item.id === "natural-original-roster"), profile, items);
   assert.equal(memoryTitle(originalResult), original.title);
-  assert.equal(originalResult.selected.match.item.revision, 5);
+  assert.equal(originalResult.selected.match.item.revision, expectedCurrentRevision, "Retrieval returned a stale Memory revision.");
+  assert.equal(originalResult.selected.match.item.trustScore, authoritativeOriginal.trustScore, "Retrieval returned stale Memory trust.");
+  assert.equal(originalResult.selected.match.item.governanceState, authoritativeOriginal.governanceState, "Retrieval returned stale governance state.");
+  assert.equal(originalResult.selected.match.item.scopeNote, authoritativeOriginal.scopeNote, "Retrieval returned stale Memory scope.");
   const lockoutResult = deterministicRetrieval(fixture.naturalRelevant.find((item) => item.id === "natural-lockout"), profile, items);
   assert.equal(memoryTitle(lockoutResult), "Account lockout blocks portal authentication");
   assert.ok(lockoutResult.rawMatches.findIndex((match) => match.item.title === "Account lockout blocks portal authentication") < lockoutResult.rawMatches.findIndex((match) => match.item.title === original.title));

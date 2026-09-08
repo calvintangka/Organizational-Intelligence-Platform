@@ -30,6 +30,7 @@ import { ProvenancePanel } from "@/components/ProvenancePanel";
 import { findMatchingLesson } from "@/lib/drafting";
 import { buildMatchExplainability } from "@/lib/explainability";
 import { reconcileGroundingForPresentation } from "@/lib/groundingPresentation";
+import { projectCurrentKnowledgeMatches } from "@/lib/currentMemoryProjection";
 
 export type TicketPhase =
   | "idle"
@@ -374,7 +375,12 @@ export function TicketWorkspace({
   onResolveWithEvidence,
 }: TicketWorkspaceProps) {
   const [customerReply, setCustomerReply] = useState("");
-  const topMatch = similarKnowledge.length > 0 ? similarKnowledge[0] : null;
+  // Retrieval evidence is historical, but the Memory metadata shown across
+  // Tickets must always come from the current Knowledge projection. This
+  // prevents an evolved Memory from appearing as an old revision after the
+  // user navigates back from Knowledge.
+  const projectedSimilarKnowledge = projectCurrentKnowledgeMatches(similarKnowledge, knowledgeItems);
+  const topMatch = projectedSimilarKnowledge.length > 0 ? projectedSimilarKnowledge[0] : null;
   const extractedFields = aiAnalysis?.extractedFields;
   const hasExtractedFieldDetails = !!extractedFields && (
     !!extractedFields.senderName ||
@@ -661,7 +667,7 @@ export function TicketWorkspace({
                 onApprove={onApproveResponse}
                 canApprove={reviewedResponse.trim().length > 0}
                 placeholderText={suggestedResponse?.draftResponse}
-                sourceLabel={draftGroundingLabel(suggestedResponse)}
+                sourceLabel={draftGroundingLabel(suggestedResponse, topMatch)}
                 fallbackNotice={suggestedResponse?.fallbackNotice}
                 fallbackTechnicalDetails={suggestedResponse?.fallbackTechnicalDetails}
                 deterministicDraft={suggestedResponse?.deterministicDraft}
@@ -957,6 +963,7 @@ export function TicketWorkspace({
                 isUncategorized={aiAnalysis?.category === "Uncategorized" && !topMatch}
                 response={suggestedResponse}
                 fallbackTechnicalDetails={suggestedResponse?.fallbackTechnicalDetails}
+                organizationId={organizationProfile.id}
               />
             </div>
           )}

@@ -1,10 +1,13 @@
+import { useEffect, useState } from "react";
 import type { KnowledgeMatch, SuggestedResponse, Ticket } from "@/types";
+import type { OrganizationalMemoryInspection } from "@/types/organizationalMemory";
 import { findMatchingLesson } from "@/lib/drafting";
 import { buildMatchExplainability } from "@/lib/explainability";
 import type { MatchExplainability } from "@/types";
 import { formatLastUpdatedDisplay } from "@/lib/knowledgeTimestamps";
 import { reconcileGroundingForPresentation } from "@/lib/groundingPresentation";
 import { deriveRetrievalPresentationState, retrievalPresentationCopy } from "@/lib/retrievalPresentation";
+import { projectCurrentMemoryProvenance, type CurrentMemoryProvenanceSummary } from "@/lib/currentMemoryProvenance";
 
 interface ProvenancePanelProps {
   topMatch: KnowledgeMatch | null;
@@ -13,6 +16,7 @@ interface ProvenancePanelProps {
   isUncategorized?: boolean;
   response?: SuggestedResponse | null;
   fallbackTechnicalDetails?: string;
+  organizationId: string;
 }
 
 function responseGroundingCopy(
@@ -87,7 +91,7 @@ function ExplainabilityDetails({ explanation }: { explanation: MatchExplainabili
           <p className="text-sm font-semibold text-ink">{explanation.relevance}</p>
         </div>
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Lesson evidence</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Retrieval lesson evidence</p>
           <p className="text-sm font-semibold text-ink">{explanation.lessonEvidence}</p>
         </div>
         <div>
@@ -105,7 +109,71 @@ function ExplainabilityDetails({ explanation }: { explanation: MatchExplainabili
   );
 }
 
-export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized = false, response, fallbackTechnicalDetails }: ProvenancePanelProps) {
+function MemoryProvenanceDetails({
+  summary,
+  state
+}: {
+  summary: CurrentMemoryProvenanceSummary | null;
+  state: "idle" | "loading" | "loaded" | "error";
+}) {
+  return (
+    <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
+      <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">Current Memory provenance</p>
+      {state === "loading" && <p className="mt-2 text-xs leading-5 text-emerald-900">Loading the authoritative Source and Evidence…</p>}
+      {state === "error" && <p className="mt-2 text-xs leading-5 text-emerald-900">Current Memory provenance is unavailable here. Review this Memory in Knowledge before relying on it.</p>}
+      {state === "loaded" && summary && (
+        <div className="mt-2 space-y-1 text-xs leading-5 text-emerald-950">
+          <p><strong>Human validation:</strong> {summary.validationLabel}</p>
+          <p><strong>Source/work:</strong> {summary.sourceLabel} · {summary.sourceIdentity}</p>
+          <p><strong>Evidence:</strong> {summary.evidenceCount} linked item{summary.evidenceCount === 1 ? "" : "s"}</p>
+          {summary.evidenceSummaries.length > 0 && (
+            <ul className="mt-2 space-y-1 text-emerald-900">
+              {summary.evidenceSummaries.map((entry) => <li key={entry}>• {entry}</li>)}
+            </ul>
+          )}
+          {summary.evidenceCount === 0 && <p>No linked Source/Evidence is attached to this Memory.</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized = false, response, fallbackTechnicalDetails, organizationId }: ProvenancePanelProps) {
+  const [inspection, setInspection] = useState<OrganizationalMemoryInspection | null>(null);
+  const [inspectionState, setInspectionState] = useState<"idle" | "loading" | "loaded" | "error">("idle");
+  const matchIdentity = topMatch?.item.id ?? null;
+
+  useEffect(() => {
+    if (!matchIdentity) {
+      setInspection(null);
+      setInspectionState("idle");
+      return;
+    }
+    let cancelled = false;
+    setInspection(null);
+    setInspectionState("loading");
+    fetch(`/api/organizations/${encodeURIComponent(organizationId)}/memory/knowledge/${encodeURIComponent(matchIdentity)}`, { cache: "no-store" })
+      .then(async (result) => {
+        const payload = await result.json().catch(() => null) as { data?: OrganizationalMemoryInspection; error?: { message?: string } } | null;
+        if (!result.ok || !payload?.data) throw new Error(payload?.error?.message ?? `Request failed (${result.status}).`);
+        return payload.data;
+      })
+      .then((nextInspection) => {
+        if (cancelled) return;
+        setInspection(nextInspection);
+        setInspectionState("loaded");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setInspection(null);
+        setInspectionState("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [organizationId, matchIdentity]);
+
+  const provenanceSummary = inspection ? projectCurrentMemoryProvenance(inspection) : null;
   const lessonMatch = topMatch && ticket ? findMatchingLesson(ticket, topMatch.item) : null;
   const reconciledResponse = reconcileGroundingForPresentation(response ?? null);
   const groundingCopy = responseGroundingCopy(reconciledResponse, lessonMatch, topMatch);
@@ -122,6 +190,7 @@ export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized
           <p className="mt-2 font-semibold text-ink">{presentationCopy.title}</p>
           <p className="mt-1 text-sm leading-6 text-slate-700">{presentationCopy.body}</p>
           <ExplainabilityDetails explanation={explanation} />
+          <MemoryProvenanceDetails summary={provenanceSummary} state={inspectionState} />
         </section>
       );
     }
@@ -136,7 +205,7 @@ export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized
             <pre className="mt-1 whitespace-pre-wrap rounded-lg bg-amber-100/60 p-2 font-mono text-[11px] leading-5 text-amber-900/80">{fallbackTechnicalDetails}</pre>
           </details>
         )}
-        {topMatch && <ExplainabilityDetails explanation={explanation} />}
+        {topMatch && <><ExplainabilityDetails explanation={explanation} /><MemoryProvenanceDetails summary={provenanceSummary} state={inspectionState} /></>}
       </section>
     );
   }
@@ -177,6 +246,7 @@ export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized
         <p className="mt-2 font-semibold text-ink">Relevant memory found, but not authorized for reuse</p>
         <p className="mt-1 text-sm leading-6 text-slate-700">{explanation.reason} A human must author or verify the response before it can be sent or learned.</p>
         <ExplainabilityDetails explanation={explanation} />
+        <MemoryProvenanceDetails summary={provenanceSummary} state={inspectionState} />
       </section>
     );
   }
@@ -245,7 +315,7 @@ export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized
         <div className="rounded-2xl border border-blue-100 bg-white p-3">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Relevance &amp; Trust</p>
           <p className="mt-1 text-sm font-semibold text-ink">Relevance: {explanation.relevance}</p>
-          <p className="mt-0.5 text-xs text-slate-500">Lesson evidence: {explanation.lessonEvidence}</p>
+          <p className="mt-0.5 text-xs text-slate-500">Retrieval lesson evidence: {explanation.lessonEvidence}</p>
           <p className="mt-0.5 text-xs text-slate-500">Trust: {item.trustScore ?? 20}/100</p>
         </div>
 
@@ -265,6 +335,7 @@ export function ProvenancePanel({ topMatch, isColdStart, ticket, isUncategorized
       </div>
 
       <ExplainabilityDetails explanation={explanation} />
+      <MemoryProvenanceDetails summary={provenanceSummary} state={inspectionState} />
 
       {exampleTickets.length > 0 && (
         <div className="mt-3 rounded-2xl border border-blue-100 bg-white p-3">

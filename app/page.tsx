@@ -24,6 +24,7 @@ import { classifyBusinessDomain } from "@/lib/domainClassifier";
 import { businessLessonSignalAliases } from "@/lib/businessInquiry";
 import { analyzeBulkEntries, prepareBulkClusterCommit } from "@/lib/bulkUpload";
 import { retrieveMemory } from "@/lib/memory";
+import { projectCurrentKnowledgeMatches } from "@/lib/currentMemoryProjection";
 import { draftBusinessInquiryResponse, draftResponse, findMatchingLesson, isRetrievalCandidateEligible, ticketContradictsLesson } from "@/lib/drafting";
 import type { LessonMatchResult, SemanticLessonAuthorization } from "@/lib/drafting";
 import {
@@ -1598,10 +1599,7 @@ export default function Home() {
       if (generation !== organizationSwitchGeneration.current || latest.some((item) => item.organizationId && item.organizationId !== organizationId)) return;
       suppressHydratedCollectionPersistence();
       setKnowledgeItems(latest);
-      setSimilarKnowledge((current) => current.map((match) => {
-        const refreshed = latest.find((item) => item.id === match.item.id);
-        return refreshed ? { ...match, item: refreshed } : match;
-      }));
+      setSimilarKnowledge((current) => projectCurrentKnowledgeMatches(current, latest));
       clearKnowledgeHistoryCache();
       setKnowledgeConflictRecovery((current) => current ? { ...current, currentRevision: latest.find((item) => item.id === current.resourceId)?.revision ?? current.currentRevision, latestLoaded: true } : current);
       setRevisionConflictNotice(
@@ -2784,7 +2782,7 @@ export default function Home() {
     return "AI assistant could not be reached.";
   }
 
-  function draftModeLabel(mode: DraftGroundingMode, groundingLabel?: string): string {
+  function draftModeLabel(mode: DraftGroundingMode, groundingLabel?: string, hasRelatedMemory = false): string {
     if (mode === "lesson_grounded") {
       return `AI draft grounded in validated lesson: ${groundingLabel ?? "matched lesson"}`;
     }
@@ -2793,7 +2791,9 @@ export default function Home() {
         ? "AI draft grounded in organization profile"
         : "AI draft grounded in organizational memory";
     }
-    return "AI suggestion - no organizational knowledge exists yet; this draft is not based on validated memory. Review carefully before sending.";
+    return hasRelatedMemory
+      ? "Related organizational memory was found, but it was not authorized to ground this draft. Human review is required before sending."
+      : "AI suggestion - no organizational knowledge exists yet; this draft is not based on validated memory. Review carefully before sending.";
   }
 
   function buildDefaultDiagnostics(fallbackReason?: string): AIDiagnostics {
@@ -3423,7 +3423,7 @@ export default function Home() {
           ticketId: ticket.id,
           draftResponse: aiDraft,
           basedOnKnowledgeIds: matchedKnowledge ? [matchedKnowledge.item.id] : [],
-          confidenceNote: `${draftModeLabel(draftMode, groundingLabel)} (${draftResult.data!.confidence}% confidence). Human review is required before sending or learning.`,
+          confidenceNote: `${draftModeLabel(draftMode, groundingLabel, !!matchedKnowledge)} (${draftResult.data!.confidence}% confidence). Human review is required before sending or learning.`,
           source: "ai_advisory",
           draftMode,
           groundingLabel,
@@ -4879,6 +4879,7 @@ export default function Home() {
                   const refreshed = await loadOrganizationState(organizationProfile.id);
                   suppressHydratedCollectionPersistence();
                   setKnowledgeItems(refreshed.knowledge);
+                  setSimilarKnowledge((current) => projectCurrentKnowledgeMatches(current, refreshed.knowledge));
                   setKnowledgeCandidates(refreshed.candidates);
                   setValidationRecords(refreshed.validations);
                   setMemoryChangeRecords(refreshed.changes);

@@ -185,7 +185,8 @@
     "prisma:generate": "prisma generate",
     "probe:oip-v2-fix-004a-refresh-recovery": "node scripts/oip-v2-fix-004a-refresh-recovery-regression.cjs",
     "probe:oip-v2-fix-002": "node scripts/oip-v2-fix-002-entry-inspection-probe.cjs",
-    "probe:oip-v2-fix-002-projection": "node scripts/oip-v2-fix-002-canonical-projection-regression.cjs"
+    "probe:oip-v2-fix-002-projection": "node scripts/oip-v2-fix-002-canonical-projection-regression.cjs",
+    "probe:oip-v2-fix-003-current-memory-projection": "node scripts/oip-v2-fix-003-current-memory-projection-regression.cjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
