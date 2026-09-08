@@ -1,0 +1,26 @@
+{
+  "exactTitle": [
+    { "id": "exact-lockout", "description": "What does our organization know about Account lockout blocks portal authentication?", "expectedTitle": "Account lockout blocks portal authentication" },
+    { "id": "exact-stale-board", "description": "What is our company information about Stale dispatch board caused duplicate urgent assignment?", "expectedTitle": "Stale dispatch board caused duplicate urgent assignment" },
+    { "id": "exact-branch-dns", "description": "What do we know about Branch Wi-Fi could not resolve scheduling host?", "expectedTitle": "Branch Wi-Fi could not resolve scheduling host" },
+    { "id": "exact-expired-assignment", "description": "What do we know about Expired temporary assignment blocks roster access?", "expectedTitle": "Expired temporary assignment blocks roster access" },
+    { "id": "exact-original-roster", "description": "What do we know about Dispatch roster access restored after regional group assignment?", "expectedTitle": "Dispatch roster access restored after regional group assignment" }
+  ],
+  "naturalRelevant": [
+    { "id": "natural-lockout", "description": "One employee entered the wrong password several times and is temporarily locked out before the portal loads; colleagues can still sign in.", "expectedTitle": "Account lockout blocks portal authentication" },
+    { "id": "natural-duplicate-dispatch", "subject": "Duplicate dispatch", "description": "Two coordinators assigned different technicians to one urgent job because one kept the dispatch board open through handover.", "expectedTitle": "Stale dispatch board caused duplicate urgent assignment" },
+    { "id": "natural-technician-region", "description": "A transferred technician works normally but is absent from the West regional dispatch search.", "expectedTitle": "Transferred technician missing from service region" },
+    { "id": "natural-stale-tablet", "subject": "Tablet data issue", "description": "A field tablet reconnected after a brief network loss but still shows yesterday's assignment list while backend services and other tablets are healthy.", "expectedTitle": "Mobile dispatch tablet showed stale data after reconnect" },
+    { "id": "natural-branch-dns", "subject": "Branch scheduling access", "description": "Several devices at our North branch have Wi-Fi but cannot resolve the internal scheduling hostname, while other branches are healthy.", "expectedTitle": "Branch Wi-Fi could not resolve scheduling host" },
+    { "id": "natural-expired-assignment", "subject": "Assignment issue", "description": "The coordinator signed in and belongs to the roster group, but the temporary assignment ended and roster access is denied.", "expectedTitle": "Expired temporary assignment blocks roster access" },
+    { "id": "natural-original-roster", "subject": "Regional roster access", "description": "The East coordinator can authenticate, but the regional roster denies access while other portal pages work.", "expectedTitle": "Dispatch roster access restored after regional group assignment" },
+    { "id": "browser-b1-lockout", "description": "One employee entered the wrong password several times and now cannot get past the portal login screen. Everyone else can sign in normally. Have we seen something like this before?", "expectedTitle": "Account lockout blocks portal authentication" },
+    { "id": "browser-b3-technician-region", "description": "A technician recently moved to our West region and is active, but West dispatch cannot find them in the available technician list. Is there something our organization already learned that could help?", "expectedTitle": "Transferred technician missing from service region" }
+  ],
+  "ambiguous": { "id": "ambiguous-roster", "subject": "Roster access", "description": "A transferred East coordinator can sign in and use other portal pages but cannot open the roster." },
+  "negativeControls": [
+    { "id": "central-outage", "subject": "Central scheduling outage", "description": "The central scheduling service is unavailable across several branches and direct address access also fails." },
+    { "id": "dead-tablet", "subject": "Dead field tablet", "description": "One field tablet will not power on at all." },
+    { "id": "finance-invoice", "subject": "Duplicate supplier invoice", "description": "A duplicate supplier invoice appears in the monthly payables report." }
+  ]
+}

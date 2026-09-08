@@ -23,7 +23,7 @@ const PROBLEM_FACETS: Array<{ id: string; aliases: string[]; minimumAliases?: nu
   { id: "mobile-device", aliases: ["mobile app", "mobile application", "android", "ios", "iphone", "ipad", "tablet", "handset", "mobile"] },
   { id: "attendance-checkin", aliases: ["clock in", "clock-in", "check in", "check-in", "attendance", "timekeeping"] },
   { id: "location-access", aliases: ["location permission", "location access", "device location", "geolocation", "gps"], minimumAliases: 1 },
-  { id: "offline-synchronization", aliases: ["offline", "reconnect", "reconnecting", "synchronization", "synchronizing", "synchronized", "synchronize", "syncing", "sync conflict", "newer copy"] },
+  { id: "offline-synchronization", aliases: ["offline", "reconnect", "reconnected", "reconnecting", "synchronization", "synchronizing", "synchronized", "synchronize", "syncing", "sync conflict", "newer copy"] },
   // A transition facet keeps a generic synchronization symptom from making
   // every synchronization failure look like the same reusable lesson. The
   // aliases are intentionally generic and cover ordinary inflection and
@@ -40,7 +40,36 @@ const PROBLEM_FACETS: Array<{ id: string; aliases: string[]; minimumAliases?: nu
   { id: "report-export", aliases: ["report", "export", "csv", "spreadsheet", "download"] },
   { id: "integration-callback", aliases: ["webhook", "callback", "signature", "signing", "api endpoint"], minimumAliases: 2 },
   { id: "delivery-tracking", aliases: ["delivery", "shipment", "tracking", "package"] },
-  { id: "product-version", aliases: ["version", "update", "installation", "install"] }
+  { id: "product-version", aliases: ["version", "update", "installation", "install"] },
+  // Neutral Organizational Memories use OPERATIONAL_EVENT as their source
+  // category. These facets provide a bounded, reusable vocabulary for the
+  // operational domains that do not fit the customer-support categories above.
+  // They are deliberately multi-signal gates: a generic noun such as
+  // "assignment" or "branch" cannot authorize a candidate by itself.
+  { id: "account-lockout", aliases: ["account lockout", "locked out", "temporary lockout", "failed sign-in", "failed login", "wrong password"], minimumAliases: 1 },
+  { id: "branch-dns-resolution", aliases: ["branch", "dns", "hostname", "resolution", "forwarder", "internal host"], minimumAliases: 2 },
+  { id: "dispatch-assignment-coordination", aliases: ["dispatch board", "assignment", "urgent job", "handover", "stale board", "duplicate assignment"], minimumAliases: 2 },
+  {
+    id: "technician-region-transfer",
+    aliases: [
+      "transferred technician",
+      "service region",
+      "regional dispatch",
+      "dispatch selection",
+      "region code",
+      "technician transfer",
+      "technician",
+      "region",
+      "available technician",
+      "moved"
+    ],
+    // Role, location, availability, and movement are broad in isolation. Require
+    // a three-signal combination before assigning the technician-placement facet.
+    minimumAliases: 3
+  },
+  { id: "expired-assignment-entitlement", aliases: ["temporary assignment", "assignment end date", "assignment ended", "entitlement", "eligible assignment", "assignment expired", "current assignment"], minimumAliases: 2 },
+  { id: "regional-roster-access", aliases: ["regional roster", "reader group", "reader-group", "roster access", "roster group", "roster portal", "access denied"], minimumAliases: 2 },
+  { id: "mobile-stale-session", aliases: ["stale data", "assignment snapshot", "tablet", "reconnect", "reconnected", "application session", "current assignment list"], minimumAliases: 2 }
 ];
 
 const CATEGORY_UNKNOWN = new Set(["general", "uncategorized"]);
@@ -52,6 +81,15 @@ function normalize(value: string): string {
 function aliasPresent(text: string, alias: string): boolean {
   const escaped = alias.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
   return new RegExp(`(?:^|[^a-z0-9])${escaped}(?=$|[^a-z0-9])`, "i").test(text);
+}
+
+function containsCanonicalTitle(text: string, item: KnowledgeItem): boolean {
+  const normalizedText = normalize(text);
+  const titles = [item.canonicalProblemTitle, item.title]
+    .filter((title): title is string => typeof title === "string")
+    .map((title) => normalize(title))
+    .filter((title) => title.length >= 12);
+  return titles.some((title) => normalizedText.includes(title));
 }
 
 function facetEvidenceFor(text: string): Map<string, number> {
@@ -145,6 +183,24 @@ export function assessRetrievalCompatibility(
       score: -100,
       code: "DOMAIN_CONFLICT",
       reason: `Operational condition conflicts: current ${currentCondition} vs candidate ${candidateCondition}.`,
+      currentFacets,
+      candidateFacets,
+      sharedFacets
+    };
+  }
+
+  // An exact, sufficiently descriptive canonical title is direct identity
+  // evidence. It must still pass the condition conflict check above, and it
+  // only admits the candidate to retrieval; drafting continues through the
+  // existing lesson/grounding gates. This is needed for neutral operational
+  // memories whose category is intentionally OPERATIONAL_EVENT and whose
+  // domain may not yet have a structured facet.
+  if (containsCanonicalTitle(currentText, item)) {
+    return {
+      state: "compatible",
+      score: 24,
+      code: "COMPATIBLE_EVIDENCE",
+      reason: "Exact canonical Memory title is present in the current request.",
       currentFacets,
       candidateFacets,
       sharedFacets

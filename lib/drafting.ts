@@ -604,8 +604,7 @@ const EXPLICIT_LOGIN_CONTRADICTION_PATTERNS: RegExp[] = [
   /\bi can access my account\b/,
   /\bi remember my password\b/,
   /\bpassword is working\b/,
-  /\bnot a login issue\b/,
-  /\bsign in normally\b/
+  /\bnot a login issue\b/
 ];
 
 function normalizeLessonSignalToken(token: string): string {

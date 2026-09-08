@@ -293,6 +293,10 @@ function canonicalForUnderstanding(understanding: Understanding, fallback: { tit
   return fallback.category === understanding.category ? fallback : { ...fallback, category: understanding.category };
 }
 
+function isExactCanonicalMemoryMatch(match: KnowledgeMatch | null | undefined): boolean {
+  return (match?.relevanceEvidence?.phrasePoints ?? 0) > 0;
+}
+
 function resolveTicketLanguage(ticket: Ticket, profile: OrganizationProfile) {
   const policy = resolveLanguagePolicy(profile);
   const defaultLanguage = isSupportedLanguage(policy.organizationLanguage) ? policy.organizationLanguage : undefined;
@@ -421,7 +425,13 @@ async function requestDraft(
   semanticAuthorization?: SemanticLessonAuthorization | null
 ): Promise<{ response: SuggestedResponse; advisory: AIAdvisory; usedAIDraft: boolean }> {
   const businessInquiry = understanding.businessClassification?.inquiryType === "business_inquiry";
-  const businessMemory = businessInquiry && matchedKnowledge?.item.category === "Business Inquiry";
+  // A profile-style question can still name an operational Memory explicitly.
+  // Treat that exact canonical identity as a Memory-grounded route while
+  // keeping ordinary company/product questions on the profile path.
+  const businessMemory = businessInquiry && (
+    matchedKnowledge?.item.category === "Business Inquiry" ||
+    isExactCanonicalMemoryMatch(matchedKnowledge)
+  );
   const deterministicLesson = matchedKnowledge ? findMatchingLesson(ticket, matchedKnowledge.item) : null;
   const semanticLesson = matchedKnowledge && semanticAuthorization
     ? matchedKnowledge.item.lessons?.find((lesson) => lesson.id === semanticAuthorization.lessonId) ?? null
@@ -638,13 +648,20 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
     const retrievalStartedAt = monotonicNow();
     const knowledgeItems = command.processingOptions?.knowledgeItems ?? [];
     const sessionCreatedIds = command.processingOptions?.sessionCreatedIds ?? new Set<string>();
-    const rawMatches = securityRouted ? [] : withPreDiscriminationLessonMatches(ticket, enriched, retrieveMemory(enriched, knowledgeItems, sessionCreatedIds), knowledgeItems, canonical.title);
-    const matches = rawMatches.filter((item) => isRetrievalCandidateEligible(enriched, item.item, ticket));
+    // Business/profile routing is a response-mode decision. Retrieval must
+    // still inspect the original operational understanding so a profile-style
+    // question that names a Memory cannot remove that Memory from the pool.
+    const retrievalUnderstanding = rawUnderstanding;
+    const rawMatches = securityRouted ? [] : withPreDiscriminationLessonMatches(ticket, retrievalUnderstanding, retrieveMemory(retrievalUnderstanding, knowledgeItems, sessionCreatedIds), knowledgeItems, canonical.title);
+    const matches = rawMatches.filter((item) => isRetrievalCandidateEligible(retrievalUnderstanding, item.item, ticket));
     const selected = selectPreferredMatch(ticket, matches);
     const topMatch = selected?.match ?? null;
     const lessonMatch = selected?.lessonMatch ?? null;
     const isBusinessInquiry = enriched.businessClassification?.inquiryType === "business_inquiry";
-    const businessMemory = isBusinessInquiry && matches.some((item) => item.item.category === "Business Inquiry");
+    const businessMemory = isBusinessInquiry && (
+      matches.some((item) => item.item.category === "Business Inquiry") ||
+      isExactCanonicalMemoryMatch(topMatch)
+    );
     let effectiveMatch = isBusinessInquiry && !businessMemory ? null : topMatch;
     if (effectiveMatch) effectiveMatch = await discriminate(ports, ticket, rawUnderstanding, effectiveMatch, lessonMatch);
     const semantic = !securityRouted && !isBusinessInquiry && !businessMemory && matches.length === 0 && rawMatches[0] && isRetrievalCandidateEligible(enriched, rawMatches[0].item, ticket)
