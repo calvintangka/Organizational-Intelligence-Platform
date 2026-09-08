@@ -8,7 +8,7 @@ import { TicketWorkspace } from "@/components/views/TicketWorkspace";
 import type { TicketPhase } from "@/components/views/TicketWorkspace";
 import { BulkUploadWorkspace } from "@/components/views/BulkUploadWorkspace";
 import { KnowledgeView } from "@/components/views/KnowledgeView";
-import { OrganizationalMemorySurface } from "@/components/views/OrganizationalMemorySurface";
+import { ACTIVE_SOURCE_STORAGE_PREFIX, OrganizationalMemorySurface } from "@/components/views/OrganizationalMemorySurface";
 import { DashboardView } from "@/components/views/DashboardView";
 import { OperationsView } from "@/components/views/OperationsView";
 import { OrganizationView, type NewOrganizationInput } from "@/components/views/OrganizationView";
@@ -112,7 +112,11 @@ import {
   LearningApplicationError
 } from "@/lib/application/learning/reflectionCommands";
 const PAGE_LOAD_STARTED_AT = Date.now();
-const AUTH_HYDRATION_TIMEOUT_MS = 2_500;
+// A local Next.js development server can compile the auth route on the first
+// request. Give that one request enough time to finish so a cold compile is
+// never mistaken for a logged-out session. The server route still has its own
+// bounded database lookup timeout.
+const AUTH_HYDRATION_TIMEOUT_MS = 15_000;
 const AUTH_HYDRATION_RETRY_DELAY_MS = 250;
 const ASYNC_BULK_INTAKE_ENABLED = process.env.NEXT_PUBLIC_OIP_ASYNC_BULK_INTAKE === "true";
 const ASYNC_REFLECTION_ENABLED = process.env.NEXT_PUBLIC_OIP_ASYNC_REFLECTION === "true";
@@ -795,8 +799,13 @@ export default function Home() {
           if (response.ok && payload?.data) {
             setAuthUser(payload.data);
             setAuthStatus("authenticated");
-          } else {
+          } else if (response.status === 503 && attempt === 0) {
+            await new Promise((resolve) => setTimeout(resolve, AUTH_HYDRATION_RETRY_DELAY_MS));
+            continue;
+          } else if (response.status === 401) {
             setAuthStatus("unauthenticated");
+          } else {
+            throw new Error("Authentication is temporarily unavailable.");
           }
           return;
         } catch {
@@ -888,7 +897,10 @@ export default function Home() {
           loadedIntelligenceLog,
           loadedPatterns
         ] = await Promise.all([
-          persistence.loadOrganizationList(),
+          // `/api/organizations` above already returned the complete
+          // authorized profile list. Reusing it removes a duplicate
+          // organization bootstrap request during every refresh.
+          Promise.resolve(authorizedProfiles),
           session.loadKnowledge(),
           session.loadKnowledgeCandidates(),
           Promise.resolve([] as ValidationRecord[]),
@@ -935,6 +947,13 @@ export default function Home() {
         setIntelligenceLog(loadedIntelligenceLog);
         setEmergingPatterns(loadedPatterns);
         setDarkMode(window.localStorage.getItem("maesa-theme") === "dark");
+        // A tenant-keyed Source pointer is only a presentation hint. The
+        // Knowledge surface re-reads the Source and Evidence from the server
+        // before showing the active work, so browser storage never becomes
+        // the source of truth.
+        if (window.localStorage.getItem(`${ACTIVE_SOURCE_STORAGE_PREFIX}${encodeURIComponent(orgId)}`)) {
+          setActiveView("knowledge");
+        }
         setHydrated(true);
         setOrganizationBootstrapState("ready");
       } catch (error) {

@@ -21,6 +21,11 @@ interface OrganizationalMemorySurfaceProps {
 
 const sourceKinds = ["OPERATIONAL_EVENT", "INCIDENT", "DECISION", "PROCESS_LEARNING", "OTHER"];
 const evidenceTypes = ["observation", "investigation", "system_result", "action_taken", "confirmation", "outcome", "reference"];
+export const ACTIVE_SOURCE_STORAGE_PREFIX = "oip.active-organizational-source.v1:";
+
+function activeSourceStorageKey(organizationId: string): string {
+  return `${ACTIVE_SOURCE_STORAGE_PREFIX}${encodeURIComponent(organizationId)}`;
+}
 
 function randomKey(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -118,10 +123,48 @@ export function OrganizationalMemorySurface({ organizationId, knowledgeItems, da
   const selectedMemory = useMemo(() => knowledgeItems.find((item) => item.id === selectedId) ?? null, [knowledgeItems, selectedId]);
 
   useEffect(() => {
-    void onRefresh();
-    // The page hydrates the legacy knowledge view and this surface is also a
-    // direct inspection entry point; refresh once on mount so a validated
-    // memory committed immediately before navigation is visible here.
+    let cancelled = false;
+
+    async function restoreSurface(): Promise<void> {
+      try {
+        // The page hydrates the legacy knowledge view and this surface is also
+        // a direct inspection entry point; refresh once on mount so a
+        // validated memory committed immediately before navigation is visible.
+        await onRefresh();
+      } catch {
+        // The parent reports the authoritative workspace error. Do not hide a
+        // recoverable active Source behind a second client-only failure.
+      }
+      if (cancelled || typeof window === "undefined") return;
+      const sourceId = window.localStorage.getItem(activeSourceStorageKey(organizationId));
+      if (!sourceId) return;
+
+      try {
+        const [nextSource, nextEvidence] = await Promise.all([
+          requestJson<OrganizationalSourceView>(`/api/organizations/${organizationId}/memory/experiences/${encodeURIComponent(sourceId)}`),
+          requestJson<EvidenceRecordView[]>(`/api/organizations/${organizationId}/memory/experiences/${encodeURIComponent(sourceId)}/evidence`)
+        ]);
+        if (cancelled) return;
+        setSource(nextSource);
+        setSourceEvidence(nextEvidence);
+        setPrepared(null);
+        setEntryOpen(true);
+        setMessage("Resumed the saved organizational experience and its evidence.");
+      } catch (nextError) {
+        if (cancelled) return;
+        const detail = nextError instanceof Error ? nextError.message : "Unable to resume the saved organizational experience.";
+        if (/not found/i.test(detail)) {
+          window.localStorage.removeItem(activeSourceStorageKey(organizationId));
+          return;
+        }
+        setError(`Unable to resume the saved organizational experience: ${detail}`);
+      }
+    }
+
+    void restoreSurface();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId]);
 
@@ -156,6 +199,7 @@ export function OrganizationalMemorySurface({ organizationId, knowledgeItems, da
       setSource(nextSource);
       setSourceEvidence([]);
       setPrepared(null);
+      window.localStorage.setItem(activeSourceStorageKey(organizationId), nextSource.id);
       setMessage("Organizational experience recorded. Add supporting evidence before preparing learning.");
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Unable to record the organizational experience.");
@@ -210,6 +254,7 @@ export function OrganizationalMemorySurface({ organizationId, knowledgeItems, da
       });
       setPrepared(null);
       setEntryOpen(false);
+      window.localStorage.removeItem(activeSourceStorageKey(organizationId));
       await onRefresh();
       await loadInspection(result.knowledgeItem.id);
       setMessage("Human validation committed. Organizational Memory is now inspectable.");

@@ -183,6 +183,7 @@
     "seed:development-memberships": "node scripts/seed-development-memberships.cjs",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
+    "probe:oip-v2-fix-004a-refresh-recovery": "node scripts/oip-v2-fix-004a-refresh-recovery-regression.cjs",
     "probe:oip-v2-fix-002": "node scripts/oip-v2-fix-002-entry-inspection-probe.cjs"
   },
   "dependencies": {
