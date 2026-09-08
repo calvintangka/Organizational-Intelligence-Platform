@@ -31,12 +31,30 @@ export type HistoricalAuditCompleteness =
 
 export type KnowledgeCandidateStatus = "proposed" | "validated" | "rejected";
 
+/**
+ * The single structured learning object shown for approval and carried into
+ * committed Organizational Memory. Source/Evidence remain the provenance;
+ * this object is the reusable, bounded organizational lesson.
+ */
+export interface CanonicalLearning {
+  title: string;
+  problem: string;
+  rootCause: string;
+  lesson: string;
+  solution: string;
+  scope: string;
+  exclusions: string[];
+  signals: string[];
+  whenToEscalate: string;
+}
+
 export interface KnowledgeCandidateContent {
   solution: string;
   customerResponseTemplate: string;
   internalGuidance: string;
   canonicalProblemTitle?: string;
   category?: string;
+  canonicalLearning?: CanonicalLearning;
   lessons?: Lesson[];
   importMetadata?: {
     sourceType: "knowledge_pack";
@@ -212,6 +230,7 @@ export interface KnowledgeItem {
   canonicalProblemId?: string;
   canonicalProblemTitle?: string;
   problemSummary?: string;
+  canonicalLearning?: CanonicalLearning;
   internalGuidance?: string;
   customerResponseTemplate?: string;
   resolutionWorkflow?: string[];

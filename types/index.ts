@@ -58,6 +58,7 @@ export type {
   HistoricalAuditCompleteness,
   KnowledgeCandidate,
   KnowledgeCandidateContent,
+  CanonicalLearning,
   KnowledgeCandidateStatus,
   ValidationRecord,
   MemoryChangeRecord,

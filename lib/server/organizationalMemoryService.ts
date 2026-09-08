@@ -27,7 +27,7 @@ import type {
   OrganizationalSourceView,
   ReuseOutcomeClassification
 } from "@/types";
-import type { KnowledgeCandidate, KnowledgeItem, ReflectionDecision } from "@/types";
+import type { CanonicalLearning, KnowledgeCandidate, KnowledgeItem, ReflectionDecision } from "@/types";
 
 const OUTCOME_CLASSES = new Set<ReuseOutcomeClassification>(["SUCCESS", "CORRECTION_REQUIRED", "FAILURE"]);
 const CHALLENGE_DISPOSITIONS = new Set<KnowledgeChallengeDisposition>(["REVALIDATED", "SCOPE_UPDATED", "DEPRECATED"]);
@@ -563,6 +563,151 @@ function neutralSourceMetadata(source: OrganizationalSourceView): Record<string,
   return asRecord(source.metadata);
 }
 
+function canonicalText(value: unknown): string {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+}
+
+/**
+ * Remove incidental person identifiers from the reusable lesson while leaving
+ * organizational regions, systems, and other operational context intact.
+ * Source and Evidence are still preserved verbatim for provenance.
+ */
+function redactCanonicalIdentity(value: string): string {
+  return value
+    .replace(/\b(?:employee|engineer|technician|coordinator|operator|user|customer|agent)\s+(?:[A-Z][a-z]+\s+){1,2}[A-Z][a-z]+\b/g, (match) => {
+      const role = match.trim().split(/\s+/)[0];
+      return `the affected ${role}`;
+    })
+    .replace(/\b(?:[A-Z][a-z]{2,}\s+){1,2}[A-Z][a-z]{2,}\b/g, (match) => {
+      const phrase = match.trim();
+      const preserved = new Set(["Meridian Field", "Field Operations", "East Region", "West Region", "North Region", "South Region"]);
+      return preserved.has(phrase) ? phrase : "the affected employee";
+    });
+}
+
+function stripTerminalPunctuation(value: string): string {
+  return canonicalText(value).replace(/[.!?]+$/g, "").trim();
+}
+
+function lowerFirst(value: string): string {
+  return value ? `${value.charAt(0).toLowerCase()}${value.slice(1)}` : value;
+}
+
+const CAUSAL_LANGUAGE = /\b(?:because|due to|caused by|root cause|result(?:ed|s) from|stale|out of sync|out-of-sync|unsynchroni[sz]ed|mismatch|retained|previous|prior|incorrect|mapping|assignment|permission|membership|group|policy|configuration|certificate|token|cache|index|state|record|queue)\b/i;
+const SYMPTOM_LANGUAGE = /\b(?:could|can|cannot|can't|unable|failed|failure|missing|absent|not appear|did not appear|does not appear|doesn't appear|authenticate|authenticated|sign in|login|existing .* (?:visible|available|work))\b/i;
+const ACTION_LANGUAGE = /\b(?:reconcil|refresh|updat|reset|restor|restart|add|remov|enabl|disabl|verif|check|compar|reload|reconnect|renew|apply|synchroni[sz]|repair|reconcile)\w*\b/i;
+
+function tokenOverlap(left: string, right: string): number {
+  const stopWords = new Set(["a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from", "in", "is", "it", "of", "on", "or", "the", "to", "was", "were", "with"]);
+  const tokens = (value: string) => new Set(value.toLowerCase().match(/[a-z][a-z0-9-]{2,}/g)?.filter((token) => !stopWords.has(token)) ?? []);
+  const leftTokens = tokens(left);
+  const rightTokens = tokens(right);
+  if (leftTokens.size === 0 || rightTokens.size === 0) return 0;
+  let overlap = 0;
+  for (const token of leftTokens) if (rightTokens.has(token)) overlap += 1;
+  return overlap / Math.max(leftTokens.size, rightTokens.size);
+}
+
+function evidenceScore(content: string, type: string, problem: string): number {
+  const text = canonicalText(content);
+  if (!text) return Number.NEGATIVE_INFINITY;
+  let score = 0;
+  if (type === "investigation") {
+    if (CAUSAL_LANGUAGE.test(text)) score += 5;
+    if (/\b(?:because|due to|caused by|root cause|result(?:ed|s) from)\b/i.test(text)) score += 3;
+    if (/\b(?:stale|out of sync|out-of-sync|unsynchroni[sz]ed|retained|previous|prior|mapping|assignment|permission|membership|group|configuration|policy|certificate|token|cache|index)\b/i.test(text)) score += 3;
+    if (SYMPTOM_LANGUAGE.test(text)) score -= 4;
+    if (tokenOverlap(text, problem) >= 0.55 && !CAUSAL_LANGUAGE.test(text)) score -= 4;
+  } else if (type === "action_taken") {
+    if (ACTION_LANGUAGE.test(text)) score += 6;
+    if (/\b(?:after|then|so that|to restore|to resolve)\b/i.test(text)) score += 1;
+  } else if (type === "observation") {
+    if (SYMPTOM_LANGUAGE.test(text)) score += 2;
+  } else if (type === "confirmation") {
+    if (/\b(?:after|resolved|restored|appeared|visible|returned|working|accessed|successful)\b/i.test(text)) score += 3;
+  }
+  return score;
+}
+
+function selectEvidenceContent(evidence: EvidenceRecordView[], type: string, problem: string, minimumScore = Number.NEGATIVE_INFINITY): string {
+  const candidates = new Map<string, EvidenceRecordView>();
+  for (const item of evidence) {
+    if (item.evidenceType !== type) continue;
+    const content = canonicalText(item.content);
+    if (!content) continue;
+    const key = content.toLowerCase();
+    if (!candidates.has(key)) candidates.set(key, item);
+  }
+  const ranked = [...candidates.values()]
+    .map((item) => ({ item, score: evidenceScore(item.content ?? "", type, problem), text: canonicalText(item.content) }))
+    .filter((entry) => entry.score >= minimumScore)
+    .sort((left, right) => right.score - left.score || left.text.localeCompare(right.text) || left.item.id.localeCompare(right.item.id));
+  return ranked[0]?.text ?? "";
+}
+
+function selectRootCauseEvidence(evidence: EvidenceRecordView[], problem: string, context: string): string {
+  const investigation = selectEvidenceContent(evidence, "investigation", problem, 2);
+  if (investigation) return redactCanonicalIdentity(investigation);
+  const systemResult = selectEvidenceContent(evidence, "system_result", problem, 2);
+  if (systemResult && CAUSAL_LANGUAGE.test(systemResult)) return redactCanonicalIdentity(systemResult);
+  if (context && CAUSAL_LANGUAGE.test(context) && tokenOverlap(context, problem) < 0.8) return redactCanonicalIdentity(context);
+  return "Root cause not yet confirmed; available evidence supports the observed problem and intervention only.";
+}
+
+function actionDirective(value: string): string {
+  const cleaned = stripTerminalPunctuation(value);
+  if (!cleaned) return "apply the confirmed intervention";
+  const pastTense = /(reconciled|refreshed|updated|reset|restored|restarted|added|removed|enabled|disabled|verified|checked|compared|reloaded|reconnected|renewed|applied|synchronized|synced|repaired)/i;
+  const match = cleaned.match(new RegExp(`^.+?\\b((?:${pastTense.source.slice(1, -1)})(?:\\s+and\\s+(?:${pastTense.source.slice(1, -1)}))*)\\s+(.+)$`, "i"));
+  if (match) {
+    const verbMap: Record<string, string> = { reconciled: "reconcile", refreshed: "refresh", updated: "update", reset: "reset", restored: "restore", restarted: "restart", added: "add", removed: "remove", enabled: "enable", disabled: "disable", verified: "verify", checked: "check", compared: "compare", reloaded: "reload", reconnected: "reconnect", renewed: "renew", applied: "apply", synchronized: "synchronize", synced: "sync", repaired: "repair" };
+    const verbs = match[1].split(/\s+and\s+/i).map((verb) => verbMap[verb.toLowerCase()] ?? verb.toLowerCase());
+    return `${verbs.join(" and ")} ${match[2]}`;
+  }
+  if (/^(?:to\s+)?(?:apply|check|compare|enable|disable|reconcile|refresh|reload|repair|reset|restore|restart|synchronize|sync|update|verify)\b/i.test(cleaned)) return cleaned.replace(/^to\s+/i, "");
+  return `follow the confirmed action \"${cleaned}\"`;
+}
+
+function buildCanonicalLearning(
+  source: OrganizationalSourceView,
+  evidence: EvidenceRecordView[],
+  title: string,
+  description: string
+): CanonicalLearning {
+  const metadata = neutralSourceMetadata(source);
+  const location = canonicalText(metadata.location);
+  const context = redactCanonicalIdentity(canonicalText(metadata.context));
+  const problem = redactCanonicalIdentity(description || title);
+  const investigation = selectRootCauseEvidence(evidence, problem, context);
+  const action = redactCanonicalIdentity(selectEvidenceContent(evidence, "action_taken", problem) || "apply the confirmed intervention for the affected configuration");
+  const scope = context || redactCanonicalIdentity(location) || source.sourceKind.replaceAll("_", " ").toLowerCase();
+  const observation = redactCanonicalIdentity(selectEvidenceContent(evidence, "observation", problem) || problem);
+  const problemClause = lowerFirst(stripTerminalPunctuation(problem) || "the scoped problem recurs");
+  const scopeClause = lowerFirst(stripTerminalPunctuation(scope) || "the verified operational context");
+  const causeConfirmed = !/^Root cause not yet confirmed\b/i.test(investigation);
+  const causeClause = lowerFirst(stripTerminalPunctuation(investigation));
+  const actionClause = actionDirective(action);
+  const lesson = causeConfirmed
+    ? `When ${problemClause} and the verified context is ${scopeClause}, check whether ${causeClause}; if confirmed, ${actionClause} before escalating beyond the affected scope.`
+    : `When ${problemClause} and the verified context is ${scopeClause}, verify the contributing condition before ${actionClause} or escalating beyond the affected scope.`;
+  const exclusions = [
+    `Apply this lesson only within the verified ${scope} scope.`,
+    "Do not treat this pattern as proof of a broader outage without checking the scoped condition."
+  ];
+  const whenToEscalate = `Escalate beyond ${scope} only if the scoped condition check and confirmed intervention do not resolve the problem.`;
+  return {
+    title,
+    problem,
+    rootCause: investigation,
+    lesson,
+    solution: action,
+    scope,
+    exclusions,
+    signals: [observation, investigation].filter(Boolean).slice(0, 4),
+    whenToEscalate
+  };
+}
+
 export async function prepareOrganizationalLearning(
   organizationId: string,
   sourceId: string,
@@ -575,7 +720,7 @@ export async function prepareOrganizationalLearning(
   const metadata = neutralSourceMetadata(source);
   const title = typeof metadata.title === "string" && metadata.title.trim() ? metadata.title.trim() : `${source.sourceKind.replaceAll("_", " ")} learning event`;
   const description = typeof metadata.description === "string" ? metadata.description.trim() : "";
-  const evidenceText = evidence.map((item) => item.content?.trim()).filter(Boolean).join(" ");
+  const canonicalLearning = buildCanonicalLearning(source, evidence, title, description);
   const now = new Date().toISOString();
   const candidate: KnowledgeCandidate = {
     id: getNeutralCandidateId(source.id),
@@ -583,18 +728,21 @@ export async function prepareOrganizationalLearning(
     sourceTicketIds: [],
     proposedAction: "create_new",
     proposedContent: {
-      solution: evidenceText || description,
+      solution: canonicalLearning.lesson,
       customerResponseTemplate: "Apply this lesson only when the observed conditions and scope are present.",
-      internalGuidance: `Prepared from organizational Source ${source.id}. Human validation is required before this becomes memory.`,
+      internalGuidance: canonicalLearning.solution,
       canonicalProblemTitle: title,
       category: source.sourceKind,
+      canonicalLearning,
       lessons: [{
         id: `neutral-lesson-${source.id}`,
         title,
-        rootCause: description || title,
-        solution: evidenceText || description || title,
+        rootCause: canonicalLearning.rootCause,
+        solution: canonicalLearning.solution,
         customerResponse: "",
-        signals: evidence.map((item) => item.content ?? "").filter(Boolean).slice(0, 8),
+        signals: canonicalLearning.signals,
+        whenToEscalate: canonicalLearning.whenToEscalate,
+        doNotPromise: canonicalLearning.exclusions,
         createdAt: now,
         sourceTicketId: source.id
       }]
@@ -661,13 +809,17 @@ export async function validateOrganizationalLearning(input: {
   const rationale = memoryString(input.rationale, "rationale", 4000);
   const actorName = memoryString(input.actorName, "actorName", 240);
   const sourceDescription = typeof neutralSourceMetadata(source).description === "string" ? String(neutralSourceMetadata(source).description) : title;
+  const canonicalLearning = asRecord(content.canonicalLearning) as unknown as CanonicalLearning;
+  const canonicalLesson = canonicalLearning && typeof canonicalLearning.lesson === "string"
+    ? canonicalLearning
+    : buildCanonicalLearning(source, evidence, title, sourceDescription);
   const item: KnowledgeItem = {
     id: knowledgeId,
     organizationId,
     revision: 0,
     title,
-    problem: sourceDescription,
-    approvedAnswer: typeof content.solution === "string" ? content.solution : sourceDescription,
+    problem: canonicalLesson.problem,
+    approvedAnswer: canonicalLesson.lesson,
     category: typeof content.category === "string" ? content.category : source.sourceKind,
     tags: ["organizational-memory", source.sourceKind.toLowerCase()],
     sourceTicketId: source.id,
@@ -681,11 +833,24 @@ export async function validateOrganizationalLearning(input: {
     autoResponseEligible: false,
     canonicalProblemId: `neutral-problem-${source.id}`,
     canonicalProblemTitle: title,
-    problemSummary: sourceDescription,
-    internalGuidance: typeof content.internalGuidance === "string" ? content.internalGuidance : "Human review approved this evidence-backed organizational lesson.",
+    problemSummary: canonicalLesson.problem,
+    internalGuidance: canonicalLesson.solution,
+    canonicalLearning: canonicalLesson,
+    scopeNote: canonicalLesson.scope,
     resolutionWorkflow: evidence.map((entry) => entry.content ?? "").filter(Boolean),
     knowledgeVersions: [{ versionId, version: 1, createdAt: now, changeReason: "Initial human validation of organizational experience", sourceTicketId: source.id, summary: title }],
-    lessons: Array.isArray(content.lessons) ? content.lessons as KnowledgeItem["lessons"] : undefined,
+    lessons: Array.isArray(content.lessons) ? content.lessons as KnowledgeItem["lessons"] : [{
+      id: `neutral-lesson-${source.id}`,
+      title: canonicalLesson.title,
+      rootCause: canonicalLesson.rootCause,
+      solution: canonicalLesson.solution,
+      customerResponse: "",
+      signals: canonicalLesson.signals,
+      whenToEscalate: canonicalLesson.whenToEscalate,
+      doNotPromise: canonicalLesson.exclusions,
+      createdAt: now,
+      sourceTicketId: source.id
+    }],
     validation: { validatedBy: actorName, validatedAt: now, validationBasis: rationale, validationScope: "Domain-neutral organizational experience", status: "validated" },
     provenance: { sourceTicketId: source.id, contributingTicketIds: [], createdBy: actorName, createdAt: now, validatedBy: actorName, validatedAt: now, validationBasis: rationale, validationScope: "Domain-neutral organizational experience" }
   };
