@@ -58,6 +58,7 @@ import {
   withCanonicalProblemDefaults
 } from "@/lib/canonicalProblemEngine";
 import { createLogEntry } from "@/lib/intelligenceLog";
+import { OrganizationLogSaveQueue } from "@/lib/persistence/orgLogSaveQueue";
 import { TicketRequestGuard } from "@/lib/ticketRequestGuard";
 import {
   hasSpecificCanonicalMatch,
@@ -650,6 +651,7 @@ export default function Home() {
   const [emergingPatterns, setEmergingPatterns] = useState<EmergingPattern[]>([]);
 
   // Ticket records (first-class persisted case records)
+  const orgLogSaveQueue = useRef(new OrganizationLogSaveQueue());
   const ticketSaveChains = useRef<Record<string, Promise<void>>>({});
   const draftSaveChains = useRef<Record<string, Promise<void>>>({});
   const draftSaveState = useRef<Record<string, { record: TicketRecord; value: string }>>({});
@@ -989,6 +991,17 @@ export default function Home() {
     });
   }
 
+  function enqueueOrgLogSave(
+    organizationId: string,
+    entries: IntelligenceLogEntry[],
+    operationName: string
+  ): Promise<void> {
+    return orgLogSaveQueue.current.enqueue(organizationId, async () => {
+      const session = await openPersistenceSession(organizationId, operationName);
+      await session.saveOrgLog(entries);
+    });
+  }
+
   /**
    * RSS-1.2S3: the only client-owned fields that may be written directly. All
    * authority (status, actor, timestamps, resolution, review and memory state)
@@ -1218,7 +1231,7 @@ export default function Home() {
       session.saveKnowledge(knowledgeItems),
       session.saveKnowledgeCandidates(knowledgeCandidates),
       session.saveOrgMetrics(orgMetrics),
-      session.saveOrgLog(intelligenceLog),
+      enqueueOrgLogSave(orgId, intelligenceLog, "save-organization-state-log"),
       session.saveEmergingPatterns(emergingPatterns)
     ]);
   }
@@ -1263,7 +1276,7 @@ export default function Home() {
   }, [orgMetrics, organizationProfile.id, hydrated]);
 
   useEffect(() => {
-    if (shouldPersistHydratedCollection("log")) queuePersistenceSave("saveOrgLog", openPersistenceSession(organizationProfile.id, "save-log").then((session) => session.saveOrgLog(intelligenceLog)));
+    if (shouldPersistHydratedCollection("log")) queuePersistenceSave("saveOrgLog", enqueueOrgLogSave(organizationProfile.id, intelligenceLog, "save-log"));
   }, [intelligenceLog, organizationProfile.id, hydrated]);
 
   useEffect(() => {
