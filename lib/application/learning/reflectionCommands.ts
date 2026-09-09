@@ -212,6 +212,34 @@ function normalizeLessonDraft(draft: LessonDraft): LessonDraft {
 }
 
 /**
+ * Resolve the selected Reflection item against the organization-scoped
+ * persistence snapshot while retaining the durable row object. Retrieval
+ * normalisation uses canonicalProblemId as a semantic identity, whereas
+ * server persistence keeps the database row id in KnowledgeItem.id. A
+ * Reflection may therefore carry either identity. Exact durable ids win;
+ * canonical aliases are accepted only when they resolve to one in-scope row.
+ * Missing or ambiguous targets remain fail-closed at the promotion boundary.
+ */
+function resolveReflectionKnowledgeItem(
+  command: Pick<PromoteKnowledgeCommand, "organizationId" | "knowledgeItems">,
+  reflectionItemId: string | undefined
+): KnowledgeItem | null {
+  if (!reflectionItemId) return null;
+  const inScope = command.knowledgeItems.filter((item) =>
+    item.organizationId === undefined || item.organizationId === command.organizationId
+  );
+  const direct = inScope.find((item) => item.id === reflectionItemId);
+  if (direct) return direct;
+  const aliases = inScope.filter((item) => {
+    if (item.canonicalProblemId === reflectionItemId) return true;
+    // Legacy rows may not carry canonicalProblemId until normalized for
+    // retrieval. Compare the derived alias but return the raw row unchanged.
+    return withCanonicalProblemDefaults(item).canonicalProblemId === reflectionItemId;
+  });
+  return aliases.length === 1 ? aliases[0] : null;
+}
+
+/**
  * Return the content that the selected promotion action will actually write
  * into reusable Organizational Memory. Source tickets, conversation messages,
  * resolution evidence, and provenance identifiers are deliberately not part
@@ -455,8 +483,9 @@ export async function promoteKnowledgeCommand(command: PromoteKnowledgeCommand, 
   const und = command.understanding;
   const draft = submittedDraft;
   const action = command.reflection.action;
+  const reflectionTarget = resolveReflectionKnowledgeItem(command, command.reflection.existingItemId);
   const expectedKnowledgeRevision = command.reflection.existingItemId
-    ? command.knowledgeItems.find((item) => item.id === command.reflection.existingItemId)?.revision ?? 0
+    ? reflectionTarget?.revision ?? 0
     : null;
   let beforeState: KnowledgeItem | null = null;
   let afterState: KnowledgeItem;
@@ -487,9 +516,13 @@ export async function promoteKnowledgeCommand(command: PromoteKnowledgeCommand, 
     orgMetricsPatch = { memoryGrowthToday: (command.currentOrgMetrics?.memoryGrowthToday ?? 0) + 1, knowledgeVersions: (command.currentOrgMetrics?.knowledgeVersions ?? 0) + 1 };
     lessonCreatedId = draft?.mode === "new" ? afterState.lessons?.find((lesson) => lessonContentFingerprint(lesson) === lessonContentFingerprint(draft))?.id ?? null : null;
   } else {
-    beforeState = command.knowledgeItems.find((item) => item.id === command.reflection.existingItemId) ?? null;
+    beforeState = reflectionTarget;
     if (!beforeState) fail(command, "promotion_conflict", "The knowledge item selected by Reflection is no longer available.", true);
-    const base = withCanonicalProblemDefaults(beforeState);
+    // Canonical defaults are useful for content construction but intentionally
+    // derive a semantic id. Keep the authoritative persistence row id on the
+    // object that will be committed so validation, history, and optimistic
+    // concurrency all reference the same durable Memory.
+    const base = { ...withCanonicalProblemDefaults(beforeState), id: beforeState.id };
     candidate = createCandidate(command, {
       action,
       sourceTicketIds: [ticketId],
@@ -503,7 +536,7 @@ export async function promoteKnowledgeCommand(command: PromoteKnowledgeCommand, 
       now
     });
     if (action === "merge_existing") {
-      afterState = mergeIntoCanonicalProblem(base, command.ticket, und, undefined, "human", now);
+      afterState = { ...mergeIntoCanonicalProblem(base, command.ticket, und, undefined, "human", now), id: beforeState.id };
       if (draft) afterState = applyLessonToItem(afterState, draft, ticketId, now);
       metricsPatch = { ...metricsPatch, canonicalProblemsTouched: 1, mergedTickets: 1, duplicatePreventions: 1 };
       orgMetricsPatch = { mergedTickets: (command.currentOrgMetrics?.mergedTickets ?? 0) + 1, duplicatePreventions: (command.currentOrgMetrics?.duplicatePreventions ?? 0) + 1 };
@@ -529,6 +562,7 @@ export async function promoteKnowledgeCommand(command: PromoteKnowledgeCommand, 
       const targetWithEvidence = mergeIntoCanonicalProblem(base, command.ticket, und, undefined, "human", now);
       const trust = recordResolution(targetWithEvidence, { mode: "human", success: true, at: now }, command.organizationProfile, command.validationRecords);
       afterState = draft ? applyLessonToItem(trust.item, draft, ticketId, now) : trust.item;
+      afterState = { ...afterState, id: beforeState.id };
       trustDelta = trust.trustDelta;
       lessonReinforcedId = draft?.mode === "improves_existing" ? draft.existingLessonId ?? null : null;
       metricsPatch = { ...metricsPatch, ...(lessonReinforcedId ? {} : {}) };

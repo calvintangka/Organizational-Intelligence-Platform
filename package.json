@@ -3,6 +3,7 @@
   "version": "0.4.1",
   "private": true,
   "scripts": {
+    "probe:oip-v2-fix-009-reflection-commit-identity": "node scripts/oip-v2-fix-009-reflection-commit-identity-regression.cjs",
     "dev": "next dev",
     "prebuild": "prisma generate",
     "build": "next build",
