@@ -28,7 +28,7 @@ const PROBLEM_FACETS: Array<{ id: string; aliases: string[]; minimumAliases?: nu
   // every synchronization failure look like the same reusable lesson. The
   // aliases are intentionally generic and cover ordinary inflection and
   // movement wording without encoding a product or fixture.
-  { id: "network-transition-synchronization", aliases: ["roaming", "roam", "network band", "network bands", "move between", "moving between", "movement between", "scanning zones"] },
+  { id: "network-transition-synchronization", aliases: ["roaming", "roam", "network transition", "network band", "network bands", "move between", "moving between", "movement between", "scanning zones"] },
   { id: "billing-document", aliases: ["invoice", "billing", "charge", "payment", "receipt"] },
   { id: "authentication", aliases: ["login", "log in", "sign in", "password", "authentication", "certificate", "certificates", "device authentication", "sso", "saml"] },
   {
@@ -69,13 +69,36 @@ const PROBLEM_FACETS: Array<{ id: string; aliases: string[]; minimumAliases?: nu
   },
   { id: "expired-assignment-entitlement", aliases: ["temporary assignment", "assignment end date", "assignment ended", "entitlement", "eligible assignment", "assignment expired", "current assignment"], minimumAliases: 2 },
   { id: "regional-roster-access", aliases: ["regional roster", "reader group", "reader-group", "roster access", "roster group", "roster portal", "access denied"], minimumAliases: 2 },
-  { id: "mobile-stale-session", aliases: ["stale data", "assignment snapshot", "tablet", "reconnect", "reconnected", "application session", "current assignment list"], minimumAliases: 2 }
+  { id: "mobile-stale-session", aliases: ["stale data", "assignment snapshot", "mobile device", "tablet", "reconnect", "reconnected", "application session", "current assignment list"], minimumAliases: 2 }
 ];
 
 const CATEGORY_UNKNOWN = new Set(["general", "uncategorized"]);
 
 function normalize(value: string): string {
   return value.toLowerCase().replace(/[\u2018\u2019]/gu, "'").replace(/\s+/gu, " ").trim();
+}
+
+/**
+ * Map ordinary operational paraphrases to the same bounded problem vocabulary
+ * before facet extraction. This is deliberately structural: it normalizes
+ * device, connection, transition, and stale-assignment expressions rather
+ * than naming a customer, fixture, Memory title, or complete query sentence.
+ */
+function normalizeOperationalVariants(value: string): string {
+  return normalize(value)
+    .replace(/\bhandhelds?\b/gu, "tablet")
+    .replace(/\b(?:field|portable)\s+(?:terminal|unit|device)\b/gu, "mobile device")
+    .replace(/\b(?:came|come|comes|returned|returning)\s+back\s+online\b/gu, "reconnect")
+    .replace(/\b(?:came|come|comes|returned|returning)\s+online\b/gu, "reconnect")
+    .replace(/\bback\s+online\b/gu, "reconnect")
+    .replace(/\bonline\s+again\b/gu, "reconnect")
+    .replace(/\b(?:connectivity|network)\s+(?:has\s+)?returned\b/gu, "reconnect")
+    .replace(/\b(?:wi[- ]?fi|wireless)\s+(?:network\s+)?(?:hand[- ]?off|handover|transition)\b/gu, "network transition")
+    .replace(/\b(?:old|stale|out[- ]of[- ]date|yesterday's?)\s+(?:route\s+)?(?:manifest|assignment(?:s)?|list)\b/gu, "stale data")
+    .replace(/\b(?:route\s+)?manifest(?:s)?\s+(?:is|are|was|were|stays?|stayed)\s+(?:still\s+)?(?:old|stale|out[- ]of[- ]date)\b/gu, "stale data")
+    .replace(/\b(?:assignment(?:s)?|route list|work assignments?)\s+(?:is|are|remain|remains|stays?|stayed)\s+(?:still\s+)?(?:old|stale|out[- ]of[- ]date)\b/gu, "stale data")
+    .replace(/\bstale\s+(?:work\s+)?assignments?\b/gu, "stale data")
+    .replace(/\b(?:route|assignment|work)\s+(?:manifest|list|assignments?)\b/gu, "assignment snapshot");
 }
 
 function aliasPresent(text: string, alias: string): boolean {
@@ -93,7 +116,7 @@ function containsCanonicalTitle(text: string, item: KnowledgeItem): boolean {
 }
 
 function facetEvidenceFor(text: string): Map<string, number> {
-  const normalized = normalize(text);
+  const normalized = normalizeOperationalVariants(text);
   return new Map(PROBLEM_FACETS
     .map((facet) => [facet.id, facet.aliases.filter((alias) => aliasPresent(normalized, normalize(alias))).length] as const)
     .filter(([id, count]) => count >= (PROBLEM_FACETS.find((facet) => facet.id === id)?.minimumAliases ?? 1)));
@@ -170,8 +193,9 @@ export function assessRetrievalCompatibility(
   const currentRootCauseFacets = currentFacets.filter((facet) => !symptomFacets.has(facet));
   const candidateRootCauseFacets = candidateFacets.filter((facet) => !symptomFacets.has(facet));
   const transitionFacet = "network-transition-synchronization";
-  const currentTextNormalized = normalize(currentText);
+  const currentTextNormalized = normalizeOperationalVariants(currentText);
   const candidateRequiresTransitionEvidence = candidate.has(transitionFacet);
+  const sharedRootCauseFacets = sharedFacets.filter((facet) => !symptomFacets.has(facet));
 
   // A healthy backend and a backend outage are different operational
   // conditions even when both cases mention scanners and synchronization.
@@ -231,7 +255,7 @@ export function assessRetrievalCompatibility(
   // applicability depends on a network transition. This keeps certificate
   // and backend-wide failures from becoming strong matches when the current
   // category is otherwise unknown.
-  if (categoryUnknown && candidateRequiresTransitionEvidence && !sharedFacets.includes(transitionFacet)) {
+  if (categoryUnknown && candidateRequiresTransitionEvidence && !sharedFacets.includes(transitionFacet) && sharedRootCauseFacets.length === 0) {
     return {
       state: "incompatible",
       score: -100,
