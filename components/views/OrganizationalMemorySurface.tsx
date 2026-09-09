@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { KnowledgeItem } from "@/types/knowledge";
+import type { KnowledgeMatch } from "@/types/knowledge";
+import type { KnowledgeQueryResult, KnowledgeQueryState } from "@/lib/knowledgeQuery";
 import type {
   EvidenceRecordView,
   KnowledgeChallengeView,
@@ -81,6 +83,16 @@ function automationLabel(item: KnowledgeItem): string {
   return item.autoResponseEligible ? "Automation eligible" : "Human review required";
 }
 
+function queryMatchLabel(match: KnowledgeMatch): string {
+  if (match.matchScore >= 70) return "Strong potential match";
+  if (match.matchScore >= 55) return "Possible match";
+  return "Weak possible match";
+}
+
+function queryLesson(item: KnowledgeItem): string {
+  return item.canonicalLearning?.lesson ?? item.problemSummary ?? item.problem ?? item.approvedAnswer;
+}
+
 function trustExplanation(item: KnowledgeItem): string {
   const score = typeof item.trustScore === "number" ? item.trustScore : "unknown";
   const failures = item.failedResolutions ?? 0;
@@ -119,6 +131,12 @@ export function OrganizationalMemorySurface({ organizationId, knowledgeItems, da
   const [reviewRationale, setReviewRationale] = useState("");
   const [reviewDisposition, setReviewDisposition] = useState<"REVALIDATED" | "SCOPE_UPDATED" | "DEPRECATED">("SCOPE_UPDATED");
   const [scopeNote, setScopeNote] = useState("");
+  const [queryText, setQueryText] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
+  const [queryMatches, setQueryMatches] = useState<KnowledgeMatch[]>([]);
+  const [queryState, setQueryState] = useState<KnowledgeQueryState | "idle" | "loading" | "error">("idle");
+  const [queryError, setQueryError] = useState("");
+  const queryAbortRef = useRef<AbortController | null>(null);
 
   const selectedMemory = useMemo(() => knowledgeItems.find((item) => item.id === selectedId) ?? null, [knowledgeItems, selectedId]);
 
@@ -178,6 +196,45 @@ export function OrganizationalMemorySurface({ organizationId, knowledgeItems, da
       setError(nextError instanceof Error ? nextError.message : "Unable to inspect this memory.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function runKnowledgeQuery(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const query = queryText.trim();
+    if (!query || busy) return;
+    queryAbortRef.current?.abort();
+    const controller = new AbortController();
+    queryAbortRef.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 90_000);
+    setQueryState("loading");
+    setQueryError("");
+    setSubmittedQuery(query);
+    setQueryMatches([]);
+    try {
+      const response = await fetch(`/api/organizations/${organizationId}/memory/query`, {
+        method: "POST",
+        cache: "no-store",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query }),
+        signal: controller.signal
+      });
+      const payload = await response.json().catch(() => null) as { data?: KnowledgeQueryResult; error?: { message?: string } } | null;
+      if (!response.ok || !payload?.data) {
+        throw new Error(payload?.error?.message ?? `Unable to check Organizational Memory (${response.status}).`);
+      }
+      setQueryMatches(payload.data.matches);
+      setQueryState(payload.data.state);
+    } catch (nextError) {
+      if (controller.signal.aborted) {
+        setQueryError("The Organizational Memory check took too long. Try again when the workspace is ready.");
+      } else {
+        setQueryError(nextError instanceof Error ? nextError.message : "Unable to check Organizational Memory.");
+      }
+      setQueryState("error");
+    } finally {
+      window.clearTimeout(timeout);
+      if (queryAbortRef.current === controller) queryAbortRef.current = null;
     }
   }
 
@@ -357,6 +414,99 @@ export function OrganizationalMemorySurface({ organizationId, knowledgeItems, da
 
   return (
     <section className="mx-auto max-w-6xl space-y-5 p-6">
+      <div className={cardClass(darkMode)}>
+        <div className="max-w-3xl">
+          <span className={`text-xs font-bold uppercase tracking-widest ${darkMode ? "text-blue-400" : "text-[#2563EB]"}`}>ASK ORGANIZATIONAL MEMORY</span>
+          <h2 className={`mt-1 text-2xl font-bold ${darkMode ? "text-white" : "text-[#111827]"}`}>What are you dealing with?</h2>
+          <p className={`mt-1 text-sm ${muted(darkMode)}`}>Describe the situation you're dealing with. OIP will look for relevant lessons your organization has already validated.</p>
+        </div>
+        <form className="mt-4" onSubmit={(event) => { void runKnowledgeQuery(event); }}>
+          <label htmlFor="knowledge-situation-query" className={`mb-1 block text-xs font-semibold ${darkMode ? "text-slate-300" : "text-slate-600"}`}>Describe the situation</label>
+          <textarea
+            id="knowledge-situation-query"
+            value={queryText}
+            onChange={(event) => setQueryText(event.target.value)}
+            rows={4}
+            maxLength={4000}
+            disabled={queryState === "loading"}
+            placeholder="An employee can sign in but lost access to a regional dispatch roster after being reassigned. Have we seen this before?"
+            className={`${inputClass(darkMode)} min-h-28 resize-y`}
+          />
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button type="submit" disabled={queryState === "loading" || !queryText.trim()} className="rounded-xl bg-[#2563EB] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-50">
+              {queryState === "loading" ? "Checking Organizational Memory…" : "Check Organizational Memory"}
+            </button>
+            <span className={`text-xs ${muted(darkMode)}`}>Observational only. Checking does not create a Ticket, reuse, Outcome, or Memory change.</span>
+          </div>
+        </form>
+
+        <div className="mt-5" aria-live="polite" aria-atomic="true">
+          {queryState === "loading" && (
+            <div role="status" className={`rounded-xl border px-4 py-3 text-sm ${darkMode ? "border-blue-700/50 bg-blue-900/20 text-blue-200" : "border-blue-200 bg-blue-50 text-blue-800"}`}>
+              Checking what your organization has learned…
+            </div>
+          )}
+          {queryState === "error" && (
+            <div role="alert" className={`rounded-xl border px-4 py-3 text-sm ${darkMode ? "border-rose-700/50 bg-rose-900/20 text-rose-200" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
+              <p className="font-semibold">Organizational Memory could not be checked.</p>
+              <p className="mt-1">{queryError || "Try the same situation again."}</p>
+            </div>
+          )}
+          {queryState === "no_match" && (
+            <div className={`rounded-xl border px-4 py-3 text-sm ${darkMode ? "border-slate-600 bg-slate-900/40 text-slate-200" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
+              <p className="font-semibold">We couldn't find Organizational Memory that clearly matches this situation.</p>
+              <p className="mt-1">No answer was invented. You can browse the current Memory below or describe a different situation.</p>
+            </div>
+          )}
+          {(queryState === "relevant" || queryState === "weak") && (
+            <div className={`rounded-xl border p-4 ${darkMode ? "border-blue-700/50 bg-blue-950/20" : "border-blue-200 bg-blue-50/60"}`}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className={`text-xs font-bold uppercase tracking-wide ${darkMode ? "text-blue-300" : "text-blue-700"}`}>Retrieval result</p>
+                  <p className={`mt-1 text-sm font-semibold ${darkMode ? "text-white" : "text-[#111827]"}`}>{queryState === "weak" ? "We found a possible related Memory, but the match is weak." : "OIP found Organizational Memory that may be relevant."}</p>
+                </div>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${queryState === "weak" ? darkMode ? "bg-amber-900/40 text-amber-200" : "bg-amber-100 text-amber-800" : darkMode ? "bg-blue-900/50 text-blue-200" : "bg-white text-blue-800"}`}>
+                  Human judgment required
+                </span>
+              </div>
+              <p className={`mt-3 text-xs uppercase tracking-wide ${muted(darkMode)}`}>Situation checked</p>
+              <p className={`mt-1 rounded-lg p-3 text-sm ${darkMode ? "bg-[#111827] text-slate-200" : "bg-white text-slate-700"}`}>{submittedQuery}</p>
+              <div className="mt-4 space-y-3">
+                {queryMatches.map((match) => {
+                  const item = match.item;
+                  const trust = item.trustScore ?? 20;
+                  const versionCount = (item.knowledgeVersions?.length ?? 0) || 1;
+                  const scope = item.scopeNote ?? item.canonicalLearning?.scope;
+                  return (
+                    <article key={item.id} className={`rounded-xl border p-4 ${darkMode ? "border-[#2d3f52] bg-[#111827]" : "border-slate-200 bg-white"}`}>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h3 className={`font-bold ${darkMode ? "text-white" : "text-[#111827]"}`}>{item.canonicalProblemTitle ?? item.title}</h3>
+                          <p className={`mt-1 text-sm ${darkMode ? "text-slate-300" : "text-slate-700"}`}>{queryLesson(item)}</p>
+                        </div>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${match.matchScore < 55 ? darkMode ? "bg-amber-900/40 text-amber-200" : "bg-amber-100 text-amber-800" : darkMode ? "bg-blue-900/50 text-blue-200" : "bg-blue-50 text-blue-800"}`}>{queryMatchLabel(match)}</span>
+                      </div>
+                      <p className={`mt-3 text-sm ${darkMode ? "text-slate-300" : "text-slate-600"}`}><strong>Why it may apply:</strong> {match.matchReason}</p>
+                      <div className={`mt-3 grid gap-2 text-xs sm:grid-cols-2 ${muted(darkMode)}`}>
+                        <span>Reliability {trust}/100</span>
+                        <span>Version {versionCount}</span>
+                        <span>{item.governanceState === "challenged" ? "Challenged · automation blocked" : "Human review required"}</span>
+                        {scope && <span>Scope: {scope}</span>}
+                        <span>{item.provenance?.validatedBy ? `Validated by ${item.provenance.validatedBy}` : "Validation recorded"}</span>
+                      </div>
+                      <button type="button" onClick={() => { void loadInspection(item.id); }} className={`mt-4 rounded-lg px-3 py-2 text-xs font-semibold ${darkMode ? "bg-slate-800 text-slate-200 hover:bg-slate-700" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
+                        Inspect Memory provenance
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+              <p className={`mt-4 text-xs ${muted(darkMode)}`}>Retrieval is a relevance signal, not a confirmed answer. Inspect the Memory's evidence and scope before deciding whether it applies.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <span className={`text-xs font-bold uppercase tracking-widest ${darkMode ? "text-blue-400" : "text-[#2563EB]"}`}>MEMORY CORE</span>

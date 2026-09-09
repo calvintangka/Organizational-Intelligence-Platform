@@ -169,6 +169,7 @@
     "certify": "node scripts/certify.cjs",
     "probe:oip-v2-fix-001": "node scripts/oip-v2-fix-001-foundation-probe.cjs",
     "probe:oip-v2-fix-001-retrieval": "node scripts/oip-v2-fix-001-retrieval-regression.cjs",
+    "probe:oip-v2-product-001-knowledge-direct-query": "node scripts/oip-v2-product-001-knowledge-direct-query-probe.cjs",
     "worker:jobs": "node scripts/async-worker.cjs",
     "probe:todo060-business-inquiry": "node scripts/todo060-business-inquiry-probe.cjs",
     "probe:todo061-business-memory": "node scripts/todo061-business-memory-probe.cjs",
