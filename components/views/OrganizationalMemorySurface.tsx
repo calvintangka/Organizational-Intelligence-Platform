@@ -13,6 +13,7 @@ import type {
   PreparedOrganizationalLearning
 } from "@/types/organizationalMemory";
 import { formatLocalDateTimeInput, serializeLocalDateTimeInput } from "@/lib/eventTime";
+import { canApplyDraftHydration, type OrganizationalExperienceEditorIntent } from "@/lib/organizationalExperienceEditorState";
 
 interface OrganizationalMemorySurfaceProps {
   organizationId: string;
@@ -104,6 +105,8 @@ function trustExplanation(item: KnowledgeItem): string {
 
 export function OrganizationalMemorySurface({ organizationId, knowledgeItems, darkMode, onRefresh }: OrganizationalMemorySurfaceProps) {
   const [entryOpen, setEntryOpen] = useState(false);
+  const [editorIntent, setEditorIntent] = useState<OrganizationalExperienceEditorIntent>("idle");
+  const [savedDraftSourceId, setSavedDraftSourceId] = useState<string | null>(null);
   const [source, setSource] = useState<OrganizationalSourceView | null>(null);
   const [sourceEvidence, setSourceEvidence] = useState<EvidenceRecordView[]>([]);
   const [prepared, setPrepared] = useState<PreparedOrganizationalLearning | null>(null);
@@ -137,13 +140,32 @@ export function OrganizationalMemorySurface({ organizationId, knowledgeItems, da
   const [queryState, setQueryState] = useState<KnowledgeQueryState | "idle" | "loading" | "error">("idle");
   const [queryError, setQueryError] = useState("");
   const queryAbortRef = useRef<AbortController | null>(null);
+  const editorIntentRef = useRef<OrganizationalExperienceEditorIntent>("idle");
+  const draftHydrationGenerationRef = useRef(0);
+  const activeOrganizationIdRef = useRef(organizationId);
 
   const selectedMemory = useMemo(() => knowledgeItems.find((item) => item.id === selectedId) ?? null, [knowledgeItems, selectedId]);
 
   useEffect(() => {
     let cancelled = false;
+    activeOrganizationIdRef.current = organizationId;
+    draftHydrationGenerationRef.current += 1;
+    editorIntentRef.current = "idle";
+    setEditorIntent("idle");
+    setEntryOpen(false);
+    setSource(null);
+    setSourceEvidence([]);
+    setPrepared(null);
+    const restoreGeneration = draftHydrationGenerationRef.current;
 
     async function restoreSurface(): Promise<void> {
+      if (typeof window === "undefined") return;
+      const sourceId = window.localStorage.getItem(activeSourceStorageKey(organizationId));
+      if (!sourceId) {
+        setSavedDraftSourceId(null);
+        return;
+      }
+      setSavedDraftSourceId(sourceId);
       try {
         // The page hydrates the legacy knowledge view and this surface is also
         // a direct inspection entry point; refresh once on mount so a
@@ -153,30 +175,10 @@ export function OrganizationalMemorySurface({ organizationId, knowledgeItems, da
         // The parent reports the authoritative workspace error. Do not hide a
         // recoverable active Source behind a second client-only failure.
       }
-      if (cancelled || typeof window === "undefined") return;
-      const sourceId = window.localStorage.getItem(activeSourceStorageKey(organizationId));
-      if (!sourceId) return;
-
-      try {
-        const [nextSource, nextEvidence] = await Promise.all([
-          requestJson<OrganizationalSourceView>(`/api/organizations/${organizationId}/memory/experiences/${encodeURIComponent(sourceId)}`),
-          requestJson<EvidenceRecordView[]>(`/api/organizations/${organizationId}/memory/experiences/${encodeURIComponent(sourceId)}/evidence`)
-        ]);
-        if (cancelled) return;
-        setSource(nextSource);
-        setSourceEvidence(nextEvidence);
-        setPrepared(null);
-        setEntryOpen(true);
-        setMessage("Resumed the saved organizational experience and its evidence.");
-      } catch (nextError) {
-        if (cancelled) return;
-        const detail = nextError instanceof Error ? nextError.message : "Unable to resume the saved organizational experience.";
-        if (/not found/i.test(detail)) {
-          window.localStorage.removeItem(activeSourceStorageKey(organizationId));
-          return;
-        }
-        setError(`Unable to resume the saved organizational experience: ${detail}`);
-      }
+      if (cancelled
+        || restoreGeneration !== draftHydrationGenerationRef.current
+        || editorIntentRef.current === "new") return;
+      setMessage("A saved organizational experience is available. Resume it or start a new experience.");
     }
 
     void restoreSurface();
@@ -185,6 +187,71 @@ export function OrganizationalMemorySurface({ organizationId, knowledgeItems, da
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId]);
+
+  function resetNewEditor(): void {
+    draftHydrationGenerationRef.current += 1;
+    editorIntentRef.current = "new";
+    setEditorIntent("new");
+    setSource(null);
+    setSourceEvidence([]);
+    setPrepared(null);
+    setTitle("");
+    setSourceKind("OPERATIONAL_EVENT");
+    setOccurredAt(formatLocalDateTimeInput());
+    setDescription("");
+    setLocation("");
+    setContext("");
+    setEvidenceContent("");
+    setValidationRationale("");
+    setMessage(savedDraftSourceId ? "Started a new organizational experience. The saved draft remains available to resume." : "Started a new organizational experience.");
+    setError("");
+    setEntryOpen(true);
+  }
+
+  async function resumeSavedDraft(): Promise<void> {
+    if (!savedDraftSourceId) return;
+    const requestOrganizationId = organizationId;
+    const requestGeneration = draftHydrationGenerationRef.current + 1;
+    draftHydrationGenerationRef.current = requestGeneration;
+    editorIntentRef.current = "resume";
+    setEditorIntent("resume");
+    setBusy(true);
+    setError("");
+    try {
+      const [nextSource, nextEvidence] = await Promise.all([
+        requestJson<OrganizationalSourceView>(`/api/organizations/${organizationId}/memory/experiences/${encodeURIComponent(savedDraftSourceId)}`),
+        requestJson<EvidenceRecordView[]>(`/api/organizations/${organizationId}/memory/experiences/${encodeURIComponent(savedDraftSourceId)}/evidence`)
+      ]);
+      if (!canApplyDraftHydration({
+        requestOrganizationId,
+        activeOrganizationId: activeOrganizationIdRef.current,
+        requestGeneration,
+        activeGeneration: draftHydrationGenerationRef.current,
+        intent: editorIntentRef.current
+      })) return;
+      setSource(nextSource);
+      setSourceEvidence(nextEvidence);
+      setPrepared(null);
+      setEntryOpen(true);
+      setMessage("Resumed the saved organizational experience and its evidence.");
+    } catch (nextError) {
+      if (requestOrganizationId === activeOrganizationIdRef.current
+        && requestGeneration === draftHydrationGenerationRef.current
+        && editorIntentRef.current === "resume") {
+        setError(nextError instanceof Error ? nextError.message : "Unable to resume the saved organizational experience.");
+      }
+    } finally {
+      if (requestGeneration === draftHydrationGenerationRef.current) setBusy(false);
+    }
+  }
+
+  function closeEntry(): void {
+    draftHydrationGenerationRef.current += 1;
+    setEntryOpen(false);
+    editorIntentRef.current = "idle";
+    setEditorIntent("idle");
+    setError("");
+  }
 
   async function loadInspection(knowledgeId: string) {
     setBusy(true);
@@ -256,6 +323,7 @@ export function OrganizationalMemorySurface({ organizationId, knowledgeItems, da
       setSource(nextSource);
       setSourceEvidence([]);
       setPrepared(null);
+      setSavedDraftSourceId(nextSource.id);
       window.localStorage.setItem(activeSourceStorageKey(organizationId), nextSource.id);
       setMessage("Organizational experience recorded. Add supporting evidence before preparing learning.");
     } catch (nextError) {
@@ -312,6 +380,7 @@ export function OrganizationalMemorySurface({ organizationId, knowledgeItems, da
       setPrepared(null);
       setEntryOpen(false);
       window.localStorage.removeItem(activeSourceStorageKey(organizationId));
+      setSavedDraftSourceId(null);
       await onRefresh();
       await loadInspection(result.knowledgeItem.id);
       setMessage("Human validation committed. Organizational Memory is now inspectable.");
@@ -513,9 +582,13 @@ export function OrganizationalMemorySurface({ organizationId, knowledgeItems, da
           <h2 className={`mt-1 text-2xl font-bold ${darkMode ? "text-white" : "text-[#111827]"}`}>Record organizational experience</h2>
           <p className={`mt-1 max-w-2xl text-sm ${muted(darkMode)}`}>Capture what happened and the evidence behind it. Learning remains pending until a human validates it.</p>
         </div>
-        <button type="button" onClick={() => { setEntryOpen((value) => !value); setError(""); }} className="rounded-xl bg-[#2563EB] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#1d4ed8]">
-          {entryOpen ? "Close entry" : "Add Organizational Experience"}
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button type="button" onClick={entryOpen ? closeEntry : resetNewEditor} className="rounded-xl bg-[#2563EB] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#1d4ed8]">
+            {entryOpen ? "Close entry" : savedDraftSourceId ? "Start new experience" : "Add Organizational Experience"}
+          </button>
+          {savedDraftSourceId && editorIntent === "resume" && entryOpen && <button type="button" onClick={resetNewEditor} className={`rounded-xl border px-4 py-2.5 text-sm font-semibold ${darkMode ? "border-[#2d3f52] text-slate-200 hover:bg-slate-800" : "border-slate-300 text-slate-700 hover:bg-slate-50"}`}>Start new experience</button>}
+          {savedDraftSourceId && (!entryOpen || editorIntent === "new") && <button type="button" disabled={busy} onClick={() => { void resumeSavedDraft(); }} className={`rounded-xl border px-4 py-2.5 text-sm font-semibold ${darkMode ? "border-[#2d3f52] text-slate-200 hover:bg-slate-800" : "border-slate-300 text-slate-700 hover:bg-slate-50"}`}>Resume saved experience</button>}
+        </div>
       </div>
 
       {error && <div role="alert" className={`rounded-xl border px-4 py-3 text-sm ${darkMode ? "border-rose-700/50 bg-rose-900/20 text-rose-200" : "border-rose-200 bg-rose-50 text-rose-700"}`}>{error}</div>}
