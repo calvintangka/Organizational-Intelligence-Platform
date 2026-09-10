@@ -13,7 +13,8 @@ import {
   type TicketResolutionEvidenceType,
   type TicketRecordStatus,
   type TicketWorkflowCommand,
-  type ReflectionDecision
+  type ReflectionDecision,
+  type LessonDraft
 } from "@/types";
 
 /**
@@ -92,6 +93,38 @@ function validatePreparedReflection(value: ReflectionDecision): ReflectionDecisi
 
 function draftRevision(value: unknown): number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : 0;
+}
+
+function validateReflectionLessonDraft(value: unknown): LessonDraft | null {
+  if (value === null || value === undefined) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TicketWriteError("INVALID_TRANSITION", "A prepared Reflection lesson draft must be an object.", 400);
+  }
+  const record = value as Record<string, unknown>;
+  if (record.mode !== "new" && record.mode !== "matches_existing" && record.mode !== "improves_existing") {
+    throw new TicketWriteError("INVALID_TRANSITION", "A prepared Reflection lesson type is invalid.", 400);
+  }
+  const fields = ["rootCause", "solution", "customerResponse"] as const;
+  for (const field of fields) {
+    if (record[field] !== undefined && (typeof record[field] !== "string" || record[field].length > 20_000)) {
+      throw new TicketWriteError("INVALID_TRANSITION", `The prepared Reflection ${field} is invalid.`, 400);
+    }
+  }
+  if (!Array.isArray(record.signals) || record.signals.length > 50 || record.signals.some((item) => typeof item !== "string" || !item.trim() || item.length > 500)) {
+    throw new TicketWriteError("INVALID_TRANSITION", "Prepared Reflection lesson signals are invalid.", 400);
+  }
+  const existingLessonId = record.existingLessonId;
+  if (existingLessonId !== undefined && existingLessonId !== null && (typeof existingLessonId !== "string" || !existingLessonId.trim())) {
+    throw new TicketWriteError("INVALID_TRANSITION", "The prepared Reflection lesson reference is invalid.", 400);
+  }
+  return {
+    mode: record.mode,
+    rootCause: typeof record.rootCause === "string" ? record.rootCause.trim() : "",
+    solution: typeof record.solution === "string" ? record.solution.trim() : "",
+    customerResponse: typeof record.customerResponse === "string" ? record.customerResponse.trim() : "",
+    signals: (record.signals as string[]).map((item) => item.trim().toLowerCase()),
+    ...(typeof existingLessonId === "string" && existingLessonId.trim() ? { existingLessonId: existingLessonId.trim() } : {})
+  };
 }
 
 function messageContent(value: unknown): string {
@@ -293,9 +326,42 @@ async function computeNextState(input: {
         reflection: {
           ...currentReflection,
           preparedDecision,
+          draftRevision: draftRevision(currentReflection.draftRevision),
           validationEligible: resolvedWithEvidence ? true : false,
           validationEligibilityReason: resolvedWithEvidence ? null : "Resolution evidence is required before validation.",
           ...(evidenceIds ? { evidenceIds } : {})
+        }
+      };
+    }
+    case "save_reflection_draft": {
+      if (status !== "resolved") {
+        throw new TicketWriteError("INVALID_TRANSITION", "A prepared Reflection draft can only be saved for an evidence-resolved case.", 409);
+      }
+      const currentReflection = asRecord(current.reflection);
+      if (!currentReflection.preparedDecision) {
+        throw new TicketWriteError("INVALID_TRANSITION", "Prepare the Reflection before saving its authored lesson.", 409);
+      }
+      if (currentReflection.validationEligible !== true) {
+        throw new TicketWriteError("INVALID_TRANSITION", "This Reflection is not eligible for human validation.", 409);
+      }
+      if (!Number.isInteger(command.expectedDraftRevision) || command.expectedDraftRevision < 0) {
+        throw new TicketWriteError("INVALID_TRANSITION", "A valid expected Reflection draft revision is required.", 400);
+      }
+      const currentDraftRevision = draftRevision(currentReflection.draftRevision);
+      if (command.expectedDraftRevision !== currentDraftRevision) {
+        throw new TicketWriteError("REVISION_CONFLICT", "This Reflection draft was updated elsewhere. Reload the latest draft before saving again.", 409);
+      }
+      const lessonDraft = validateReflectionLessonDraft(command.lessonDraft);
+      const problemName = typeof command.problemName === "string" && command.problemName.trim()
+        ? command.problemName.trim().slice(0, 500)
+        : null;
+      return {
+        ...base,
+        reflection: {
+          ...currentReflection,
+          preparedLessonDraft: lessonDraft,
+          preparedProblemName: problemName,
+          draftRevision: currentDraftRevision + 1
         }
       };
     }

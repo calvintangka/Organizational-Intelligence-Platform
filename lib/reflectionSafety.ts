@@ -45,6 +45,13 @@ const GENERIC_SOURCE_WORDS = new Set([
   "Ticket", "Reference", "Hello", "Hi", "Please", "Thank", "Best", "Regards"
 ]);
 
+const GENERIC_CUSTOMER_LABEL = /^(?:the\s+)?(?:customer|client|user|requester|end user)$/i;
+
+function nonGenericCustomerValue(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed && !GENERIC_CUSTOMER_LABEL.test(trimmed) ? trimmed : undefined;
+}
+
 /**
  * Pull only conservative identity-shaped values from source text. These values
  * are used as negative controls for reusable fields; the source text itself is
@@ -78,18 +85,19 @@ export function buildReflectionSafetyContext(input: {
   reusableProblemName?: string;
 }): ReflectionSafetyContext {
   const sourceTicketText = input.sourceTicketText ?? "";
+  const customerName = nonGenericCustomerValue(input.extractedCustomerName?.trim() || input.customerName);
   return {
-    customerName: input.extractedCustomerName?.trim() || input.customerName,
+    customerName,
     organizationName: input.organizationName,
     sourceTicketId: input.sourceTicketId,
     sourceTicketText,
     reusableProblemName: input.reusableProblemName,
     sourceSpecificValues: [
-      input.customerName,
-      input.extractedCustomerName ?? undefined,
+      nonGenericCustomerValue(input.customerName),
+      nonGenericCustomerValue(input.extractedCustomerName ?? undefined),
       input.extractedCompanyName ?? undefined,
       ...sourceIdentityCandidates(sourceTicketText)
-    ].filter((value): value is string => Boolean(value?.trim()))
+    ].filter((value): value is string => Boolean(value?.trim() && !GENERIC_CUSTOMER_LABEL.test(value.trim())))
   };
 }
 

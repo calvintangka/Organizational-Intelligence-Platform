@@ -1,6 +1,7 @@
-﻿import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReflectionAction, ReflectionCommitInput, ReflectionDecision, Lesson, LessonMode } from "@/types";
 import { relevanceStrengthForScore } from "@/lib/relevanceLabels";
+import { initialReflectionProblemName, submittedReflectionProblemName } from "@/lib/reflectionDraft";
 
 const ACTION_LABELS: Record<ReflectionAction, string> = {
   create_new: "New Knowledge Entry",
@@ -45,27 +46,88 @@ interface ReflectionPanelProps {
   isSubmitting?: boolean;
   validationEligible?: boolean;
   validationBlockedReason?: string | null;
+  initialDraft?: ReflectionCommitInput;
+  onDraftChange?: (input: ReflectionCommitInput) => void | Promise<void>;
+  onDraftFlushReady?: (flush: (() => void | Promise<void>) | null) => void;
 }
 
-export function ReflectionPanel({ decision, onConfirm, existingLessons = [], darkMode = false, isSubmitting = false, validationEligible = true, validationBlockedReason = null }: ReflectionPanelProps) {
+export function ReflectionPanel({ decision, onConfirm, existingLessons = [], darkMode = false, isSubmitting = false, validationEligible = true, validationBlockedReason = null, initialDraft, onDraftChange, onDraftFlushReady }: ReflectionPanelProps) {
   const actionColor = ACTION_COLORS[decision.action];
   const trustColor = TRUST_IMPACT_COLORS[decision.trustImpact];
   const requiresProblemName = !!decision.problemNameRequired;
   const requiresLesson = requiresProblemName;
 
-  const [lessonOpen, setLessonOpen] = useState(requiresLesson);
-  const [lessonMode, setLessonMode] = useState<LessonMode>(requiresLesson || existingLessons.length === 0 ? "new" : "improves_existing");
-  const [problemName, setProblemName] = useState(decision.suggestedProblemName ?? "");
-  const [rootCause, setRootCause] = useState("");
-  const [solution, setSolution] = useState("");
+  const savedLesson = initialDraft?.lessonDraft;
+  const [lessonOpen, setLessonOpen] = useState(requiresLesson || !!savedLesson);
+  const [lessonMode, setLessonMode] = useState<LessonMode>(savedLesson?.mode ?? (requiresLesson || existingLessons.length === 0 ? "new" : "improves_existing"));
+  const [problemName, setProblemName] = useState(initialReflectionProblemName(decision, initialDraft));
+  const [rootCause, setRootCause] = useState(savedLesson?.rootCause ?? "");
+  const [solution, setSolution] = useState(savedLesson?.solution ?? "");
   // The reviewed AI response is customer-specific by design. A new lesson's
   // reusable template must be authored explicitly instead of inheriting that
   // response into the promotion payload.
-  const [customerResponse, setCustomerResponse] = useState("");
+  const [customerResponse, setCustomerResponse] = useState(savedLesson?.customerResponse ?? "");
   const [signalInput, setSignalInput] = useState("");
-  const [signals, setSignals] = useState<string[]>([]);
-  const [selectedExistingId, setSelectedExistingId] = useState<string | undefined>(existingLessons[0]?.id);
+  const [signals, setSignals] = useState<string[]>(savedLesson?.signals ?? []);
+  const [selectedExistingId, setSelectedExistingId] = useState<string | undefined>(savedLesson?.existingLessonId ?? existingLessons[0]?.id);
   const [validationMessage, setValidationMessage] = useState("");
+  const initialDraftEffect = useRef(true);
+  const onDraftChangeRef = useRef(onDraftChange);
+  const draftTimerRef = useRef<number | null>(null);
+  onDraftChangeRef.current = onDraftChange;
+  const latestDraftRef = useRef<ReflectionCommitInput>({
+    problemName: submittedReflectionProblemName(decision, problemName),
+    lessonDraft: {
+      mode: lessonMode,
+      rootCause: rootCause.trim(),
+      solution: solution.trim(),
+      customerResponse: customerResponse.trim(),
+      signals,
+      existingLessonId: lessonMode !== "new" ? selectedExistingId : undefined
+    }
+  });
+  latestDraftRef.current = {
+    problemName: submittedReflectionProblemName(decision, problemName),
+    lessonDraft: {
+      mode: lessonMode,
+      rootCause: rootCause.trim(),
+      solution: solution.trim(),
+      customerResponse: customerResponse.trim(),
+      signals,
+      existingLessonId: lessonMode !== "new" ? selectedExistingId : undefined
+    }
+  };
+
+  function flushDraftChange() {
+    if (draftTimerRef.current !== null) {
+      window.clearTimeout(draftTimerRef.current);
+      draftTimerRef.current = null;
+    }
+    onDraftChangeRef.current?.(latestDraftRef.current);
+  }
+
+  const flushDraftChangeRef = useRef(flushDraftChange);
+  flushDraftChangeRef.current = flushDraftChange;
+
+  useEffect(() => {
+    const flush = () => flushDraftChangeRef.current();
+    onDraftFlushReady?.(flush);
+    return () => onDraftFlushReady?.(null);
+  }, [onDraftFlushReady]);
+
+  useEffect(() => {
+    if (!onDraftChangeRef.current) return;
+    if (initialDraftEffect.current) {
+      initialDraftEffect.current = false;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      draftTimerRef.current = null;
+      flushDraftChange();
+    }, 450);
+    draftTimerRef.current = timer;
+    return () => window.clearTimeout(timer);
+  }, [customerResponse, lessonMode, problemName, rootCause, selectedExistingId, signals, solution]);
 
   function addSignal() {
     const trimmed = signalInput.trim().toLowerCase();
@@ -118,12 +180,13 @@ export function ReflectionPanel({ decision, onConfirm, existingLessons = [], dar
     }
 
     if (!lessonOpen || !rootCause.trim() || !solution.trim() || signals.length === 0) {
-      onConfirm(problemName.trim() ? { problemName: problemName.trim() } : undefined);
+      const submittedProblemName = submittedReflectionProblemName(decision, problemName);
+      onConfirm(submittedProblemName ? { problemName: submittedProblemName } : undefined);
       return;
     }
 
     onConfirm({
-      problemName: problemName.trim() || undefined,
+      problemName: submittedReflectionProblemName(decision, problemName),
       lessonDraft: {
         mode: lessonMode,
         rootCause: rootCause.trim(),
@@ -210,6 +273,7 @@ export function ReflectionPanel({ decision, onConfirm, existingLessons = [], dar
                   type="text"
                   value={problemName}
                   onChange={(e) => setProblemName(e.target.value)}
+                  onBlur={flushDraftChange}
                   placeholder="e.g. Account Recovery - Forgot Registration Email"
                   className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm ${inputBg}`}
                 />
@@ -271,25 +335,25 @@ export function ReflectionPanel({ decision, onConfirm, existingLessons = [], dar
 
             <div>
               <label className={`text-xs font-bold uppercase tracking-wide ${textFaint}`}>Root Cause</label>
-              <textarea value={rootCause} onChange={(e) => setRootCause(e.target.value)} placeholder="What caused this issue?" rows={2} className={`mt-1 w-full resize-none rounded-xl border px-3 py-2 text-sm ${inputBg}`} />
+              <textarea value={rootCause} onChange={(e) => setRootCause(e.target.value)} onBlur={flushDraftChange} placeholder="What caused this issue?" rows={2} className={`mt-1 w-full resize-none rounded-xl border px-3 py-2 text-sm ${inputBg}`} />
             </div>
 
             <div>
               <label className={`text-xs font-bold uppercase tracking-wide ${textFaint}`}>Solution</label>
-              <textarea value={solution} onChange={(e) => setSolution(e.target.value)} placeholder="How should this issue be resolved?" rows={2} className={`mt-1 w-full resize-none rounded-xl border px-3 py-2 text-sm ${inputBg}`} />
+              <textarea value={solution} onChange={(e) => setSolution(e.target.value)} onBlur={flushDraftChange} placeholder="How should this issue be resolved?" rows={2} className={`mt-1 w-full resize-none rounded-xl border px-3 py-2 text-sm ${inputBg}`} />
             </div>
 
             <div>
               <label className={`text-xs font-bold uppercase tracking-wide ${textFaint}`}>Customer Response</label>
               <p className={`mt-0.5 text-xs ${textFaint}`}>Use {"{{customerName}}"}, {"{{ticketId}}"}, and {"{{organizationName}}"} as placeholders</p>
-              <textarea value={customerResponse} onChange={(e) => setCustomerResponse(e.target.value)} placeholder="The customer-facing response template for this lesson" rows={4} className={`mt-1 w-full resize-none rounded-xl border px-3 py-2 text-sm ${inputBg}`} />
+              <textarea value={customerResponse} onChange={(e) => setCustomerResponse(e.target.value)} onBlur={flushDraftChange} placeholder="The customer-facing response template for this lesson" rows={4} className={`mt-1 w-full resize-none rounded-xl border px-3 py-2 text-sm ${inputBg}`} />
             </div>
 
             <div>
               <label className={`text-xs font-bold uppercase tracking-wide ${textFaint}`}>Signals</label>
               <p className={`mt-0.5 text-xs ${textFaint}`}>Keywords that indicate this lesson applies. Press Enter or comma to add.</p>
               <div className="mt-1 flex gap-2">
-                <input type="text" value={signalInput} onChange={(e) => setSignalInput(e.target.value)} onKeyDown={handleSignalKeyDown} placeholder="e.g. forgot registration email" className={`flex-1 rounded-xl border px-3 py-2 text-sm ${inputBg}`} />
+                <input type="text" value={signalInput} onChange={(e) => setSignalInput(e.target.value)} onKeyDown={handleSignalKeyDown} onBlur={flushDraftChange} placeholder="e.g. forgot registration email" className={`flex-1 rounded-xl border px-3 py-2 text-sm ${inputBg}`} />
                 <button type="button" onClick={addSignal} className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${darkMode ? "bg-[#27469e] text-white hover:bg-[#1e3a8a]" : "bg-slate-800 text-white hover:bg-slate-700"}`}>
                   Add
                 </button>

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { withOrganizationRoute } from "@/lib/server/organizationRoute";
 import { applyTicketWorkflowCommand } from "@/lib/server/tickets/ticketWorkflow";
 import { requestIdentity } from "@/lib/server/rateLimit";
-import { TicketWriteError, type ReflectionDecision, type TicketRecordClassification, type TicketRecordMemoryMatch, type TicketResolutionEvidenceType, type TicketWorkflowCommand } from "@/types";
+import { TicketWriteError, type LessonDraft, type ReflectionDecision, type TicketRecordClassification, type TicketRecordMemoryMatch, type TicketResolutionEvidenceType, type TicketWorkflowCommand } from "@/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +33,13 @@ function parseCommand(body: unknown): TicketWorkflowCommand {
       return {
         kind: "prepare_reflection",
         reflection: (record.reflection ?? null) as ReflectionDecision
+      };
+    case "save_reflection_draft":
+      return {
+        kind: "save_reflection_draft",
+        lessonDraft: record.lessonDraft === null ? null : (record.lessonDraft as LessonDraft | undefined),
+        problemName: typeof record.problemName === "string" ? record.problemName : null,
+        expectedDraftRevision: typeof record.expectedDraftRevision === "number" ? record.expectedDraftRevision : Number.NaN
       };
     case "append_customer_message":
       return {

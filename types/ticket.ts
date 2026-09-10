@@ -1,4 +1,4 @@
-import type { ReflectionDecision } from "./knowledge";
+import type { LessonDraft, ReflectionDecision } from "./knowledge";
 
 export type TicketStatus = "new" | "analyzed" | "drafted" | "reviewed" | "approved" | "resolved";
 
@@ -138,6 +138,12 @@ export interface TicketRecordReflection {
   evidenceIds?: string[];
   /** Prepared human-review analysis; never implies resolution or validation eligibility. */
   preparedDecision?: ReflectionDecision | null;
+  /** Human-authored reusable lesson draft, persisted separately from the AI decision. */
+  preparedLessonDraft?: LessonDraft | null;
+  /** Human-authored problem name accompanying the prepared lesson draft. */
+  preparedProblemName?: string | null;
+  /** Monotonic optimistic-concurrency revision for the prepared lesson draft. */
+  draftRevision?: number;
 }
 
 export interface TicketRecord {
@@ -259,6 +265,7 @@ export type TicketWorkflowCommand =
   | { kind: "attach_analysis"; classification: TicketRecordClassification | null; memoryMatch: TicketRecordMemoryMatch | null; bulkClusterId?: string | null }
   | { kind: "save_draft"; finalResponse: string; humanEdited: boolean; expectedDraftRevision: number }
   | { kind: "prepare_reflection"; reflection: ReflectionDecision }
+  | { kind: "save_reflection_draft"; lessonDraft?: LessonDraft | null; problemName?: string | null; expectedDraftRevision: number }
   | { kind: "append_customer_message"; content: string; idempotencyKey: string }
   | { kind: "send_agent_message"; finalResponse: string; humanEdited: boolean; expectedDraftRevision: number; idempotencyKey: string }
   | {

@@ -192,7 +192,10 @@
     "probe:oip-v2-fix-002-projection": "node scripts/oip-v2-fix-002-canonical-projection-regression.cjs",
     "probe:oip-v2-fix-003-current-memory-projection": "node scripts/oip-v2-fix-003-current-memory-projection-regression.cjs",
     "probe:oip-v2-fix-010-new-vs-resume": "node scripts/oip-v2-fix-010-new-vs-resume-regression.cjs",
-    "probe:oip-v2-fix-011-generalization": "node scripts/oip-v2-fix-011-retrieval-generalization-regression.cjs"
+    "probe:oip-v2-fix-011-generalization": "node scripts/oip-v2-fix-011-retrieval-generalization-regression.cjs",
+    "probe:oip-v2-fix-013-reflection-promotion-and-draft-recovery": "node scripts/oip-v2-fix-013-reflection-promotion-and-draft-recovery-regression.cjs",
+    "probe:oip-v2-fix-013r2-reflection-draft-navigation": "node scripts/oip-v2-fix-013r2-reflection-draft-navigation-regression.cjs",
+    "probe:oip-v2-fix-013r4-reflection-rejection-correction-retry": "node scripts/oip-v2-fix-013r4-reflection-rejection-correction-retry-regression.cjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",

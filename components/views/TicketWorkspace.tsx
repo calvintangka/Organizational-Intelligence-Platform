@@ -52,6 +52,7 @@ interface TicketWorkspaceProps {
   suggestedResponse: SuggestedResponse | null;
   reviewedResponse: string;
   reflectionDecision: ReflectionDecision | null;
+  reflectionDraft?: ReflectionCommitInput;
   reflectionValidationEligible?: boolean;
   reflectionValidationBlockedReason?: string | null;
   knowledgeItems: KnowledgeItem[];
@@ -91,6 +92,8 @@ interface TicketWorkspaceProps {
   onApproveResponse: () => void;
   onViewReflection: () => void;
   onConfirmReflection: (input?: ReflectionCommitInput) => void;
+  onReflectionDraftChange?: (input: ReflectionCommitInput) => void | Promise<void>;
+  onReflectionDraftFlushReady?: (flush: (() => void | Promise<void>) | null) => void;
   onApproveReuse: () => void;
   onProcessReuse: (text?: string) => void;
   onRunAgain: () => void;
@@ -330,6 +333,7 @@ export function TicketWorkspace({
   suggestedResponse,
   reviewedResponse,
   reflectionDecision,
+  reflectionDraft,
   reflectionValidationEligible = false,
   reflectionValidationBlockedReason = null,
   knowledgeItems,
@@ -357,6 +361,8 @@ export function TicketWorkspace({
   onApproveResponse,
   onViewReflection,
   onConfirmReflection,
+  onReflectionDraftChange,
+  onReflectionDraftFlushReady,
   onApproveReuse,
   onProcessReuse,
   onRunAgain,
@@ -741,6 +747,9 @@ export function TicketWorkspace({
               isSubmitting={isValidationSubmitting}
               validationEligible={reflectionValidationEligible}
               validationBlockedReason={reflectionValidationBlockedReason}
+              initialDraft={reflectionDraft}
+              onDraftChange={onReflectionDraftChange}
+              onDraftFlushReady={onReflectionDraftFlushReady}
               existingLessons={reflectionDecision.existingItemId ? knowledgeItems.find(k => k.id === reflectionDecision.existingItemId)?.lessons : undefined}
               reviewedResponse={reviewedResponse}
               darkMode={darkMode}

@@ -42,6 +42,16 @@ import {
 } from "@/lib/knowledgePacks";
 import { generateReflection } from "@/lib/reflection";
 import { assessReflectionSafety, buildReflectionSafetyContext } from "@/lib/reflectionSafety";
+import { reflectionDraftFingerprint } from "@/lib/reflectionDraft";
+import {
+  beginReflectionValidationAttempt,
+  createReflectionValidationLifecycle,
+  markReflectionValidationRejected,
+  markReflectionValidationRetryable,
+  markReflectionValidationSucceeded,
+  releaseReflectionValidationAttempt,
+  resetReflectionValidationLifecycle
+} from "@/lib/reflectionValidationLifecycle";
 import {
   createCanonicalProblem,
   createGeneralizedEvidenceExample,
@@ -123,6 +133,14 @@ const AUTH_HYDRATION_TIMEOUT_MS = 15_000;
 const AUTH_HYDRATION_RETRY_DELAY_MS = 250;
 const ASYNC_BULK_INTAKE_ENABLED = process.env.NEXT_PUBLIC_OIP_ASYNC_BULK_INTAKE === "true";
 const ASYNC_REFLECTION_ENABLED = process.env.NEXT_PUBLIC_OIP_ASYNC_REFLECTION === "true";
+
+type ReflectionDraftSaveState = {
+  record: TicketRecord;
+  input: ReflectionCommitInput;
+  fingerprint: string;
+  persistedFingerprint?: string;
+  chain?: Promise<void>;
+};
 import type {
   AIAnalysis,
   AIAdvisory,
@@ -656,12 +674,17 @@ export default function Home() {
   const ticketSaveChains = useRef<Record<string, Promise<void>>>({});
   const draftSaveChains = useRef<Record<string, Promise<void>>>({});
   const draftSaveState = useRef<Record<string, { record: TicketRecord; value: string }>>({});
+  const reflectionDraftSaveChains = useRef<Record<string, Promise<void>>>({});
+  const reflectionDraftSaveState = useRef<Record<string, ReflectionDraftSaveState>>({});
+  const reflectionDraftFlushers = useRef<Record<string, () => void | Promise<void>>>({});
   // Profile edits have their own resource-specific write chain. This lets a
   // switch drain an actual pending profile edit without treating navigation as
   // a reason to re-save an unchanged whole organization snapshot.
   const profileSaveChains = useRef<Record<string, Promise<void>>>({});
   const bulkTicketRecords = useRef<Record<string, TicketRecord>>({});
   const [activeTicketRecord, setActiveTicketRecord] = useState<TicketRecord | null>(null);
+  const activeTicketRecordRef = useRef<TicketRecord | null>(null);
+  activeTicketRecordRef.current = activeTicketRecord;
   const [isConversationSubmitting, setIsConversationSubmitting] = useState(false);
 
   // LLM match discrimination — reasoning surfaced in the analysis step
@@ -677,6 +700,35 @@ export default function Home() {
   // preceding commit's React state update completed.
   const knowledgeItemsRef = useRef<KnowledgeItem[]>([]);
   knowledgeItemsRef.current = knowledgeItems;
+  // Reflection callbacks can survive a render boundary while Cases → Resume
+  // restores several related values together. Read these inputs through one
+  // latest-state ref so a resumed button can never call a pre-resume closure.
+  const latestReflectionStateRef = useRef({
+    selectedTicket: null as Ticket | null,
+    aiAnalysis: null as AIAnalysis | null,
+    reflectionDecision: null as ReflectionDecision | null,
+    activeTicketRecord: null as TicketRecord | null,
+    reviewedResponse: "",
+    suggestedResponse: null as SuggestedResponse | null,
+    validationRecords: [] as ValidationRecord[],
+    organizationProfile,
+    orgMetrics,
+    authUser,
+    lastDraftUsedAI: false
+  });
+  latestReflectionStateRef.current = {
+    selectedTicket,
+    aiAnalysis,
+    reflectionDecision,
+    activeTicketRecord,
+    reviewedResponse,
+    suggestedResponse,
+    validationRecords,
+    organizationProfile,
+    orgMetrics,
+    authUser,
+    lastDraftUsedAI
+  };
 
   // Maesa Tech UI state
   const [activeView, setActiveView] = useState<ActiveView>("home");
@@ -687,9 +739,11 @@ export default function Home() {
   const organizationSwitchGeneration = useRef(0);
   const ticketRequestGuard = useRef(new TicketRequestGuard());
   const ticketAbortController = useRef<AbortController | null>(null);
-  const learningCommandContext = useRef<{ requestId: string; idempotencyKey: string } | null>(null);
   const knowledgeHistoryCache = useRef<Record<string, KnowledgeHistory>>({});
   const knowledgeHistoryRequests = useRef<Record<string, Promise<KnowledgeHistory>>>({});
+  // This guard is scoped to Reflection. Other governed validation flows must
+  // not be able to make a resumed Reflection click return silently.
+  const reflectionValidationLifecycle = useRef(createReflectionValidationLifecycle());
   const validationCommitInFlight = useRef(false);
   // The server returns a fresh organization revision after each profile write.
   // Keep that revision outside React state so a successful save does not
@@ -1111,6 +1165,78 @@ export default function Home() {
       });
     draftSaveChains.current[ticketId] = operation;
     queuePersistenceSave("saveInReviewDraft", operation);
+  }
+
+  function queueReflectionDraftSave(record: TicketRecord, input: ReflectionCommitInput): Promise<void> {
+    const ticketId = record.ticketId;
+    const fingerprint = reflectionDraftFingerprint(input);
+    const state = reflectionDraftSaveState.current[ticketId] ?? {
+      record,
+      input,
+      fingerprint,
+      persistedFingerprint: undefined
+    };
+    state.record = state.record ?? record;
+    state.input = input;
+    state.fingerprint = fingerprint;
+    reflectionDraftSaveState.current[ticketId] = state;
+    if (state.persistedFingerprint === fingerprint && !state.chain) return Promise.resolve();
+    if (state.chain) return state.chain;
+
+    const operationRef: { current: Promise<void> | null } = { current: null };
+    const operation = (async () => {
+      try {
+        // Inputs can arrive while a server revision is in flight. Persist the
+        // latest snapshot once, then repeat only when a newer fingerprint
+        // actually arrived. This prevents autosave and blur from building a
+        // long chain of duplicate revision writes.
+        while (state.persistedFingerprint !== state.fingerprint) {
+          const nextInput = state.input;
+          const nextFingerprint = state.fingerprint;
+          const expectedDraftRevision = state.record.reflection.draftRevision ?? 0;
+          let persisted: TicketRecord;
+          if (persistenceMode === "local") {
+            persisted = {
+              ...state.record,
+              reflection: {
+                ...state.record.reflection,
+                preparedLessonDraft: nextInput.lessonDraft ?? null,
+                preparedProblemName: nextInput.problemName ?? null,
+                draftRevision: expectedDraftRevision + 1
+              }
+            };
+            const session = await openPersistenceSession(state.record.orgId, "save-reflection-draft");
+            await session.saveTicketRecord(persisted);
+          } else {
+            persisted = await transitionTicket(ticketId, {
+              kind: "save_reflection_draft",
+              lessonDraft: nextInput.lessonDraft ?? null,
+              problemName: nextInput.problemName ?? null,
+              expectedDraftRevision
+            });
+          }
+          state.record = persisted;
+          state.persistedFingerprint = nextFingerprint;
+          if (state.fingerprint === nextFingerprint && activeTicketRecordRef.current?.ticketId === ticketId) {
+            setActiveTicketRecord(persisted);
+          }
+        }
+      } finally {
+        if (reflectionDraftSaveChains.current[ticketId] === operationRef.current) {
+          delete reflectionDraftSaveChains.current[ticketId];
+        }
+        state.chain = undefined;
+      }
+    })();
+    operationRef.current = operation;
+    state.chain = operation;
+    reflectionDraftSaveChains.current[ticketId] = operation;
+    queuePersistenceSave("saveReflectionDraft", operation);
+    return operation;
+  }
+
+  async function flushReflectionDraftSave(ticketId: string): Promise<void> {
+    await (reflectionDraftSaveState.current[ticketId]?.chain ?? Promise.resolve());
   }
 
   function persistTicketRecord(record: TicketRecord) {
@@ -2250,6 +2376,7 @@ export default function Home() {
   }
 
   function resetWorkflowState() {
+    resetReflectionValidationLifecycle(reflectionValidationLifecycle.current);
     setSelectedTicket(null);
     setSecondTicket(null);
     setSecondTicketRecord(null);
@@ -2329,6 +2456,10 @@ export default function Home() {
    */
   function resumeTicketFromRecord(record: TicketRecord) {
     if (!ticketWorkflowResumable(record)) return;
+
+    // Resume is a new client lifecycle boundary. Never carry a stale rejected
+    // or retryable validation context into a restored Reflection callback.
+    resetReflectionValidationLifecycle(reflectionValidationLifecycle.current);
 
     // Warn before clobbering a different in-progress ticket.
     const otherInProgress =
@@ -2452,8 +2583,26 @@ export default function Home() {
         : draft.draftResponse;
 
     const preparedDecision = record.reflection.preparedDecision ?? null;
+    const preparedLessonDraft = record.reflection.preparedLessonDraft;
+    const preparedReflectionDraft: ReflectionCommitInput | undefined = preparedLessonDraft
+      ? {
+          problemName: record.reflection.preparedProblemName ?? undefined,
+          lessonDraft: preparedLessonDraft
+        }
+      : record.reflection.preparedProblemName
+      ? { problemName: record.reflection.preparedProblemName }
+      : undefined;
     setActiveTicketRecord(record);
+    activeTicketRecordRef.current = record;
     draftSaveState.current[record.ticketId] = { record, value: record.resolution.finalResponse ?? "" };
+    const restoredReflectionInput = preparedReflectionDraft ?? {};
+    const restoredReflectionFingerprint = reflectionDraftFingerprint(restoredReflectionInput);
+    reflectionDraftSaveState.current[record.ticketId] = {
+      record,
+      input: restoredReflectionInput,
+      fingerprint: restoredReflectionFingerprint,
+      persistedFingerprint: restoredReflectionFingerprint
+    };
     setSelectedTicket(reconstructedTicket);
     setAiAnalysis(understandingToAnalysis(reconstructedUnderstanding));
     setSimilarKnowledge(reconstructedSimilarKnowledge);
@@ -3705,6 +3854,7 @@ export default function Home() {
       return;
     }
     if (activeTicketRecord) await flushDraftSave(activeTicketRecord.ticketId);
+    resetReflectionValidationLifecycle(reflectionValidationLifecycle.current);
     const und = toUnderstanding(aiAnalysis);
     const draftedMatch = resolveDraftSourceMatch();
     const existingMatch = draftedMatch
@@ -3765,7 +3915,6 @@ export default function Home() {
         { unit: "tickets" }
       );
     }
-    learningCommandContext.current = { requestId: reflectionRequestId, idempotencyKey: reflectionIdempotencyKey };
     setReflectionDecision(reflection);
 
     if (activeTicketRecord) {
@@ -3841,61 +3990,90 @@ export default function Home() {
     return item;
   }
 
+  function saveReflectionDraft(input: ReflectionCommitInput): Promise<void> {
+    const current = activeTicketRecordRef.current;
+    if (!current || current.status !== "resolved" || current.reflection.validationEligible !== true || !current.reflection.preparedDecision) return Promise.resolve();
+    return queueReflectionDraftSave(current, input);
+  }
+
   /** Thin UI controller for the extracted reflection/learning commands. */
   async function confirmReflectionApplication(input?: ReflectionCommitInput) {
-    if (!selectedTicket || !aiAnalysis || !reflectionDecision) return;
-    if (activeTicketRecord?.status !== "resolved" || activeTicketRecord.reflection.validationEligible !== true) {
-      setErrorMessage(activeTicketRecord?.reflection.validationEligibilityReason ?? "Resolution evidence is required before this Reflection can be validated.");
+    const latest = latestReflectionStateRef.current;
+    const ticket = latest.selectedTicket;
+    const analysis = latest.aiAnalysis;
+    const decision = latest.reflectionDecision;
+    const record = activeTicketRecordRef.current ?? latest.activeTicketRecord;
+    if (!ticket || !analysis || !decision) {
+      setErrorMessage("Reflection is not ready to validate. Resume the prepared case and try again.");
       setCurrentStep(7);
       return;
     }
-    const context = learningCommandContext.current ?? {
-      requestId: `reflection-${ticketReferenceId(selectedTicket)}-${Date.now()}`,
-      idempotencyKey: `reflection:${ticketReferenceId(selectedTicket)}:${Date.now()}`
-    };
-    learningCommandContext.current = context;
-    const lessonDraft = input?.lessonDraft;
-    const resourcePersistence = await openPersistenceSession(organizationProfile.id, "promote-knowledge", context.requestId);
-    const validation = validateReflectionCommand({
-      organizationId: organizationProfile.id,
-      actor: { id: authUser?.id ?? "ui-reviewer", name: authUser?.name ?? "Prototype Knowledge Validator", email: authUser?.email },
+    if (!record || record.status !== "resolved" || record.reflection.validationEligible !== true) {
+      setErrorMessage(record?.reflection.validationEligibilityReason ?? "Resolution evidence is required before this Reflection can be validated.");
+      setCurrentStep(7);
+      return;
+    }
+
+    // This guard is intentionally Reflection-specific. A different governed
+    // validation flow must not be able to make this callback silently return.
+    const context = beginReflectionValidationAttempt(
+      reflectionValidationLifecycle.current,
+      ticketReferenceId(ticket)
+    );
+    if (!context) return;
+    setIsValidationSubmitting(true);
+    try {
+      if (input) {
+        await queueReflectionDraftSave(record, input);
+        await flushReflectionDraftSave(record.ticketId);
+      }
+      const lessonDraft = input?.lessonDraft;
+      const resourcePersistence = await openPersistenceSession(latest.organizationProfile.id, "promote-knowledge", context.requestId);
+      const safetyContext = buildReflectionSafetyContext({
+        customerName: ticket.customerName,
+        organizationName: latest.organizationProfile.name,
+        sourceTicketId: ticketReferenceId(ticket),
+        sourceTicketText: `${ticket.subject} ${ticket.description}`,
+        extractedCustomerName: analysis.extractedFields?.senderName,
+        extractedCompanyName: analysis.extractedFields?.companyName,
+        reusableProblemName: input?.problemName
+      });
+      const validation = validateReflectionCommand({
+      organizationId: latest.organizationProfile.id,
+      actor: { id: latest.authUser?.id ?? "ui-reviewer", name: latest.authUser?.name ?? "Prototype Knowledge Validator", email: latest.authUser?.email },
       authority: resourcePersistence.context.authority,
       requestId: context.requestId,
-      reflection: reflectionDecision,
+      reflection: decision,
       lessonDraft,
-      safetyContext: buildReflectionSafetyContext({
-        customerName: selectedTicket.customerName,
-        organizationName: organizationProfile.name,
-        sourceTicketId: ticketReferenceId(selectedTicket),
-        sourceTicketText: `${selectedTicket.subject} ${selectedTicket.description}`,
-        extractedCustomerName: aiAnalysis.extractedFields?.senderName,
-        extractedCompanyName: aiAnalysis.extractedFields?.companyName,
-        reusableProblemName: input?.problemName
-      })
-    });
-    if (!validation.accepted) {
-      setErrorMessage(`Reflection rejected: ${validation.reasons.join(", ")} before promoting this lesson.`);
-      setCurrentStep(7);
-      return;
-    }
-    try {
+      safetyContext
+      });
+      if (!validation.accepted) {
+        // A rejected validation never owns an idempotent promotion identity.
+        // The next reviewer attempt must be evaluated as a fresh payload while
+        // the rejection remains visible in the audit/log surface.
+        markReflectionValidationRejected(reflectionValidationLifecycle.current);
+        setErrorMessage(`Reflection rejected: ${validation.reasons.join(", ")} before promoting this lesson.`);
+        setCurrentStep(7);
+        return;
+      }
+      try {
       const result = await promoteKnowledgeCommand({
-        organizationId: organizationProfile.id,
-        actor: { id: authUser?.id ?? "ui-reviewer", name: authUser?.name ?? "Prototype Knowledge Validator", email: authUser?.email },
+        organizationId: latest.organizationProfile.id,
+        actor: { id: latest.authUser?.id ?? "ui-reviewer", name: latest.authUser?.name ?? "Prototype Knowledge Validator", email: latest.authUser?.email },
         authority: resourcePersistence.context.authority,
         requestId: context.requestId,
         idempotencyKey: context.idempotencyKey,
-        organizationProfile,
-        ticket: selectedTicket,
-        understanding: toUnderstanding(aiAnalysis),
-        reviewedResponse,
-        suggestedResponse,
-        reflection: reflectionDecision,
+        organizationProfile: latest.organizationProfile,
+        ticket,
+        understanding: toUnderstanding(analysis),
+        reviewedResponse: latest.reviewedResponse,
+        suggestedResponse: latest.suggestedResponse,
+        reflection: decision,
         lessonDraft: validation.normalizedLessonDraft,
         problemName: input?.problemName,
         knowledgeItems: knowledgeItemsRef.current,
-        validationRecords,
-        currentOrgMetrics: orgMetrics
+        validationRecords: latest.validationRecords,
+        currentOrgMetrics: latest.orgMetrics
       }, {
         persistence: resourcePersistence,
         onEvent: (event) => addLogEntries([createLogEntry(event.name, event.detail)])
@@ -3920,15 +4098,15 @@ export default function Home() {
       setLastTrustDelta(result.trustDelta);
       updateMetrics(result.metricsPatch);
       setOrgMetrics((prev) => ({ ...prev, ...result.orgMetricsPatch, lastUpdatedAt: new Date().toISOString() }));
-      if (lastDraftUsedAI) recordHumanAcceptedAISuggestion();
-      if (activeTicketRecord) {
+      if (latest.lastDraftUsedAI) recordHumanAcceptedAISuggestion();
+      if (record) {
         // RSS-1.2S3: the reflection-confirmed resolution is a server-owned
         // commit; the server validates the validation/knowledge references and
         // derives the resolved state. Await it so the UI cannot show a
         // successful reflection while the governed ticket commit is still
         // pending or has failed.
         try {
-          const record = await transitionTicket(activeTicketRecord.ticketId, {
+          const committedRecord = await transitionTicket(record.ticketId, {
             kind: "commit",
             validationRecordIds: [result.validation.id],
             knowledgeId: committedItem.id,
@@ -3936,11 +4114,15 @@ export default function Home() {
             lessonCreatedId: result.ticketReflection.lessonCreatedId ?? null,
             lessonReinforcedId: result.ticketReflection.lessonReinforcedId ?? null,
             knowledgeChanged: result.ticketReflection.knowledgeChanged ?? null,
-            finalResponse: reviewedResponse,
+            finalResponse: latest.reviewedResponse,
             automatic: false
           });
-          setActiveTicketRecord(record);
+          setActiveTicketRecord(committedRecord);
         } catch (error) {
+          // The Memory commit may have completed before the ticket transition
+          // failed. Preserve the attempt identity so a deliberate retry can
+          // replay safely instead of creating a duplicate validation.
+          markReflectionValidationRetryable(reflectionValidationLifecycle.current);
           reportPersistenceError("confirmReflection", error);
           setCurrentStep(7);
           return;
@@ -3956,14 +4138,20 @@ export default function Home() {
       setErrorMessage("");
       setKnowledgeConflictRecovery(null);
       setRevisionConflictNotice("");
+      markReflectionValidationSucceeded(reflectionValidationLifecycle.current);
       setCurrentStep(8);
-    } catch (error) {
+      } catch (error) {
       if (error instanceof LearningApplicationError) {
+        if (error.failure.errorClass === "validation_rejected") {
+          markReflectionValidationRejected(reflectionValidationLifecycle.current);
+        } else {
+          markReflectionValidationRetryable(reflectionValidationLifecycle.current);
+        }
         if (error.failure.errorClass === "stale_revision") {
-          const resourceId = reflectionDecision?.existingItemId ?? "selected knowledge item";
-          const expectedRevision = knowledgeItems.find((item) => item.id === resourceId)?.revision ?? null;
+          const resourceId = decision.existingItemId ?? "selected knowledge item";
+          const expectedRevision = knowledgeItemsRef.current.find((item) => item.id === resourceId)?.revision ?? null;
           setKnowledgeConflictRecovery({
-            organizationId: organizationProfile.id,
+            organizationId: latest.organizationProfile.id,
             resourceId,
             operation: "promoteKnowledge",
             expectedRevision,
@@ -3979,10 +4167,20 @@ export default function Home() {
         }
       }
       else {
+        markReflectionValidationRetryable(reflectionValidationLifecycle.current);
         reportPersistenceError("promoteKnowledge", error);
         setErrorMessage("Knowledge promotion failed. No success state was applied; retry is safe.");
       }
+        setCurrentStep(7);
+      }
+    } catch (error) {
+      markReflectionValidationRetryable(reflectionValidationLifecycle.current);
+      reportPersistenceError("confirmReflection", error);
+      setErrorMessage(error instanceof Error ? error.message : "Reflection validation failed. No knowledge was promoted; retry is safe.");
       setCurrentStep(7);
+    } finally {
+      releaseReflectionValidationAttempt(reflectionValidationLifecycle.current);
+      setIsValidationSubmitting(false);
     }
   }
 
@@ -4665,6 +4863,27 @@ export default function Home() {
     : currentStep === 7 ? "reflecting"
     : "complete";
 
+  async function navigateToView(view: ActiveView): Promise<void> {
+    const active = activeTicketRecordRef.current;
+    if (active && currentStep === 7 && active.reflection.preparedDecision) {
+      try {
+        await reflectionDraftFlushers.current[active.ticketId]?.();
+        await flushReflectionDraftSave(active.ticketId);
+      } catch (error) {
+        reportPersistenceError("navigateWithReflectionDraft", error);
+        return;
+      }
+    }
+    setActiveView(view);
+  }
+
+  const registerReflectionDraftFlusher = useCallback((flush: (() => void | Promise<void>) | null) => {
+    const ticketId = activeTicketRecordRef.current?.ticketId;
+    if (!ticketId) return;
+    if (flush) reflectionDraftFlushers.current[ticketId] = flush;
+    else delete reflectionDraftFlushers.current[ticketId];
+  }, []);
+
   const handleNewTicket = () => {
     cancelActiveTicketRequest();
     setActiveView("tickets");
@@ -4719,9 +4938,7 @@ export default function Home() {
       {/* Sidebar */}
       <Sidebar
         activeView={activeView}
-        onNavigate={(view) => {
-          setActiveView(view);
-        }}
+        onNavigate={(view) => { void navigateToView(view); }}
         orgName={organizationProfile.name}
         darkMode={darkMode}
         accentColor={accent}
@@ -4823,6 +5040,12 @@ export default function Home() {
                   suggestedResponse={suggestedResponse}
                   reviewedResponse={reviewedResponse}
                   reflectionDecision={reflectionDecision}
+                  reflectionDraft={activeTicketRecord?.reflection.preparedLessonDraft || activeTicketRecord?.reflection.preparedProblemName
+                    ? {
+                        problemName: activeTicketRecord.reflection.preparedProblemName ?? undefined,
+                        lessonDraft: activeTicketRecord.reflection.preparedLessonDraft ?? undefined
+                      }
+                    : undefined}
                   reflectionValidationEligible={activeTicketRecord?.status === "resolved" && activeTicketRecord.reflection.validationEligible === true}
                   reflectionValidationBlockedReason={activeTicketRecord?.reflection.validationEligibilityReason ?? "Resolution evidence is required before this Reflection can be validated."}
                   knowledgeItems={knowledgeItems}
@@ -4850,6 +5073,8 @@ export default function Home() {
                   onApproveResponse={approveResponse}
                   onViewReflection={() => setCurrentStep(7)}
                   onConfirmReflection={confirmReflectionApplication}
+                  onReflectionDraftChange={saveReflectionDraft}
+                  onReflectionDraftFlushReady={registerReflectionDraftFlusher}
                   isValidationSubmitting={isValidationSubmitting}
                   onApproveReuse={approveReuse}
                   onProcessReuse={(text) => { void processSecondTicket(text); }}
@@ -4891,7 +5116,7 @@ export default function Home() {
               darkMode={darkMode}
               loadTicketPage={loadCasePage}
               onNavigateToKnowledge={() => {
-                setActiveView("knowledge");
+                void navigateToView("knowledge");
               }}
               onResumeTicket={resumeTicketFromRecord}
             />
