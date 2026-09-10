@@ -93,6 +93,7 @@ import { useOrganizationDocumentTitle } from "@/lib/documentTitle";
 import { detectLanguage, isSupportedLanguage, languageLabel, type SupportedLanguageCode } from "@/lib/languageDetection";
 import { resolveLanguagePolicy, resolveResponseLanguage } from "@/lib/languagePolicy";
 import { measureTelemetry, measureTelemetrySync, recordTelemetryEvent, startTelemetrySpan } from "@/lib/telemetry";
+import { activeSurfaceStorageKey, isPersistedActiveSurface, restoreActiveSurface } from "@/lib/activeSurfaceState";
 import {
   createTicketRecord,
   computeEditDistance,
@@ -950,13 +951,22 @@ export default function Home() {
         setIntelligenceLog(loadedIntelligenceLog);
         setEmergingPatterns(loadedPatterns);
         setDarkMode(window.localStorage.getItem("maesa-theme") === "dark");
-        // A tenant-keyed Source pointer is only a presentation hint. The
-        // Knowledge surface re-reads the Source and Evidence from the server
-        // before showing the active work, so browser storage never becomes
-        // the source of truth.
-        if (window.localStorage.getItem(`${ACTIVE_SOURCE_STORAGE_PREFIX}${encodeURIComponent(orgId)}`)) {
-          setActiveView("knowledge");
+        // Restore only the tenant-keyed core surface selection. The value is
+        // a presentation hint, never an authorization decision; the active
+        // organization and all workspace data still come from server-backed
+        // hydration above. Older Source pointers retain their Knowledge
+        // recovery behavior when no active-surface value exists yet.
+        const activeSurfaceKey = activeSurfaceStorageKey(orgId);
+        const persistedSurface = window.localStorage.getItem(activeSurfaceKey);
+        if (persistedSurface !== null && !isPersistedActiveSurface(persistedSurface)) {
+          window.localStorage.removeItem(activeSurfaceKey);
         }
+        const restoredSurface = persistedSurface !== null
+          ? restoreActiveSurface(persistedSurface)
+          : window.localStorage.getItem(`${ACTIVE_SOURCE_STORAGE_PREFIX}${encodeURIComponent(orgId)}`)
+            ? "knowledge"
+            : "home";
+        setActiveView(restoredSurface);
         setHydrated(true);
         setOrganizationBootstrapState("ready");
       } catch (error) {
@@ -1293,6 +1303,11 @@ export default function Home() {
   useEffect(() => {
     if (hydrated) window.localStorage.setItem("maesa-theme", darkMode ? "dark" : "light");
   }, [darkMode, hydrated]);
+
+  useEffect(() => {
+    if (authStatus !== "authenticated" || !hydrated || !isPersistedActiveSurface(activeView)) return;
+    window.localStorage.setItem(activeSurfaceStorageKey(organizationProfile.id), activeView);
+  }, [activeView, authStatus, hydrated, organizationProfile.id]);
 
   /* ---------- Helpers ---------- */
 
