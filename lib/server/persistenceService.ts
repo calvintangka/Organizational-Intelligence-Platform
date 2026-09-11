@@ -1356,6 +1356,8 @@ export async function resetOrganizationData(organizationId: string): Promise<voi
 
 /* ----------------------------- Resource writes ----------------------------- */
 
+const MAX_INTELLIGENCE_LOG_ENTRIES = 80;
+
 /**
  * Reconcile the organization's knowledge set with the provided snapshot:
  * per-item upserts guarded by optimistic revisions, plus scoped deletion of
@@ -1445,25 +1447,53 @@ export async function saveOrgMetrics(organizationId: string, metrics: OrgMetrics
 export async function saveIntelligenceLog(organizationId: string, entries: IntelligenceLogEntry[]): Promise<void> {
   const organization = await requireOrganization(organizationId);
   if (!Array.isArray(entries)) throw invalidRequest("The intelligence log payload must be an array.");
+  const normalizedEntries = entries.map((entry) => ({
+    id: requireString(entry.id, "intelligence log entry id"),
+    timestamp: parseDate(entry.timestamp, "intelligence log timestamp"),
+    event: requireString(entry.event, "intelligence log event"),
+    detail: entry.detail ?? null
+  }));
+  // The local adapter keeps only the most recent entries. Enforce the same
+  // bound before entering the interactive transaction so a stale or unusually
+  // large client snapshot cannot consume the transaction timeout.
+  const boundedEntries = normalizedEntries.slice(-MAX_INTELLIGENCE_LOG_ENTRIES);
+  const submittedIds = [...new Set(boundedEntries.map((entry) => entry.id))];
   await writeDatabase("intelligence log", () =>
     prisma.$transaction(async (tx) => {
-      for (const entry of entries) {
-        const id = requireString(entry.id, "intelligence log entry id");
-        const data = {
-          timestamp: parseDate(entry.timestamp, "intelligence log timestamp"),
-          event: requireString(entry.event, "intelligence log event"),
-          detail: entry.detail ?? null
-        };
+      // Full-snapshot clients can be in flight in separate tabs or processes.
+      // Locking the organization row gives all writers one serialization point.
+      await tx.$queryRaw`SELECT "id" FROM "organizations" WHERE "id" = ${organization.id} FOR UPDATE`;
+      const existingEntries = submittedIds.length > 0
+        ? await tx.intelligenceLog.findMany({
+            where: { id: { in: submittedIds } },
+            select: { id: true, organizationId: true }
+          })
+        : [];
+      const foreignEntry = existingEntries.find((entry) => entry.organizationId !== organization.id);
+      if (foreignEntry) {
+        throw conflict(`Intelligence log entry ${foreignEntry.id} belongs to a different organization.`);
+      }
+      for (const entry of boundedEntries) {
         await tx.intelligenceLog.upsert({
-          where: { id },
-          create: { id, organizationId: organization.id, ...data },
-          update: data
+          where: { id: entry.id },
+          create: { id: entry.id, organizationId: organization.id, timestamp: entry.timestamp, event: entry.event, detail: entry.detail },
+          update: { timestamp: entry.timestamp, event: entry.event, detail: entry.detail }
         });
       }
-      // The client keeps a bounded log; remove scoped entries it trimmed away.
-      await tx.intelligenceLog.deleteMany({
-        where: { organizationId: organization.id, id: { notIn: entries.map((entry) => entry.id) } }
+      // Do not reconcile against a stale full snapshot: an absent ID may have
+      // been committed by a concurrent writer. Prune only the oldest rows
+      // after all submitted entries have been written.
+      const overflow = await tx.intelligenceLog.findMany({
+        where: { organizationId: organization.id },
+        orderBy: [{ timestamp: "desc" }, { id: "desc" }],
+        skip: MAX_INTELLIGENCE_LOG_ENTRIES,
+        select: { id: true }
       });
+      if (overflow.length > 0) {
+        await tx.intelligenceLog.deleteMany({
+          where: { organizationId: organization.id, id: { in: overflow.map((entry) => entry.id) } }
+        });
+      }
     })
   );
 }
