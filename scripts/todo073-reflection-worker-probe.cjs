@@ -21,8 +21,8 @@ async function main() {
     assert.equal(replay.replayed, true);
     assert.equal(replay.job.id, first.job.id);
     await assert.rejects(() => support.durableJobRepository.enqueue({ context: fixture.context, type: 'reflection.generate', version: 1, input: { ...fixture.input, reviewedResponse: 'different safe response' }, inputDigest: support.digest({ changed: true }), idempotencyKey: `todo073-reflection:${fixture.ticket.ticketId}` }), /different.*input/);
-    workerA = await support.runWorker('todo073-reflection-worker-a', { concurrency: 1 });
-    workerB = await support.runWorker('todo073-reflection-worker-b', { concurrency: 1 });
+    workerA = await support.runWorker('todo073-reflection-worker-a', { concurrency: 1, organizationId });
+    workerB = await support.runWorker('todo073-reflection-worker-b', { concurrency: 1, organizationId });
     const completed = await support.waitForTerminal(fixture.context, first.job.id);
     await workerA.stop(); await workerB.stop(); workerA = null; workerB = null;
     assert.equal(completed.status, 'succeeded');

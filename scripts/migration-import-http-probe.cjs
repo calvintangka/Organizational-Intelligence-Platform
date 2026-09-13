@@ -2,6 +2,7 @@
 const assert = require("node:assert/strict");
 const intakeProbe = require("./migration-intake-probe.cjs");
 const { populatedPackage } = require("./migration-import-probe.cjs");
+const { createMigrationHttpAuth } = require("./lib/migration-http-auth.cjs");
 
 const BASE_URL = process.env.OIP_INTAKE_BASE_URL || "http://127.0.0.1:3001";
 const ORG = "test-oip-migration-http";
@@ -9,15 +10,15 @@ const COLLISION_ORG = "test-oip-migration-http-collision";
 const TARGET_ORG = "test-oip-migration-http-target";
 const NOW = "2026-07-15T00:00:00.000Z";
 
-async function post(path, body) {
+async function post(path, body, cookie) {
   const response = await fetch(`${BASE_URL}${path}`, {
-    method: "POST", headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body)
+    method: "POST", headers: { "content-type": "application/json", cookie }, body: body === undefined ? undefined : JSON.stringify(body)
   });
   return { response, body: await response.json() };
 }
 
-async function get(path) {
-  const response = await fetch(`${BASE_URL}${path}`);
+async function get(path, cookie) {
+  const response = await fetch(`${BASE_URL}${path}`, { headers: { cookie } });
   return { response, body: await response.json() };
 }
 
@@ -26,11 +27,13 @@ async function main() {
   try {
     await Promise.all(ids.map(intakeProbe.deleteIfPresent));
     await intakeProbe.persistence.upsertOrganizationProfiles(ids.map((id) => intakeProbe.profile(id)));
+    const auth = await createMigrationHttpAuth(BASE_URL, ids, "migration-import-http");
+    try {
     const prisma = intakeProbe.getPrismaClient();
     const valid = await populatedPackage(ORG);
-    const intake = await post(`/api/organizations/${ORG}/migration-import`, valid);
+    const intake = await post(`/api/organizations/${ORG}/migration-import`, valid, auth.cookie);
     assert.equal(intake.response.status, 201);
-    const execute = await post(`/api/organizations/${ORG}/migration-import/${intake.body.data.batchId}/execute`);
+    const execute = await post(`/api/organizations/${ORG}/migration-import/${intake.body.data.batchId}/execute`, undefined, auth.cookie);
     assert.equal(execute.response.status, 200);
     assert.equal(execute.body.data.status, "imported");
     assert.equal(execute.body.data.noOp, false);
@@ -38,13 +41,13 @@ async function main() {
     assert.equal(execute.body.data.resourceCheckpoints.find((row) => row.resourceType === "memoryChangeRecords").status, "imported");
     assert.equal(execute.body.data.resourceCheckpoints.find((row) => row.resourceType === "ticketSequence").status, "imported");
 
-    const knowledge = await get(`/api/organizations/${ORG}/knowledge`);
+    const knowledge = await get(`/api/organizations/${ORG}/knowledge`, auth.cookie);
     assert.equal(knowledge.response.status, 200);
     assert.equal(knowledge.body.data[0].id, "import-knowledge-1");
-    const tickets = await get(`/api/organizations/${ORG}/tickets?full=true`);
+    const tickets = await get(`/api/organizations/${ORG}/tickets?full=true`, auth.cookie);
     assert.equal(tickets.body.data[0].ticketId, "MT-20260715-0015");
 
-    const retry = await post(`/api/organizations/${ORG}/migration-import/${intake.body.data.batchId}/execute`);
+    const retry = await post(`/api/organizations/${ORG}/migration-import/${intake.body.data.batchId}/execute`, undefined, auth.cookie);
     assert.equal(retry.response.status, 200);
     assert.equal(retry.body.data.noOp, true);
     assert.equal(await prisma.knowledgeItem.count({ where: { organizationId: ORG } }), 1);
@@ -57,14 +60,17 @@ async function main() {
       sourceTicketId: "target-ticket", createdAt: new Date(NOW), approvedAt: new Date(NOW), revision: 1, timesReused: 0,
       content: { problem: "target", approvedAnswer: "target", tags: [], lessons: [], knowledgeVersions: [], learningHistory: [], exampleTickets: [] }
     } });
-    const conflictIntake = await post(`/api/organizations/${COLLISION_ORG}/migration-import`, collision);
-    const conflictExecute = await post(`/api/organizations/${COLLISION_ORG}/migration-import/${conflictIntake.body.data.batchId}/execute`);
+    const conflictIntake = await post(`/api/organizations/${COLLISION_ORG}/migration-import`, collision, auth.cookie);
+    const conflictExecute = await post(`/api/organizations/${COLLISION_ORG}/migration-import/${conflictIntake.body.data.batchId}/execute`, undefined, auth.cookie);
     assert.equal(conflictExecute.response.status, 200);
     assert.equal(conflictExecute.body.data.status, "conflict");
     assert.equal(conflictExecute.body.data.unresolvedConflictCount, 1);
     assert.equal(Object.prototype.hasOwnProperty.call(conflictExecute.body, "DATABASE_URL"), false);
 
     console.log("migration import HTTP probe passed: execute, GET verification, retry no-op, conflict quarantine, and safe response");
+    } finally {
+      await auth.cleanup();
+    }
   } finally {
     await Promise.all(ids.map(intakeProbe.deleteIfPresent));
   }

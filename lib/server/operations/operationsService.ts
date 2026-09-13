@@ -2,6 +2,7 @@ import "server-only";
 
 import { prisma } from "@/lib/server/prisma";
 import type { DurableJobRecord, JobAttemptRecord, JobStatus, JobType } from "@/lib/application/jobs/types";
+import { normalizeRoleKey, ROLE_CAPABILITIES } from "@/lib/server/rbac/definitions";
 
 const OFFLINE_AFTER_MS = 45_000;
 const DEFAULT_LIMIT = 100;
@@ -153,7 +154,7 @@ function average(values: number[]): number | null {
 }
 
 async function accessibleOrganizations(userId: string) {
-  return prisma.organizationMembership.findMany({ where: { userId }, select: { organizationId: true, organization: { select: { id: true, name: true } } }, orderBy: { organizationId: "asc" } });
+  return prisma.organizationMembership.findMany({ where: { userId }, select: { organizationId: true, role: true, organization: { select: { id: true, name: true } } }, orderBy: { organizationId: "asc" } });
 }
 
 async function loadJobs(organizationIds: string[], limit: number): Promise<JobRow[]> {
@@ -192,7 +193,10 @@ export async function getOperationsSnapshot(organizationId: string, userId: stri
     return { provider, sampleCount: samples.length, successCount: samples.filter((sample) => sample.outcome === "succeeded").length, failureCount: samples.filter((sample) => sample.outcome !== "succeeded").length, averageJobDurationMs: average(latencies), p95JobDurationMs: percentile(latencies, 0.95), providerRequestMetrics: "unavailable", measured: true };
   });
   const failures = [...new Set(rows.map((row) => row.error?.errorClass).filter(Boolean))].map((errorClass) => ({ errorClass, count: rows.filter((row) => row.error?.errorClass === errorClass).length, retryableCount: rows.filter((row) => row.error?.errorClass === errorClass && row.retryable).length }));
-  const organizations = memberships.map((membership) => ({ organizationId: membership.organization.id, name: membership.organization.name, jobCount: rows.filter((row) => row.organizationId === membership.organizationId).length, activeJobs: rows.filter((row) => row.organizationId === membership.organizationId && ["queued", "leased", "running", "retry_scheduled", "cancellation_requested"].includes(row.status)).length }));
+  const organizations = memberships.map((membership) => {
+    const capabilities = ROLE_CAPABILITIES[normalizeRoleKey(membership.role)];
+    return { organizationId: membership.organization.id, name: membership.organization.name, jobCount: rows.filter((row) => row.organizationId === membership.organizationId).length, activeJobs: rows.filter((row) => row.organizationId === membership.organizationId && ["queued", "leased", "running", "retry_scheduled", "cancellation_requested"].includes(row.status)).length, canRetry: capabilities.includes("worker.retry"), canCancel: capabilities.includes("worker.cancel") };
+  });
   const connectorInstallations = await prisma.connectorInstallation.findMany({ where: { organizationId: { in: organizationIds } }, include: { _count: { select: { inboundEvents: true, externalMappings: true } } }, orderBy: { updatedAt: "desc" }, take: 100 });
   const connectors = connectorInstallations.map((installation) => ({ id: installation.id, organizationId: installation.organizationId, connectorType: installation.connectorType, name: installation.name, status: installation.status, eventCount: installation._count.inboundEvents, mappingCount: installation._count.externalMappings, lastSuccessAt: installation.lastSuccessAt?.toISOString(), lastFailureAt: installation.lastFailureAt?.toISOString(), lastFailureSafe: installation.lastFailureSafe, credentialConfigured: Boolean(installation.activeCredentialId) }));
   const longest = rows.filter((row) => ["leased", "running", "cancellation_requested"].includes(row.status)).sort((left, right) => new Date(left.startedAt ?? left.createdAt).getTime() - new Date(right.startedAt ?? right.createdAt).getTime())[0];

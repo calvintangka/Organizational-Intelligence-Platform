@@ -16,6 +16,10 @@ import { prisma } from "@/lib/server/prisma";
 import { startTelemetrySpan } from "@/lib/telemetry";
 
 const MAX_WEBHOOK_BYTES = 256 * 1024;
+// Duplicate webhook deliveries are intentionally concurrent. Give the short
+// enqueue transaction enough pool wait time to serialize those deliveries
+// instead of surfacing Prisma's default P2028 transaction-start timeout.
+const WEBHOOK_ENQUEUE_TRANSACTION_OPTIONS = { maxWait: 15_000, timeout: 15_000 };
 
 function json(value: unknown): Prisma.InputJsonValue { return value as Prisma.InputJsonValue; }
 function iso(value: Date | null | undefined) { return value?.toISOString(); }
@@ -132,7 +136,7 @@ export async function receiveWebhook(installationId: string, request: { rawBody:
         const job = await tx.durableJob.create({ data: { organizationId: installation.organizationId, type: "connector.intake", version: 1, status: "queued", priority: 100, authority: "server", input: json(input), inputDigest: digestJobInput(input), idempotencyKey: `connector-event:${installation.id}:${signal.externalEventId}:${signal.eventType}`, correlationId: `connector:${installation.id}:${signal.externalEventId}`, requestId, progress: json(initialJobProgress()), retryable: false, attemptCount: 0, maxAttempts: 3 } });
         const linked = await tx.connectorInboundEvent.update({ where: { id: event.id }, data: { status: "enqueued", jobId: job.id } });
         return { event: linked, job };
-      });
+      }, WEBHOOK_ENQUEUE_TRANSACTION_OPTIONS);
       enqueueSpan.end(true);
     } catch (error) {
       if ((error as { code?: string } | undefined)?.code !== "P2002") { enqueueSpan.end(false); throw error; }

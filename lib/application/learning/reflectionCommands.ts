@@ -239,26 +239,58 @@ function resolveReflectionKnowledgeItem(
   return aliases.length === 1 ? aliases[0] : null;
 }
 
+interface CanonicalCreateTargetResolution {
+  target: KnowledgeItem | null;
+  ambiguous: boolean;
+}
+
+/**
+ * A create-new Reflection can be prepared against an older client snapshot.
+ * If the reviewer names a canonical problem that now exists, the durable
+ * identity must be reconciled before the write boundary rather than sent as a
+ * second create with `expectedKnowledgeRevision: null`. Only one in-scope row
+ * may own the canonical identity; ambiguity remains fail-closed.
+ */
+function resolveCanonicalCreateTarget(
+  command: Pick<PromoteKnowledgeCommand, "organizationId" | "knowledgeItems">,
+  proposed: KnowledgeItem
+): CanonicalCreateTargetResolution {
+  const proposedCanonicalId = proposed.canonicalProblemId ?? proposed.id;
+  const proposedCanonicalTitle = proposed.canonicalProblemTitle ?? proposed.title;
+  const matches = command.knowledgeItems
+    .filter((item) => item.organizationId === undefined || item.organizationId === command.organizationId)
+    .filter((item) => {
+      const normalized = withCanonicalProblemDefaults(item);
+      return normalized.canonicalProblemId === proposedCanonicalId
+        || normalized.canonicalProblemTitle === proposedCanonicalTitle;
+    });
+  const uniqueMatches = [...new Map(matches.map((item) => [item.id, item])).values()];
+  return {
+    target: uniqueMatches.length === 1 ? uniqueMatches[0] : null,
+    ambiguous: uniqueMatches.length > 1
+  };
+}
+
 /**
  * Return the content that the selected promotion action will actually write
  * into reusable Organizational Memory. Source tickets, conversation messages,
  * resolution evidence, and provenance identifiers are deliberately not part
  * of this projection.
  *
- * NC-FIX-011 validated reviewer-authored lesson fields when present, but the
- * no-lesson and generic-version paths can also persist fields from the
- * understanding or reviewed response. Keeping this projection beside the
- * command makes the validation boundary follow the write boundary.
+ * NC-FIX-011 validated reviewer-authored lesson fields when present. A blank
+ * optional lesson is not a lesson draft, so source evidence and the reviewed
+ * customer reply must not be wrapped in a synthetic LessonDraft and scanned
+ * as if the reviewer authored reusable lesson content.
  *
  * NC-FIX-012R2 audit additions to the recovered stash implementation:
  * - create_new falls back to `reviewedResponse` when an authored response
  *   template is blank; that fallback is projected so it cannot bypass
  *   validation.
  * - create_new / merge_existing / trust_update_only persist
- *   `understanding.tags` as canonical item tags even when a lesson is
- *   authored; those tags are projected into the safety draft's signals.
- * - trust_update_only writes understanding tags when tags exist, so it
- *   receives the same tag projection as merge_existing.
+ *   `understanding.tags` as canonical item tags; when a lesson is authored,
+ *   those tags are projected into the safety draft's signals.
+ * - trust_update_only writes understanding tags when tags exist, so an
+ *   authored lesson receives the same tag projection as merge_existing.
  */
 function effectiveReusablePromotionDraft(
   command: PromoteKnowledgeCommand,
@@ -283,36 +315,10 @@ function effectiveReusablePromotionDraft(
     return submittedDraft;
   }
 
-  if (command.reflection.action === "create_new") {
-    return {
-      mode: "new",
-      rootCause: command.understanding.coreProblem,
-      solution: command.understanding.summary,
-      customerResponse: command.reviewedResponse,
-      signals: understandingTags
-    };
-  }
-
-  if (command.reflection.action === "create_version" && command.suggestedResponse?.draftMode !== "lesson_grounded") {
-    return {
-      mode: "new",
-      rootCause: "",
-      solution: "",
-      customerResponse: command.reviewedResponse,
-      signals: []
-    };
-  }
-
-  if ((command.reflection.action === "merge_existing" || command.reflection.action === "trust_update_only") && understandingTags.length > 0) {
-    return {
-      mode: "new",
-      rootCause: "",
-      solution: "",
-      customerResponse: "",
-      signals: understandingTags
-    };
-  }
-
+  // BLANK is the generic no-lesson path. It must not manufacture a lesson
+  // draft from source-derived understanding, tags, or the reviewed response.
+  // The submitted lesson branch above continues to validate actual authored
+  // reusable fields, including the response fallback that create_new writes.
   return undefined;
 }
 
@@ -320,6 +326,14 @@ function stableId(prefix: string, key: string): string {
   let hash = 2166136261;
   for (let index = 0; index < key.length; index += 1) hash = Math.imul(hash ^ key.charCodeAt(index), 16777619);
   return `${prefix}-${(hash >>> 0).toString(16)}`;
+}
+
+function tenantScopedCanonicalRowId(organizationId: string, canonicalProblemId: string): string {
+  // Keep the tenant suffix fixed-width. The unsigned 32-bit digest can begin
+  // with zeroes, and String#toString(16) omits those leading digits. Durable
+  // row identity is easier to audit and validate when every scope key has the
+  // same eight-hex-character shape.
+  return `${canonicalProblemId}--tenant-${stableId("scope", organizationId).slice("scope-".length).padStart(8, "0")}`;
 }
 
 function payloadHash(command: PromoteKnowledgeCommand): string {
@@ -482,9 +496,10 @@ export async function promoteKnowledgeCommand(command: PromoteKnowledgeCommand, 
   const ticketId = ticketReferenceId(command.ticket);
   const und = command.understanding;
   const draft = submittedDraft;
-  const action = command.reflection.action;
+  const requestedAction = command.reflection.action;
+  let action = requestedAction;
   const reflectionTarget = resolveReflectionKnowledgeItem(command, command.reflection.existingItemId);
-  const expectedKnowledgeRevision = command.reflection.existingItemId
+  let expectedKnowledgeRevision = command.reflection.existingItemId
     ? reflectionTarget?.revision ?? 0
     : null;
   let beforeState: KnowledgeItem | null = null;
@@ -496,7 +511,7 @@ export async function promoteKnowledgeCommand(command: PromoteKnowledgeCommand, 
   let lessonCreatedId: string | null = null;
   let lessonReinforcedId: string | null = null;
 
-  if (action === "create_new") {
+  if (requestedAction === "create_new") {
     const isBusinessInquiry = und.businessClassification?.inquiryType === "business_inquiry";
     const isUncategorized = !!command.reflection.problemNameRequired;
     const businessIntent = und.businessClassification?.intent;
@@ -505,16 +520,63 @@ export async function promoteKnowledgeCommand(command: PromoteKnowledgeCommand, 
     if (isUncategorized && !title) fail(command, "invalid_command", "Name the new problem in Reflection before committing it to Organizational Memory.");
     const category = isBusinessInquiry ? "Business Inquiry" : isUncategorized ? "Uncategorized" : und.category;
     const canonicalTitle = title ?? "Uncategorized";
-    const response = draft?.customerResponse?.trim() || command.reviewedResponse;
-    candidate = createCandidate(command, { action, sourceTicketIds: [ticketId], solution: draft?.rootCause ?? und.coreProblem, customerResponseTemplate: response, internalGuidance: draft?.solution ?? und.summary, canonicalProblemTitle: canonicalTitle, category, rationale: command.reflection.rationale, now });
+    // A blank optional lesson has no authored reusable response. Let the
+    // canonical engine choose its generic template instead of promoting the
+    // source-specific reviewed reply as reusable content. An authored lesson
+    // still keeps the existing reviewed-response fallback for its blank
+    // response field and validates that fallback before persistence.
+    const response = draft
+      ? draft.customerResponse.trim() || command.reviewedResponse
+      : "";
     const customCanonical = isBusinessInquiry || isUncategorized
       ? { title: canonicalTitle, category, problemSummary: draft?.rootCause ?? und.coreProblem, tags: und.tags }
       : undefined;
     afterState = createCanonicalProblem(command.ticket, und, response, command.organizationProfile, now, customCanonical);
     if (draft) afterState = applyLessonToItem(afterState, { ...draft, mode: "new" }, ticketId, now);
-    metricsPatch = { ...metricsPatch, knowledgeItemsCreated: 1, canonicalProblemsTouched: 1, knowledgeVersionsCreated: 1 };
-    orgMetricsPatch = { memoryGrowthToday: (command.currentOrgMetrics?.memoryGrowthToday ?? 0) + 1, knowledgeVersions: (command.currentOrgMetrics?.knowledgeVersions ?? 0) + 1 };
-    lessonCreatedId = draft?.mode === "new" ? afterState.lessons?.find((lesson) => lessonContentFingerprint(lesson) === lessonContentFingerprint(draft))?.id ?? null : null;
+    const canonicalTarget = resolveCanonicalCreateTarget(command, afterState);
+    if (canonicalTarget.ambiguous) {
+      fail(command, "promotion_conflict", "The canonical Memory identity is ambiguous. Reload organizational memory before committing.", true);
+    }
+    if (canonicalTarget.target) {
+      // The reviewer authored a new lesson for a canonical problem that is
+      // already present. Reconcile to that durable row and record supporting
+      // evidence; never attempt a second row with the same canonical identity.
+      action = "merge_existing";
+      beforeState = canonicalTarget.target;
+      expectedKnowledgeRevision = canonicalTarget.target.revision ?? 0;
+      const base = { ...withCanonicalProblemDefaults(canonicalTarget.target), id: canonicalTarget.target.id };
+      afterState = { ...mergeIntoCanonicalProblem(base, command.ticket, und, undefined, "human", now), id: canonicalTarget.target.id };
+      if (draft) afterState = applyLessonToItem(afterState, { ...draft, mode: "new" }, ticketId, now);
+      candidate = createCandidate(command, {
+        action,
+        sourceTicketIds: [ticketId],
+        solution: und.coreProblem,
+        customerResponseTemplate: base.customerResponseTemplate ?? base.approvedAnswer,
+        internalGuidance: base.internalGuidance ?? und.summary,
+        canonicalProblemTitle: base.canonicalProblemTitle ?? base.title,
+        category: base.category,
+        relatedKnowledgeId: base.id,
+        rationale: command.reflection.rationale,
+        now
+      });
+      metricsPatch = { ...metricsPatch, canonicalProblemsTouched: 1, mergedTickets: 1, duplicatePreventions: 1 };
+      orgMetricsPatch = { mergedTickets: (command.currentOrgMetrics?.mergedTickets ?? 0) + 1, duplicatePreventions: (command.currentOrgMetrics?.duplicatePreventions ?? 0) + 1 };
+      lessonCreatedId = draft?.mode === "new" ? afterState.lessons?.find((lesson) => lessonContentFingerprint(lesson) === lessonContentFingerprint(draft))?.id ?? null : null;
+    } else {
+      // Canonical IDs describe the shared semantic problem, while KnowledgeItem
+      // IDs are global database primary keys. A new tenant may legitimately
+      // create the same semantic canonical problem as another tenant, so give
+      // the new durable row a deterministic tenant-scoped ID. Same-tenant
+      // matches took the branch above and retain their existing row identity.
+      afterState = {
+        ...afterState,
+        id: tenantScopedCanonicalRowId(command.organizationId, afterState.canonicalProblemId ?? afterState.id)
+      };
+      candidate = createCandidate(command, { action, sourceTicketIds: [ticketId], solution: draft?.rootCause ?? und.coreProblem, customerResponseTemplate: afterState.customerResponseTemplate ?? afterState.approvedAnswer ?? "", internalGuidance: draft?.solution ?? und.summary, canonicalProblemTitle: canonicalTitle, category, rationale: command.reflection.rationale, now });
+      metricsPatch = { ...metricsPatch, knowledgeItemsCreated: 1, canonicalProblemsTouched: 1, knowledgeVersionsCreated: 1 };
+      orgMetricsPatch = { memoryGrowthToday: (command.currentOrgMetrics?.memoryGrowthToday ?? 0) + 1, knowledgeVersions: (command.currentOrgMetrics?.knowledgeVersions ?? 0) + 1 };
+      lessonCreatedId = draft?.mode === "new" ? afterState.lessons?.find((lesson) => lessonContentFingerprint(lesson) === lessonContentFingerprint(draft))?.id ?? null : null;
+    }
   } else {
     beforeState = reflectionTarget;
     if (!beforeState) fail(command, "promotion_conflict", "The knowledge item selected by Reflection is no longer available.", true);
@@ -542,13 +604,12 @@ export async function promoteKnowledgeCommand(command: PromoteKnowledgeCommand, 
       orgMetricsPatch = { mergedTickets: (command.currentOrgMetrics?.mergedTickets ?? 0) + 1, duplicatePreventions: (command.currentOrgMetrics?.duplicatePreventions ?? 0) + 1 };
     } else if (action === "create_version") {
       const lessonGrounded = command.suggestedResponse?.draftMode === "lesson_grounded";
-      const updatesGeneric = !lessonGrounded && !draft;
+      const recordsGenericVersion = !lessonGrounded && !draft;
       const version = (base.knowledgeVersions?.length ?? 0) + 1;
       afterState = {
         ...base,
-        ...(updatesGeneric ? { customerResponseTemplate: command.reviewedResponse, approvedAnswer: command.reviewedResponse } : {}),
         exampleTickets: [...(base.exampleTickets ?? []), createGeneralizedEvidenceExample(ticketId, base.problemSummary ?? base.problem, "human")],
-        knowledgeVersions: updatesGeneric ? [...(base.knowledgeVersions ?? []), { versionId: `${base.canonicalProblemId}-v${version}`, version, createdAt: now, changeReason: command.reflection.versionReason ?? "Human review introduced an improved response", sourceTicketId: ticketId, summary: `v${version}: Updated customer response template` }] : base.knowledgeVersions ?? [],
+        knowledgeVersions: recordsGenericVersion ? [...(base.knowledgeVersions ?? []), { versionId: `${base.canonicalProblemId}-v${version}`, version, createdAt: now, changeReason: command.reflection.versionReason ?? "Human review recorded a governed evidence update without an authored reusable lesson", sourceTicketId: ticketId, summary: `v${version}: Recorded validated evidence without a reusable lesson` }] : base.knowledgeVersions ?? [],
         timesSeen: (base.timesSeen ?? 0) + 1,
         humanReviewCount: (base.humanReviewCount ?? 0) + 1,
         lastUpdated: now,
@@ -556,8 +617,8 @@ export async function promoteKnowledgeCommand(command: PromoteKnowledgeCommand, 
         lastValidatedAt: now
       };
       if (draft) afterState = applyLessonToItem(afterState, draft, ticketId, now);
-      metricsPatch = { ...metricsPatch, canonicalProblemsTouched: 1, ...(updatesGeneric ? { knowledgeVersionsCreated: 1 } : {}) };
-      orgMetricsPatch = updatesGeneric ? { knowledgeVersions: (command.currentOrgMetrics?.knowledgeVersions ?? 0) + 1 } : {};
+      metricsPatch = { ...metricsPatch, canonicalProblemsTouched: 1, ...(recordsGenericVersion ? { knowledgeVersionsCreated: 1 } : {}) };
+      orgMetricsPatch = recordsGenericVersion ? { knowledgeVersions: (command.currentOrgMetrics?.knowledgeVersions ?? 0) + 1 } : {};
     } else {
       const targetWithEvidence = mergeIntoCanonicalProblem(base, command.ticket, und, undefined, "human", now);
       const trust = recordResolution(targetWithEvidence, { mode: "human", success: true, at: now }, command.organizationProfile, command.validationRecords);

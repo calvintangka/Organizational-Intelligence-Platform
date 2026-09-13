@@ -225,11 +225,12 @@ export class PrismaJobRepository implements JobRepository {
     return row ? mapJob(row) : null;
   }
 
-  async claimNext(workerId: string, options: { leaseMs?: number; now?: Date } = {}): Promise<ClaimedJob | null> {
+  async claimNext(workerId: string, options: { leaseMs?: number; now?: Date; organizationId?: string } = {}): Promise<ClaimedJob | null> {
     const now = options.now ?? new Date();
     const leaseMs = Math.max(5_000, options.leaseMs ?? DEFAULT_LEASE_MS);
     const candidates = await prisma.durableJob.findMany({
       where: {
+        ...(options.organizationId ? { organizationId: options.organizationId } : {}),
         OR: [
           { status: "queued", OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }], leaseOwner: null },
           { status: "retry_scheduled", OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }], leaseOwner: null },

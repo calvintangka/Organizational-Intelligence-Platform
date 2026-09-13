@@ -37,6 +37,12 @@ function verifySourceContract() {
   assert.match(menu, /Role:/);
   assert.match(view, /server-owned organization/);
   assert.match(view, /creationError/);
+  const deleteStart = page.indexOf("async function deleteOrganization(");
+  const deleteEnd = page.indexOf("function createRelevanceLogEntries(", deleteStart);
+  assert.ok(deleteStart >= 0 && deleteEnd > deleteStart, "organization delete source must be discoverable");
+  const deleteSource = page.slice(deleteStart, deleteEnd);
+  assert.match(deleteSource, /setAuthorizedOrganizations\(nextList\)/, "deletion must update the account-menu membership projection");
+  assert.match(deleteSource, /persistenceMode === "local"/, "server deletion must not replay a stale profile list");
 }
 
 async function signup() {

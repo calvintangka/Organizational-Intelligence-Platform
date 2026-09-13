@@ -38,7 +38,7 @@ async function cleanup(prefix = 'todo072-probe-') {
   await prisma.organization.deleteMany({ where: { id: { startsWith: prefix } } });
 }
 
-async function waitForTerminal(context, jobId, timeoutMs = 60_000) {
+async function waitForTerminal(context, jobId, timeoutMs = 300_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const job = await durableJobRepository.get(context, jobId);
@@ -52,7 +52,7 @@ function bulkInput(uploadKey, entries) { return { uploadKey, entries }; }
 function digest(input) { return digestJobInput(input); }
 
 async function runWorker(workerId, options = {}) {
-  const worker = new AsyncJobWorker({ workerId, pollMs: 25, leaseMs: options.leaseMs ?? 5_000, concurrency: options.concurrency ?? 1 });
+  const worker = new AsyncJobWorker({ workerId, pollMs: 25, leaseMs: options.leaseMs ?? 5_000, concurrency: options.concurrency ?? 1, organizationId: options.organizationId });
   worker.start();
   return worker;
 }

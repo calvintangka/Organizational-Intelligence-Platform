@@ -275,6 +275,21 @@ async function main() {
     assert.equal(afterUpdate.status, "open", "server-owned status must be preserved on fact update");
 
     // ------------------------------------------------------------ TRANSITIONS
+    // Resolution requires explicit evidence before a server-owned approve can
+    // resolve the case. This mirrors the human-governed UI path and keeps the
+    // contract probe aligned with the production safety boundary.
+    const approvalEvidence = await request(`/api/organizations/${organizationId}/tickets/${encodeURIComponent(ticketId)}/transition`, {
+      method: "POST", headers: jsonHeaders(supportCookie), body: JSON.stringify({
+        kind: "attach_resolution_evidence",
+        evidenceType: "manual_verified_resolution",
+        note: "Authorized reviewer verified the disposable resolution before approval.",
+        idempotencyKey: `approval-evidence-${suffix}`
+      })
+    });
+    evidence.approvalEvidence = { status: approvalEvidence.status, type: approvalEvidence.body?.data?.resolutionEvidence?.[0]?.type };
+    assert.equal(approvalEvidence.status, 200, "approval evidence must be accepted before approve");
+    assert.equal(approvalEvidence.body?.data?.resolutionEvidence?.[0]?.type, "manual_verified_resolution", "approval evidence type must be durable");
+
     // approve
     const approve = await request(`/api/organizations/${organizationId}/tickets/${encodeURIComponent(ticketId)}/transition`, {
       method: "POST", headers: jsonHeaders(supportCookie), body: JSON.stringify({ kind: "approve", finalResponse: "Thank you for your patience.", humanEdited: true })
@@ -321,6 +336,18 @@ async function main() {
     });
     evidence.forgedValidation = { status: forgedValidation.status, code: forgedValidation.body?.error?.code };
     assert.equal(forgedValidation.status, 400, "a forged validation reference must be rejected");
+
+    const commitEvidence = await request(`/api/organizations/${organizationId}/tickets/${encodeURIComponent(ticketId2)}/transition`, {
+      method: "POST", headers: jsonHeaders(supportCookie), body: JSON.stringify({
+        kind: "attach_resolution_evidence",
+        evidenceType: "manual_verified_resolution",
+        note: "Authorized reviewer verified the disposable commit before validation.",
+        idempotencyKey: `commit-evidence-${suffix}`
+      })
+    });
+    evidence.commitEvidence = { status: commitEvidence.status, type: commitEvidence.body?.data?.resolutionEvidence?.[0]?.type };
+    assert.equal(commitEvidence.status, 200, "commit evidence must be accepted before validation");
+    assert.equal(commitEvidence.body?.data?.resolutionEvidence?.[0]?.type, "manual_verified_resolution", "commit evidence type must be durable");
 
     const commit = await request(`/api/organizations/${organizationId}/tickets/${encodeURIComponent(ticketId2)}/transition`, {
       method: "POST", headers: jsonHeaders(supportCookie), body: JSON.stringify({ kind: "commit", validationRecordIds: [validationId], knowledgeId, action: "create_new", lessonCreatedId: "lesson-1", knowledgeChanged: knowledgeId })

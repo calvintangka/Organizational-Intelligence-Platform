@@ -12,6 +12,7 @@ import type {
   OrganizationalSourceView,
   PreparedOrganizationalLearning
 } from "@/types/organizationalMemory";
+import type { OrganizationDomain } from "@/types/multiDepartment";
 import { formatLocalDateTimeInput, serializeLocalDateTimeInput } from "@/lib/eventTime";
 import { canApplyDraftHydration, type OrganizationalExperienceEditorIntent } from "@/lib/organizationalExperienceEditorState";
 
@@ -22,7 +23,7 @@ interface OrganizationalMemorySurfaceProps {
   onRefresh: () => Promise<void>;
 }
 
-const sourceKinds = ["OPERATIONAL_EVENT", "INCIDENT", "DECISION", "PROCESS_LEARNING", "OTHER"];
+const sourceKinds = ["EXPERIENCE", "OPERATIONAL_EVENT", "INCIDENT", "DECISION", "PROCESS_LEARNING", "OTHER"];
 const evidenceTypes = ["observation", "investigation", "system_result", "action_taken", "confirmation", "outcome", "reference"];
 export const ACTIVE_SOURCE_STORAGE_PREFIX = "oip.active-organizational-source.v1:";
 
@@ -117,10 +118,13 @@ export function OrganizationalMemorySurface({ organizationId, knowledgeItems, da
   const [message, setMessage] = useState("");
   const [title, setTitle] = useState("");
   const [sourceKind, setSourceKind] = useState("OPERATIONAL_EVENT");
+  const [domains, setDomains] = useState<OrganizationDomain[]>([]);
+  const [domainId, setDomainId] = useState("");
   const [occurredAt, setOccurredAt] = useState(formatLocalDateTimeInput());
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
   const [context, setContext] = useState("");
+  const [scopeText, setScopeText] = useState("");
   const [evidenceType, setEvidenceType] = useState("observation");
   const [evidenceContent, setEvidenceContent] = useState("");
   const [validationRationale, setValidationRationale] = useState("");
@@ -188,6 +192,20 @@ export function OrganizationalMemorySurface({ organizationId, knowledgeItems, da
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void requestJson<OrganizationDomain[]>(`/api/organizations/${organizationId}/domains`)
+      .then((nextDomains) => {
+        if (cancelled) return;
+        setDomains(nextDomains);
+        setDomainId((current) => current || nextDomains.find((domain) => domain.key === "customer-support")?.id || nextDomains[0]?.id || "");
+      })
+      .catch(() => {
+        if (!cancelled) setDomains([]);
+      });
+    return () => { cancelled = true; };
+  }, [organizationId]);
+
   function resetNewEditor(): void {
     draftHydrationGenerationRef.current += 1;
     editorIntentRef.current = "new";
@@ -201,6 +219,7 @@ export function OrganizationalMemorySurface({ organizationId, knowledgeItems, da
     setDescription("");
     setLocation("");
     setContext("");
+    setScopeText("");
     setEvidenceContent("");
     setValidationRationale("");
     setMessage(savedDraftSourceId ? "Started a new organizational experience. The saved draft remains available to resume." : "Started a new organizational experience.");
@@ -231,6 +250,7 @@ export function OrganizationalMemorySurface({ organizationId, knowledgeItems, da
       })) return;
       setSource(nextSource);
       setSourceEvidence(nextEvidence);
+      setDomainId(nextSource.domainId ?? "");
       setPrepared(null);
       setEntryOpen(true);
       setMessage("Resumed the saved organizational experience and its evidence.");
@@ -312,13 +332,28 @@ export function OrganizationalMemorySurface({ organizationId, knowledgeItems, da
   }
 
   async function createSource() {
+    if (!domainId) {
+      setError("Choose a Domain before recording an organizational experience.");
+      return;
+    }
     setBusy(true);
     setError("");
     setMessage("");
     try {
+      let scope: Record<string, unknown> | undefined;
+      if (scopeText.trim()) {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(scopeText);
+        } catch {
+          throw new Error("Scope must be a JSON object.");
+        }
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Scope must be a JSON object.");
+        scope = parsed as Record<string, unknown>;
+      }
       const nextSource = await requestJson<OrganizationalSourceView>(`/api/organizations/${organizationId}/memory/experiences`, {
         method: "POST",
-        body: JSON.stringify({ title, sourceKind, occurredAt: serializeLocalDateTimeInput(occurredAt), description, location, context, idempotencyKey: randomKey("experience") })
+        body: JSON.stringify({ title, sourceKind, domainId, scope, occurredAt: serializeLocalDateTimeInput(occurredAt), description, location, context, idempotencyKey: randomKey("experience") })
       });
       setSource(nextSource);
       setSourceEvidence([]);
@@ -608,10 +643,12 @@ export function OrganizationalMemorySurface({ organizationId, knowledgeItems, da
             <div className="grid gap-4 md:grid-cols-2">
               <label><span className={labelClass(darkMode)}>Event title</span><input className={inputClass(darkMode)} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Warehouse scanner synchronization incident" /></label>
               <label><span className={labelClass(darkMode)}>Source type</span><select className={inputClass(darkMode)} value={sourceKind} onChange={(event) => setSourceKind(event.target.value)}>{sourceKinds.map((kind) => <option key={kind}>{kind}</option>)}</select></label>
+              <label><span className={labelClass(darkMode)}>Domain</span><select className={inputClass(darkMode)} value={domainId} onChange={(event) => setDomainId(event.target.value)} disabled={domains.length === 0}><option value="">Choose a Domain</option>{domains.map((domain) => <option key={domain.id} value={domain.id}>{domain.label}{domain.sensitivity === "restricted" ? " · restricted" : ""}</option>)}</select></label>
               <label><span className={labelClass(darkMode)}>Occurred</span><input type="datetime-local" className={inputClass(darkMode)} value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} /></label>
               <label><span className={labelClass(darkMode)}>Location or context <span className="font-normal">(optional)</span></span><input className={inputClass(darkMode)} value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Warehouse A" /></label>
               <label className="md:col-span-2"><span className={labelClass(darkMode)}>What happened</span><textarea className={`${inputClass(darkMode)} min-h-28`} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Describe the organizational event without treating it as validated learning." /></label>
               <label className="md:col-span-2"><span className={labelClass(darkMode)}>Relevant context <span className="font-normal">(optional)</span></span><textarea className={`${inputClass(darkMode)} min-h-20`} value={context} onChange={(event) => setContext(event.target.value)} placeholder="Conditions, systems, or process context" /></label>
+              <label className="md:col-span-2"><span className={labelClass(darkMode)}>Scope as JSON <span className="font-normal">(optional)</span></span><input className={inputClass(darkMode)} value={scopeText} onChange={(event) => setScopeText(event.target.value)} placeholder={'{"team":"finance","period":"monthly"}'} /></label>
               <div className="md:col-span-2"><button type="button" disabled={busy} onClick={() => { void createSource(); }} className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Record experience</button></div>
             </div>
           )}

@@ -6,6 +6,7 @@ export interface OrganizationalSourceView {
   id: string;
   organizationId: string;
   sourceKind: string;
+  domainId: string | null;
   sourceSystem: string;
   sourceObjectType: string;
   sourceObjectId: string;
@@ -13,6 +14,7 @@ export interface OrganizationalSourceView {
   capturedAt: string | null;
   actorId: string | null;
   metadata?: Record<string, unknown> | null;
+  scope?: Record<string, unknown> | null;
   createdAt: string;
 }
 
@@ -72,7 +74,7 @@ export interface KnowledgeChallengeView {
   updatedAt: string;
 }
 
-export type OrganizationalSourceKind = "OPERATIONAL_EVENT" | "INCIDENT" | "DECISION" | "PROCESS_LEARNING" | "OTHER";
+export type OrganizationalSourceKind = "EXPERIENCE" | "OPERATIONAL_EVENT" | "INCIDENT" | "DECISION" | "PROCESS_LEARNING" | "EXECUTION_OUTCOME" | "OTHER";
 
 export interface OrganizationalMemoryInspection {
   knowledgeItem: import("@/types/knowledge").KnowledgeItem;

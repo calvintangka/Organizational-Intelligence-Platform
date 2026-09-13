@@ -200,13 +200,11 @@ async function main() {
     fetchMode = "live";
     assert.equal(await authorityRouting.resolveOrganizationAuthority(ORG_LOCAL), "local");
     assert.equal(await authorityRouting.resolveOrganizationAuthority(ORG_VERIFIED), "server");
-    await persistenceBarrel.activatePersistenceOrganization(ORG_LOCAL);
-    assert.equal(persistenceBarrel.activePersistenceMode(), "local");
-    await persistenceBarrel.activatePersistenceOrganization(ORG_VERIFIED);
+    // TODO-070 made the compatibility facade stateless: activation validates
+    // the per-organization authority but never retargets shared process state.
+    assert.equal(await persistenceBarrel.activatePersistenceOrganization(ORG_LOCAL), "local");
     assert.equal(persistenceBarrel.activePersistenceMode(), "server");
-    await persistenceBarrel.activatePersistenceOrganization(ORG_LOCAL);
-    assert.equal(persistenceBarrel.activePersistenceMode(), "local");
-    await persistenceBarrel.activatePersistenceOrganization(ORG_VERIFIED);
+    assert.equal(await persistenceBarrel.activatePersistenceOrganization(ORG_VERIFIED), "server");
     assert.equal(persistenceBarrel.activePersistenceMode(), "server");
 
     /* ---- L: server unavailable does not fall back to localStorage ---- */

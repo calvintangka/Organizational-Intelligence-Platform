@@ -1119,7 +1119,7 @@ export function withCanonicalProblemDefaults(item: KnowledgeItem): KnowledgeItem
         ? item.exampleTickets
         : [
             {
-              ticketId: item.sourceTicketId,
+              ticketId: item.sourceTicketId ?? item.primarySourceId ?? item.id,
               customerName: "Historical customer",
               originalIssue: item.problem,
               createdAt,
@@ -1134,7 +1134,7 @@ export function withCanonicalProblemDefaults(item: KnowledgeItem): KnowledgeItem
               versionId: `${id}-v1`,
               createdAt,
               changeReason: "Initial canonical problem version",
-              sourceTicketId: item.sourceTicketId
+              sourceTicketId: item.sourceTicketId ?? item.primarySourceId ?? item.id
             }
           ],
     learningHistory: item.learningHistory ?? [
@@ -1212,6 +1212,10 @@ export function createCanonicalProblem(
 
   return withCanonicalProblemDefaults({
     id: identity.id,
+    // Preserve an explicit identity override through normalization. Without
+    // this field, withCanonicalProblemDefaults derives the legacy title slug
+    // and silently discards tenant-scoped or otherwise deliberate IDs.
+    canonicalProblemId: identity.id,
     title: identity.title,
     problem: identity.problemSummary,
     approvedAnswer: customerResponseTemplate,

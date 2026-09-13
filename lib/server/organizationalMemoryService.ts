@@ -47,6 +47,7 @@ function mapSource(row: any): OrganizationalSourceView {
     id: row.id,
     organizationId: row.organizationId,
     sourceKind: row.sourceKind,
+    domainId: row.domainId ?? null,
     sourceSystem: row.sourceSystem,
     sourceObjectType: row.sourceObjectType,
     sourceObjectId: row.sourceObjectId,
@@ -54,6 +55,7 @@ function mapSource(row: any): OrganizationalSourceView {
     capturedAt: iso(row.capturedAt),
     actorId: row.actorId ?? null,
     metadata: row.metadata && typeof row.metadata === "object" ? row.metadata as Record<string, unknown> : null,
+    scope: row.scope && typeof row.scope === "object" ? row.scope as Record<string, unknown> : null,
     createdAt: row.createdAt.toISOString()
   };
 }
@@ -293,11 +295,11 @@ export async function recordReuseOutcome(input: RecordReuseOutcomeInput): Promis
   });
 }
 
-export async function listReuseOutcomes(organizationId: string, knowledgeItemId?: string): Promise<KnowledgeReuseOutcomeView[]> {
+export async function listReuseOutcomes(organizationId: string, knowledgeItemId?: string, domainIds?: string[]): Promise<KnowledgeReuseOutcomeView[]> {
   const id = assertOrganizationId(organizationId);
   await assertOrganizationExists(id);
   const rows = await prisma.knowledgeReuseOutcome.findMany({
-    where: { organizationId: id, ...(knowledgeItemId ? { knowledgeItemId: memoryString(knowledgeItemId, "knowledgeItemId", 160) } : {}) },
+    where: { organizationId: id, ...(knowledgeItemId ? { knowledgeItemId: memoryString(knowledgeItemId, "knowledgeItemId", 160) } : domainIds ? { knowledgeItem: { domainId: { in: domainIds } } } : {}) },
     include: { source: true, evidence: true },
     orderBy: { createdAt: "desc" },
     take: 200
@@ -362,11 +364,11 @@ export async function openKnowledgeChallenge(input: OpenKnowledgeChallengeInput)
   });
 }
 
-export async function listKnowledgeChallenges(organizationId: string, knowledgeItemId?: string): Promise<KnowledgeChallengeView[]> {
+export async function listKnowledgeChallenges(organizationId: string, knowledgeItemId?: string, domainIds?: string[]): Promise<KnowledgeChallengeView[]> {
   const id = assertOrganizationId(organizationId);
   await assertOrganizationExists(id);
   const rows = await prisma.knowledgeChallenge.findMany({
-    where: { organizationId: id, ...(knowledgeItemId ? { knowledgeItemId: memoryString(knowledgeItemId, "knowledgeItemId", 160) } : {}) },
+    where: { organizationId: id, ...(knowledgeItemId ? { knowledgeItemId: memoryString(knowledgeItemId, "knowledgeItemId", 160) } : domainIds ? { knowledgeItem: { domainId: { in: domainIds } } } : {}) },
     orderBy: { createdAt: "desc" },
     take: 200
   });
@@ -518,12 +520,14 @@ export async function listMemoryEvidence(organizationId: string, knowledgeItemId
 export interface CreateOrganizationalSourceInput {
   organizationId: string;
   sourceKind: string;
+  domainId?: string | null;
   sourceSystem?: string;
   sourceObjectType?: string;
   sourceObjectId: string;
   occurredAt: Date;
   actorId: string;
   metadata: Prisma.InputJsonValue;
+  scope?: Prisma.InputJsonValue | null;
   idempotencyKey: string;
 }
 
@@ -533,13 +537,15 @@ export async function createOrganizationalSource(input: CreateOrganizationalSour
   const idempotencyKey = memoryString(input.idempotencyKey, "idempotencyKey", 240);
   const source = await prisma.$transaction(async (tx) => ensureSourceTx(tx, organizationId, {
     sourceKind: memoryString(input.sourceKind, "sourceKind", 80),
+    domainId: input.domainId ?? null,
     sourceSystem: memoryString(input.sourceSystem ?? "oip.organizational_memory", "sourceSystem", 120),
     sourceObjectType: memoryString(input.sourceObjectType ?? "organizational_event", "sourceObjectType", 120),
     sourceObjectId: memoryString(input.sourceObjectId, "sourceObjectId", 300),
     occurredAt: input.occurredAt,
     capturedAt: new Date(),
     actorId: memoryString(input.actorId, "actorId", 160),
-    metadata: { ...(input.metadata as Record<string, unknown>), idempotencyKey }
+    metadata: { ...(input.metadata as Record<string, unknown>), idempotencyKey },
+    scope: input.scope ?? null
   }));
   return mapSource(source);
 }
@@ -726,6 +732,8 @@ export async function prepareOrganizationalLearning(
     id: getNeutralCandidateId(source.id),
     organizationId: id,
     sourceTicketIds: [],
+    sourceId: source.id,
+    domainId: source.domainId ?? undefined,
     proposedAction: "create_new",
     proposedContent: {
       solution: canonicalLearning.lesson,
@@ -756,6 +764,8 @@ export async function prepareOrganizationalLearning(
     create: {
       id: candidate.id,
       organizationId: id,
+      domainId: source.domainId ?? null,
+      sourceId: source.id,
       sourceTicketIds: [],
       proposedAction: candidate.proposedAction,
       proposedContent: jsonInput(candidate.proposedContent),
@@ -765,7 +775,9 @@ export async function prepareOrganizationalLearning(
     },
     update: {
       proposedContent: jsonInput(candidate.proposedContent),
-      rationale: candidate.rationale
+      rationale: candidate.rationale,
+      domainId: source.domainId ?? undefined,
+      sourceId: source.id
     }
   });
   const reflection: ReflectionDecision = {
@@ -813,6 +825,11 @@ export async function validateOrganizationalLearning(input: {
   const canonicalLesson = canonicalLearning && typeof canonicalLearning.lesson === "string"
     ? canonicalLearning
     : buildCanonicalLearning(source, evidence, title, sourceDescription);
+  // Preserve the historical Support/OIP projection for legacy domain-neutral
+  // operational events. Domain-aware Memory uses primarySourceId instead;
+  // this compatibility field remains nullable and is never the generic
+  // identity path.
+  const legacySourceTicketId = source.domainId ? undefined : source.id;
   const item: KnowledgeItem = {
     id: knowledgeId,
     organizationId,
@@ -822,7 +839,10 @@ export async function validateOrganizationalLearning(input: {
     approvedAnswer: canonicalLesson.lesson,
     category: typeof content.category === "string" ? content.category : source.sourceKind,
     tags: ["organizational-memory", source.sourceKind.toLowerCase()],
-    sourceTicketId: source.id,
+    sourceTicketId: legacySourceTicketId,
+    domainId: source.domainId ?? undefined,
+    primarySourceId: source.id,
+    scope: source.scope ?? undefined,
     timesReused: 0,
     createdAt: now,
     approvedAt: now,
@@ -852,7 +872,7 @@ export async function validateOrganizationalLearning(input: {
       sourceTicketId: source.id
     }],
     validation: { validatedBy: actorName, validatedAt: now, validationBasis: rationale, validationScope: "Domain-neutral organizational experience", status: "validated" },
-    provenance: { sourceTicketId: source.id, contributingTicketIds: [], createdBy: actorName, createdAt: now, validatedBy: actorName, validatedAt: now, validationBasis: rationale, validationScope: "Domain-neutral organizational experience" }
+    provenance: { sourceId: source.id, sourceTicketId: legacySourceTicketId, domainId: source.domainId ?? undefined, contributingTicketIds: [], createdBy: actorName, createdAt: now, validatedBy: actorName, validatedAt: now, validationBasis: rationale, validationScope: "Domain-neutral organizational experience" }
   };
   const validation = {
     id: validationId,
@@ -903,10 +923,16 @@ export async function loadOrganizationalMemoryInspection(organizationId: string,
   const knowledgeItem = knowledgeItems.find((item) => item.id === memoryString(knowledgeItemId, "knowledgeItemId", 160));
   if (!knowledgeItem) throw new MemoryFoundationError("RESOURCE_NOT_FOUND", "The requested knowledge item was not found in this organization.", 404);
   const sourceRow = await prisma.organizationalSource.findFirst({
-    where: { organizationId: id, OR: [
-      { id: knowledgeItem.sourceTicketId },
-      { sourceSystem: "oip.support", sourceObjectType: "ticket", sourceObjectId: knowledgeItem.sourceTicketId }
-    ] }
+    where: {
+      organizationId: id,
+      OR: [
+        ...(knowledgeItem.primarySourceId ? [{ id: knowledgeItem.primarySourceId }] : []),
+        ...(knowledgeItem.sourceTicketId ? [
+          { id: knowledgeItem.sourceTicketId },
+          { sourceSystem: "oip.support", sourceObjectType: "ticket", sourceObjectId: knowledgeItem.sourceTicketId }
+        ] : [])
+      ]
+    }
   });
   const [evidence, outcomes, challenges, history] = await Promise.all([
     listMemoryEvidence(id, knowledgeItem.id),

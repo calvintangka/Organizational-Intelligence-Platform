@@ -28,6 +28,7 @@ import type {
   ValidationRecord
 } from "@/types";
 import type { MigrationExportPackage } from "@/types/migrationExport";
+import { deriveAuthoritativeOrgMetricValuesTx } from "@/lib/server/persistenceService";
 
 type TransactionClient = Prisma.TransactionClient;
 type JsonRecord = Record<string, unknown>;
@@ -86,12 +87,17 @@ function sourceProfileProjection(profile: OrganizationProfile): JsonRecord {
 }
 
 function targetProfileProjection(row: JsonRecord): JsonRecord {
+  const settings = asRecord(row.settings);
+  // _profileRevision is server-side optimistic-concurrency bookkeeping, not
+  // part of the exported organization profile and must not create a false
+  // migration mismatch.
+  const { _profileRevision: _ignoredProfileRevision, ...profileSettings } = settings;
   return {
     id: row.id,
     name: row.name,
     industry: row.industry,
     description: row.description,
-    settings: asRecord(row.settings)
+    settings: profileSettings
   };
 }
 
@@ -467,19 +473,19 @@ async function buildVerificationReport(
   exportPackage: MigrationExportPackage,
   checkpoints: Array<{ resourceType: MigrationImportResourceType; expectedCount: number; sourceDigest: string }>
 ): Promise<MigrationImportVerificationReport> {
-  const [organization, knowledge, candidates, validations, memory, tickets, patterns, logs, metrics, sequence, conflicts] = await Promise.all([
-    tx.organization.findUnique({ where: { id: organizationId } }),
-    tx.knowledgeItem.findMany({ where: { organizationId } }),
-    tx.knowledgeCandidate.findMany({ where: { organizationId } }),
-    tx.validationRecord.findMany({ where: { organizationId } }),
-    tx.memoryChangeRecord.findMany({ where: { organizationId } }),
-    tx.ticketRecord.findMany({ where: { organizationId } }),
-    tx.emergingPattern.findMany({ where: { organizationId } }),
-    tx.intelligenceLog.findMany({ where: { organizationId } }),
-    tx.orgMetrics.findUnique({ where: { organizationId } }),
-    tx.ticketSequence.findUnique({ where: { organizationId } }),
-    tx.migrationImportConflict.findMany({ where: { batchId }, orderBy: { detectedAt: "asc" } })
-  ]);
+  // This is an interactive transaction backed by one PostgreSQL client.
+  // Serialize the reads instead of issuing Promise.all against that client.
+  const organization = await tx.organization.findUnique({ where: { id: organizationId } });
+  const knowledge = await tx.knowledgeItem.findMany({ where: { organizationId } });
+  const candidates = await tx.knowledgeCandidate.findMany({ where: { organizationId } });
+  const validations = await tx.validationRecord.findMany({ where: { organizationId } });
+  const memory = await tx.memoryChangeRecord.findMany({ where: { organizationId } });
+  const tickets = await tx.ticketRecord.findMany({ where: { organizationId } });
+  const patterns = await tx.emergingPattern.findMany({ where: { organizationId } });
+  const logs = await tx.intelligenceLog.findMany({ where: { organizationId } });
+  const metrics = await tx.orgMetrics.findUnique({ where: { organizationId } });
+  const sequence = await tx.ticketSequence.findUnique({ where: { organizationId } });
+  const conflicts = await tx.migrationImportConflict.findMany({ where: { batchId }, orderBy: { detectedAt: "asc" } });
   const checkpoint = (resourceType: MigrationImportResourceType) => checkpoints.find((row) => row.resourceType === resourceType)!;
   const source = exportPackage.resources;
   const results: MigrationImportVerificationResourceResult[] = [];
@@ -490,7 +496,14 @@ async function buildVerificationReport(
   results.push(await collectionResult(checkpoint("ticketRecords"), "ticketRecords", source.ticketRecords, tickets as unknown as JsonRecord[], organizationId, (value, id) => sourceTicket(value as TicketRecord, id), (row) => targetTicket(row)));
   results.push(await collectionResult(checkpoint("emergingPatterns"), "emergingPatterns", source.emergingPatterns, patterns as unknown as JsonRecord[], organizationId, (value, id) => sourcePattern(value as EmergingPattern, id), (row) => targetPattern(row)));
   results.push(await collectionResult(checkpoint("intelligenceLog"), "intelligenceLog", source.intelligenceLog, logs as unknown as JsonRecord[], organizationId, (value, id) => sourceLog(value as IntelligenceLogEntry, id), (row) => targetLog(row)));
-  const metricsSource = source.orgMetrics ? [source.orgMetrics] : [];
+  // Import finalization recomputes these counters from durable rows so a
+  // legacy snapshot cannot overwrite authoritative current projections.
+  // Keep the other historical metric fields from the export, but verify the
+  // four derived counters against the post-import durable calculation.
+  const derivedMetrics = await deriveAuthoritativeOrgMetricValuesTx(tx, organizationId);
+  const metricsSource = source.orgMetrics
+    ? [{ ...source.orgMetrics, ...derivedMetrics }]
+    : [];
   results.push(await collectionResult(checkpoint("orgMetrics"), "orgMetrics", metricsSource, metrics ? [metrics as unknown as JsonRecord] : [], organizationId, (value, id) => sourceMetrics(value as OrgMetrics, id), (row) => targetMetrics(row)));
 
   const sequenceCheckpoint = checkpoint("ticketSequence");

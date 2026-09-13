@@ -5,7 +5,7 @@ async function runLanguage(language, workerId) {
   const fixture = await support.reflectionFixture(`todo073-probe-parity-${language}-${Date.now()}` , language);
   await support.addActor(fixture, `${language}-${Date.now()}`);
   const job = await support.enqueueReflection(fixture, `todo073-parity:${language}:${fixture.ticket.ticketId}`);
-  const worker = await support.runWorker(workerId);
+  const worker = await support.runWorker(workerId, { organizationId: fixture.context.organizationId });
   let completed;
   try {
     completed = await support.waitForTerminal(fixture.context, job.job.id);

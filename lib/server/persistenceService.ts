@@ -46,7 +46,7 @@ import { withStableValidationProvenance } from "@/lib/knowledgeProvenance";
 import { recordTelemetryEvent, startTelemetrySpan } from "@/lib/telemetry";
 import type { ValidationCommitResult as AtomicValidationCommitResult } from "@/lib/persistence/adapter";
 import { OPEN_TICKET_STATUSES } from "@/lib/ticketMetrics";
-import { ensureSupportSourceAndEvidenceTx, getNeutralCandidateId } from "@/lib/server/organizationalMemoryPrimitives";
+import { ensureKnowledgePackSourceAndEvidenceTx, ensureSupportSourceAndEvidenceTx, getNeutralCandidateId } from "@/lib/server/organizationalMemoryPrimitives";
 
 export type PersistenceServiceErrorCode =
   | "UNAUTHENTICATED"
@@ -131,22 +131,32 @@ async function ensureOrgMetricsRowTx(tx: Prisma.TransactionClient, organizationI
   await tx.$queryRaw`SELECT "organizationId" FROM "org_metrics" WHERE "organizationId" = ${organizationId} FOR UPDATE`;
 }
 
+// Metric projections are authoritative and intentionally serialized per
+// organization. Under a burst of legitimate writes, queued transactions need
+// enough time to reach the metrics-row lock instead of failing at Prisma's
+// short interactive-transaction defaults.
+const AUTHORITATIVE_METRICS_TRANSACTION_OPTIONS = {
+  maxWait: 120_000,
+  timeout: 120_000
+};
+
 export async function deriveAuthoritativeOrgMetricValuesTx(
   tx: Prisma.TransactionClient,
   organizationId: string
 ): Promise<AuthoritativeOrgMetricValues> {
-  const [tickets, knowledge, emergingPatternsDetected] = await Promise.all([
-    tx.ticketRecord.findMany({
-      where: { organizationId },
-      select: { ticketId: true, status: true, memoryMatch: true, createdAt: true }
-    }),
-    tx.knowledgeItem.findMany({
-      where: { organizationId },
-      select: { id: true, sourceTicketId: true, createdAt: true, content: true }
-    }),
-    tx.emergingPattern.count({ where: { organizationId } })
-  ]);
-  const knowledgeById = new Map<string, { sourceTicketId: string; createdAt: Date }>();
+  // Interactive transactions use one PostgreSQL client. Keep these reads
+  // sequential so the adapter never receives concurrent queries on that
+  // client (pg 9 correctly warns that this execution is unsupported).
+  const tickets = await tx.ticketRecord.findMany({
+    where: { organizationId },
+    select: { ticketId: true, status: true, memoryMatch: true, createdAt: true }
+  });
+  const knowledge = await tx.knowledgeItem.findMany({
+    where: { organizationId },
+    select: { id: true, sourceTicketId: true, createdAt: true, content: true }
+  });
+  const emergingPatternsDetected = await tx.emergingPattern.count({ where: { organizationId } });
+  const knowledgeById = new Map<string, { sourceTicketId: string | null; createdAt: Date }>();
   for (const item of knowledge) {
     knowledgeById.set(item.id, { sourceTicketId: item.sourceTicketId, createdAt: item.createdAt });
   }
@@ -267,7 +277,10 @@ function mapKnowledge(row: PrismaKnowledgeItem): KnowledgeItem {
     approvedAnswer: stringValue(content.approvedAnswer, stringValue(content.solution)),
     category: row.category,
     tags: stringArray(content.tags),
-    sourceTicketId: row.sourceTicketId,
+    ...(row.sourceTicketId ? { sourceTicketId: row.sourceTicketId } : {}),
+    ...(row.domainId ? { domainId: row.domainId } : {}),
+    ...(row.primarySourceId ? { primarySourceId: row.primarySourceId } : {}),
+    ...(row.scope && typeof row.scope === "object" ? { scope: row.scope as Record<string, unknown> } : {}),
     timesReused: row.timesReused,
     createdAt: iso(row.createdAt),
     approvedAt: iso(row.approvedAt),
@@ -308,6 +321,8 @@ function mapCandidate(row: PrismaKnowledgeCandidate): KnowledgeCandidate {
     id: row.id,
     organizationId: row.organizationId,
     sourceTicketIds: stringArray(row.sourceTicketIds),
+    ...(row.sourceId ? { sourceId: row.sourceId } : {}),
+    ...(row.domainId ? { domainId: row.domainId } : {}),
     proposedAction: row.proposedAction as KnowledgeCandidate["proposedAction"],
     proposedContent: asRecord(row.proposedContent) as unknown as KnowledgeCandidate["proposedContent"],
     relatedKnowledgeId: row.relatedKnowledgeId ?? undefined,
@@ -1058,7 +1073,10 @@ function knowledgeColumns(item: KnowledgeItem): Omit<Prisma.KnowledgeItemUncheck
     canonicalProblemTitle: item.canonicalProblemTitle ?? null,
     lifecycleState: narrowEnum(item.lifecycleState, KNOWLEDGE_LIFECYCLES, "active"),
     governanceState: item.governanceState === "challenged" ? "challenged" : "trusted",
-    sourceTicketId: typeof item.sourceTicketId === "string" ? item.sourceTicketId : "",
+    sourceTicketId: typeof item.sourceTicketId === "string" ? item.sourceTicketId : null,
+    domainId: item.domainId ?? null,
+    primarySourceId: item.primarySourceId ?? null,
+    scope: nullableJson(item.scope),
     timesReused: typeof item.timesReused === "number" ? item.timesReused : 0,
     timesSeen: item.timesSeen ?? null,
     successfulResolutions: item.successfulResolutions ?? null,
@@ -1128,6 +1146,8 @@ async function upsertCandidateTx(
   assertPayloadOrganization(organizationId, candidate.organizationId, "knowledge candidate");
   const data = {
     relatedKnowledgeId: candidate.relatedKnowledgeId ?? null,
+    domainId: candidate.domainId ?? null,
+    sourceId: candidate.sourceId ?? null,
     sourceTicketIds: json(candidate.sourceTicketIds ?? []),
     proposedAction: requireString(candidate.proposedAction, "knowledge candidate proposedAction"),
     proposedContent: json(candidate.proposedContent ?? {}),
@@ -1340,6 +1360,10 @@ export async function resetOrganizationData(organizationId: string): Promise<voi
   const id = organization.id;
   await writeDatabase("organization reset", () =>
     prisma.$transaction(async (tx) => {
+      // Resource writers that maintain authoritative counters already
+      // serialize on this row. Acquire that same lock before deleting the
+      // scoped data so reset cannot interleave with an in-flight snapshot.
+      await ensureOrgMetricsRowTx(tx, id);
       await tx.trustEvidence.deleteMany({ where: { organizationId: id } });
       await tx.memoryChangeRecord.deleteMany({ where: { organizationId: id } });
       await tx.validationRecord.deleteMany({ where: { organizationId: id } });
@@ -1350,7 +1374,7 @@ export async function resetOrganizationData(organizationId: string): Promise<voi
       await tx.ticketRecord.deleteMany({ where: { organizationId: id } });
       await tx.orgMetrics.deleteMany({ where: { organizationId: id } });
       await tx.ticketSequence.deleteMany({ where: { organizationId: id } });
-    })
+    }, AUTHORITATIVE_METRICS_TRANSACTION_OPTIONS)
   );
 }
 
@@ -1387,7 +1411,7 @@ export async function saveKnowledge(organizationId: string, items: KnowledgeItem
       }
       await tx.knowledgeItem.deleteMany({ where: { organizationId: organization.id, id: { notIn: keptIds } } });
       await recomputeAuthoritativeOrgMetricsTx(tx, organization.id);
-    })
+    }, AUTHORITATIVE_METRICS_TRANSACTION_OPTIONS)
   );
 }
 
@@ -1440,7 +1464,7 @@ export async function saveOrgMetrics(organizationId: string, metrics: OrgMetrics
       await ensureOrgMetricsRowTx(tx, organization.id);
       await tx.orgMetrics.update({ where: { organizationId: organization.id }, data });
       await recomputeAuthoritativeOrgMetricsTx(tx, organization.id);
-    })
+    }, AUTHORITATIVE_METRICS_TRANSACTION_OPTIONS)
   );
 }
 
@@ -1535,7 +1559,7 @@ export async function saveEmergingPatterns(organizationId: string, patterns: Eme
         where: { organizationId: organization.id, id: { notIn: patterns.map((pattern) => pattern.id) } }
       });
       await recomputeAuthoritativeOrgMetricsTx(tx, organization.id);
-    })
+    }, AUTHORITATIVE_METRICS_TRANSACTION_OPTIONS)
   );
 }
 
@@ -1554,7 +1578,7 @@ export async function saveTicketRecords(organizationId: string, records: TicketR
         await upsertTicketRecordTx(tx, organization.id, record);
       }
       await recomputeAuthoritativeOrgMetricsTx(tx, organization.id);
-    })
+    }, AUTHORITATIVE_METRICS_TRANSACTION_OPTIONS)
   );
 }
 
@@ -1581,7 +1605,7 @@ export async function saveClientTicketRecords(
         await upsertClientTicketTx(tx, organization.id, record);
       }
       await recomputeAuthoritativeOrgMetricsTx(tx, organization.id);
-    })
+    }, AUTHORITATIVE_METRICS_TRANSACTION_OPTIONS)
   );
   return authoritative;
 }
@@ -1667,7 +1691,7 @@ export async function prepareBulkTicketRecords(
       );
       await recomputeAuthoritativeOrgMetricsTx(tx, organization.id);
       return seeds.map((seed) => mapTicket(byEntry.get(seed.entryId)!));
-    })
+    }, AUTHORITATIVE_METRICS_TRANSACTION_OPTIONS)
   );
 }
 
@@ -1801,12 +1825,12 @@ async function loadCommittedValidationAggregate(
   knowledgeRevision: number,
   trustApplied: boolean
 ): Promise<ValidationCommitResult> {
-  const [candidateRow, validationRow, memoryChangeRow, knowledgeRow] = await Promise.all([
-    tx.knowledgeCandidate.findUnique({ where: { id: candidateId } }),
-    tx.validationRecord.findUnique({ where: { id: validationId } }),
-    tx.memoryChangeRecord.findUnique({ where: { id: memoryChangeId } }),
-    tx.knowledgeItem.findUnique({ where: { id: knowledgeItemId } })
-  ]);
+  // Interactive transactions use one PostgreSQL client; concurrent Prisma
+  // reads on that client trigger pg's "client.query while executing" warning.
+  const candidateRow = await tx.knowledgeCandidate.findUnique({ where: { id: candidateId } });
+  const validationRow = await tx.validationRecord.findUnique({ where: { id: validationId } });
+  const memoryChangeRow = await tx.memoryChangeRecord.findUnique({ where: { id: memoryChangeId } });
+  const knowledgeRow = await tx.knowledgeItem.findUnique({ where: { id: knowledgeItemId } });
   if (!candidateRow || !validationRow || !memoryChangeRow || !knowledgeRow) {
     throw new PersistenceServiceError(
       "DATABASE_ERROR",
@@ -1968,6 +1992,21 @@ export async function commitValidation(
           throw conflict("Every neutral validation evidence item must belong to the selected source and organization.");
         }
         neutralSupportEvidence.set(neutralSource.id, { sourceId: neutralSource.id, evidenceIds: neutralEvidence.map((row) => row.id) });
+      } else if (
+        sourceTicketIds.length > 0
+        && sourceTicketIds.every((sourceId) => sourceId.startsWith("knowledge_pack:"))
+        && asRecord(payload.candidate.proposedContent).importMetadata
+        && asRecord(asRecord(payload.candidate.proposedContent).importMetadata).sourceType === "knowledge_pack"
+      ) {
+        // Starter packs are domain-neutral sources, not Support tickets. Keep
+        // the pack's existing provenance label for trust/audit records while
+        // materializing a durable Source/Evidence pair for this organization.
+        neutralSupportEvidence = await ensureKnowledgePackSourceAndEvidenceTx(
+          tx,
+          organization.id,
+          sourceTicketIds,
+          actor.id
+        );
       } else {
         if (sourceTickets.length !== sourceTicketIds.length) {
           throw conflict("A validation candidate references a missing source ticket in this organization.");
@@ -2198,6 +2237,6 @@ export async function commitValidation(
         knowledgeRevision,
         trustApplied
       );
-    })
+    }, AUTHORITATIVE_METRICS_TRANSACTION_OPTIONS)
   );
 }

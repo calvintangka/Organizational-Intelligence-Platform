@@ -8,17 +8,20 @@ async function createFixture(prefix = 'todo075-probe-') {
   const organizationId = `${prefix}${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const context = await support.createOrganization(organizationId);
   const user = await support.prisma.user.create({ data: { name: 'TODO-075 Operator', email: `${organizationId}@example.invalid`, passwordHash: 'probe-only' } });
-  await support.prisma.organizationMembership.create({ data: { userId: user.id, organizationId, role: 'member' } });
-  return { organizationId, context, user };
+  await support.prisma.organizationMembership.create({ data: { userId: user.id, organizationId, role: 'viewer' } });
+  const secondaryOrganizationId = `${organizationId}-secondary`;
+  const secondaryContext = await support.createOrganization(secondaryOrganizationId);
+  await support.prisma.organizationMembership.create({ data: { userId: user.id, organizationId: secondaryOrganizationId, role: 'member' } });
+  return { organizationId, context, user, secondaryOrganizationId, secondaryContext };
 }
 
 function customRegistry() {
   return new JobHandlerRegistry().register('ticket.process', async () => ({ processed: true, replayed: false }));
 }
 
-async function enqueue(fixture, type = 'ticket.process', suffix = Date.now(), maxAttempts = 3) {
-  const input = { organizationId: fixture.organizationId, ticketInput: { description: 'Disposable probe payload that must never appear in operations output.' } };
-  return support.durableJobRepository.enqueue({ context: fixture.context, type, version: 1, input, inputDigest: support.digest(input), idempotencyKey: `todo075:${fixture.organizationId}:${type}:${suffix}`, maxAttempts });
+async function enqueue(fixture, type = 'ticket.process', suffix = Date.now(), maxAttempts = 3, context = fixture.context) {
+  const input = { organizationId: context.organizationId ?? fixture.organizationId, ticketInput: { description: 'Disposable probe payload that must never appear in operations output.' } };
+  return support.durableJobRepository.enqueue({ context, type, version: 1, input, inputDigest: support.digest(input), idempotencyKey: `todo075:${fixture.organizationId}:${type}:${suffix}`, maxAttempts });
 }
 
 async function snapshot(fixture, options = {}) { return getOperationsSnapshot(fixture.organizationId, fixture.user.id, options); }

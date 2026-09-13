@@ -215,6 +215,13 @@ model Organization {
   authorizationAudits      AuthorizationDecisionAudit[]
   creationRequest          OrganizationCreationRequest?
   activeUsers              User[]                            @relation("UserActiveOrganization")
+  domains                  OrganizationDomain[]
+  domainCapabilityGrants   OrganizationDomainCapabilityGrant[]
+  skills                   OrganizationalSkill[]
+  skillVersions            OrganizationalSkillVersion[]
+  skillMemoryLinks         SkillMemoryLink[]
+  executionPackages        ExecutionPackage[]
+  executionSessions        ExecutionSession[]
 
   @@map("organizations")
 }
@@ -245,6 +252,7 @@ model Role {
 
   capabilities RoleCapability[]
   assignments  OrganizationRoleAssignment[]
+  domainCapabilityGrants OrganizationDomainCapabilityGrant[]
 
   @@map("rbac_roles")
 }
@@ -292,6 +300,48 @@ model OrganizationRoleAssignment {
   @@index([organizationId, roleId])
   @@index([userId])
   @@map("organization_role_assignments")
+}
+
+model OrganizationDomain {
+  id             String   @id @default(cuid())
+  organizationId String
+  key            String
+  label          String
+  description    String?
+  status         String   @default("active")
+  sensitivity    String   @default("internal")
+  createdBy      String?
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(6)
+
+  organization     Organization                      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sources          OrganizationalSource[]
+  knowledgeItems   KnowledgeItem[]
+  candidates       KnowledgeCandidate[]
+  skills           OrganizationalSkill[]
+  capabilityGrants OrganizationDomainCapabilityGrant[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, key])
+  @@index([organizationId, status])
+  @@map("organization_domains")
+}
+
+model OrganizationDomainCapabilityGrant {
+  id             String   @id @default(cuid())
+  organizationId String
+  domainId       String
+  roleId         String
+  capabilityKey  String
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  domain       OrganizationDomain @relation(fields: [organizationId, domainId], references: [organizationId, id], onDelete: Cascade)
+  role         Role               @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, domainId, roleId, capabilityKey])
+  @@index([organizationId, domainId, capabilityKey])
+  @@map("organization_domain_capability_grants")
 }
 
 model AuthorizationDecisionAudit {
@@ -346,7 +396,10 @@ model KnowledgeItem {
   canonicalProblemTitle    String?
   lifecycleState           KnowledgeLifecycleState @default(active)
   governanceState          String                  @default("trusted")
-  sourceTicketId           String
+  sourceTicketId           String?
+  domainId                 String?
+  primarySourceId          String?
+  scope                    Json?
   timesReused              Int                     @default(0)
   timesSeen                Int?
   successfulResolutions    Int?
@@ -367,13 +420,17 @@ model KnowledgeItem {
   revision                 Int                     @default(0)
   content                  Json
 
-  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization        Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  domain              OrganizationDomain?   @relation(fields: [organizationId, domainId], references: [organizationId, id], onDelete: Restrict)
+  primarySource       OrganizationalSource? @relation("KnowledgePrimarySource", fields: [organizationId, primarySourceId], references: [organizationId, id], onDelete: Restrict)
   memoryEvidenceLinks MemoryEvidenceLink[]
   reuseOutcomes       KnowledgeReuseOutcome[]
   challenges          KnowledgeChallenge[]
+  skillMemoryLinks    SkillMemoryLink[]
 
   @@index([organizationId])
   @@index([organizationId, category])
+  @@index([organizationId, domainId, lifecycleState])
   @@index([organizationId, canonicalProblemId])
   @@unique([organizationId, id])
   @@map("knowledge_items")
@@ -384,6 +441,7 @@ model OrganizationalSource {
   id                String   @id @default(cuid())
   organizationId    String
   sourceKind        String
+  domainId          String?
   sourceSystem      String
   sourceObjectType  String
   sourceObjectId    String
@@ -391,17 +449,23 @@ model OrganizationalSource {
   capturedAt        DateTime?
   actorId           String?
   metadata          Json?
+  scope             Json?
   createdAt         DateTime @default(now()) @db.Timestamptz(6)
 
-  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  ticket         TicketRecord?
-  evidenceRecords EvidenceRecord[]
-  reuseOutcomes  KnowledgeReuseOutcome[]
-  challenges     KnowledgeChallenge[]
+  organization            Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  domain                  OrganizationDomain?   @relation(fields: [organizationId, domainId], references: [organizationId, id], onDelete: Restrict)
+  ticket                  TicketRecord?
+  evidenceRecords         EvidenceRecord[]
+  reuseOutcomes           KnowledgeReuseOutcome[]
+  challenges              KnowledgeChallenge[]
+  primaryKnowledgeItems   KnowledgeItem[]       @relation("KnowledgePrimarySource")
+  primaryCandidates       KnowledgeCandidate[]  @relation("CandidatePrimarySource")
+  executionOutcomeSession ExecutionSession?     @relation("ExecutionOutcomeSource")
 
   @@unique([organizationId, sourceSystem, sourceObjectType, sourceObjectId])
   @@unique([organizationId, id])
   @@index([organizationId, sourceKind, createdAt])
+  @@index([organizationId, domainId, createdAt])
   @@index([organizationId, sourceSystem, sourceObjectId])
   @@map("organizational_sources")
 }
@@ -428,6 +492,7 @@ model EvidenceRecord {
   memoryLinks      MemoryEvidenceLink[]
   reuseOutcomes     KnowledgeReuseOutcome[]
   challenges        KnowledgeChallenge[]
+  executionOutcomeSession ExecutionSession? @relation("ExecutionOutcomeEvidence")
 
   @@unique([organizationId, sourceId, idempotencyKey])
   @@unique([organizationId, id])
@@ -548,6 +613,8 @@ model KnowledgeCandidate {
   id                 String                      @id
   organizationId     String
   relatedKnowledgeId String?
+  domainId           String?
+  sourceId           String?
   sourceTicketIds    Json
   proposedAction     String
   proposedContent    Json
@@ -555,11 +622,14 @@ model KnowledgeCandidate {
   status             KnowledgeCandidateLifecycle @default(proposed)
   createdAt          DateTime                    @db.Timestamptz(6)
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization  Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  domain        OrganizationDomain?   @relation(fields: [organizationId, domainId], references: [organizationId, id], onDelete: Restrict)
+  primarySource OrganizationalSource? @relation("CandidatePrimarySource", fields: [organizationId, sourceId], references: [organizationId, id], onDelete: Restrict)
 
   @@index([organizationId])
   @@index([organizationId, status])
   @@index([organizationId, relatedKnowledgeId])
+  @@index([organizationId, domainId, status])
   @@map("knowledge_candidates")
 }
 
@@ -634,6 +704,146 @@ model MemoryChangeRecord {
   @@index([organizationId, knowledgeItemId])
   @@index([organizationId, timestamp])
   @@map("memory_change_records")
+}
+
+model OrganizationalSkill {
+  id             String   @id @default(cuid())
+  organizationId String
+  domainId       String
+  key            String
+  name           String
+  description    String
+  status         String   @default("DRAFT")
+  currentVersion Int?
+  createdBy      String
+  validatedBy    String?
+  validatedAt    DateTime?
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(6)
+
+  organization Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  domain       OrganizationDomain           @relation(fields: [organizationId, domainId], references: [organizationId, id], onDelete: Restrict)
+  versions     OrganizationalSkillVersion[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, key])
+  @@index([organizationId, domainId, status])
+  @@map("organizational_skills")
+}
+
+model OrganizationalSkillVersion {
+  id                String   @id @default(cuid())
+  organizationId    String
+  skillId           String
+  version           Int
+  status            String   @default("DRAFT")
+  definition        Json
+  riskLevel         String
+  executionPolicy   String
+  humanReviewPolicy String
+  scope             Json
+  fingerprint       String
+  createdBy         String
+  validatedBy       String?
+  validatedAt       DateTime?
+  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+
+  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  skill        OrganizationalSkill      @relation(fields: [organizationId, skillId], references: [organizationId, id], onDelete: Cascade)
+  memoryLinks  SkillMemoryLink[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, skillId, version])
+  @@unique([organizationId, fingerprint])
+  @@index([organizationId, skillId, status])
+  @@map("organizational_skill_versions")
+}
+
+model SkillMemoryLink {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  skillVersionId     String
+  knowledgeItemId    String
+  knowledgeVersionId String?
+  knowledgeRevision  Int
+  relationship       String
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
+
+  organization  Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  skillVersion  OrganizationalSkillVersion @relation(fields: [organizationId, skillVersionId], references: [organizationId, id], onDelete: Cascade)
+  knowledgeItem KnowledgeItem            @relation(fields: [organizationId, knowledgeItemId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, skillVersionId, knowledgeItemId, knowledgeRevision, relationship])
+  @@index([organizationId, skillVersionId])
+  @@index([organizationId, knowledgeItemId])
+  @@map("skill_memory_links")
+}
+
+model ExecutionPackage {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  requestedTask       String
+  status              String   @default("PREPARED")
+  packageVersion      Int      @default(1)
+  payload             Json
+  payloadDigest       String
+  policy              Json
+  scope               Json
+  riskLevel           String
+  humanReviewRequired Boolean  @default(true)
+  createdBy           String
+  idempotencyKey      String
+  requestId           String
+  correlationId       String
+  expiresAt           DateTime?
+  handedOffAt         DateTime?
+  createdAt           DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @db.Timestamptz(6)
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessions     ExecutionSession[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, status, createdAt])
+  @@map("execution_packages")
+}
+
+model ExecutionSession {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  packageId             String
+  status                String   @default("PREPARED")
+  executorType          String
+  externalCorrelationId String?
+  resultPayload         Json?
+  resultReference       String?
+  resultDigest          String?
+  reviewedBy            String?
+  reviewDecision        String?
+  reviewNotes           String?
+  correctionPayload     Json?
+  outcomeClassification String?
+  outcomeSourceId       String?
+  outcomeEvidenceId     String?
+  idempotencyKey        String
+  createdAt             DateTime @default(now()) @db.Timestamptz(6)
+  receivedAt            DateTime?
+  reviewedAt            DateTime?
+  updatedAt             DateTime @updatedAt @db.Timestamptz(6)
+
+  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  package         ExecutionPackage     @relation(fields: [organizationId, packageId], references: [organizationId, id], onDelete: Cascade)
+  outcomeSource   OrganizationalSource? @relation("ExecutionOutcomeSource", fields: [organizationId, outcomeSourceId], references: [organizationId, id], onDelete: Restrict)
+  outcomeEvidence EvidenceRecord?      @relation("ExecutionOutcomeEvidence", fields: [organizationId, outcomeEvidenceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, packageId])
+  @@unique([organizationId, idempotencyKey])
+  @@unique([organizationId, outcomeSourceId])
+  @@unique([organizationId, outcomeEvidenceId])
+  @@index([organizationId, status, createdAt])
+  @@map("execution_sessions")
 }
 
 model TicketRecord {

@@ -2,15 +2,16 @@
 const assert = require("node:assert/strict");
 const intakeProbe = require("./migration-intake-probe.cjs");
 const { populatedPackage } = require("./migration-import-probe.cjs");
+const { createMigrationHttpAuth } = require("./lib/migration-http-auth.cjs");
 
 const BASE_URL = process.env.OIP_INTAKE_BASE_URL || "http://127.0.0.1:3001";
 const ORG = "test-oip-migration-verify-http";
 const ORG_DRIFT = "test-oip-migration-verify-http-drift";
 
-async function request(path, method, body) {
+async function request(path, method, body, cookie) {
   const response = await fetch(`${BASE_URL}${path}`, {
     method,
-    headers: body === undefined ? undefined : { "content-type": "application/json" },
+    headers: { ...(body === undefined ? {} : { "content-type": "application/json" }), cookie },
     body: body === undefined ? undefined : JSON.stringify(body)
   });
   return { response, body: await response.json() };
@@ -21,41 +22,46 @@ async function main() {
   try {
     await Promise.all(ids.map(intakeProbe.deleteIfPresent));
     await intakeProbe.persistence.upsertOrganizationProfiles(ids.map((id) => intakeProbe.profile(id)));
+    const auth = await createMigrationHttpAuth(BASE_URL, ids, "migration-verify-http");
+    try {
     const prisma = intakeProbe.getPrismaClient();
 
-    const intake = await request(`/api/organizations/${ORG}/migration-import`, "POST", await populatedPackage(ORG));
+    const intake = await request(`/api/organizations/${ORG}/migration-import`, "POST", await populatedPackage(ORG), auth.cookie);
     assert.equal(intake.response.status, 201);
-    const execute = await request(`/api/organizations/${ORG}/migration-import/${intake.body.data.batchId}/execute`, "POST");
+    const execute = await request(`/api/organizations/${ORG}/migration-import/${intake.body.data.batchId}/execute`, "POST", undefined, auth.cookie);
     assert.equal(execute.response.status, 200);
-    const verify = await request(`/api/organizations/${ORG}/migration-import/${intake.body.data.batchId}/verify`, "POST");
+    const verify = await request(`/api/organizations/${ORG}/migration-import/${intake.body.data.batchId}/verify`, "POST", undefined, auth.cookie);
     assert.equal(verify.response.status, 200);
     assert.equal(verify.body.data.status, "passed");
     assert.equal(verify.body.data.summary.status, "verified");
     assert.equal(verify.body.data.report.resourceResults.length, 9);
-    const readback = await request(`/api/organizations/${ORG}/migration-import/${intake.body.data.batchId}/verify`, "GET");
+    const readback = await request(`/api/organizations/${ORG}/migration-import/${intake.body.data.batchId}/verify`, "GET", undefined, auth.cookie);
     assert.equal(readback.response.status, 200);
     assert.equal(readback.body.data.report.overallStatus, "passed");
-    const retry = await request(`/api/organizations/${ORG}/migration-import/${intake.body.data.batchId}/verify`, "POST");
+    const retry = await request(`/api/organizations/${ORG}/migration-import/${intake.body.data.batchId}/verify`, "POST", undefined, auth.cookie);
     assert.equal(retry.response.status, 200);
     assert.equal(retry.body.data.noOp, true);
     await intakeProbe.deleteIfPresent(ORG);
 
     const driftPackage = await populatedPackage(ORG_DRIFT);
-    const driftIntake = await request(`/api/organizations/${ORG_DRIFT}/migration-import`, "POST", driftPackage);
+    const driftIntake = await request(`/api/organizations/${ORG_DRIFT}/migration-import`, "POST", driftPackage, auth.cookie);
     assert.equal(driftIntake.response.status, 201);
-    const driftExecute = await request(`/api/organizations/${ORG_DRIFT}/migration-import/${driftIntake.body.data.batchId}/execute`, "POST");
+    const driftExecute = await request(`/api/organizations/${ORG_DRIFT}/migration-import/${driftIntake.body.data.batchId}/execute`, "POST", undefined, auth.cookie);
     assert.equal(driftExecute.response.status, 200);
     await prisma.knowledgeItem.update({ where: { id: "import-knowledge-1" }, data: { title: "HTTP drift" } });
-    const driftVerify = await request(`/api/organizations/${ORG_DRIFT}/migration-import/${driftIntake.body.data.batchId}/verify`, "POST");
+    const driftVerify = await request(`/api/organizations/${ORG_DRIFT}/migration-import/${driftIntake.body.data.batchId}/verify`, "POST", undefined, auth.cookie);
     assert.equal(driftVerify.response.status, 409);
     assert.equal(driftVerify.body.data.status, "failed");
     assert.equal(driftVerify.body.data.report.resourceResults.find((result) => result.resourceType === "knowledge").digestMatch, false);
     await prisma.knowledgeItem.update({ where: { id: "import-knowledge-1" }, data: { title: "Imported Login Knowledge" } });
-    const repaired = await request(`/api/organizations/${ORG_DRIFT}/migration-import/${driftIntake.body.data.batchId}/verify`, "POST");
+    const repaired = await request(`/api/organizations/${ORG_DRIFT}/migration-import/${driftIntake.body.data.batchId}/verify`, "POST", undefined, auth.cookie);
     assert.equal(repaired.response.status, 200);
     assert.equal(repaired.body.data.status, "passed");
 
     console.log("migration verification HTTP probe passed: verify, readback, retry no-op, structured drift failure, repair, and reverify");
+    } finally {
+      await auth.cleanup();
+    }
   } finally {
     await Promise.all(ids.map(intakeProbe.deleteIfPresent));
   }

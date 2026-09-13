@@ -8,11 +8,11 @@ async function main() {
     const fixture = await support.patternFixture(organizationId);
     const created = await support.enqueuePattern(fixture, `todo074-recovery:${fixture.input.sourceTicketId}`);
     const leaseStart = new Date();
-    const claimed = await support.durableJobRepository.claimNext('todo074-crashed-pattern-worker', { leaseMs: 5000, now: leaseStart });
+    const claimed = await support.durableJobRepository.claimNext('todo074-crashed-pattern-worker', { leaseMs: 5000, now: leaseStart, organizationId });
     assert.ok(claimed);
     assert.equal(claimed.job.id, created.job.id);
     assert.equal(await support.durableJobRepository.releaseExpiredLeases(new Date(leaseStart.getTime() + 6000)), 1);
-    worker = await support.runWorker('todo074-restarted-pattern-worker');
+    worker = await support.runWorker('todo074-restarted-pattern-worker', { organizationId });
     const completed = await support.waitForTerminal(fixture.context, created.job.id);
     await worker.stop(); worker = null;
     assert.equal(completed.status, 'succeeded');

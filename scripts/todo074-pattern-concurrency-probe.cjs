@@ -13,7 +13,7 @@ async function main() {
     const first = await support.enqueuePattern(a1, `todo074-concurrency:${a1.ticket.ticketId}`);
     const second = await support.enqueuePattern(a2, `todo074-concurrency:${a2.ticket.ticketId}`);
     const tenantB = await support.enqueuePattern(b1, `todo074-concurrency:${b1.ticket.ticketId}`);
-    workers = [await support.runWorker('todo074-concurrency-worker-a'), await support.runWorker('todo074-concurrency-worker-b')];
+    workers = [await support.runWorker('todo074-concurrency-worker-a', { organizationId: organizationA }), await support.runWorker('todo074-concurrency-worker-b', { organizationId: organizationB })];
     const [doneFirst, doneSecond, doneTenantB] = await Promise.all([
       support.waitForTerminal(a1.context, first.job.id),
       support.waitForTerminal(a2.context, second.job.id),

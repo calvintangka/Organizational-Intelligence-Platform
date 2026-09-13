@@ -91,6 +91,29 @@ export type { Metrics, OrgMetrics } from "./metrics";
 export type { Observation, ExtractedTicketFields, Understanding, ReasoningSummary, Confidence, BusinessRelevance, BusinessDomainClassification, IntelligenceLogEntry } from "./oip";
 export type { EmergingPattern, EmergingPatternExample } from "./patterns";
 export type {
+  DomainSensitivity,
+  DomainStatus,
+  OrganizationDomain,
+  DomainCapabilityGrant,
+  SkillStatus,
+  SkillPolicy,
+  RiskLevel,
+  SkillInputDefinition,
+  OrganizationalSkillDefinition,
+  OrganizationalSkill,
+  OrganizationalSkillVersion,
+  SkillMemoryLink,
+  EffectiveSkillPolicy,
+  SkillCompositionResult,
+  ExecutionSessionStatus,
+  ExecutionOutcomeClassification,
+  ExecutionPackage,
+  ExecutionSession,
+  AskSource,
+  AskState,
+  AskResult
+} from "./multiDepartment";
+export type {
   OrganizationProfile,
   CustomerTone,
   BusinessConcept,

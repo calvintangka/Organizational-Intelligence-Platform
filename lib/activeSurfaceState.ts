@@ -3,6 +3,8 @@ export const ACTIVE_SURFACES = [
   "tickets",
   "cases",
   "knowledge",
+  "ask",
+  "skills",
   "dashboard",
   "operations"
 ] as const;

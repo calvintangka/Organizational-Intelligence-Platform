@@ -55,20 +55,21 @@ function nonGenericCustomerValue(value: string | undefined): string | undefined 
 /**
  * Pull only conservative identity-shaped values from source text. These values
  * are used as negative controls for reusable fields; the source text itself is
- * never added to the reusable-content scan.
+ * never added to the reusable-content scan. Capitalization alone is not enough:
+ * product and permission terms such as "Payroll Viewer" are reusable vocabulary,
+ * not customer identity.
  */
 function sourceIdentityCandidates(sourceText: string): string[] {
   const candidates = new Set<string>();
-  const properPhrase = /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}\b/g;
-  for (const match of sourceText.matchAll(properPhrase)) {
-    const words = match[0].split(/\s+/).filter(Boolean);
-    for (let start = 0; start < words.length; start += 1) {
-      for (let length = 2; length <= Math.min(4, words.length - start); length += 1) {
-        const value = words.slice(start, start + length).join(" ");
-        if (value.split(" ").some((word) => GENERIC_SOURCE_WORDS.has(word))) continue;
-        candidates.add(value);
-      }
-    }
+  const identityContext = /\b(?:my name is|i am|i'm|this is|customer|client|requester|sender|contact|affected employee|employee|user|technician|supervisor|manager)\b[^A-Za-z0-9\r\n]{0,12}([A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+){1,3})\b/g;
+  for (const match of sourceText.matchAll(identityContext)) {
+    const value = match[1]?.trim();
+    if (value && !value.split(" ").some((word) => GENERIC_SOURCE_WORDS.has(word))) candidates.add(value);
+  }
+  const signature = /(?:^|\r?\n)[ \t]*(?:warm regards|best regards|regards|thanks|thank you)[,!]?[ \t]*\r?\n[ \t]*([A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+){1,3})\b/g;
+  for (const match of sourceText.matchAll(signature)) {
+    const value = match[1]?.trim();
+    if (value && !value.split(" ").some((word) => GENERIC_SOURCE_WORDS.has(word))) candidates.add(value);
   }
   const companyPattern = /\b(?:PT|CV|LLC|Ltd\.?|Inc\.?|Corp\.?)\s+[A-Z][A-Za-z0-9&.'-]*(?:\s+[A-Z][A-Za-z0-9&.'-]*){0,4}/g;
   for (const match of sourceText.matchAll(companyPattern)) candidates.add(match[0].trim());

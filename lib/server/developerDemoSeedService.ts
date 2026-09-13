@@ -536,8 +536,8 @@ async function verifyPersisted(
   record("ref.memoryHasKnowledge", memoryRows.every((row) => knowledgeIds.has(row.knowledgeItemId)));
   record("ref.evidenceHasValidation", evidenceRows.every((row) => validationIds.has(row.validationRecordId)));
   record("ref.evidenceHasKnowledge", evidenceRows.every((row) => knowledgeIds.has(row.knowledgeItemId)));
-  record("ref.evidenceHasTicket", evidenceRows.every((row) => ticketIds.has(row.sourceTicketId)));
-  record("ref.knowledgeHasSourceTicket", knowledgeRows.every((row) => ticketIds.has(row.sourceTicketId)));
+  record("ref.evidenceHasTicket", evidenceRows.every((row) => Boolean(row.sourceTicketId && ticketIds.has(row.sourceTicketId))));
+  record("ref.knowledgeHasSourceTicket", knowledgeRows.every((row) => Boolean(row.sourceTicketId && ticketIds.has(row.sourceTicketId))));
 
   const crossOrg =
     knowledgeRows.every((row) => row.organizationId === EXACT_TARGET) &&
@@ -593,7 +593,7 @@ async function verifyPersisted(
 interface KnowledgeRowLike {
   id: string; organizationId: string; revision: number; title: string; category: string;
   canonicalProblemId: string | null; canonicalProblemTitle: string | null; lifecycleState: string;
-  sourceTicketId: string; timesReused: number; timesSeen: number | null; successfulResolutions: number | null;
+  sourceTicketId: string | null; timesReused: number; timesSeen: number | null; successfulResolutions: number | null;
   failedResolutions: number | null; successRate: number | null; trustScore: number | null;
   autoResponseEligible: boolean | null; humanReviewCount: number | null; automaticResolutionCount: number | null;
   createdAt: Date; approvedAt: Date; lastUsedAt: Date | null; lastValidatedAt: Date | null;
@@ -615,7 +615,7 @@ function mapKnowledgeRow(row: KnowledgeRowLike): KnowledgeItem {
     approvedAnswer: String(content.approvedAnswer ?? content.solution ?? ""),
     category: row.category,
     tags: Array.isArray(content.tags) ? (content.tags as string[]) : [],
-    sourceTicketId: row.sourceTicketId,
+    ...(row.sourceTicketId ? { sourceTicketId: row.sourceTicketId } : {}),
     timesReused: row.timesReused,
     createdAt: row.createdAt.toISOString(),
     approvedAt: row.approvedAt.toISOString(),

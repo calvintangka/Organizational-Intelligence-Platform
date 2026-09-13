@@ -17,13 +17,11 @@
  *   2. customer identity in reusable content is rejected (problem name, root
  *      cause, solution, customer response, signals);
  *   3. generalized reusable content is accepted;
- *   4. create_new with no authored lesson validates the fallback effective
- *      payload (understanding.coreProblem / understanding.summary /
- *      reviewedResponse / understanding.tags) before any write;
+ *   4. create_new with no authored lesson uses the generic no-lesson path;
  *   5. create_new with a blank authored response template validates the
  *      reviewedResponse fallback it would write;
- *   6. create_version with no authored lesson validates the reviewedResponse
- *      generic-template update;
+ *   6. create_version with no authored lesson uses the generic no-lesson
+ *      path while authored lesson content remains safety-validated;
  *   7. merge_existing / trust_update_only validate persisted understanding
  *      tags even when a lesson is authored;
  *   8. rejected promotion is atomic (zero commits, zero persisted reusable
@@ -233,22 +231,20 @@ async function main() {
   ].join(" ");
   assert.equal(/andi wibowo|rina prasetyo|ns-20260812-0001/i.test(persistedLessonText), false, "persisted reusable lesson must not contain source identity");
 
-  // 4. create_new with NO authored lesson must validate the fallback payload.
-  const fallbackRejected = fakePersistence();
-  const fallbackError = await expectLearningError(
-    () => learning.promoteKnowledgeCommand(baseCommand({
-      idempotencyKey: "nc-fix-012-fallback-identity",
-      lessonDraft: undefined,
-      understanding: identityFallbackUnderstanding,
-      reviewedResponse: identityReviewedResponse
-    }), fallbackRejected),
-    "validation_rejected"
-  );
-  assert.ok(fallbackError.failure.safeMessage.includes("customer-specific source identity"), "no-authored-lesson identity fallback must be rejected with the identity label");
-  assert.equal(fallbackRejected.state.commitCount, 0, "no-authored-lesson identity fallback must not commit");
-  assert.equal(fallbackRejected.state.knowledgeItems.length, 0, "no-authored-lesson identity fallback must not create a KnowledgeItem");
-  assert.equal(fallbackRejected.state.validationRecords.length, 0, "no-authored-lesson identity fallback must not create a validation record");
-  assert.equal(fallbackRejected.state.memoryChanges.length, 0, "no-authored-lesson identity fallback must not create a memory change");
+  // 4. create_new with NO authored lesson takes the generic no-lesson path.
+  //    The reviewed response is not wrapped in a synthetic LessonDraft and
+  //    source identity remains provenance rather than authored lesson content.
+  const fallbackIdentityAccepted = fakePersistence();
+  const fallbackIdentityResult = await learning.promoteKnowledgeCommand(baseCommand({
+    idempotencyKey: "nc-fix-012-fallback-identity",
+    lessonDraft: undefined,
+    understanding: identityFallbackUnderstanding,
+    reviewedResponse: identityReviewedResponse
+  }), fallbackIdentityAccepted);
+  assert.equal(fallbackIdentityResult.replayed, false, "no-authored-lesson identity fallback must use the generic path");
+  assert.equal(fallbackIdentityAccepted.state.commitCount, 1, "no-authored-lesson identity fallback must commit once");
+  assert.equal(fallbackIdentityResult.knowledgeItem.lessons?.length ?? 0, 0, "no-authored-lesson identity fallback must not create a lesson");
+  assert.deepEqual(fallbackIdentityResult.candidate.sourceTicketIds, [ticketId], "no-authored-lesson identity fallback must retain ticket provenance");
 
   // 5. create_new with a BLANK authored response template must validate the
   //    reviewedResponse fallback that would be persisted.
@@ -263,21 +259,21 @@ async function main() {
   );
   assert.equal(blankTemplateRejected.state.commitCount, 0, "blank authored template with identity-bearing reviewedResponse must not commit");
 
-  // 6. create_version with no authored lesson must validate the generic
-  //    template update.
+  // 6. create_version with no authored lesson must use the generic no-lesson
+  //    path; authored lesson content remains the safety boundary.
   const versionBase = baseKnowledgeItem();
-  const versionRejected = fakePersistence();
-  await expectLearningError(
-    () => learning.promoteKnowledgeCommand(baseCommand({
-      idempotencyKey: "nc-fix-012-version-identity",
-      lessonDraft: undefined,
-      reviewedResponse: identityReviewedResponse,
-      reflection: { ...reflection, action: "create_version", existingItemId: versionBase.id, existingItemTitle: versionBase.title },
-      knowledgeItems: [versionBase]
-    }), versionRejected),
-    "validation_rejected"
-  );
-  assert.equal(versionRejected.state.commitCount, 0, "create_version identity template must not commit");
+  const versionIdentityAccepted = fakePersistence();
+  const versionIdentityResult = await learning.promoteKnowledgeCommand(baseCommand({
+    idempotencyKey: "nc-fix-012-version-identity",
+    lessonDraft: undefined,
+    reviewedResponse: identityReviewedResponse,
+    reflection: { ...reflection, action: "create_version", existingItemId: versionBase.id, existingItemTitle: versionBase.title },
+    knowledgeItems: [versionBase]
+  }), versionIdentityAccepted);
+  assert.equal(versionIdentityResult.replayed, false, "create_version identity template must use the generic path");
+  assert.equal(versionIdentityAccepted.state.commitCount, 1, "create_version identity template must commit once");
+  assert.equal(versionIdentityResult.knowledgeItem.lessons?.length ?? 0, 0, "create_version identity template must not create a lesson");
+  assert.deepEqual(versionIdentityResult.candidate.sourceTicketIds, [ticketId], "create_version identity template must retain ticket provenance");
   const versionAccepted = fakePersistence();
   const versionResult = await learning.promoteKnowledgeCommand(baseCommand({
     idempotencyKey: "nc-fix-012-version-safe",
@@ -302,19 +298,17 @@ async function main() {
     "validation_rejected"
   );
   assert.equal(mergeTagRejected.state.commitCount, 0, "identity-bearing understanding tag with authored merge lesson must not commit");
-  const trustTagRejected = fakePersistence();
-  await expectLearningError(
-    () => learning.promoteKnowledgeCommand(baseCommand({
-      idempotencyKey: "nc-fix-012-trust-identity-tag",
-      understanding: identityTagUnderstanding,
-      lessonDraft: undefined,
-      reflection: { ...reflection, action: "trust_update_only", existingItemId: versionBase.id, existingItemTitle: versionBase.title },
-      knowledgeItems: [versionBase]
-    }), trustTagRejected),
-    "validation_rejected"
-  );
-  assert.equal(trustTagRejected.state.commitCount, 0, "identity-bearing understanding tag on trust_update_only must not commit");
   const trustTagAccepted = fakePersistence();
+  const trustIdentityResult = await learning.promoteKnowledgeCommand(baseCommand({
+    idempotencyKey: "nc-fix-012-trust-identity-tag",
+    understanding: identityTagUnderstanding,
+    lessonDraft: undefined,
+    reflection: { ...reflection, action: "trust_update_only", existingItemId: versionBase.id, existingItemTitle: versionBase.title },
+    knowledgeItems: [versionBase]
+  }), trustTagAccepted);
+  assert.equal(trustIdentityResult.replayed, false, "identity-bearing understanding tag on blank trust_update_only must use the generic path");
+  assert.equal(trustTagAccepted.state.commitCount, 1, "identity-bearing understanding tag on blank trust_update_only must commit once");
+  assert.equal(trustIdentityResult.knowledgeItem.lessons?.length ?? 0, 0, "blank trust_update_only must not create a lesson");
   const trustResult = await learning.promoteKnowledgeCommand(baseCommand({
     idempotencyKey: "nc-fix-012-trust-safe-tag",
     lessonDraft: undefined,
@@ -323,16 +317,20 @@ async function main() {
   }), trustTagAccepted);
   assert.equal(trustResult.replayed, false, "sanitized trust_update_only must succeed");
 
-  // 8. Validation/write equivalence for the no-authored-lesson fallback.
+  // 8. Generic write contract for the no-authored-lesson fallback.
   const equivalence = fakePersistence();
   const fallbackAccepted = await learning.promoteKnowledgeCommand(baseCommand({
     idempotencyKey: "nc-fix-012-fallback-safe",
     lessonDraft: undefined,
     reviewedResponse: safeReviewedResponse
   }), equivalence);
-  assert.equal(fallbackAccepted.knowledgeItem.customerResponseTemplate, safeReviewedResponse, "validated fallback template must equal the persisted template");
-  assert.equal(fallbackAccepted.knowledgeItem.problemSummary, understanding.coreProblem, "validated fallback root cause must equal the persisted problem summary");
-  assert.deepEqual(fallbackAccepted.knowledgeItem.tags, understanding.tags, "validated fallback signals must equal the persisted canonical tags");
+  const genericFallbackTemplate = fallbackAccepted.knowledgeItem.customerResponseTemplate ?? "";
+  assert.equal(genericFallbackTemplate, fallbackAccepted.knowledgeItem.approvedAnswer, "generic fallback approved answer must equal the persisted template");
+  assert.equal(genericFallbackTemplate.includes(customerName), false, "generic fallback template must not contain customer identity");
+  assert.equal(genericFallbackTemplate.includes(employeeName), false, "generic fallback template must not contain employee identity");
+  assert.equal(genericFallbackTemplate.includes(ticketId), false, "generic fallback template must not contain source ticket identity");
+  assert.equal(fallbackAccepted.knowledgeItem.problemSummary, understanding.coreProblem, "generic fallback problem summary must equal the persisted summary");
+  assert.deepEqual(fallbackAccepted.knowledgeItem.tags, understanding.tags, "generic fallback tags must equal the persisted canonical tags");
 
   // 9. Corrected retry after an atomic rejection.
   const retry = fakePersistence();
@@ -377,7 +375,7 @@ async function main() {
     provenanceIdentityAllowed: true,
     reusableIdentityRejectedPerField: true,
     generalizedReusableAccepted: true,
-    noAuthoredLessonFallbackValidated: true,
+    noAuthoredLessonGenericPathAccepted: true,
     blankTemplateFallbackValidated: true,
     createVersionGenericTemplateValidated: true,
     persistedUnderstandingTagsValidated: true,

@@ -68,6 +68,41 @@ async function main() {
   );
   assert.ok(weak.state === "weak" || weak.state === "no_match", "Weak similarity must remain cautious.");
 
+  // A direct query can remain Uncategorized even when it contains an
+  // authentication phrase as background context. An Uncategorized candidate
+  // must not receive category-match points and become a strong password-reset
+  // false positive for a different access problem.
+  const unknownCategoryFalsePositive = queryOrganizationalMemory(
+    "An employee can sign in but lost access to a regional dispatch roster after being reassigned.",
+    profile,
+    [{
+      id: "qa-unknown-category-password-reset",
+      organizationId: MERIDIAN,
+      title: "Password Reset Email Not Received",
+      canonicalProblemTitle: "Password Reset Email Not Received",
+      problem: "The customer email security filter blocked password reset emails.",
+      problemSummary: "Password reset email delivery was blocked by an email filter.",
+      approvedAnswer: "Check the email security filter.",
+      category: "Uncategorized",
+      tags: [],
+      trustScore: 20,
+      lifecycleState: "active",
+      governanceState: "validated",
+      lessons: [{
+        id: "qa-unknown-category-password-reset-lesson",
+        title: "Password reset email",
+        rootCause: "Email security filter",
+        solution: "Check the email security filter.",
+        signals: ["password reset"]
+      }],
+      exampleTickets: [],
+      resolutionWorkflow: []
+    }]
+  );
+  assert.ok(unknownCategoryFalsePositive.state === "weak" || unknownCategoryFalsePositive.state === "no_match", "Unknown-category false positive must remain weak or absent.");
+  assert.ok((unknownCategoryFalsePositive.matches[0]?.matchScore ?? 0) < 40, "Unknown-category false positive must not reach the relevant-match threshold.");
+  assert.equal(unknownCategoryFalsePositive.matches[0]?.item.title ?? null, "Password Reset Email Not Received", "The regression fixture should exercise the previously false-positive candidate.");
+
   const currentOriginal = beforeItems.find((item) => item.title === "Dispatch roster access restored after regional group assignment");
   assert.ok(currentOriginal, "Current Memory projection fixture is required.");
   const projectedOriginal = known.matches.find((match) => match.item.title === currentOriginal.title);
@@ -93,6 +128,7 @@ async function main() {
     ambiguous: { state: ambiguous.state, candidates: ambiguous.matches.length },
     unrelated: { state: unrelated.state, candidates: unrelated.matches.length },
     weak: { state: weak.state, candidates: weak.matches.length },
+    unknownCategoryFalsePositive: { state: unknownCategoryFalsePositive.state, score: unknownCategoryFalsePositive.matches[0]?.matchScore ?? 0 },
     currentProjection: "PASS",
     queryMutationAudit: "PASS",
     tenantIsolation: "PASS"

@@ -17,7 +17,7 @@ async function main() {
     await assert.rejects(() => support.durableJobRepository.enqueue({ context, type: 'bulk.analyze', version: 1, input: support.bulkInput(uploadKey, parsed.entries.slice(0, 99)), inputDigest: support.digest({ changed: true }), idempotencyKey: uploadKey }), /different job input/);
     await assert.rejects(() => support.durableJobRepository.get(otherContext, first.job.id), /organization|authority/i);
 
-    worker = await support.runWorker('todo072-bulk-worker-1');
+    worker = await support.runWorker('todo072-bulk-worker-1', { organizationId });
     const completed = await support.waitForTerminal(context, first.job.id);
     await worker.stop();
     worker = null;

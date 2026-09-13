@@ -137,7 +137,7 @@ export interface JobRepository {
   enqueue(request: EnqueueJobRequest): Promise<EnqueueJobResult>;
   get(context: PersistenceContext, jobId: string): Promise<DurableJobRecord>;
   getForWorker(jobId: string): Promise<DurableJobRecord | null>;
-  claimNext(workerId: string, options?: { leaseMs?: number; now?: Date }): Promise<ClaimedJob | null>;
+  claimNext(workerId: string, options?: { leaseMs?: number; now?: Date; organizationId?: string }): Promise<ClaimedJob | null>;
   renewLease(jobId: string, workerId: string, leaseMs?: number): Promise<DurableJobRecord>;
   recordProgress(jobId: string, workerId: string, progress: JobProgress): Promise<DurableJobRecord>;
   complete(jobId: string, workerId: string, result: unknown, resultDigest?: string, diagnostics?: JobAttemptDiagnostics): Promise<DurableJobRecord>;

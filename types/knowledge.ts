@@ -1,5 +1,7 @@
 ﻿export interface KnowledgeProvenance {
-  sourceTicketId: string;
+  sourceTicketId?: string;
+  sourceId?: string;
+  domainId?: string;
   contributingTicketIds?: string[];
   createdBy: string;
   createdAt: string;
@@ -74,6 +76,8 @@ export interface KnowledgeCandidate {
   // stamp the requested id; persistence APIs require that id explicitly.
   organizationId?: string;
   sourceTicketIds: string[];
+  sourceId?: string;
+  domainId?: string;
   proposedAction: ReflectionAction;
   proposedContent: KnowledgeCandidateContent;
   relatedKnowledgeId?: string;
@@ -203,7 +207,10 @@ export interface KnowledgeItem {
   approvedAnswer: string;
   category: string;
   tags: string[];
-  sourceTicketId: string;
+  sourceTicketId?: string;
+  domainId?: string;
+  primarySourceId?: string;
+  scope?: Record<string, unknown>;
   timesReused: number;
   createdAt: string;
   approvedAt: string;

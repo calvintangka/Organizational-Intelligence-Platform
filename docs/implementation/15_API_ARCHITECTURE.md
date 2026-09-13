@@ -200,6 +200,22 @@ Neutral preparation and validation share the canonical `neutral-candidate-{sourc
 
 These commands require organization authorization, optimistic knowledge-revision checks, and idempotency keys. Challenge state is not an AI promotion mechanism: an open challenge remains evidence-backed and retrievable for inspection, but is not eligible for automatic response. Support remains backward-compatible through an in-transaction adapter from existing ticket and resolution evidence into the neutral source/evidence records.
 
+### MD-001 Multi-Department and Execution Contracts
+
+The MD-001 routes extend the same organization boundary with an authoritative Domain registry and optional role/domain capability grants:
+
+- `GET|POST /api/organizations/{organizationId}/domains` lists or creates organization-owned Domains.
+- `GET|POST /api/organizations/{organizationId}/domains/{domainId}/grants` manages supplemental Domain grants.
+- `POST /api/organizations/{organizationId}/ask` routes procedural requests to permission-aware Organizational Memory and current-value requests to the Company Data Provider boundary. No provider is implemented; unavailable current data is explicit and never filled from Memory.
+- `GET|POST /api/organizations/{organizationId}/skills` discovers or creates draft Skills; `GET|PATCH /skills/{skillId}` reads or creates a new draft version.
+- `POST /skills/{skillId}/lifecycle` enforces Draft → Ready for Review → Validated → Suspended/Revoked with explicit capabilities.
+- `POST /skills/compose` performs deterministic validation, input conflict detection, capability union, permission/scope intersection, strictest-policy selection, and restricted-Domain review enforcement.
+- `POST|GET /api/organizations/{organizationId}/execution-packages` creates or lists immutable, redacted governed handoff packages; package export returns references and snapshots without credentials.
+- `POST /execution-packages/{packageId}/sessions` receives an external result without executing it.
+- `POST /execution-sessions/{sessionId}/review` records one human review and creates outcome Source/Evidence, candidate, or challenge records without rewriting original Memory.
+
+All MD-001 routes use `withOrganizationRoute`; Domain-scoped operations add the existing global capability check plus an exact Domain grant, with owner/administrator organization-wide authority preserved. Mutations use idempotency keys, and Memory-linked operations retain revision checks.
+
 ## Internal Service APIs
 
 Internal Service APIs support communication between internal software modules.

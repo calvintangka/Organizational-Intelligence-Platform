@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { withOrganizationRoute } from "@/lib/server/organizationRoute";
 import { memoryString, optionalMemoryString, parseMemoryDate } from "@/lib/server/organizationalMemoryPrimitives";
 import { listReuseOutcomes, recordReuseOutcome } from "@/lib/server/organizationalMemoryService";
+import { listAccessibleDomainIds, requireKnowledgeDomainCapability } from "@/lib/server/domainAuthorization";
 
 function objectValue(value: unknown, field: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${field} must be an object.`);
@@ -34,9 +35,11 @@ function parseEvidence(value: unknown, defaultKey: string): Record<string, unkno
   };
 }
 
-export const GET = withOrganizationRoute("memory.evidence.read", async ({ request, organizationId }) => {
+export const GET = withOrganizationRoute("memory.evidence.read", async ({ request, organizationId, user }) => {
   const knowledgeItemId = new URL(request.url).searchParams.get("knowledgeItemId") ?? undefined;
-  return NextResponse.json({ data: await listReuseOutcomes(organizationId, knowledgeItemId) });
+  if (knowledgeItemId) await requireKnowledgeDomainCapability({ organizationId, knowledgeItemId, capability: "memory.evidence.read", request, resource: `memory:${knowledgeItemId}:outcomes` });
+  const domains = knowledgeItemId ? undefined : await listAccessibleDomainIds({ organizationId, userId: user.id, capability: "memory.evidence.read" });
+  return NextResponse.json({ data: await listReuseOutcomes(organizationId, knowledgeItemId, domains) });
 });
 
 export const POST = withOrganizationRoute("memory.outcome.record", async ({ request, organizationId, user }) => {
@@ -45,9 +48,11 @@ export const POST = withOrganizationRoute("memory.outcome.record", async ({ requ
   const idempotencyKey = memoryString(body.idempotencyKey, "idempotencyKey", 240);
   const expectedKnowledgeRevision = body.expectedKnowledgeRevision;
   if (!Number.isInteger(expectedKnowledgeRevision)) return NextResponse.json({ error: { code: "INVALID_REQUEST", message: "expectedKnowledgeRevision must be an integer." } }, { status: 400 });
+  const knowledgeItemId = memoryString(body.knowledgeItemId, "knowledgeItemId", 160);
+  await requireKnowledgeDomainCapability({ organizationId, knowledgeItemId, capability: "memory.outcome.record", request, resource: `memory:${knowledgeItemId}:outcome` });
   const result = await recordReuseOutcome({
     organizationId,
-    knowledgeItemId: memoryString(body.knowledgeItemId, "knowledgeItemId", 160),
+    knowledgeItemId,
     knowledgeVersionId: optionalMemoryString(body.knowledgeVersionId, "knowledgeVersionId", 160),
     source: parseSource(body.source) as never,
     evidence: parseEvidence(body.evidence, idempotencyKey) as never,

@@ -14,7 +14,7 @@ async function main() {
 
     const runningInput = support.bulkInput(`${uploadKey}-running-cancel`, parsed.entries.slice(0, 10));
     const running = await support.durableJobRepository.enqueue({ context, type: 'bulk.analyze', version: 1, input: runningInput, inputDigest: support.digest(runningInput), idempotencyKey: runningInput.uploadKey });
-    const claimed = await support.durableJobRepository.claimNext('todo072-cancel-worker', { leaseMs: 5_000 });
+    const claimed = await support.durableJobRepository.claimNext('todo072-cancel-worker', { leaseMs: 5_000, organizationId });
     assert.ok(claimed);
     assert.equal(claimed.job.id, running.job.id);
     const requested = await support.durableJobRepository.requestCancellation(context, running.job.id);
@@ -24,7 +24,7 @@ async function main() {
 
     const failingInput = support.bulkInput(`${uploadKey}-dead-letter`, parsed.entries.slice(0, 1));
     const failing = await support.durableJobRepository.enqueue({ context, type: 'bulk.analyze', version: 1, input: failingInput, inputDigest: support.digest(failingInput), idempotencyKey: failingInput.uploadKey, maxAttempts: 1 });
-    const failingClaim = await support.durableJobRepository.claimNext('todo072-dead-letter-worker', { leaseMs: 5_000 });
+    const failingClaim = await support.durableJobRepository.claimNext('todo072-dead-letter-worker', { leaseMs: 5_000, organizationId });
     assert.ok(failingClaim);
     assert.equal(failingClaim.job.id, failing.job.id);
     const dead = await support.durableJobRepository.fail(failing.job.id, 'todo072-dead-letter-worker', { errorClass: 'permanent_failure', safeMessage: 'Permanent disposable probe failure.', retryable: true });

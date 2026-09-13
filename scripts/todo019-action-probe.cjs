@@ -27,7 +27,7 @@ function context() {
 }
 
 async function runWorker(workerId) {
-  const worker = new AsyncJobWorker({ workerId, pollMs: 15, leaseMs: 5_000, concurrency: 1 });
+  const worker = new AsyncJobWorker({ workerId, pollMs: 15, leaseMs: 5_000, concurrency: 1, organizationId });
   worker.start();
   return worker;
 }

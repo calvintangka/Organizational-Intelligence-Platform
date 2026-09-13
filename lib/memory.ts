@@ -9,6 +9,23 @@ const RETRIEVAL_STOPWORDS = new Set([
 
 type RelevanceConcept = { id: string; categories: string[]; aliases: string[]; requiredAliases?: string[]; minimumEvidence: number };
 
+type PreparedRetrievalCandidate = {
+  rawItem: KnowledgeItem;
+  item: KnowledgeItem;
+  category: string;
+  itemKeywords: string[];
+  evidenceText: string;
+  evidenceKeywords: string[];
+  broadKeywords: string[];
+  itemConcepts: Set<string>;
+  canonicalTitleTokens: string[];
+};
+
+// Bulk analysis evaluates one organization-scoped Memory collection once per
+// uploaded row. The collection identity is the cache boundary because every
+// persistence load returns a fresh array when Memory changes.
+const preparedRetrievalCache = new WeakMap<KnowledgeItem[], PreparedRetrievalCandidate[]>();
+
 // Bounded, explainable problem concepts. These describe recurring failure
 // meanings across domains rather than individual fixture sentences or IDs.
 // A concept contributes only when both the ticket and the canonical's own
@@ -73,6 +90,41 @@ function normalizeRetrievalToken(token: string): string {
     periodically: "periodic"
   };
   return aliases[token] ?? token;
+}
+
+function prepareRetrievalCandidates(knowledgeItems: KnowledgeItem[]): PreparedRetrievalCandidate[] {
+  const cached = preparedRetrievalCache.get(knowledgeItems);
+  if (cached) return cached;
+  const prepared: PreparedRetrievalCandidate[] = knowledgeItems.map((rawItem) => {
+    const item = withCanonicalProblemDefaults(rawItem);
+    const itemKeywords = [...new Set(tokenize(
+      `${item.canonicalProblemTitle ?? item.title} ${item.problemSummary ?? item.problem} ${item.tags.join(" ")}`
+    ))];
+    const evidenceText = [
+      item.canonicalProblemTitle,
+      item.title,
+      item.problemSummary,
+      item.problem,
+      item.internalGuidance,
+      item.customerResponseTemplate,
+      ...(item.resolutionWorkflow ?? []),
+      ...(item.lessons ?? []).flatMap((lesson) => [lesson.title, lesson.rootCause, lesson.solution, ...lesson.signals]),
+      ...(item.exampleTickets ?? []).map((example) => example.originalIssue)
+    ].filter(Boolean).join(" ");
+    return {
+      rawItem,
+      item,
+      category: item.category.toLowerCase(),
+      itemKeywords,
+      evidenceText,
+      evidenceKeywords: [...new Set(tokenize(evidenceText))],
+      broadKeywords: [...new Set(tokenize(`${item.internalGuidance ?? ""} ${item.customerResponseTemplate ?? ""}`))],
+      itemConcepts: conceptEvidence(evidenceText, item.category),
+      canonicalTitleTokens: tokenize(item.canonicalProblemTitle ?? item.title)
+    };
+  });
+  preparedRetrievalCache.set(knowledgeItems, prepared);
+  return prepared;
 }
 
 type OperationalCondition = "healthy" | "outage" | null;
@@ -234,37 +286,24 @@ export function retrieveMemory(
   const normalizedAnalysis = analysisTokens.join(" ");
   const analysisSource = `${understanding.retrievalText ?? understanding.originalText ?? ""} ${understanding.summary} ${understanding.coreProblem} ${understanding.category} ${understanding.tags.join(" ")}`;
   const analysisConcepts = conceptEvidence(analysisSource, understanding.category);
+  const categoryUnknown = understanding.category === "General" || understanding.category === "Uncategorized";
 
-  const mapped = knowledgeItems
-    .map((rawItem) => {
-      const item = withCanonicalProblemDefaults(rawItem);
-      const categoryMatch = item.category.toLowerCase() === understanding.category.toLowerCase();
+  const mapped = prepareRetrievalCandidates(knowledgeItems)
+    .map((candidate) => {
+      const { rawItem, item } = candidate;
+      // General/Uncategorized are classifier fallbacks, not evidence that a
+      // candidate belongs to the same problem domain. Treating an unknown
+      // query category as a positive category match can turn a generic noun
+      // overlap into a confident false-positive Memory result.
+      const categoryMatch = !categoryUnknown && candidate.category === understanding.category.toLowerCase();
       const matchedTags = item.tags.filter((tag) => understanding.tags.includes(tag));
-      const itemKeywords = [...new Set(tokenize(
-        `${item.canonicalProblemTitle ?? item.title} ${item.problemSummary ?? item.problem} ${item.tags.join(" ")}`
-      ))];
-      const evidenceText = [
-        item.canonicalProblemTitle,
-        item.title,
-        item.problemSummary,
-        item.problem,
-        item.internalGuidance,
-        item.customerResponseTemplate,
-        ...(item.resolutionWorkflow ?? []),
-        ...(item.lessons ?? []).flatMap((lesson) => [lesson.title, lesson.rootCause, lesson.solution, ...lesson.signals]),
-        ...(item.exampleTickets ?? []).map((example) => example.originalIssue)
-      ].filter(Boolean).join(" ");
-      const evidenceKeywords = [...new Set(tokenize(evidenceText))];
-      const broadKeywords = [...new Set(tokenize(`${item.internalGuidance ?? ""} ${item.customerResponseTemplate ?? ""}`))];
-      const matchedSpecificKeywords = itemKeywords.filter((kw) => analysisKeywords.has(kw));
-      const matchedEvidenceKeywords = evidenceKeywords.filter((kw) => analysisKeywords.has(kw) && !itemKeywords.includes(kw));
-      const matchedBroadKeywords = broadKeywords.filter((kw) => analysisKeywords.has(kw));
+      const matchedSpecificKeywords = candidate.itemKeywords.filter((kw) => analysisKeywords.has(kw));
+      const matchedEvidenceKeywords = candidate.evidenceKeywords.filter((kw) => analysisKeywords.has(kw) && !candidate.itemKeywords.includes(kw));
+      const matchedBroadKeywords = candidate.broadKeywords.filter((kw) => analysisKeywords.has(kw));
       const matchedKeywords = [...new Set([...matchedSpecificKeywords, ...matchedEvidenceKeywords, ...matchedBroadKeywords])];
-      const itemConcepts = conceptEvidence(evidenceText, item.category);
-      const matchedConcepts = [...itemConcepts].filter((concept) => analysisConcepts.has(concept));
-      const canonicalTitleTokens = tokenize(item.canonicalProblemTitle ?? item.title);
-      const canonicalPhrase = canonicalTitleTokens.join(" ");
-      const exactCanonicalPhrase = canonicalTitleTokens.length >= 2 && normalizedAnalysis.includes(canonicalPhrase);
+      const matchedConcepts = [...candidate.itemConcepts].filter((concept) => analysisConcepts.has(concept));
+      const canonicalPhrase = candidate.canonicalTitleTokens.join(" ");
+      const exactCanonicalPhrase = candidate.canonicalTitleTokens.length >= 2 && normalizedAnalysis.includes(canonicalPhrase);
       const isSessionCreated = sessionCreatedIds.has(item.id) || sessionCreatedIds.has(rawItem.id);
       // Reuse/validation history is confidence metadata, not problem
       // relevance. It must never outrank a more specific canonical match.
@@ -302,7 +341,6 @@ export function retrieveMemory(
         : 0;
       const compatibility = assessIntentCompatibility(understanding, item);
       const facetCompatibility = assessRetrievalCompatibility(understanding, item);
-      const categoryUnknown = understanding.category === "General" || understanding.category === "Uncategorized";
       const conditionPoints = facetCompatibility.sharedFacets.some((facet) => facet === "network-transition-synchronization" || facet === "offline-synchronization") ? 6 : 0;
       const specificityPoints = Math.min(evidenceKeywordPoints + conditionPoints + evidenceQualityPoints, 28);
       const groundingReady = (item.lessons?.length ?? 0) > 0 && item.lifecycleState !== "deprecated" && item.governanceState !== "challenged";
@@ -377,7 +415,7 @@ export function retrieveMemory(
           understanding,
           item,
           analysisSource,
-          evidenceText,
+          candidate.evidenceText,
           facetCompatibility,
           matchedSpecificKeywords,
           matchedConcepts,
@@ -422,6 +460,13 @@ function assessIntentCompatibility(understanding: Understanding, item: Knowledge
   const negated = (pattern: RegExp) => isolation.negatedTopics.some((topic) => pattern.test(topic));
 
   if (isolation.securityIntent.detected) return { score: -100, reason: "security override: retrieval prohibited" };
+  // Security Memories are governed escalation records, not general-purpose
+  // support templates. A non-security request must never reuse one merely
+  // because its later lesson evidence happens to mention a shared noun such
+  // as export, billing, or access.
+  if (item.category === "Security Incident" && !isolation.securityIntent.detected) {
+    return { score: -100, reason: "security Memory is restricted to security-routed requests" };
+  }
   if (isolation.primaryIssueHint === "role_permission" && has(/guest|collaborator|external invitation/) && !evidenceHas(/guest|collaborator|invitation/)) return { score: -100, reason: "object mismatch: guest/collaborator lesson is not the active role-permission issue" };
   if (isolation.primaryIssueHint === "refund_investigation" && has(/duplicate|invoice duplication|two charges/) && !activeHas(/duplicate|twice|two charges|doubled/)) return { score: -100, reason: "object mismatch: duplicate-charge lesson is not the refund investigation" };
   if (isolation.primaryIssueHint === "report_export_timeout" && has(/encoding|csv|garbled|character|spreadsheet/) && !activeHas(/encoding|csv|garbled|character/)) return { score: -100, reason: "stage mismatch: encoding lesson is not the report timeout" };

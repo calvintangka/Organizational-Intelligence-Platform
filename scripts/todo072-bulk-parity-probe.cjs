@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const support = require('./lib/todo072-support.cjs');
+const domains = require('../lib/server/domainService.ts');
 
 function flatten(result) {
   const items = [...result.clusters.flatMap((cluster) => cluster.items), ...result.unclustered.items];
@@ -18,12 +19,17 @@ async function main() {
   let worker = null;
   try {
     const context = await support.createOrganization(organizationId);
+    await domains.ensureDefaultOrganizationDomains(organizationId);
+    const targetSupportDomain = await domains.resolveOrganizationDomain(organizationId, 'customer-support');
     const sourceProfile = await support.persistence.getOrganizationProfile('profile-oip-developer-demo');
     await support.persistence.upsertOrganizationProfile({ ...sourceProfile, id: organizationId, name: `TODO-072 parity ${organizationId}`, updatedAt: new Date().toISOString(), createdAt: new Date().toISOString() });
     const matureSource = await support.persistence.loadKnowledge('profile-oip-developer-demo');
     const mature = matureSource.find((item) => /invoice/i.test(`${item.title} ${item.canonicalProblemTitle ?? ''} ${item.problem}`));
     assert.ok(mature, 'Expected an invoice lesson in the protected mature-memory source.');
-    const copiedKnowledge = matureSource.map((item, index) => ({ ...item, id: `todo072-mature-${Date.now()}-${index}`, organizationId, revision: undefined }));
+    // The source corpus belongs to another tenant. Remap its Support Domain
+    // to the disposable tenant's own Domain instead of carrying a foreign FK
+    // into the target organization.
+    const copiedKnowledge = matureSource.map((item, index) => ({ ...item, id: `todo072-mature-${Date.now()}-${index}`, organizationId, revision: undefined, domainId: item.domainId ? targetSupportDomain.id : undefined, primarySourceId: undefined }));
     const syntheticMature = { id: `todo072-synthetic-password-${Date.now()}`, organizationId, title: 'Password Reset Email Missing', problem: 'Password reset email is missing after replacing a laptop.', approvedAnswer: 'Use the account recovery flow and verify the login email before requesting a new reset message.', category: 'Password Reset', tags: ['password', 'reset', 'email', 'missing', 'laptop'], sourceTicketId: 'todo072-source', timesReused: 10, createdAt: new Date().toISOString(), approvedAt: new Date().toISOString(), canonicalProblemId: 'todo072-password-reset', canonicalProblemTitle: 'Password Reset Email Missing', problemSummary: 'Password reset email is missing after a device change.', customerResponseTemplate: 'Please verify your login email and request a new password reset message.', lessons: [{ id: 'todo072-password-lesson', title: 'Password reset delivery', rootCause: 'The reset message can be delayed after a device change.', solution: 'Verify the login email and retry the recovery flow.', customerResponse: 'Please verify your login email and request a new password reset message.', signals: ['password reset', 'reset email'], createdAt: new Date().toISOString(), sourceTicketId: 'todo072-source' }] };
     await support.persistence.saveKnowledge(organizationId, [...copiedKnowledge, syntheticMature]);
     const knowledge = await support.persistence.loadKnowledge(organizationId);
@@ -32,7 +38,7 @@ async function main() {
     const direct = await require(`${support.root}/lib/bulkUpload.ts`).analyzeBulkEntries({ entries: parsed.entries, organizationProfile: await support.persistence.getOrganizationProfile(organizationId), knowledgeItems: knowledge, aiAdapter: ai });
     const input = support.bulkInput(uploadKey, parsed.entries);
     const queued = await support.durableJobRepository.enqueue({ context, type: 'bulk.analyze', version: 1, input, inputDigest: support.digest(input), idempotencyKey: uploadKey, maxAttempts: 3 });
-    worker = await support.runWorker('todo072-parity-worker');
+    worker = await support.runWorker('todo072-parity-worker', { organizationId, leaseMs: 30_000 });
     const completed = await support.waitForTerminal(context, queued.job.id);
     await worker.stop();
     worker = null;

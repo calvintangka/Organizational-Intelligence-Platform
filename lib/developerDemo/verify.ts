@@ -178,12 +178,12 @@ export function verifyDeveloperDemoSimulation(simulation: SimulationDraft): Inte
   const aliasOwners = new Map<string, string>();
   for (const item of knowledgeItems) {
     fail("organizationIsolationViolations", item.organizationId === organizationId);
-    const source = ticketById.get(item.sourceTicketId);
+    const source = item.sourceTicketId ? ticketById.get(item.sourceTicketId) : undefined;
     fail("unresolvedTicketReferences", Boolean(source));
     if (source) fail("timestampViolations", source.createdAt <= item.createdAt);
     const canonicalLessonIds = new Set((item.lessons ?? []).map((lesson) => lesson.id));
     for (const lesson of item.lessons ?? []) {
-      const primarySource = ticketById.get(lesson.sourceTicketId);
+      const primarySource = lesson.sourceTicketId ? ticketById.get(lesson.sourceTicketId) : undefined;
       fail("unresolvedTicketReferences", Boolean(primarySource));
       if (primarySource) fail("timestampViolations", primarySource.createdAt <= lesson.createdAt);
       for (const ticketId of [...new Set(lesson.sourceTicketIds ?? [])]) {
@@ -201,7 +201,7 @@ export function verifyDeveloperDemoSimulation(simulation: SimulationDraft): Inte
     }
     const versions = item.knowledgeVersions ?? [];
     versions.forEach((version, index) => {
-      const ticket = ticketById.get(version.sourceTicketId);
+      const ticket = version.sourceTicketId ? ticketById.get(version.sourceTicketId) : undefined;
       fail("unresolvedTicketReferences", Boolean(ticket));
       if (ticket) fail("timestampViolations", ticket.createdAt <= version.createdAt);
       fail("timestampViolations", index === 0 || versions[index - 1].createdAt <= version.createdAt);

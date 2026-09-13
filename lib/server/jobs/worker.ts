@@ -22,6 +22,7 @@ export interface AsyncJobWorkerOptions {
   concurrency?: number;
   leaseMs?: number;
   pollMs?: number;
+  organizationId?: string;
   drainTimeoutMs?: number;
 }
 
@@ -69,6 +70,7 @@ export class AsyncJobWorker {
   readonly concurrency: number;
   readonly leaseMs: number;
   readonly pollMs: number;
+  readonly organizationId?: string;
   private readonly drainTimeoutMs: number;
   private readonly repository: JobRepository;
   private readonly registry: JobHandlerRegistry;
@@ -85,6 +87,7 @@ export class AsyncJobWorker {
     this.concurrency = Math.max(1, Math.min(32, options.concurrency ?? Number(process.env.OIP_JOB_WORKER_CONCURRENCY ?? 2)));
     this.leaseMs = Math.max(5_000, options.leaseMs ?? 30_000);
     this.pollMs = Math.max(100, options.pollMs ?? 1_000);
+    this.organizationId = options.organizationId;
     this.drainTimeoutMs = Math.max(1_000, options.drainTimeoutMs ?? 30_000);
     this.repository = options.repository ?? durableJobRepository;
     this.registry = options.registry ?? createDefaultJobHandlerRegistry();
@@ -115,7 +118,7 @@ export class AsyncJobWorker {
     await this.persistHeartbeat({ status: this.stopping ? "stopping" : "running", lastPollAt: new Date(), lastErrorSafe: null });
     await this.repository.releaseExpiredLeases();
     while (!this.stopping && this.active.size < this.concurrency) {
-      const claimed = await this.repository.claimNext(this.workerId, { leaseMs: this.leaseMs });
+      const claimed = await this.repository.claimNext(this.workerId, { leaseMs: this.leaseMs, organizationId: this.organizationId });
       if (!claimed) break;
       await this.persistHeartbeat({ currentJobId: claimed.job.id, currentLeaseExpiresAt: claimed.job.leaseExpiresAt ? new Date(claimed.job.leaseExpiresAt) : null });
       const task = this.execute(claimed.job);

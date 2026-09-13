@@ -152,12 +152,17 @@ function profileProjection(profile: OrganizationProfile): JsonRecord {
 }
 
 function targetProfileProjection(row: { id: string; name: string; industry: string; description: string; settings: unknown }): JsonRecord {
+  const settings = asRecord(row.settings, "target organization settings");
+  // _profileRevision is server-side optimistic-concurrency bookkeeping, not
+  // part of the exported organization profile. Comparing it here would make
+  // every normal server-owned target look different from its own local export.
+  const { _profileRevision: _ignoredProfileRevision, ...profileSettings } = settings;
   return {
     id: row.id,
     name: row.name,
     industry: row.industry,
     description: row.description,
-    settings: asRecord(row.settings, "target organization settings")
+    settings: profileSettings
   };
 }
 
@@ -282,6 +287,10 @@ function candidateData(candidate: KnowledgeCandidate, organizationId: string) {
     id: requiredString(candidate.id, "knowledgeCandidate.id"),
     organizationId,
     relatedKnowledgeId: candidate.relatedKnowledgeId ?? null,
+    // Preserve MD-001's generic Source/Domain identity during migration while
+    // normalizing legacy Support exports to explicit nulls for parity.
+    domainId: candidate.domainId ?? null,
+    sourceId: candidate.sourceId ?? null,
     sourceTicketIds: jsonValue(candidate.sourceTicketIds ?? []),
     proposedAction: requiredString(candidate.proposedAction, "knowledgeCandidate.proposedAction"),
     proposedContent: jsonValue(candidate.proposedContent ?? {}),

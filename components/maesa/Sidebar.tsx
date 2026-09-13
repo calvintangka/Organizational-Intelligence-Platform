@@ -2,7 +2,7 @@
 
 import { useAuthorization } from "@/components/AuthorizationContext";
 
-export type ActiveView = "home" | "tickets" | "cases" | "knowledge" | "dashboard" | "operations" | "organization" | "settings" | "developer";
+export type ActiveView = "home" | "tickets" | "cases" | "knowledge" | "ask" | "skills" | "dashboard" | "operations" | "organization" | "settings" | "developer";
 
 interface SidebarProps {
   activeView: ActiveView;
@@ -107,6 +107,8 @@ const NAV_ITEMS: { id: ActiveView; label: string }[] = [
   { id: "tickets", label: "Tickets" },
   { id: "cases", label: "Cases" },
   { id: "knowledge", label: "Knowledge" },
+  { id: "ask", label: "Ask" },
+  { id: "skills", label: "Skills" },
   { id: "dashboard", label: "Dashboard" },
   { id: "operations", label: "Operations" },
   { id: "organization", label: "Organization" },

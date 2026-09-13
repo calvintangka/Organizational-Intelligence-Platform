@@ -12,7 +12,8 @@ export function ticketReferenceId(ticket: Pick<Ticket, "id" | "ticketId">): stri
  * to replace an existing canonical source ticket. When the server has an
  * authoritative stored item, its top-level sourceTicketId wins over a stale
  * client provenance payload; this also repairs the legacy split-brain shape
- * where the top-level origin is correct but content.provenance drifted.
+ * where the top-level origin is correct but content.provenance drifted. Generic
+ * Source identity is preserved alongside the legacy ticket field.
  */
 export function withStableValidationProvenance(
   item: KnowledgeItem,
@@ -24,6 +25,8 @@ export function withStableValidationProvenance(
   const historicalOrigin = storedItem?.sourceTicketId || storedItem?.provenance?.sourceTicketId
     || item.sourceTicketId || item.provenance?.sourceTicketId;
   const origin = historicalOrigin || candidateSourceTicketIds.find(Boolean) || "";
+  const genericSourceId = storedItem?.provenance?.sourceId || item.primarySourceId || item.provenance?.sourceId;
+  const domainId = storedItem?.domainId || storedItem?.provenance?.domainId || item.domainId || item.provenance?.domainId;
   const contributingTicketIds = [...new Set([
     ...(existing?.contributingTicketIds ?? []),
     ...(candidateSourceTicketIds ?? []),
@@ -32,9 +35,12 @@ export function withStableValidationProvenance(
 
   return {
     ...item,
-    sourceTicketId: origin,
+    ...(origin ? { sourceTicketId: origin } : item.sourceTicketId ? { sourceTicketId: item.sourceTicketId } : { sourceTicketId: undefined }),
     provenance: {
-      sourceTicketId: origin,
+      ...existing,
+      ...(origin ? { sourceTicketId: origin } : {}),
+      ...(genericSourceId ? { sourceId: genericSourceId } : {}),
+      ...(domainId ? { domainId } : {}),
       contributingTicketIds,
       createdBy: existing?.createdBy ?? "oip_prototype",
       createdAt: existing?.createdAt ?? item.createdAt,

@@ -114,6 +114,7 @@ import { ZendeskLandingPage } from "@/components/landing/LandingPageZendesk";
 import { CaseLookupView } from "@/components/views/CaseLookupView";
 import { AuthorizationProvider } from "@/components/AuthorizationContext";
 import { DeveloperDiagnosticsView } from "@/components/views/DeveloperDiagnosticsView";
+import { MultiDepartmentWorkspace } from "@/components/views/MultiDepartmentWorkspace";
 import { bulkResult, cancelJob, enqueueBulkJob, enqueuePatternDiscoveryJob, enqueueReflectionJob, getJob, reflectionResult } from "@/lib/application/jobs/client";
 import type { ProcessTicketResult } from "@/lib/application/tickets/processTicket";
 import { digestJobInput } from "@/lib/application/jobs/types";
@@ -2921,9 +2922,19 @@ export default function Home() {
       const targetSession = await openPersistenceSession(id, "delete-organization");
       await targetSession.deleteOrganization();
       if (id === organizationProfile.id) {
-        await selectOrganization(nextList[0].id, nextList, false);
+        // Keep the account menu's authoritative membership projection in sync
+        // before selecting the replacement organization. Passing nextList
+        // explicitly also prevents a stale React snapshot from authorizing a
+        // just-deleted organization during the transition.
+        setAuthorizedOrganizations(nextList);
+        setOrganizationList(nextList);
+        await selectOrganization(nextList[0].id, nextList, false, nextList);
       } else {
-        await persistence.saveOrganizationList(nextList);
+        // The server DELETE already changed the authoritative membership set;
+        // replaying the remaining profiles through the bulk profile endpoint
+        // is unnecessary in server mode and can reject a stale snapshot.
+        if (persistenceMode === "local") await persistence.saveOrganizationList(nextList);
+        setAuthorizedOrganizations(nextList);
         setOrganizationList(nextList);
       }
     } catch (error) {
@@ -4056,6 +4067,14 @@ export default function Home() {
         setCurrentStep(7);
         return;
       }
+      // Promotion is server-authoritative, so refresh the organization-scoped
+      // Memory snapshot immediately before constructing the commit payload.
+      // A prepared create-new Reflection may have been authored while another
+      // ticket created the same canonical Memory; the promotion command can
+      // then reconcile that unique identity to the durable row.
+      const currentKnowledgeItems = await resourcePersistence.loadKnowledge();
+      const currentValidationRecords = await resourcePersistence.loadValidationRecords();
+      knowledgeItemsRef.current = currentKnowledgeItems;
       try {
       const result = await promoteKnowledgeCommand({
         organizationId: latest.organizationProfile.id,
@@ -4071,8 +4090,8 @@ export default function Home() {
         reflection: decision,
         lessonDraft: validation.normalizedLessonDraft,
         problemName: input?.problemName,
-        knowledgeItems: knowledgeItemsRef.current,
-        validationRecords: latest.validationRecords,
+        knowledgeItems: currentKnowledgeItems,
+        validationRecords: currentValidationRecords,
         currentOrgMetrics: latest.orgMetrics
       }, {
         persistence: resourcePersistence,
@@ -5159,6 +5178,24 @@ export default function Home() {
                 }}
               />
             </div>
+          )}
+
+          {activeView === "ask" && (
+            <MultiDepartmentWorkspace
+              organizationId={organizationProfile.id}
+              darkMode={darkMode}
+              variant="ask"
+              knowledgeItems={knowledgeItems}
+            />
+          )}
+
+          {activeView === "skills" && (
+            <MultiDepartmentWorkspace
+              organizationId={organizationProfile.id}
+              darkMode={darkMode}
+              variant="skills"
+              knowledgeItems={knowledgeItems}
+            />
           )}
 
           {activeView === "dashboard" && (

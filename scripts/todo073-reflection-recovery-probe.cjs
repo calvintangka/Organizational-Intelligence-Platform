@@ -9,12 +9,12 @@ async function main() {
     await support.addActor(fixture, Date.now());
     const created = await support.enqueueReflection(fixture, `todo073-recovery:${fixture.ticket.ticketId}`);
     const leaseStart = new Date();
-    const claimed = await support.durableJobRepository.claimNext('todo073-crashed-reflection-worker', { leaseMs: 5_000, now: leaseStart });
+    const claimed = await support.durableJobRepository.claimNext('todo073-crashed-reflection-worker', { leaseMs: 5_000, now: leaseStart, organizationId });
     assert.ok(claimed);
     assert.equal(claimed.job.id, created.job.id);
     assert.equal(await support.durableJobRepository.releaseExpiredLeases(new Date(leaseStart.getTime() + 6_000)), 1);
     assert.equal((await support.durableJobRepository.get(fixture.context, created.job.id)).status, 'retry_scheduled');
-    worker = await support.runWorker('todo073-restarted-reflection-worker');
+    worker = await support.runWorker('todo073-restarted-reflection-worker', { organizationId });
     const completed = await support.waitForTerminal(fixture.context, created.job.id);
     await worker.stop(); worker = null;
     assert.equal(completed.status, 'succeeded');

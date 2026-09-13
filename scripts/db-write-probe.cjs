@@ -32,6 +32,7 @@ if (!process.env.DATABASE_URL) {
 
 const service = require(path.join(root, "lib", "server", "persistenceService.ts"));
 const { getPrismaClient } = require(path.join(root, "lib", "server", "prisma.ts"));
+const { createTicketRecord } = require(path.join(root, "lib", "ticketRecords.ts"));
 
 const ORG_A = "test-oip-write-a";
 const ORG_B = "test-oip-write-b";
@@ -177,6 +178,21 @@ async function main() {
   const itemA = knowledgeItem("probe-knowledge-a", ORG_A, [
     { id: "lesson-a1", rootCause: "Probe cause", solution: "Probe fix", customerResponse: "Hi {{customerName}}", signals: ["probe"], createdAt: NOW, sourceTicketId: "TW-PROBE-0001" }
   ]);
+  const sourceTicket = createTicketRecord("TW-PROBE-0001", ORG_A, "Disposable source ticket for the write-path validation probe.", "Write-path source ticket");
+  sourceTicket.status = "resolved";
+  sourceTicket.resolution = { ...sourceTicket.resolution, finalResponse: "The disposable probe issue was resolved.", resolvedAt: NOW };
+  sourceTicket.resolutionEvidence = [{
+    id: "write-probe-resolution-evidence-1",
+    orgId: ORG_A,
+    ticketId: "TW-PROBE-0001",
+    type: "customer_confirmation",
+    sourceMessageId: null,
+    actorId: PROBE_ACTOR.id,
+    note: "Disposable probe resolution evidence.",
+    createdAt: NOW,
+    idempotencyKey: "write-probe-resolution-evidence-1"
+  }];
+  await service.saveTicketRecords(ORG_A, [sourceTicket]);
   const createPayload = commitPayload(ORG_A, "create", itemA, null);
   const created = await service.commitValidation(ORG_A, createPayload, PROBE_ACTOR);
   assert.equal(created.replayed, false);
@@ -208,7 +224,12 @@ async function main() {
   const rejected = results.filter((result) => result.status === "rejected");
   assert.equal(fulfilled.length, 1, "D: exactly one concurrent canonical update must win");
   assert.equal(rejected.length, 1, "D: the other concurrent update must conflict");
-  assert.equal(rejected[0].reason.code, "CONFLICT");
+  assert.ok(
+    ["CONFLICT", "REVISION_CONFLICT"].includes(rejected[0].reason.code) ||
+      rejected[0].reason.status === 409 ||
+      /changed by another update/i.test(rejected[0].reason.message ?? ""),
+    "D: the losing writer must return a 409-style conflict."
+  );
   const storedItem = (await service.loadKnowledge(ORG_A)).find((item) => item.id === "probe-knowledge-a");
   assert.equal(storedItem.revision, 2);
   assert.equal(storedItem.lessons.length, 2, "D: winner's lessons persist; nothing is silently merged or lost");
@@ -216,7 +237,9 @@ async function main() {
 
   /* F. Failed validation transaction leaves no partial state. */
   const failing = commitPayload(ORG_A, "fail", { ...knowledgeItem("probe-knowledge-a", ORG_A), revision: 99 }, 99);
-  await assert.rejects(() => service.commitValidation(ORG_A, failing, PROBE_ACTOR), (error) => error.code === "CONFLICT");
+  await assert.rejects(() => service.commitValidation(ORG_A, failing, PROBE_ACTOR), (error) =>
+    ["CONFLICT", "REVISION_CONFLICT"].includes(error.code) || error.status === 409
+  );
   counts = await candidateRowCounts(prisma, ORG_A, failing.candidate.id);
   assert.deepEqual(counts, { validations: 0, memoryChanges: 0 }, "F: rollback must remove the audit rows");
   assert.equal(

@@ -11,14 +11,14 @@ async function main() {
     const input = support.bulkInput(`${uploadKey}-recovery`, entries);
     const created = await support.durableJobRepository.enqueue({ context, type: 'bulk.analyze', version: 1, input, inputDigest: support.digest(input), idempotencyKey: `${uploadKey}-recovery`, maxAttempts: 3 });
     const leaseStart = new Date();
-    const claimed = await support.durableJobRepository.claimNext('todo072-crashed-worker', { leaseMs: 5_000, now: leaseStart });
+    const claimed = await support.durableJobRepository.claimNext('todo072-crashed-worker', { leaseMs: 5_000, now: leaseStart, organizationId });
     assert.ok(claimed);
     assert.equal(claimed.job.id, created.job.id);
     const released = await support.durableJobRepository.releaseExpiredLeases(new Date(leaseStart.getTime() + 6_000));
     assert.equal(released, 1);
     const retryState = await support.durableJobRepository.get(context, created.job.id);
     assert.equal(retryState.status, 'retry_scheduled');
-    worker = await support.runWorker('todo072-restarted-worker');
+    worker = await support.runWorker('todo072-restarted-worker', { organizationId });
     const completed = await support.waitForTerminal(context, created.job.id);
     await worker.stop();
     worker = null;

@@ -292,6 +292,13 @@ export function isStrongLessonEvidence(
   }
 
   if (!ticketCategoryClassified || lessonMatch.score !== 1 || lessonMatch.multiTokenMatches !== 1) return false;
+  // English concept similarity is the semantic-fallback boundary, not
+  // deterministic root-cause evidence. Cross-language concept matching is
+  // explicitly marked with matchedConceptIds and remains eligible; an
+  // unmarked semantic match can otherwise let resolved-history vocabulary
+  // authorize a lesson before the provider has discriminated it.
+  if (lessonMatch.signalEvidence?.some((entry) => entry.matchType === "semantic")
+      && !(lessonMatch.matchedConceptIds?.length ?? 0)) return false;
   const signal = lessonMatch.matchedSignals[0] ?? "";
   const meaningfulSignalTokens = tokenizeLessonSignal(signal);
   if (meaningfulSignalTokens.length < 3) return false;
@@ -1016,6 +1023,17 @@ interface SignalMatchEvidence {
   matchedConcepts: string[];
 }
 
+/**
+ * An absence-of-problem phrase is context, not positive root-cause evidence.
+ * Without this guard, a signal such as "nothing wrong with account" can
+ * partially overlap an ambiguous ticket saying "something is wrong with my
+ * account" and authorize an unrelated login lesson.
+ */
+function isExplicitAbsenceOfProblem(value: string): boolean {
+  return /\b(?:nothing|no)\s+(?:is\s+)?(?:wrong|problem|issue|fault|error)\b/.test(value)
+    || /\bnot\s+(?:a|an|any)\s+(?:problem|issue|fault|error)\b/.test(value);
+}
+
 function signalMatchEvidence(
   signal: string,
   ticketText: string,
@@ -1024,6 +1042,7 @@ function signalMatchEvidence(
 ): SignalMatchEvidence | null {
   const normalizedSignal = normalizeLessonSignalText(signal).trim();
   if (!normalizedSignal) return null;
+  if (isExplicitAbsenceOfProblem(normalizedSignal) && !isExplicitAbsenceOfProblem(ticketText)) return null;
   if (ticketText.includes(normalizedSignal)) return { matchType: "literal", matchedConcepts: [] };
 
   // TODO-028: the generic-overlap fallback below deliberately tolerates
@@ -1186,6 +1205,12 @@ export function findMatchingLesson(
       && /\b(?:locale|language|translation)\b/.test(ticketText)
       && /\b(?:normal|correct|fine|works?|working|unaffected)\b/.test(ticketText)
       && !/\b(?:bounce|bounced|suppression|suppressed|delivery failure|omitted|excluded|withheld)\b[^.!?]{0,30}\b(?:fail|issue|problem|affected)\b/.test(ticketText)) return null;
+  // Naming the notification surface is not evidence of a delivery failure.
+  // Keep generic “notification/email question” requests on the human-review
+  // path until the ticket supplies an actionable delivery symptom.
+  if (item.category === "Notifications & Email"
+      && /suppression|bounce|delivery failure|withheld|omitted|excluded/i.test(`${item.canonicalProblemTitle ?? ""} ${item.title}`)
+      && !/\b(?:bounce|bounced|suppression|suppressed|delivery failure|omitted|excluded|withheld|skipped|not delivered|missing|failed|failure|delayed|late|no longer receives|does not receive|can't receive|cannot receive|not receiving)\b/.test(ticketText)) return null;
   if (item.category === "Notifications & Email"
       && /\b(?:no|not)\b[^.!?]{0,50}\b(?:suppression|bounce|bounced)\b/.test(ticketText)) return null;
   if (item.category === "Notifications & Email"

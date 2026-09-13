@@ -261,7 +261,7 @@ async function main() {
   const baseline = payload(ORG_A, "stale-baseline", baselineItem, null);
   await service.commitValidation(ORG_A, baseline, ACTOR_A);
   const stale = payload(ORG_A, "stale-revision", { ...baselineItem, revision: 1 }, 0);
-  await assert.rejects(() => service.commitValidation(ORG_A, stale, ACTOR_B), (error) => error.code === "CONFLICT");
+  await assert.rejects(() => service.commitValidation(ORG_A, stale, ACTOR_B), (error) => error.code === "CONFLICT" || error.code === "REVISION_CONFLICT");
   const staleState = await counts(prisma, ORG_A, stale.candidate.id, baselineItem.id);
   assert.equal(staleState.validationCount, 0, "I3: stale revision leaves no validation");
   assert.equal(staleState.memoryCount, 0, "I3: stale revision leaves no memory change");

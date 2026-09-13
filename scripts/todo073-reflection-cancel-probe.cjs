@@ -10,7 +10,7 @@ async function main() {
     assert.equal((await support.durableJobRepository.requestCancellation(fixture.context, queued.job.id)).status, 'cancelled');
     assert.equal(await support.prisma.preparedReflection.count({ where: { organizationId } }), 0);
     const running = await support.enqueueReflection(fixture, `todo073-running-cancel:${fixture.ticket.ticketId}`);
-    const claimed = await support.durableJobRepository.claimNext('todo073-cancel-worker', { leaseMs: 5_000 });
+    const claimed = await support.durableJobRepository.claimNext('todo073-cancel-worker', { leaseMs: 5_000, organizationId });
     assert.ok(claimed);
     assert.equal(claimed.job.id, running.job.id);
     assert.equal((await support.durableJobRepository.requestCancellation(fixture.context, running.job.id)).status, 'cancellation_requested');

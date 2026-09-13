@@ -6,9 +6,12 @@
     "probe:oip-v2-fix-012-active-surface": "node scripts/oip-v2-fix-012-active-surface-reload-regression.cjs",
     "probe:oip-v2-fix-014-save-org-log-reliability": "node scripts/oip-v2-fix-014-save-org-log-reliability-regression.cjs",
     "probe:oip-v2-fix-009-reflection-commit-identity": "node scripts/oip-v2-fix-009-reflection-commit-identity-regression.cjs",
+    "probe:oip-v2-fix-016-reset-persistence-race": "node scripts/oip-v2-fix-016-reset-persistence-race-regression.cjs",
     "dev": "next dev",
     "prebuild": "prisma generate",
     "build": "next build",
+    "probe:oip-v2-md-001": "node scripts/oip-v2-md-001-probe.cjs",
+    "probe:oip-v2-md-001-http": "node scripts/oip-v2-md-001-http-probe.cjs",
     "start": "next start",
     "lint": "next lint",
     "probe:migration-export": "node scripts/migration-export-probe.cjs",
@@ -196,13 +199,16 @@
     "probe:oip-v2-fix-011-generalization": "node scripts/oip-v2-fix-011-retrieval-generalization-regression.cjs",
     "probe:oip-v2-fix-013-reflection-promotion-and-draft-recovery": "node scripts/oip-v2-fix-013-reflection-promotion-and-draft-recovery-regression.cjs",
     "probe:oip-v2-fix-013r2-reflection-draft-navigation": "node scripts/oip-v2-fix-013r2-reflection-draft-navigation-regression.cjs",
-    "probe:oip-v2-fix-013r4-reflection-rejection-correction-retry": "node scripts/oip-v2-fix-013r4-reflection-rejection-correction-retry-regression.cjs"
+    "probe:oip-v2-fix-013r4-reflection-rejection-correction-retry": "node scripts/oip-v2-fix-013r4-reflection-rejection-correction-retry-regression.cjs",
+    "probe:oip-v2-fix-015-reflection-source-identity": "node scripts/oip-v2-fix-015-reflection-source-identity-false-rejection-regression.cjs",
+    "probe:oip-v2-fix-015r2-blank-optional-lesson": "node scripts/oip-v2-fix-015r2-blank-optional-lesson-regression.cjs",
+    "probe:oip-v2-fix-015r3-collapsed-partial-lesson": "node scripts/oip-v2-fix-015r3-collapsed-partial-lesson-regression.cjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "dotenv": "^16.6.1",
-    "next": "^15.5.22",
+    "next": "^15.5.25",
     "pg": "^8.22.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
@@ -220,7 +226,11 @@
   },
   "overrides": {
     "postcss": "$postcss",
-    "sharp": "0.35.3"
+    "deepmerge-ts": "8.0.2",
+    "fast-uri": "3.1.6",
+    "nanoid": "3.3.18",
+    "mysql2": "3.24.0",
+    "sharp": "0.35.4"
   },
   "description": "",
   "main": "index.js",

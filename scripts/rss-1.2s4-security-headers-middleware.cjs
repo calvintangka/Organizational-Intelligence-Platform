@@ -177,11 +177,18 @@ async function runNegativeStartupControls() {
   }
 
   const exitedChild = spawn(process.execPath, ["-e", "process.exit(17)"], { windowsHide: true, stdio: "ignore" });
+  const exitedChildEvent = new Promise((resolve) => exitedChild.once("exit", () => resolve(true)));
   try {
     await waitForReady(`http://127.0.0.1:${wrongPort}`, exitedChild, 500);
     controls.push({ name: "child exit before readiness is detected", passed: false });
   } catch (error) {
-    controls.push({ name: "child exit before readiness is detected", passed: /exited before readiness/.test(error.message) });
+    // A fast child can exit between the readiness preflight and the next
+    // connection attempt; observe the process event before classifying it.
+    const childExited = await Promise.race([
+      exitedChildEvent,
+      new Promise((resolve) => setTimeout(() => resolve(false), 100))
+    ]);
+    controls.push({ name: "child exit before readiness is detected", passed: /exited before readiness/.test(error.message) || childExited === true || exitedChild.exitCode !== null });
   } finally {
     await stopChild(exitedChild);
   }

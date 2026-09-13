@@ -9,7 +9,7 @@ async function main() {
     const indonesian = await support.patternFixture(organizationId, { suffix: `${Date.now()}-id`, language: 'id', subject: 'Undangan aktivasi tertunda', description: 'Akun baru tetap tertunda setelah undangan aktivasi dikirim.', tags: ['account', 'activation'], detectedSignals: ['activation', 'invitation'], category: 'Access', understandingSummary: 'Account activation remains pending' });
     const first = await support.enqueuePattern(english, `todo074-multilingual:${english.ticket.ticketId}`);
     const second = await support.enqueuePattern(indonesian, `todo074-multilingual:${indonesian.ticket.ticketId}`);
-    worker = await support.runWorker('todo074-multilingual-worker', { concurrency: 1 });
+    worker = await support.runWorker('todo074-multilingual-worker', { concurrency: 1, organizationId });
     const [doneEnglish, doneIndonesian] = await Promise.all([support.waitForTerminal(english.context, first.job.id), support.waitForTerminal(indonesian.context, second.job.id)]);
     await worker.stop(); worker = null;
     assert.equal(doneEnglish.status, 'succeeded');

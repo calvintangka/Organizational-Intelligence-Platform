@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 
 import { withOrganizationRoute } from "@/lib/server/organizationRoute";
+import { requireSourceDomainCapability } from "@/lib/server/domainAuthorization";
 import { memoryString } from "@/lib/server/organizationalMemoryPrimitives";
 import { validateOrganizationalLearning } from "@/lib/server/organizationalMemoryService";
 
 type Params = { organizationId: string; sourceId: string };
 
 export const POST = withOrganizationRoute<Params>("knowledge.promote", async ({ request, organizationId, params, user }) => {
+  await requireSourceDomainCapability({ organizationId, sourceId: params.sourceId, capability: "knowledge.promote", request, resource: "organizational-learning:validate" });
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!body) return NextResponse.json({ error: { code: "INVALID_REQUEST", message: "A JSON validation payload is required." } }, { status: 400 });
   const result = await validateOrganizationalLearning({

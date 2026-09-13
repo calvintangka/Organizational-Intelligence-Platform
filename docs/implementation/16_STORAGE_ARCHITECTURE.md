@@ -63,6 +63,14 @@ Storage is therefore a governance concern, not merely an infrastructure concern.
 
 The implemented persistence foundation makes the source/evidence and governance boundaries explicit without replacing existing Support authority. `OrganizationalSource` identifies a source object, `EvidenceRecord` preserves a durable evidence assertion, and `MemoryEvidenceLink` connects evidence to a KnowledgeItem. `KnowledgeReuseOutcome` stores reusable outcome events and trust deltas, while `KnowledgeChallenge` and `KnowledgeChallengeDecision` preserve human challenge, revalidation, scope-update, and deprecation history. All records are organization-scoped, protected by composite tenant foreign keys, and written with idempotency and optimistic concurrency where a KnowledgeItem changes. This is an additive foundation; the Knowledge surface provides a practical operator entry and inspection path over these records. It does not introduce vector retrieval, connectors, autonomous promotion, or an alternate source of truth for Support evidence.
 
+### MD-001 Storage Extensions
+
+MD-001 adds `OrganizationDomain` and `OrganizationDomainCapabilityGrant` as organization-owned Domain and supplemental authorization records. Existing Support profile arrays remain bootstrap metadata, not the security source of truth. `OrganizationalSource`, `KnowledgeItem`, and `KnowledgeCandidate` gain nullable Domain, scope, and generic Source identity fields while legacy Support `sourceTicketId` values remain intact.
+
+The governed Skill boundary is persisted by `OrganizationalSkill`, immutable `OrganizationalSkillVersion`, and `SkillMemoryLink`. `ExecutionPackage` stores a digest-protected, redacted snapshot of Skill versions, Memory revisions, Evidence references, inputs, capabilities, tools, policy, risk, constraints, and correlation identifiers. `ExecutionSession` stores bounded external result intake and one human review. Review writes execution outcome Source/Evidence and routes corrections or challenges to existing candidate/challenge/outcome services; it never directly changes the original Memory row.
+
+The migration is additive and organization-scoped. It seeds the eleven default Domains, backfills existing Sources and Memory conservatively, and adds compatibility grants for the legacy Support/general paths. Domain deletion is restricted while referenced; Skills, versions, packages, sessions, and audit history are retained and revoked rather than destructively removed.
+
 # 1. Introduction
 
 Storage Architecture preserves Organizational Intelligence rather than simply storing application data.

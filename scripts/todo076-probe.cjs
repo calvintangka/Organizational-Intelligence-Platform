@@ -32,7 +32,7 @@ async function main() {
     }
     if (mode === 'connector-worker' || mode === 'connector-mapping') {
       const first = await support.send(installed, support.event('created-event', 'external-42'));
-      worker = await support.runWorker(`todo076-${mode}-worker`);
+      worker = await support.runWorker(`todo076-${mode}-worker`, fixture.organizationId);
       const completed = await support.waitFor(fixture.context, first.jobId);
       assert.equal(completed.status, 'succeeded');
       if (mode === 'connector-worker') {

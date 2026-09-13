@@ -7,18 +7,26 @@ async function main() {
   let worker = null;
   try {
     const failed = await support.enqueue(fixture, 'ticket.process', 'failed', 1);
-    const failedClaim = await support.durableJobRepository.claimNext(`todo075-${mode}-failure`);
+    const failedClaim = await support.durableJobRepository.claimNext(`todo075-${mode}-failure`, { organizationId: fixture.organizationId });
     assert.ok(failedClaim);
     await support.durableJobRepository.fail(failed.job.id, `todo075-${mode}-failure`, { errorClass: 'provider_timeout', safeMessage: 'Disposable safe failure.', retryable: true });
     assert.equal((await support.durableJobRepository.get(fixture.context, failed.job.id)).status, 'dead_lettered');
     const queued = await support.enqueue(fixture, 'ticket.process', 'queued');
     const running = await support.enqueue(fixture, 'ticket.process', 'running');
-    worker = new support.AsyncJobWorker({ workerId: `todo075-${mode}-worker`, pollMs: 20, leaseMs: 5000, concurrency: 1, registry: support.customRegistry() });
+    const secondaryQueued = await support.enqueue(fixture, 'ticket.process', 'secondary-queued', 3, fixture.secondaryContext);
+    worker = new support.AsyncJobWorker({ workerId: `todo075-${mode}-worker`, pollMs: 20, leaseMs: 5000, concurrency: 1, organizationId: fixture.organizationId, registry: support.customRegistry() });
     worker.start();
     const completed = await support.waitForTerminal(fixture, running.job.id);
     await worker.stop(); worker = null;
     const data = await support.snapshot(fixture);
     assert.ok(data.generatedAt);
+    assert.ok(data.organizations.some((item) => item.organizationId === fixture.organizationId));
+    assert.ok(data.organizations.some((item) => item.organizationId === fixture.secondaryOrganizationId));
+    assert.equal(data.organizations.find((item) => item.organizationId === fixture.organizationId).canRetry, false);
+    assert.equal(data.organizations.find((item) => item.organizationId === fixture.organizationId).canCancel, false);
+    assert.equal(data.organizations.find((item) => item.organizationId === fixture.secondaryOrganizationId).canRetry, true);
+    assert.equal(data.organizations.find((item) => item.organizationId === fixture.secondaryOrganizationId).canCancel, true);
+    assert.ok(data.jobs.some((job) => job.id === secondaryQueued.job.id && job.organizationId === fixture.secondaryOrganizationId));
     assert.ok(data.jobs.every((job) => !Object.prototype.hasOwnProperty.call(job, 'input')));
     assert.ok(data.jobs.every((job) => !JSON.stringify(job).includes('Disposable probe payload')));
     if (mode === 'dashboard') assert.ok(data.overview.totalJobs >= 3);

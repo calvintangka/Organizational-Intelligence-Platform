@@ -41,8 +41,8 @@ async function waitFor(context, jobId, timeoutMs = 20000) {
   throw new Error(`Timed out waiting for connector job ${jobId}.`);
 }
 
-async function runWorker(workerId) {
-  const worker = new AsyncJobWorker({ workerId, pollMs: 20, leaseMs: 5000, concurrency: 1 });
+async function runWorker(workerId, organizationId) {
+  const worker = new AsyncJobWorker({ workerId, pollMs: 20, leaseMs: 5000, concurrency: 1, organizationId });
   worker.start();
   return worker;
 }

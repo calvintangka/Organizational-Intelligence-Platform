@@ -184,6 +184,19 @@ export function candidateToPackDraft(candidate: KnowledgeCandidate): KnowledgePa
   };
 }
 
+function tenantScopedPackCanonicalId(title: string, organizationId: string): string {
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "knowledge-pack";
+  let hash = 2166136261;
+  for (let index = 0; index < organizationId.length; index += 1) {
+    hash ^= organizationId.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `canonical-${slug}--tenant-${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
 export function buildKnowledgeItemFromPackCandidate(
   candidate: KnowledgeCandidate,
   draft: KnowledgePackCandidateDraft,
@@ -257,6 +270,11 @@ export function buildKnowledgeItemFromPackCandidate(
     organizationProfile,
     createdAt,
     {
+      // Pack titles are reusable across organizations, but durable knowledge
+      // row IDs are globally unique. Keep the human-readable identity while
+      // adding a deterministic tenant scope so a starter pack can be
+      // validated in more than one organization.
+      id: tenantScopedPackCanonicalId(draft.canonicalProblemTitle, organizationProfile.id),
       title: draft.canonicalProblemTitle,
       category: draft.category,
       problemSummary: draft.problemSummary,

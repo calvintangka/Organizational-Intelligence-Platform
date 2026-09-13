@@ -6,6 +6,7 @@ import { classifyBusinessDomain } from "@/lib/domainClassifier";
 import { draftBusinessInquiryResponse, draftResponse, findMatchingLesson, isRetrievalCandidateEligible, ticketContradictsLesson } from "@/lib/drafting";
 import type { LessonMatchResult, SemanticLessonAuthorization } from "@/lib/drafting";
 import { retrieveMemory } from "@/lib/memory";
+import { projectCurrentKnowledgeMatches } from "@/lib/currentMemoryProjection";
 import {
   buildDiscriminationLessonPayload,
   isStrongLessonMatch,
@@ -652,7 +653,13 @@ export async function processTicket(command: ProcessTicketCommand, ports: Proces
     // still inspect the original operational understanding so a profile-style
     // question that names a Memory cannot remove that Memory from the pool.
     const retrievalUnderstanding = rawUnderstanding;
-    const rawMatches = securityRouted ? [] : withPreDiscriminationLessonMatches(ticket, retrievalUnderstanding, retrieveMemory(retrievalUnderstanding, knowledgeItems, sessionCreatedIds), knowledgeItems, canonical.title);
+    const retrievedMatches = securityRouted
+      ? []
+      : projectCurrentKnowledgeMatches(
+          retrieveMemory(retrievalUnderstanding, knowledgeItems, sessionCreatedIds),
+          knowledgeItems
+        );
+    const rawMatches = securityRouted ? [] : withPreDiscriminationLessonMatches(ticket, retrievalUnderstanding, retrievedMatches, knowledgeItems, canonical.title);
     const matches = rawMatches.filter((item) => isRetrievalCandidateEligible(retrievalUnderstanding, item.item, ticket));
     const selected = selectPreferredMatch(ticket, matches);
     const topMatch = selected?.match ?? null;

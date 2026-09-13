@@ -530,6 +530,8 @@ At this stage, OIP becomes a platform layer that helps departments learn from wo
 
 This stage should be earned. It should not be assumed from the beginning.
 
+The focused product-layer treatment of this future direction—including the distinction between Organizational Memory, Ask Your Organization, and future Organizational Skills—is defined in [Multi-Department Organizational Memory and Organizational Skills](./15_MULTI_DEPARTMENT_MEMORY_AND_ORGANIZATIONAL_SKILLS.md). This does not change the Product Strategy's sequencing authority or claim that those future capabilities are implemented today.
+
 ## 13. Beachhead Product Strategy
 
 The company begins with Customer Support because it is one of the clearest environments for validating the OIP thesis.

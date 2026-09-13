@@ -37,7 +37,15 @@ const PROBLEM_FACETS: Array<{ id: string; aliases: string[]; minimumAliases?: nu
     minimumAliases: 1
   },
   { id: "notification-delivery", aliases: ["notification settings", "notification", "settings", "email delivery", "recipient", "bounce", "suppression", "alert"], minimumAliases: 2 },
-  { id: "report-export", aliases: ["report", "export", "csv", "spreadsheet", "download"] },
+  // "Report" is often only the surface carrying an unrelated business
+  // record. Require a second export-format or delivery signal before it can
+  // authorize an uncategorized operational Memory.
+  { id: "report-export", aliases: ["report", "export", "csv", "spreadsheet", "download"], minimumAliases: 2 },
+  // Finance procedure queries need a concrete domain-neutral facet of their
+  // own. A composite phrase such as "financial report" or "close checklist"
+  // is sufficiently specific to bridge a validated Finance Memory without
+  // treating every generic mention of a report as the same lesson.
+  { id: "financial-reporting", aliases: ["financial report", "financial reporting", "monthly financial report", "accounting report", "close checklist"], minimumAliases: 1 },
   { id: "integration-callback", aliases: ["webhook", "callback", "signature", "signing", "api endpoint"], minimumAliases: 2 },
   { id: "delivery-tracking", aliases: ["delivery", "shipment", "tracking", "package"] },
   { id: "product-version", aliases: ["version", "update", "installation", "install"] },
@@ -71,6 +79,14 @@ const PROBLEM_FACETS: Array<{ id: string; aliases: string[]; minimumAliases?: nu
   { id: "regional-roster-access", aliases: ["regional roster", "reader group", "reader-group", "roster access", "roster group", "roster portal", "access denied"], minimumAliases: 2 },
   { id: "mobile-stale-session", aliases: ["stale data", "assignment snapshot", "mobile device", "tablet", "reconnect", "reconnected", "application session", "current assignment list"], minimumAliases: 2 }
 ];
+
+type CandidateFacetData = {
+  text: string;
+  facets: Set<string>;
+  evidence: Map<string, number>;
+};
+
+const candidateFacetCache = new WeakMap<KnowledgeItem, CandidateFacetData>();
 
 const CATEGORY_UNKNOWN = new Set(["general", "uncategorized"]);
 
@@ -147,11 +163,18 @@ function candidateEvidenceText(item: KnowledgeItem): string {
     item.scopeNote,
     item.tags.join(" "),
     ...(item.resolutionWorkflow ?? []),
-    item.internalGuidance,
-    item.customerResponseTemplate,
     ...(item.lessons ?? []).flatMap((lesson) => [lesson.title, lesson.rootCause, ...lesson.signals]),
     ...(item.exampleTickets ?? []).map((example) => example.originalIssue)
   ].filter(Boolean).join(" ");
+}
+
+function candidateFacetData(item: KnowledgeItem): CandidateFacetData {
+  const cached = candidateFacetCache.get(item);
+  if (cached) return cached;
+  const text = candidateEvidenceText(item);
+  const data = { text, facets: facetsFor(text), evidence: facetEvidenceFor(text) };
+  candidateFacetCache.set(item, data);
+  return data;
 }
 
 type OperationalCondition = "healthy" | "outage" | null;
@@ -174,20 +197,27 @@ export function assessRetrievalCompatibility(
   item: KnowledgeItem
 ): RetrievalCompatibility {
   const currentText = currentEvidenceText(understanding);
-  const candidateText = candidateEvidenceText(item);
+  const candidateData = candidateFacetData(item);
+  const candidateText = candidateData.text;
   const current = facetsFor(currentText);
-  const candidate = facetsFor(candidateText);
+  const candidate = candidateData.facets;
   const currentFacets = [...current].sort();
   const candidateFacets = [...candidate].sort();
   const sharedFacets = currentFacets.filter((facet) => candidate.has(facet));
   const categoryUnknown = CATEGORY_UNKNOWN.has(normalize(understanding.category));
   const currentEvidence = facetEvidenceFor(currentText);
-  const candidateEvidence = facetEvidenceFor(candidateText);
+  const candidateEvidence = candidateData.evidence;
   const currentCondition = operationalConditionFor(currentText);
   const candidateCondition = operationalConditionFor(candidateText);
   const strongCurrentFacet = currentFacets.some((facet) => (currentEvidence.get(facet) ?? 0) >= 2);
   const strongCandidateFacet = candidateFacets.some((facet) => (candidateEvidence.get(facet) ?? 0) >= 2);
-  const sharedSpecificFacets = sharedFacets.filter((facet) => facet !== "mobile-device");
+  // Device and product/version terms commonly describe the surface or
+  // release context rather than the problem being solved. For uncategorized
+  // operational Memory, either one alone must not authorize a strong match;
+  // a second, problem-specific facet is required unless the canonical title
+  // itself is explicitly present in the request.
+  const contextOnlyFacets = new Set(["mobile-device", "product-version"]);
+  const sharedSpecificFacets = sharedFacets.filter((facet) => !contextOnlyFacets.has(facet));
   const candidateHasSpecificProblemFacet = candidateFacets.some((facet) => facet !== "mobile-device");
   const symptomFacets = new Set(["mobile-device", "offline-synchronization"]);
   const currentRootCauseFacets = currentFacets.filter((facet) => !symptomFacets.has(facet));
@@ -196,6 +226,29 @@ export function assessRetrievalCompatibility(
   const currentTextNormalized = normalizeOperationalVariants(currentText);
   const candidateRequiresTransitionEvidence = candidate.has(transitionFacet);
   const sharedRootCauseFacets = sharedFacets.filter((facet) => !symptomFacets.has(facet));
+  // An expiry-specific Memory may share the same roster surface as a broader
+  // access Memory, but the expiry root cause must be present in the request
+  // before it is allowed to rank as an equally compatible explanation. Keep
+  // the candidate visible for human review; return an unknown compatibility
+  // state so the bounded score and compatibility rank demote it without
+  // manufacturing a hard negative match.
+  if (
+    categoryUnknown &&
+    sharedFacets.length > 0 &&
+    candidate.has("expired-assignment-entitlement") &&
+    !sharedFacets.includes("expired-assignment-entitlement") &&
+    !containsCanonicalTitle(currentText, item)
+  ) {
+    return {
+      state: "unknown",
+      score: 0,
+      code: "INSUFFICIENT_COMPATIBILITY_EVIDENCE",
+      reason: "Candidate has an expiry-specific assignment root cause, but the current request does not establish expiry evidence; retained as a related review candidate.",
+      currentFacets,
+      candidateFacets,
+      sharedFacets
+    };
+  }
 
   // A healthy backend and a backend outage are different operational
   // conditions even when both cases mention scanners and synchronization.

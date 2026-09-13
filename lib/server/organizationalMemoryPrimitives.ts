@@ -24,6 +24,7 @@ export class MemoryFoundationError extends Error {
 
 export interface SourceInput {
   sourceKind: string;
+  domainId?: string | null;
   sourceSystem: string;
   sourceObjectType: string;
   sourceObjectId: string;
@@ -31,6 +32,7 @@ export interface SourceInput {
   capturedAt?: Date | null;
   actorId?: string | null;
   metadata?: Prisma.InputJsonValue | null;
+  scope?: Prisma.InputJsonValue | null;
 }
 
 export interface EvidenceInput {
@@ -108,18 +110,22 @@ export async function ensureSourceTx(
     create: {
       organizationId,
       sourceKind,
+      domainId: sourceInput.domainId ?? null,
       sourceSystem,
       sourceObjectType,
       sourceObjectId,
       occurredAt: sourceInput.occurredAt ?? null,
       capturedAt: sourceInput.capturedAt ?? new Date(),
       actorId: sourceInput.actorId ?? null,
-      metadata: sourceInput.metadata ?? undefined
+      metadata: sourceInput.metadata ?? undefined,
+      scope: sourceInput.scope ?? undefined
     },
     update: {
       occurredAt: sourceInput.occurredAt ?? undefined,
       actorId: sourceInput.actorId ?? undefined,
-      metadata: sourceInput.metadata ?? undefined
+      metadata: sourceInput.metadata ?? undefined,
+      scope: sourceInput.scope ?? undefined,
+      domainId: sourceInput.domainId ?? undefined
     }
   });
 }
@@ -171,6 +177,47 @@ export async function ensureSourceAndEvidenceTx(
 export interface SupportEvidenceLink {
   sourceId: string;
   evidenceIds: string[];
+}
+
+/**
+ * Materializes a starter knowledge pack as a domain-neutral Source/Evidence
+ * pair so pack validation has the same provenance requirement as every other
+ * organizational-memory promotion. Pack labels are intentionally kept as the
+ * source-ticket-shaped identifiers already carried by the candidate payload.
+ */
+export async function ensureKnowledgePackSourceAndEvidenceTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  packLabels: string[],
+  actorId: string
+): Promise<Map<string, SupportEvidenceLink>> {
+  const labels = [...new Set(packLabels.filter((label) => label.startsWith("knowledge_pack:") && label.trim().length > 0))];
+  const result = new Map<string, SupportEvidenceLink>();
+  for (const label of labels) {
+    const packId = memoryString(label.slice("knowledge_pack:".length), "knowledge pack id", 300);
+    const adapted = await ensureSourceAndEvidenceTx(
+      tx,
+      organizationId,
+      {
+        sourceKind: "knowledge_pack",
+        sourceSystem: "oip.knowledge_pack",
+        sourceObjectType: "pack",
+        sourceObjectId: packId,
+        actorId,
+        metadata: { sourceLabel: label }
+      },
+      {
+        evidenceType: "knowledge_pack",
+        evidenceRole: "source_context",
+        actorId,
+        content: `Starter knowledge pack ${packId} imported for human review.`,
+        reference: label,
+        idempotencyKey: `knowledge-pack-source-context:${packId}`
+      }
+    );
+    result.set(label, { sourceId: adapted.source.id, evidenceIds: [adapted.evidence.id] });
+  }
+  return result;
 }
 
 /**

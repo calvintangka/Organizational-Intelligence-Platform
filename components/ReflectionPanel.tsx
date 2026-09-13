@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReflectionAction, ReflectionCommitInput, ReflectionDecision, Lesson, LessonMode } from "@/types";
 import { relevanceStrengthForScore } from "@/lib/relevanceLabels";
-import { initialReflectionProblemName, submittedReflectionProblemName } from "@/lib/reflectionDraft";
+import { classifyReflectionLesson, initialReflectionProblemName, reflectionDraftFingerprint, submittedReflectionProblemName } from "@/lib/reflectionDraft";
 
 const ACTION_LABELS: Record<ReflectionAction, string> = {
   create_new: "New Knowledge Entry",
@@ -74,6 +74,7 @@ export function ReflectionPanel({ decision, onConfirm, existingLessons = [], dar
   const initialDraftEffect = useRef(true);
   const onDraftChangeRef = useRef(onDraftChange);
   const draftTimerRef = useRef<number | null>(null);
+  const hydratedDraftFingerprintRef = useRef<string | null>(null);
   onDraftChangeRef.current = onDraftChange;
   const latestDraftRef = useRef<ReflectionCommitInput>({
     problemName: submittedReflectionProblemName(decision, problemName),
@@ -97,6 +98,25 @@ export function ReflectionPanel({ decision, onConfirm, existingLessons = [], dar
       existingLessonId: lessonMode !== "new" ? selectedExistingId : undefined
     }
   };
+
+  // Resume can supply the persisted draft after this panel has already
+  // mounted. Hydrate once per persisted value, while leaving later reviewer
+  // edits alone when the parent re-renders with the same snapshot.
+  useEffect(() => {
+    if (!initialDraft) return;
+    const fingerprint = reflectionDraftFingerprint(initialDraft);
+    if (hydratedDraftFingerprintRef.current === fingerprint) return;
+    hydratedDraftFingerprintRef.current = fingerprint;
+    setProblemName(initialDraft.problemName ?? initialReflectionProblemName(decision, initialDraft));
+    if (!initialDraft.lessonDraft) return;
+    setLessonOpen(true);
+    setLessonMode(initialDraft.lessonDraft.mode);
+    setRootCause(initialDraft.lessonDraft.rootCause);
+    setSolution(initialDraft.lessonDraft.solution);
+    setCustomerResponse(initialDraft.lessonDraft.customerResponse);
+    setSignals([...initialDraft.lessonDraft.signals]);
+    setSelectedExistingId(initialDraft.lessonDraft.existingLessonId);
+  }, [decision, initialDraft]);
 
   function flushDraftChange() {
     if (draftTimerRef.current !== null) {
@@ -159,6 +179,9 @@ export function ReflectionPanel({ decision, onConfirm, existingLessons = [], dar
     }
   }
 
+  const lessonDraftFields = { rootCause, solution, customerResponse, signals };
+  const lessonState = classifyReflectionLesson(lessonDraftFields);
+
   function handleConfirm() {
     if (isSubmitting) return;
     setValidationMessage("");
@@ -173,13 +196,21 @@ export function ReflectionPanel({ decision, onConfirm, existingLessons = [], dar
       return;
     }
 
-    const hasLessonFields = !!rootCause.trim() && !!solution.trim() && !!customerResponse.trim() && signals.length > 0;
-    if (requiresLesson && (!lessonOpen || !hasLessonFields)) {
+    if (requiresLesson && lessonState !== "COMPLETE") {
       setValidationMessage("Capture the root cause, solution, customer response, and signals for this new issue type before committing.");
       return;
     }
 
-    if (!lessonOpen || !rootCause.trim() || !solution.trim() || signals.length === 0) {
+    // Do not silently drop an authored customer response (or any other lesson
+    // field) just because the optional lesson section is collapsed. The
+    // promotion path must classify authored content before considering the
+    // generic no-lesson fallback.
+    if (lessonState === "PARTIAL") {
+      setValidationMessage("Complete the root cause, solution, customer response, and at least one signal before committing this lesson.");
+      return;
+    }
+
+    if (lessonState === "BLANK") {
       const submittedProblemName = submittedReflectionProblemName(decision, problemName);
       onConfirm(submittedProblemName ? { problemName: submittedProblemName } : undefined);
       return;
@@ -198,7 +229,7 @@ export function ReflectionPanel({ decision, onConfirm, existingLessons = [], dar
     });
   }
 
-  const hasLessonData = lessonOpen && rootCause.trim() && solution.trim() && signals.length > 0;
+  const hasLessonData = lessonState === "COMPLETE";
 
   const bg = darkMode ? "bg-[#1a2b3c]" : "bg-white";
   const border = darkMode ? "border-[#2d3f52]" : "border-slate-200";
