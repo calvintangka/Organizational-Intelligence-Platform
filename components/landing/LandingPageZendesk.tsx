@@ -851,9 +851,9 @@ export function ZendeskLandingPage() {
           <div className="maesa-shell maesa-hero__grid">
             <div className="maesa-hero__copy">
               <span className="maesa-eyebrow"><i /> Organizational Intelligence Platform</span>
-              <h1 id="maesa-hero-title">This may not be<br />a people problem.</h1>
-              <h2>It may be a memory problem.</h2>
-              <p>MAESA turns scattered company knowledge and real-world experience into living, evidence-backed Organizational Memory that people and AI can use.</p>
+              <h1 id="maesa-hero-title">Your team has solved this before.</h1>
+              <h2>Why are they solving it again?</h2>
+              <p>MAESA turns past cases, decisions, and company knowledge into trusted answers your team — and AI — can actually find and reuse.</p>
               <div className="maesa-actions">
                 <a className="maesa-button maesa-button--light" href={WAITLIST_URL} target="_blank" rel="noopener noreferrer">Join Waitlist <Arrow /></a>
                 <a className="maesa-button maesa-button--ghost" href="#flywheel"><span className="maesa-play" aria-hidden="true">▶</span> See How It Works</a>
