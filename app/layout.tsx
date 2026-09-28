@@ -4,36 +4,42 @@ import "@/components/landing/landing.css";
 import "@/components/landing/zendesk-landing.css";
 import "@/components/landing/zendesk-landing-overrides.css";
 import { headers } from "next/headers";
+import {
+  PUBLIC_BRAND_NAME,
+  PUBLIC_SITE_DESCRIPTION,
+  PUBLIC_SITE_TITLE,
+  PUBLIC_SITE_URL,
+} from "@/lib/publicBrand";
 
-const SITE_APP_TITLE = "OIP";
-
-// TODO-055: the static metadata title is the pre-hydration fallback only. The
-// browser tab follows the active organization at runtime (useOrganizationDocumentTitle
-// in app/page.tsx), so this must NOT name a specific organization — otherwise a
-// refresh inside one organization briefly shows another organization's name.
+// TODO-055: static metadata is the pre-hydration fallback only. The browser tab
+// continues to follow the active organization through useOrganizationDocumentTitle
+// in app/page.tsx, including its organization-specific title after login.
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  const socialImage = `${protocol}://${host}/og.png`;
-  const title = `${SITE_APP_TITLE} — Organizational Intelligence Platform`;
-  const description = "Turn resolved work into reusable, trusted Organizational Memory. OIP starts with customer support.";
+  const appOrigin = new URL(protocol + "://" + host);
 
   return {
-    title,
-    description,
+    metadataBase: appOrigin,
+    title: PUBLIC_SITE_TITLE,
+    description: PUBLIC_SITE_DESCRIPTION,
+    applicationName: PUBLIC_BRAND_NAME,
+    alternates: {
+      canonical: PUBLIC_SITE_URL,
+    },
     openGraph: {
-      title,
-      description,
+      title: PUBLIC_SITE_TITLE,
+      description: PUBLIC_SITE_DESCRIPTION,
       type: "website",
-      images: [{ url: socialImage, width: 1792, height: 1024, alt: "OIP — Stop starting from zero." }]
+      siteName: PUBLIC_BRAND_NAME,
+      url: PUBLIC_SITE_URL,
     },
     twitter: {
-      card: "summary_large_image",
-      title,
-      description,
-      images: [socialImage]
-    }
+      card: "summary",
+      title: PUBLIC_SITE_TITLE,
+      description: PUBLIC_SITE_DESCRIPTION,
+    },
   };
 }
 

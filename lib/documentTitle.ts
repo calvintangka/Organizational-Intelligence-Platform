@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect } from "react";
+import { PUBLIC_BRAND_NAME } from "./publicBrand";
 
 /** Product name shown alone whenever no organization is active. */
-export const APP_TITLE = "OIP";
+export const APP_TITLE = PUBLIC_BRAND_NAME;
 
 /**
  * TODO-055: the browser tab title for an active organization.
  *
- * Returns "<Organization Name> | OIP", or the bare product name when no
+ * Returns "<Organization Name> | MAESA", or the bare product name when no
  * organization is available — loading, signed out, or an organization whose
  * name is missing or blank. No environment names or internal ids.
  */
